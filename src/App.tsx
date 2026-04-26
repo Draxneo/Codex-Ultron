@@ -520,7 +520,6 @@ function AppRouter() {
         
         <Route path="/portal/preview" element={<ProtectedRoute><PortalPreview /></ProtectedRoute>} />
         
-        <Route path="/workflow-builder" element={<Navigate to="/copilot" replace />} />
         <Route path="/ivr-builder" element={<ProtectedRoute><IvrBuilder /></ProtectedRoute>} />
         <Route path="/admin/call-routing" element={<ProtectedRoute><CallRoutingSettings /></ProtectedRoute>} />
         <Route path="/sequence-builder" element={<ProtectedRoute><SequenceBuilder /></ProtectedRoute>} />
