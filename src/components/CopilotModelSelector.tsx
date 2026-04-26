@@ -12,13 +12,10 @@ export type ModelOption = {
 };
 
 export const MODEL_OPTIONS: ModelOption[] = [
-  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", description: "Fastest & cheapest, simple tasks" },
-  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", description: "Fast & balanced" },
-  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Proven stable, good reasoning" },
-  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Strongest reasoning, slower" },
-  { id: "openai/gpt-5-mini", label: "GPT-5 Mini", description: "Strong reasoning, moderate speed" },
-  { id: "openai/gpt-5", label: "GPT-5", description: "Most powerful OpenAI, expensive" },
-  { id: "openai/gpt-5.2", label: "GPT-5.2", description: "Latest OpenAI, enhanced reasoning" },
+  { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Default: fast, strong, cost-aware" },
+  { id: "gpt-5-nano", label: "GPT-5 Nano", description: "Lowest-cost simple drafting" },
+  { id: "gpt-5", label: "GPT-5", description: "Higher reasoning for complex tasks" },
+  { id: "gpt-5.2", label: "GPT-5.2", description: "Premium reasoning for hard cases" },
 ];
 
 const VALID_MODEL_IDS = new Set(MODEL_OPTIONS.map(m => m.id));
@@ -31,7 +28,7 @@ export function getSelectedModel(): string {
     // Clear stale/invalid model from cache
     if (cached) localStorage.removeItem("copilot_model_cache");
   } catch {}
-  return "google/gemini-3-flash-preview";
+  return "gpt-5-mini";
 }
 
 export function CopilotModelSelector() {

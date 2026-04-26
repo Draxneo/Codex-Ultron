@@ -21,7 +21,7 @@ function useAgentPipelineCounts() {
         instructions: instructions.count || 0,
         tools: tools.count || 0,
         learnings: learnings.count || 0,
-        model: modelConfig.data?.model || "gpt-4o-mini",
+        model: modelConfig.data?.model || "gpt-5-mini",
       };
     },
   });

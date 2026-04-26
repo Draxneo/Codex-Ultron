@@ -8,7 +8,7 @@ import { polishText } from "@/lib/grammarPolish";
  * Layers (all configurable, all default-on):
  *   1. Real-time dictionary autocorrect (as the user types)
  *   2. Final dictionary pass on blur (catches typos when no word boundary fired)
- *   3. AI grammar polish on send (Gemini) with accept/reject preview
+ *   3. AI grammar polish on send with accept/reject preview
  *
  * Use this for ALL composer surfaces (SMS, email, chat, copilot) so the user
  * gets identical correction behavior everywhere. Composers stay responsible for

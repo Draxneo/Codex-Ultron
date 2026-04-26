@@ -9,7 +9,7 @@ interface UserPreferences {
 }
 
 const DEFAULTS: UserPreferences = {
-  preferred_model: "google/gemini-3-flash-preview",
+  preferred_model: "gpt-5-mini",
   jarvis_enabled: false,
   copilot_position: null,
 };

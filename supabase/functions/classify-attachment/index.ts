@@ -3,7 +3,7 @@
  *
  * Input: { attachment_id: string, image_url: string }
  *
- * Uses OpenAI/JARVIS gateway with Gemini Flash + tool calling to categorize
+ * Uses OpenAI/JARVIS with vision + tool calling to categorize
  * the photo into one of: supply_invoice, equipment_data_plate, site_photo,
  * document, other.
  *
