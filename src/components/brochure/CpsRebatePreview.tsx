@@ -3,6 +3,7 @@ import CpsRebateForm from "@/components/CpsRebateForm";
 import type { CpsRebateJobData, CpsRebateEquipmentData, CpsRebateCompanyData } from "@/components/CpsRebateForm";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 const sampleJob: CpsRebateJobData = {
   jobId: "sample-001",
@@ -91,7 +92,7 @@ export default function CpsRebatePreview({ jobId }: CpsRebatePreviewProps) {
   }, [jobId]);
 
   const sampleCompany: CpsRebateCompanyData = {
-    companyName: settings.company_name || "Your HVAC Company",
+    companyName: settings.company_name || DEFAULT_COMPANY_NAME,
     contactName: settings.contact_name || "John Smith",
     licenseNumber: settings.tacla_number || "TACLA#12345",
     companyPhone: settings.company_phone || "(210) 555-0100",

@@ -10,12 +10,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 export default function Login() {
   const { user, loading } = useAuth();
   const { toast } = useToast();
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);

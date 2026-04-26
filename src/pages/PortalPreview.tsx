@@ -11,6 +11,7 @@ import { Briefcase, DollarSign, Wrench, Gift, LogOut, Copy, ExternalLink, CheckC
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { formatDateShort } from "@/lib/formatters";
 
 const sampleJobs = [
@@ -55,7 +56,7 @@ export default function PortalPreview() {
   const isMobile = useIsMobile();
   const [refSubmitted, setRefSubmitted] = useState(false);
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
 
   const formatDate = (d: string) => formatDateShort(d);
 

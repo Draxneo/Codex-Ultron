@@ -2,6 +2,7 @@ import { CertificateTemplate } from "./CertificateTemplate";
 import { BRAND_LOGOS } from "@/data/brandEngineering";
 import { format } from "date-fns";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 interface NoLemonCertificateProps {
   customerName: string;
@@ -12,12 +13,12 @@ interface NoLemonCertificateProps {
 
 export function NoLemonCertificate({ customerName, brand, model, installDate }: NoLemonCertificateProps) {
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your HVAC Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const brandLogo = BRAND_LOGOS[brand] || undefined;
-  const installDateFormatted = installDate ? format(new Date(installDate), "MMMM d, yyyy") : "—";
+  const installDateFormatted = installDate ? format(new Date(installDate), "MMMM d, yyyy") : "-";
   const expirationDate = installDate
     ? format(new Date(new Date(installDate).setFullYear(new Date(installDate).getFullYear() + 1)), "MMMM d, yyyy")
-    : "—";
+    : "-";
 
   return (
     <CertificateTemplate
@@ -52,3 +53,4 @@ export function NoLemonCertificate({ customerName, brand, model, installDate }: 
     </CertificateTemplate>
   );
 }
+

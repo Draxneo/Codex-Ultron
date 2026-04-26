@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import logoImg from "@/assets/logo.png";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 interface CertificateTemplateProps {
   title: string;
@@ -83,7 +84,7 @@ function GoldSeal({ text = "CERTIFIED" }: { text?: string }) {
 
 export function CertificateTemplate({ title, subtitle, children, brandLogo, sealText, className }: CertificateTemplateProps) {
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your HVAC Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const taclaNumber = settings.tacla_number || "";
   return (
     <div

@@ -123,6 +123,13 @@ const Jobs = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   useTechFormRealtime();
   const { data: followUpJobs = [] } = useFollowUpJobs();
+
+  useEffect(() => {
+    const dateParam = searchParams.get("date");
+    if (!dateParam) return;
+    const parsed = parseISO(dateParam);
+    if (!Number.isNaN(parsed.getTime())) setCurrentDay(parsed);
+  }, [searchParams]);
   const doneStatuses = ["done", "invoiced", "canceled", "completed"];
   const queueCount = useMemo(() => {
     const unschedCount = (jobs || []).filter(j => !j.scheduled_date && !doneStatuses.includes(j.status?.toLowerCase?.() ?? "")).length;
@@ -175,6 +182,8 @@ const Jobs = () => {
 
   const filteredItems = useMemo(() => {
     const searchLower = search.toLowerCase();
+    const includesSearch = (value?: string | number | null) =>
+      String(value || "").toLowerCase().includes(searchLower);
     return boardItems.filter((item) => {
       // Hide cancelled jobs/estimates from dispatch board
       if (item.work_status?.toLowerCase() === "cancelled" || item.work_status?.toLowerCase() === "canceled") return false;
@@ -185,11 +194,11 @@ const Jobs = () => {
       }
       if (search) {
         return (
-          item.customer_name?.toLowerCase().includes(searchLower) ||
-          item.job_number?.toLowerCase().includes(searchLower) ||
-          item.hcp_job_number?.toLowerCase().includes(searchLower) ||
-          item.address?.toLowerCase().includes(searchLower) ||
-          (item as any).estimate_number?.toLowerCase().includes(searchLower)
+          includesSearch(item.customer_name) ||
+          includesSearch(item.job_number) ||
+          includesSearch(item.hcp_job_number) ||
+          includesSearch(item.address) ||
+          includesSearch((item as any).estimate_number)
         );
       }
       return true;

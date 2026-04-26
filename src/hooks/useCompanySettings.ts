@@ -25,6 +25,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_TAGLINE } from "@/lib/companyDefaults";
 
 export interface CompanySettings {
   company_name: string;
@@ -101,7 +102,7 @@ export interface CompanySettings {
 
 /** Default values — used when a key doesn't exist in the database yet */
 const DEFAULTS: CompanySettings = {
-  company_name: "",
+  company_name: DEFAULT_COMPANY_NAME,
   contact_name: "",
   company_phone: "",
   company_email: "",
@@ -135,13 +136,13 @@ const DEFAULTS: CompanySettings = {
   owner_name: "",
   sms_test_mode: "false",
   email_domain: "",
-  company_tagline: "",
+  company_tagline: DEFAULT_COMPANY_TAGLINE,
   ai_sms_auto_draft: "true",
   jarvis_max_daily_alerts: "50",
   missed_call_sms_enabled: "true",
-  missed_call_sms_during_hours: "Hi! Sorry we missed you — we'll call you right back. Need us sooner? Just text us here.",
+  missed_call_sms_during_hours: "Hi! Sorry we missed you. We'll call you right back. Need us sooner? Just text us here.",
   missed_call_sms_during_hours_template_key: "",
-  missed_call_sms_after_hours: "Hi! Thanks for calling — we're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here.",
+  missed_call_sms_after_hours: "Hi! Thanks for calling. We're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here.",
   missed_call_sms_after_hours_template_key: "",
   telephony_handoff_enabled: "false",
   telephony_handoff_url: "https://codex-ultron.onrender.com",

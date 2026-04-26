@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Gift, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 export default function ReferralPublic() {
   const { code } = useParams<{ code: string }>();
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const { toast } = useToast();
   const [referrer, setReferrer] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

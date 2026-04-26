@@ -1266,10 +1266,10 @@ async function executeToolCall(
   }
 
   // Helper to invoke a specialist edge function directly
-  async function invokeSpecialist(functionName: string, body: any) {
+  async function invokeSpecialist(functionName: string, body: any, headers: Record<string, string> = {}) {
     const resp = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
     if (!resp.ok) {
@@ -1340,7 +1340,11 @@ async function executeToolCall(
       const matched = employees.find((e: any) => e.name.toLowerCase().includes(empName) || empName.includes(e.name.toLowerCase()));
       if (!matched) throw new Error("Employee not found");
       if (!matched.phone) throw new Error("No phone number on file");
-      const smsResp = await invokeSpecialist("send-sms", { to: matched.phone, body: args.message });
+      const smsResp = await invokeSpecialist(
+        "send-sms",
+        { to: matched.phone, body: args.message, source: "jarvis_internal_employee" },
+        { "x-source-function": "jarvis_internal_employee", "x-hitl-approved": "true" },
+      );
       result = { status: "sent", employee: matched.name, phone: matched.phone, message: args.message };
 
     } else if (toolName === "send_tech_form_link") {
@@ -1361,7 +1365,11 @@ async function executeToolCall(
       const smsBody = args.custom_message
         ? `${args.custom_message}\n${formUrl}\n📸 Photos: ${photosUrl}`
         : `📋 Job #${job.hcp_job_number} (${job.customer_name}) — please complete the tech form when done:\n${formUrl}\n📸 Photos: ${photosUrl}`;
-      await invokeSpecialist("send-sms", { to: matchedTech.phone, body: smsBody, job_id: job.id });
+      await invokeSpecialist(
+        "send-sms",
+        { to: matchedTech.phone, body: smsBody, job_id: job.id, source: "jarvis_internal_tech" },
+        { "x-source-function": "jarvis_internal_tech", "x-hitl-approved": "true" },
+      );
       result = { status: "sent", employee: matchedTech.name, phone: matchedTech.phone, job_number: job.hcp_job_number, customer: job.customer_name, form_url: formUrl };
 
     } else if (toolName === "search_sms_history") {

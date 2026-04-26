@@ -16,13 +16,14 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 export default function PortalDashboard() {
   const { customerId, loading: sessionLoading, valid, logout } = usePortalSession();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const [customer, setCustomer] = useState<any>(null);
   const [jobs, setJobs] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);

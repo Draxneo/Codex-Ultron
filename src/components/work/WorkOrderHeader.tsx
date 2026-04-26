@@ -31,11 +31,11 @@ export function WorkOrderHeader({
     entity?.job_number ||
     entity?.hcp_job_number ||
     entity?.estimate_number ||
-    "—";
+    "-";
 
   return (
     <div className="border-b bg-card px-6 py-4">
-      <nav className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
+      <nav className="mb-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
         <Link to="/customers" className="hover:text-primary">Customers</Link>
         <ChevronRight className="h-3 w-3" />
         {customerId ? (
@@ -50,7 +50,7 @@ export function WorkOrderHeader({
       </nav>
 
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold leading-tight">{label} for {customerName}</h1>
+        <h1 className="min-w-0 break-words text-2xl font-bold leading-tight">{label} for {customerName}</h1>
         <button className="rounded p-1 text-muted-foreground hover:text-foreground">
           <Pencil className="h-4 w-4" />
         </button>

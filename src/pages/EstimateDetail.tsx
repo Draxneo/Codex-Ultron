@@ -46,6 +46,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { getExpectedJobItems } from "@/lib/expectedJobItems";
 import { paymentPreferenceLabel } from "@/lib/paymentOptions";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_SHORT_NAME } from "@/lib/companyDefaults";
 
 interface EstimateReview {
   id: string;
@@ -69,12 +70,14 @@ function EstimateActionBar({
   estimate,
   estimateId,
   linkedJobId,
+  latestPresentationToken,
   converting,
   onConvert,
 }: {
   estimate: any;
   estimateId: string;
   linkedJobId: string | null;
+  latestPresentationToken?: string | null;
   converting: boolean;
   onConvert: () => void;
 }) {
@@ -87,14 +90,20 @@ function EstimateActionBar({
   if (estimate.customer_name) quoteParams.set("customer_name", estimate.customer_name);
   if (estimate.customer_phone) quoteParams.set("customer_phone", estimate.customer_phone);
   if (estimate.customer_email) quoteParams.set("customer_email", estimate.customer_email);
+  const presentationUrl = latestPresentationToken ? `${window.location.origin}/presentation/${latestPresentationToken}` : null;
 
   const actionClass =
     "flex-1 min-w-[120px] flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-md border border-border bg-background hover:bg-accent transition-colors";
+  const disabledActionClass = `${actionClass} opacity-60 cursor-not-allowed hover:bg-background`;
 
   return (
     <Card className="p-3">
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={actionClass}>
+        <button
+          type="button"
+          className={actionClass}
+          onClick={() => navigate(estimate?.scheduled_date ? `/?date=${estimate.scheduled_date}` : "/")}
+        >
           <BookOpen className="h-5 w-5" />
           <span className="text-xs font-semibold uppercase tracking-wide">Schedule</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">{scheduleSub}</span>
@@ -104,10 +113,24 @@ function EstimateActionBar({
           <span className="text-xs font-semibold uppercase tracking-wide">Build Quote</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">Options & pricing</span>
         </button>
-        <button type="button" className={actionClass}>
+        <button
+          type="button"
+          className={estimate.customer_phone ? actionClass : disabledActionClass}
+          disabled={!estimate.customer_phone}
+          onClick={() => {
+            if (!estimate.customer_phone) return;
+            const firstName = String(estimate.customer_name || "").split(" ")[0] || "there";
+            const body = presentationUrl
+              ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${presentationUrl}`
+              : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
+            navigate(`/inbox?section=sms&phone=${encodeURIComponent(estimate.customer_phone)}&draft=${encodeURIComponent(body)}`);
+          }}
+        >
           <Send className="h-5 w-5" />
           <span className="text-xs font-semibold uppercase tracking-wide">Send</span>
-          <span className="text-center text-[10px] leading-tight text-muted-foreground">Presentation</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">
+            {estimate.customer_phone ? "Draft SMS" : "No phone"}
+          </span>
         </button>
         {linkedJobId ? (
           <button type="button" className={actionClass} onClick={() => navigate(`/jobs/${linkedJobId}`)}>
@@ -122,12 +145,19 @@ function EstimateActionBar({
             <span className="text-center text-[10px] leading-tight text-muted-foreground">Approved to job</span>
           </button>
         )}
-        <button type="button" className={actionClass}>
+        <button
+          type="button"
+          className={presentationUrl ? actionClass : disabledActionClass}
+          disabled={!presentationUrl}
+          onClick={() => presentationUrl && window.open(presentationUrl, "_blank", "noopener,noreferrer")}
+        >
           <FileText className="h-5 w-5" />
           <span className="text-xs font-semibold uppercase tracking-wide">Proposal</span>
-          <span className="text-center text-[10px] leading-tight text-muted-foreground">Preview</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">
+            {presentationUrl ? "Preview" : "Not built"}
+          </span>
         </button>
-        <button type="button" className={actionClass}>
+        <button type="button" className={actionClass} onClick={() => window.print()}>
           <Printer className="h-5 w-5" />
           <span className="text-xs font-semibold uppercase tracking-wide">Print</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">Estimate</span>
@@ -215,6 +245,7 @@ export default function EstimateDetail() {
     "";
   const status = estimateStatus;
   const reviewConfig = review ? (reviewStatusConfig[review.status] || reviewStatusConfig.pending_review) : null;
+  const latestPresentationToken = presentations?.[0]?.token || null;
 
   const handleConvert = async () => {
     setConvertingToJob(true);
@@ -317,6 +348,7 @@ export default function EstimateDetail() {
               estimate={estimate}
               estimateId={id}
               linkedJobId={linkedJobId}
+              latestPresentationToken={latestPresentationToken}
               converting={convertingToJob || updateStatus.isPending}
               onConvert={handleConvert}
             />

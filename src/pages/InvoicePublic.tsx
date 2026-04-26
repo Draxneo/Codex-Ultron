@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 const fmt = (n: number) => `$${n.toFixed(2)}`;
 
@@ -76,7 +77,7 @@ export default function InvoicePublic() {
         <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              {cs.company_name || "Your HVAC Company"}
+              {cs.company_name || DEFAULT_COMPANY_NAME}
             </h1>
             {cs.tacla_number && (
               <p className="text-primary-foreground/70 text-sm mt-1 flex items-center gap-1">
@@ -290,8 +291,8 @@ export default function InvoicePublic() {
 
         {/* Footer */}
         <div className="mt-12 pt-6 border-t border-border text-center text-xs text-muted-foreground space-y-1">
-          <p className="font-semibold">{cs.company_name || "Your HVAC Company"}</p>
-          {cs.tacla_number && <p>Licensed & Insured · TACLA#{cs.tacla_number}</p>}
+          <p className="font-semibold">{cs.company_name || DEFAULT_COMPANY_NAME}</p>
+          {cs.tacla_number && <p>Licensed & Insured - TACLA#{cs.tacla_number}</p>}
           <p>Thank you for your business!</p>
         </div>
       </div>

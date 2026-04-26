@@ -1,6 +1,7 @@
 import { CertificateTemplate } from "./CertificateTemplate";
 import { format } from "date-fns";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 interface LaborWarrantyCertificateProps {
   customerName: string;
@@ -13,11 +14,11 @@ export function LaborWarrantyCertificate({
   customerName, equipmentDescription, installDate, warrantyYears = 2,
 }: LaborWarrantyCertificateProps) {
   const { settings } = useCompanySettings();
-  const companyName = settings.company_name || "Your HVAC Company";
-  const installDateFormatted = installDate ? format(new Date(installDate), "MMMM d, yyyy") : "—";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
+  const installDateFormatted = installDate ? format(new Date(installDate), "MMMM d, yyyy") : "-";
   const expirationDate = installDate
     ? format(new Date(new Date(installDate).setFullYear(new Date(installDate).getFullYear() + warrantyYears)), "MMMM d, yyyy")
-    : "—";
+    : "-";
 
   return (
     <CertificateTemplate

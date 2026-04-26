@@ -8,6 +8,7 @@ import { useMaintenancePlanTemplates, type PlanTemplate } from "@/hooks/useMaint
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { usePresentationSections } from "@/hooks/usePresentationSections";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 /* ── Icon mapping for perks ── */
 const PERK_ICONS = [
@@ -227,7 +228,7 @@ export default function AgreementPresentationPreview() {
   const { getSection } = usePresentationSections();
 
   const plan = plans[0] || null;
-  const companyName = settings?.company_name || "Your HVAC Company";
+  const companyName = settings?.company_name || DEFAULT_COMPANY_NAME;
 
   // Dynamic value comparison rows from plan template, fallback to defaults
   const valueRows = plan?.value_comparison?.length
@@ -237,7 +238,7 @@ export default function AgreementPresentationPreview() {
   // Honest notes from presentation_sections
   const honestSection = getSection("agreement_honest_notes");
   const honestNotesTitle = honestSection?.title || "A Few Honest Notes";
-  const defaultHonestBody = `<p>We'll do everything we can to keep your drain lines clear — cleaning and treatment at every visit. That said, we don't warranty drain lines or guarantee against clogs. Drain systems can fail between visits for reasons outside our control, and we'd rather be upfront about that than promise something we can't control.</p><p>Filter replacement is included in every visit — just have your filter ready when we arrive.</p>`;
+  const defaultHonestBody = `<p>We'll do everything we can to keep your drain lines clear with cleaning and treatment at every visit. That said, we don't warranty drain lines or guarantee against clogs. Drain systems can fail between visits for reasons outside our control, and we'd rather be upfront about that than promise something we can't control.</p><p>Filter replacement is included in every visit. Just have your filter ready when we arrive.</p>`;
   const honestNotesBody = honestSection?.body_html || defaultHonestBody;
 
   return (

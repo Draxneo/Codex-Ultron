@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Download, Phone, Mail, MapPin, Shield, CheckCircle2, ExternalLink, ChevronDown } from "lucide-react";
 import { useInvoicePreviewData } from "@/hooks/useInvoicePreviewData";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { format } from "date-fns";
 import EquipmentDocBlocks from "@/components/invoice/EquipmentDocBlocks";
@@ -137,7 +138,7 @@ export default function InvoicePreview({ invoiceId, jobId }: InvoicePreviewProps
     : sampleInvoice;
 
   const customer = useLive ? liveData.customer : sampleCustomer;
-  const companyName = useLive ? liveData.companyName : "Your HVAC Company";
+  const companyName = useLive ? liveData.companyName : DEFAULT_COMPANY_NAME;
   const companyPhone = useLive ? liveData.companyPhone : "(512) 555-0100";
   const companyEmail = useLive ? liveData.companyEmail : "info@yourhvac.com";
   const companyAddress = useLive ? liveData.companyAddress : "123 Main St, Austin, TX 78701";

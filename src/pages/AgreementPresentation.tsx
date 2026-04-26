@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 /* ── Icon mapping for perks ── */
 const PERK_ICONS = [
@@ -54,7 +55,7 @@ export default function AgreementPresentation() {
   const [enrolled, setEnrolled] = useState(false);
   const [customerName, setCustomerName] = useState("");
 
-  const companyName = settings?.company_name || "Your HVAC Company";
+  const companyName = settings?.company_name || DEFAULT_COMPANY_NAME;
 
   useEffect(() => {
     if (!presentation) return;

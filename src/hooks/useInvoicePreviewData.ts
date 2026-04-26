@@ -4,6 +4,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import type { EquipmentDocsData, CpsRebateData } from "@/hooks/usePublicInvoice";
 
 export interface InvoiceLineItem {
@@ -218,7 +219,7 @@ export function useInvoicePreviewData(opts?: { invoiceId?: string; jobId?: strin
           email: customer.email ?? null,
           phone: customer.phone ?? null,
         },
-        companyName: settingsMap.company_name || "Your HVAC Company",
+        companyName: settingsMap.company_name || DEFAULT_COMPANY_NAME,
         companyPhone: settingsMap.company_phone || "",
         companyEmail: settingsMap.company_email || "",
         companyAddress: settingsMap.company_address || "",

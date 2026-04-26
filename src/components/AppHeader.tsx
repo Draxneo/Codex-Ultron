@@ -21,6 +21,7 @@ import { NewItemDropdown } from "@/components/NewItemDropdown";
 import { AdminToolsGrid } from "@/components/AdminToolsGrid";
 import { ApiCostAlertBanner } from "@/components/ApiCostAlertBanner";
 import { SystemStatusIndicator } from "@/components/SystemStatusIndicator";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/": { label: "Schedule", roles: null },
@@ -56,7 +57,7 @@ export function AppHeader() {
   const { order } = useNavOrder();
   const { settings, isLoading: settingsLoading, updateSettings } = useCompanySettings();
   const [fwdNumber, setFwdNumber] = useState("");
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   useEffect(() => {
     if (!settingsLoading && settings.call_forwarding_number) {
       setFwdNumber(settings.call_forwarding_number);
@@ -154,7 +155,7 @@ export function AppHeader() {
                         onCheckedChange={(checked) => updateSettings.mutate({ call_forwarding_enabled: checked ? "true" : "false" })} />
                     </div>
                     {settings.call_forwarding_enabled === "true" && (
-                      <p className="text-xs text-amber-600 font-medium ml-6">⚠️ Calls forwarding to cell — softphone won't ring</p>
+                      <p className="text-xs text-amber-600 font-medium ml-6">Calls are forwarding to cell, so the softphone will not ring.</p>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -167,7 +168,7 @@ export function AppHeader() {
                         onCheckedChange={(checked) => updateSettings.mutate({ sms_alert_enabled: checked ? "true" : "false" })} />
                     </div>
                     {settings.sms_alert_enabled === "true" && (
-                      <p className="text-xs text-emerald-600 font-medium ml-6">✉️ Inbound customer texts forwarded to cell</p>
+                      <p className="text-xs text-emerald-600 font-medium ml-6">Inbound customer texts are forwarded to cell.</p>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -180,7 +181,7 @@ export function AppHeader() {
                         onCheckedChange={(checked) => updateSettings.mutate({ ai_sms_auto_draft: checked ? "true" : "false" })} />
                     </div>
                     {settings.ai_sms_auto_draft === "false" && (
-                      <p className="text-xs text-muted-foreground font-medium ml-6">🚫 JARVIS won't draft SMS replies</p>
+                      <p className="text-xs text-muted-foreground font-medium ml-6">JARVIS will not draft SMS replies.</p>
                     )}
                   </div>
                   <div className="space-y-1 border-t pt-3">
@@ -198,7 +199,7 @@ export function AppHeader() {
             <SystemStatusIndicator />
             <ThemeToggleButton />
 
-            {/* Settings gear → admin */}
+            {/* Settings gear to admin */}
             {role === "admin" && (
               <Link to="/admin">
                 <Button variant="ghost" size="icon" className={cn("h-9 w-9 text-muted-foreground hover:text-foreground",

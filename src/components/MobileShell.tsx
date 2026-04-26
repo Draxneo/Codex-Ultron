@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { MobileCallScreen } from "@/components/MobileCallScreen";
 import { startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
@@ -91,7 +92,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   const queryClient = useQueryClient();
   
   const softphone = useSoftphoneContext();
-  const companyName = settings.company_name || "Your Company";
+  const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
 
   // Mount mobile-only listeners here except push registration,
   // which is already mounted once at app root (NotificationListeners).

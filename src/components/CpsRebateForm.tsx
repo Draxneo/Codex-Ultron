@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Printer, DollarSign, FileText, AlertTriangle, Mail, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
@@ -145,7 +146,7 @@ export default function CpsRebateForm({ job, equipment, company }: Props) {
   const [paymentType, setPaymentType] = useState<"bill_credit" | "check">("bill_credit");
 
   // Contractor info (from company settings)
-  const [contractorName] = useState(company?.companyName || "Airtastic AC");
+  const [contractorName] = useState(company?.companyName || DEFAULT_COMPANY_NAME);
   const [contractorContact] = useState(company?.contactName || "");
   const [contractorAddress] = useState(company?.companyAddress || "");
   const [licenseNumber, setLicenseNumber] = useState(company?.licenseNumber || "");
