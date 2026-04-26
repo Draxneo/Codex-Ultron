@@ -19,6 +19,7 @@ import CustomerInvoicePanel from "@/components/CustomerInvoicePanel";
 import { JobActivityFeed } from "@/components/ActivityFeed";
 import { PhotoLocationMap } from "@/components/PhotoLocationMap";
 import { JobPurchasesPanel } from "@/components/job/JobPurchasesPanel";
+import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -124,19 +125,7 @@ export default function JobDetail() {
 
             <JobCartStatusCard jobId={id!} customerName={customerName} customerPhone={customerPhone} />
 
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Summary of work
-                </h3>
-                <Button variant="ghost" size="sm" className="h-7"><Plus className="h-3.5 w-3.5" /></Button>
-              </div>
-              <p className="text-sm whitespace-pre-line">
-                {job.description || (
-                  <span className="text-muted-foreground italic">No summary added yet.</span>
-                )}
-              </p>
-            </Card>
+            <WorkSummaryCard description={job.description} />
 
             <div ref={invoiceRef}>
               <Card className="overflow-hidden">

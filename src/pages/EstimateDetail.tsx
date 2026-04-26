@@ -1,31 +1,51 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { AddressLink } from "@/components/AddressLink";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  ClipboardCheck,
+  FileText,
+  Loader2,
+  Printer,
+  Send,
+  Trash2,
+  Zap,
+} from "lucide-react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useEstimate, useUpdateEstimateStatus } from "@/hooks/useEstimates";
-import { supabase } from "@/integrations/supabase/client";
+import { JobV2CustomerCard } from "@/components/job-v2/JobV2CustomerCard";
+import { JobV2Sidebar } from "@/components/job-v2/JobV2Sidebar";
+import { WorkOrderHeader } from "@/components/work/WorkOrderHeader";
+import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
+import { ExpectedItemsCard } from "@/components/work/ExpectedItemsCard";
+import { CustomerSmsTab } from "@/components/SmsEmbedTab";
+import { CustomerCallsTab } from "@/components/CallLogEmbedTab";
+import { JobStatusBadge } from "@/components/JobStatusBadge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ClipboardCheck, Phone, Mail, ExternalLink, Check, Clock, StickyNote, Save, BookOpen, ArrowRight, Loader2, Info, Camera, MessageSquare, DollarSign, Eye, ThumbsUp, Trash2, Zap } from "lucide-react";
-import { ClickToCall } from "@/components/ClickToCall";
-import { SmsButton } from "@/components/SmsButton";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, isPast, isToday } from "date-fns";
-import { toast } from "sonner";
-import { PropertyCard } from "@/components/PropertyCard";
-import { paymentPreferenceLabel } from "@/lib/paymentOptions";
-
-import { cn } from "@/lib/utils";
-
-import { CustomerSmsTab } from "@/components/SmsEmbedTab";
-import { CustomerCallsTab } from "@/components/CallLogEmbedTab";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useCustomer } from "@/hooks/useCustomers";
+import { useEstimate, useUpdateEstimateStatus } from "@/hooks/useEstimates";
 import { usePresentationsForEstimate, useResponsesForEstimate } from "@/hooks/useEstimatePresentations";
-import { formatDistanceToNow } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { getExpectedJobItems } from "@/lib/expectedJobItems";
+import { paymentPreferenceLabel } from "@/lib/paymentOptions";
+import { cn } from "@/lib/utils";
 
 interface EstimateReview {
   id: string;
@@ -45,30 +65,97 @@ const reviewStatusConfig: Record<string, { label: string; variant: "default" | "
   revision_requested: { label: "Revision Requested", variant: "destructive" },
 };
 
-// EstimateStatusBadge now uses the shared JobStatusBadge with entityType="estimate"
-import { JobStatusBadge } from "@/components/JobStatusBadge";
-function EstimateStatusBadge({ status }: { status: string }) {
-  return <JobStatusBadge status={status} entityType="estimate" />;
+function EstimateActionBar({
+  estimate,
+  estimateId,
+  linkedJobId,
+  converting,
+  onConvert,
+}: {
+  estimate: any;
+  estimateId: string;
+  linkedJobId: string | null;
+  converting: boolean;
+  onConvert: () => void;
+}) {
+  const navigate = useNavigate();
+  const scheduleSub = estimate?.scheduled_date
+    ? `${format(new Date(`${estimate.scheduled_date}T00:00:00`), "MMM d")}${estimate.arrival_start ? ` - ${estimate.arrival_start}` : ""}`
+    : "Not scheduled";
+
+  const quoteParams = new URLSearchParams({ estimate_id: estimateId });
+  if (estimate.customer_name) quoteParams.set("customer_name", estimate.customer_name);
+  if (estimate.customer_phone) quoteParams.set("customer_phone", estimate.customer_phone);
+  if (estimate.customer_email) quoteParams.set("customer_email", estimate.customer_email);
+
+  const actionClass =
+    "flex-1 min-w-[120px] flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-md border border-border bg-background hover:bg-accent transition-colors";
+
+  return (
+    <Card className="p-3">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={actionClass}>
+          <BookOpen className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Schedule</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">{scheduleSub}</span>
+        </button>
+        <button type="button" className={actionClass} onClick={() => navigate(`/quick-quote?${quoteParams.toString()}`)}>
+          <Zap className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Build Quote</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Options & pricing</span>
+        </button>
+        <button type="button" className={actionClass}>
+          <Send className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Send</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Presentation</span>
+        </button>
+        {linkedJobId ? (
+          <button type="button" className={actionClass} onClick={() => navigate(`/jobs/${linkedJobId}`)}>
+            <ArrowRight className="h-5 w-5" />
+            <span className="text-xs font-semibold uppercase tracking-wide">View Job</span>
+            <span className="text-center text-[10px] leading-tight text-muted-foreground">Converted</span>
+          </button>
+        ) : (
+          <button type="button" className={actionClass} disabled={converting} onClick={onConvert}>
+            {converting ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+            <span className="text-xs font-semibold uppercase tracking-wide">Convert</span>
+            <span className="text-center text-[10px] leading-tight text-muted-foreground">Approved to job</span>
+          </button>
+        )}
+        <button type="button" className={actionClass}>
+          <FileText className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Proposal</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Preview</span>
+        </button>
+        <button type="button" className={actionClass}>
+          <Printer className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Print</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Estimate</span>
+        </button>
+      </div>
+    </Card>
+  );
 }
-
-
-const tabTriggerClass = "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm flex items-center gap-1.5";
 
 export default function EstimateDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { data: estimate, isLoading } = useEstimate(id);
+  const { data: linkedCustomer } = useCustomer(estimate?.customer_id || undefined);
   const updateStatus = useUpdateEstimateStatus();
   const [review, setReview] = useState<EstimateReview | null>(null);
   const [reviewLoading, setReviewLoading] = useState(true);
-  
   const [linkedJobId, setLinkedJobId] = useState<string | null>(null);
   const [convertingToJob, setConvertingToJob] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
   const [deleting, setDeleting] = useState(false);
   const { data: presentations } = usePresentationsForEstimate(id);
   const { data: customerResponses } = useResponsesForEstimate(id);
+  const estimateStatus = estimate?.work_status || estimate?.status || "new";
+  const expectedItems = useMemo(
+    () => estimate ? getExpectedJobItems({ ...estimate, job_type: "estimate", status: estimateStatus }) : [],
+    [estimate, estimateStatus],
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -86,324 +173,292 @@ export default function EstimateDetail() {
       }
       setReviewLoading(false);
 
-      const { data: linkedJobs } = await supabase
-        .from("jobs")
-        .select("id")
-        .eq("estimate_id", id)
-        .limit(1);
-      if (linkedJobs && linkedJobs.length > 0) {
-        setLinkedJobId(linkedJobs[0].id);
-      }
+      const { data: linkedJobs } = await supabase.from("jobs").select("id").eq("estimate_id", id).limit(1);
+      if (linkedJobs?.[0]) setLinkedJobId(linkedJobs[0].id);
     })();
   }, [id]);
 
-  if (isLoading) return (
-    <div className="min-h-screen bg-background">
-      {!isMobile && <AppHeader />}
-      <main className="p-4 max-w-4xl mx-auto"><Skeleton className="h-40 w-full" /></main>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        {!isMobile && <AppHeader />}
+        <main className="p-6">
+          <Skeleton className="h-12 w-1/2" />
+          <div className="mt-4 grid grid-cols-12 gap-4">
+            <Skeleton className="col-span-4 h-[400px]" />
+            <Skeleton className="col-span-8 h-[400px]" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  if (!estimate) return (
-    <div className="min-h-screen bg-background">
-      {!isMobile && <AppHeader />}
-      <main className="p-4 text-center text-muted-foreground">Estimate not found</main>
-    </div>
-  );
+  if (!estimate || !id) {
+    return (
+      <div className="min-h-screen bg-background">
+        {!isMobile && <AppHeader />}
+        <main className="p-4 text-center text-muted-foreground">Estimate not found</main>
+      </div>
+    );
+  }
 
+  const customerName =
+    estimate.customer_name ||
+    [linkedCustomer?.first_name, linkedCustomer?.last_name].filter(Boolean).join(" ") ||
+    linkedCustomer?.company ||
+    "Unknown";
+  const customerPhone = estimate.customer_phone || linkedCustomer?.phone || linkedCustomer?.mobile_phone || "";
+  const customerEmail = estimate.customer_email || linkedCustomer?.email || "";
+  const customerAddress =
+    estimate.address ||
+    [linkedCustomer?.address, linkedCustomer?.city, linkedCustomer?.state, linkedCustomer?.zip].filter(Boolean).join(", ") ||
+    "";
+  const status = estimateStatus;
   const reviewConfig = review ? (reviewStatusConfig[review.status] || reviewStatusConfig.pending_review) : null;
-  const ws = estimate.work_status || "new";
+
+  const handleConvert = async () => {
+    setConvertingToJob(true);
+    try {
+      await updateStatus.mutateAsync({ id, status: "won" });
+      const { data: newJobs } = await supabase.from("jobs").select("id").eq("estimate_id", id).limit(1);
+      if (newJobs?.[0]) {
+        setLinkedJobId(newJobs[0].id);
+        toast.success("Job created successfully");
+      } else {
+        toast.success("Estimate marked won");
+      }
+    } catch (e: any) {
+      toast.error("Failed to create job: " + e.message);
+    } finally {
+      setConvertingToJob(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-muted/30">
       {!isMobile && <AppHeader />}
-      <main className="pb-8">
-        {/* Header */}
-        <div className="p-4 border-b bg-card">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary mb-2">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold">#{estimate.estimate_number || "—"}</h2>
-                <EstimateStatusBadge status={ws} />
-              </div>
-              <p className="text-sm font-medium">{estimate.customer_name || "Unknown Customer"}</p>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete estimate #{estimate.estimate_number || "—"} for {estimate.customer_name || "Unknown"}. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep Estimate</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    disabled={deleting}
-                    onClick={async () => {
-                      setDeleting(true);
-                      try {
-                        await supabase.from("estimates").delete().eq("id", id!);
-                        toast.success("Estimate deleted");
-                        navigate(-1);
-                      } catch (e: any) {
-                        toast.error("Delete failed: " + e.message);
-                      } finally {
-                        setDeleting(false);
-                      }
-                    }}
-                  >
-                    {deleting ? "Deleting…" : "Delete Estimate"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-
-          {estimate.description && (
-            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{estimate.description}</p>
-          )}
-
-          <div className="mt-3 space-y-1">
-            {estimate.customer_phone && (
-              <div className="flex items-center gap-1">
-                <ClickToCall phone={estimate.customer_phone} contactName={estimate.customer_name} jobId={estimate.id} className="flex items-center gap-2 text-xs text-foreground hover:text-primary transition-colors" iconClassName="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-
-                <SmsButton phone={estimate.customer_phone} iconClassName="h-3 w-3" />
-              </div>
-            )}
-            {estimate.customer_email && (
-              <a href={`mailto:${estimate.customer_email}`} className="flex items-center gap-2 text-xs text-foreground hover:text-primary transition-colors">
-                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span>{estimate.customer_email}</span>
-              </a>
-            )}
-            {estimate.address && (
-              <AddressLink address={estimate.address} className="text-xs text-foreground" />
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-2 mt-2">
-            {estimate.hcp_id && (
-              <a href={`https://pro.housecallpro.com/app/estimates/${estimate.hcp_id}`} target="_blank" rel="noopener" className="flex items-center gap-1 text-xs text-primary font-medium">
-                <ExternalLink className="h-3.5 w-3.5" /> Open in HCP
-              </a>
-            )}
-            {linkedJobId && (
-              <Button variant="default" size="sm" className="text-xs gap-1 h-7" onClick={() => navigate(`/jobs/${linkedJobId}`)}>
-                <ArrowRight className="h-3.5 w-3.5" /> View Job
-              </Button>
-            )}
-            <Button
-              variant="outline" size="sm" className="text-xs gap-1 h-7"
-              onClick={() => {
-                const params = new URLSearchParams({ estimate_id: id! });
-                if (estimate.customer_name) params.set("customer_name", estimate.customer_name);
-                if (estimate.customer_phone) params.set("customer_phone", estimate.customer_phone);
-                if (estimate.customer_email) params.set("customer_email", estimate.customer_email || "");
-                navigate(`/quick-quote?${params.toString()}`);
-              }}
-            >
-              <Zap className="h-3.5 w-3.5" /> Build Quote
+      <div className="flex items-center bg-background px-6 py-3 border-b">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
             </Button>
-            {ws === "won" && !linkedJobId && (
-              <Button
-                variant="outline" size="sm" className="text-xs gap-1 h-7"
-                disabled={convertingToJob}
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete estimate #{estimate.estimate_number || "-"} for {customerName}. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep Estimate</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleting}
                 onClick={async () => {
-                  setConvertingToJob(true);
+                  setDeleting(true);
                   try {
-                    await updateStatus.mutateAsync({ id: id!, status: "won" });
-                    const { data: newJobs } = await supabase.from("jobs").select("id").eq("estimate_id", id!).limit(1);
-                    if (newJobs && newJobs.length > 0) { setLinkedJobId(newJobs[0].id); toast.success("Job created successfully!"); }
-                  } catch (e: any) { toast.error("Failed to create job: " + e.message); }
-                  setConvertingToJob(false);
+                    await supabase.from("estimates").delete().eq("id", id);
+                    toast.success("Estimate deleted");
+                    navigate(-1);
+                  } catch (e: any) {
+                    toast.error("Delete failed: " + e.message);
+                  } finally {
+                    setDeleting(false);
+                  }
                 }}
               >
-                {convertingToJob ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
-                Convert to Job
-              </Button>
-            )}
-          </div>
+                {deleting ? "Deleting..." : "Delete Estimate"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
 
-          <div className="text-xs text-muted-foreground mt-2">
-            {estimate.scheduled_date && <>Scheduled: {format(new Date(estimate.scheduled_date + "T00:00:00"), "M/d/yyyy")}</>}
-            {estimate.assigned_to && <> · {estimate.assigned_to}</>}
-          </div>
+      <WorkOrderHeader
+        entity={estimate}
+        entityType="estimate"
+        customerName={customerName}
+        customerId={estimate.customer_id}
+        number={estimate.estimate_number}
+        status={status}
+        hcpUrl={estimate.hcp_id ? `https://pro.housecallpro.com/app/estimates/${estimate.hcp_id}` : null}
+      />
 
-        </div>
+      <main className="mx-auto max-w-[1600px] px-6 py-4">
+        <div className="grid grid-cols-12 gap-4">
+          <aside className="col-span-12 space-y-3 lg:col-span-3">
+            <JobV2CustomerCard
+              customerName={customerName}
+              customerId={estimate.customer_id}
+              customerPhone={customerPhone}
+              customerEmail={customerEmail}
+              customerAddress={customerAddress}
+              notificationsEnabled={(linkedCustomer as any)?.notifications_enabled ?? true}
+              hasCardOnFile={!!(linkedCustomer as any)?.default_payment_method_id}
+            />
+            <JobV2Sidebar
+              job={{ ...estimate, status, tags: [] }}
+              jobId={id}
+              customerId={estimate.customer_id}
+              customerLeadSource={(linkedCustomer as any)?.lead_source}
+            />
+          </aside>
 
-        {/* Property Info Card */}
-        {estimate.address && <PropertyCard address={estimate.address} />}
+          <section className="col-span-12 space-y-3 lg:col-span-9">
+            <EstimateActionBar
+              estimate={estimate}
+              estimateId={id}
+              linkedJobId={linkedJobId}
+              converting={convertingToJob || updateStatus.isPending}
+              onConvert={handleConvert}
+            />
 
-        {/* Tabbed Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start px-4 bg-transparent border-b rounded-none h-auto p-0 gap-0">
-            <TabsTrigger value="overview" className={tabTriggerClass}><Info className="h-3.5 w-3.5" /> Overview</TabsTrigger>
-            
-            <TabsTrigger value="sms" className={tabTriggerClass}><Phone className="h-3.5 w-3.5" /> SMS</TabsTrigger>
-            <TabsTrigger value="calls" className={tabTriggerClass}><Phone className="h-3.5 w-3.5" /> Calls</TabsTrigger>
-          </TabsList>
+            <ExpectedItemsCard
+              items={expectedItems}
+              subtitle="Estimate flow: schedule, build options, send, approve, convert."
+              quickActions={(item) => {
+                if (item.key === "quote_built") {
+                  return {
+                    label: "Build",
+                    run: () => {
+                      const params = new URLSearchParams({ estimate_id: id });
+                      if (estimate.customer_name) params.set("customer_name", estimate.customer_name);
+                      if (estimate.customer_phone) params.set("customer_phone", estimate.customer_phone);
+                      navigate(`/quick-quote?${params.toString()}`);
+                    },
+                  };
+                }
+                if (item.key === "customer_decision") {
+                  return { label: "Won", busy: updateStatus.isPending, run: handleConvert };
+                }
+                return null;
+              }}
+            />
 
-          <TabsContent value="overview" className="mt-0">
-            <div className="px-4 py-4 space-y-4">
-              {reviewLoading ? (
-                <Skeleton className="h-24 w-full" />
-              ) : review ? (
-                <Card>
-                  <CardHeader>
+            <WorkSummaryCard description={estimate.description} />
+
+            <Card>
+              <CardHeader className="border-b py-3">
+                <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+                  <ClipboardCheck className="h-4 w-4" /> Estimate Review
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {reviewLoading ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : review ? (
+                  <div className="space-y-3 text-sm">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <ClipboardCheck className="h-4 w-4" /> Estimate Review
-                      </CardTitle>
-                      <Badge variant={reviewConfig!.variant}>{reviewConfig!.label}</Badge>
+                      <span className="font-medium">Submitted by {review.employee_name}</span>
+                      {reviewConfig && <Badge variant={reviewConfig.variant}>{reviewConfig.label}</Badge>}
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div><strong>Submitted by:</strong> {review.employee_name}</div>
-                    <div><strong>Submitted:</strong> {format(new Date(review.created_at), "MMM d, yyyy h:mm a")}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Submitted {format(new Date(review.created_at), "MMM d, yyyy h:mm a")}
+                    </p>
                     {review.selected_tiers.length > 0 && (
-                      <div>
-                        <strong>Selected Tiers:</strong>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {review.selected_tiers.map(tier => (
-                            <Badge key={tier} variant="outline">{tier}</Badge>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap gap-1">
+                        {review.selected_tiers.map((tier) => (
+                          <Badge key={tier} variant="outline">{tier}</Badge>
+                        ))}
                       </div>
                     )}
                     {review.payment_preference && (
-                      <div>
-                        <strong>Payment Preference:</strong>{" "}
-                        {paymentPreferenceLabel(review.payment_preference)}
-                      </div>
-                    )}
-                    {review.reviewed_at && (
-                      <div><strong>Reviewed:</strong> {format(new Date(review.reviewed_at), "MMM d, yyyy h:mm a")}</div>
+                      <p><strong>Payment:</strong> {paymentPreferenceLabel(review.payment_preference)}</p>
                     )}
                     {review.admin_notes && (
-                      <div><strong>Admin Notes:</strong> <span className="italic text-muted-foreground">"{review.admin_notes}"</span></div>
+                      <p className="italic text-muted-foreground">"{review.admin_notes}"</p>
                     )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="p-6 text-center text-muted-foreground">
-                  <ClipboardCheck className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p>No estimate review submitted yet.</p>
-                </Card>
-              )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No estimate review submitted yet.</p>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* Presentation Tracking */}
-              {presentations && presentations.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Eye className="h-4 w-4" /> Sales Presentation Tracking
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {presentations.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between p-2 rounded border">
-                        <div>
-                          <p className="font-medium">{p.customer_email || "Unknown"}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Sent {format(new Date(p.created_at), "MMM d, yyyy")}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          {p.view_count > 0 ? (
-                            <>
-                              <Badge variant="outline" className="text-xs">
-                                <Eye className="h-3 w-3 mr-1" /> {p.view_count} view{p.view_count !== 1 ? "s" : ""}
-                              </Badge>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                Last viewed {formatDistanceToNow(new Date(p.last_viewed_at!))} ago
-                              </p>
-                            </>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">Not yet viewed</Badge>
-                          )}
-                        </div>
+            {presentations && presentations.length > 0 && (
+              <Card>
+                <CardHeader className="border-b py-3">
+                  <CardTitle className="text-sm uppercase tracking-wide text-muted-foreground">Presentation Tracking</CardTitle>
+                </CardHeader>
+                <CardContent className="divide-y p-0">
+                  {presentations.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-medium">{p.customer_email || customerEmail || "Customer"}</p>
+                        <p className="text-xs text-muted-foreground">Sent {format(new Date(p.created_at), "MMM d, yyyy")}</p>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+                      <Badge variant={p.view_count > 0 ? "outline" : "secondary"}>
+                        {p.view_count > 0 ? `${p.view_count} viewed` : "Not viewed"}
+                      </Badge>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
-              {/* Customer Responses */}
-              {customerResponses && customerResponses.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <ThumbsUp className="h-4 w-4" /> Customer Decisions
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {customerResponses.map((r) => (
-                      <div key={r.id} className={cn(
-                        "p-3 rounded border",
+            {customerResponses && customerResponses.length > 0 && (
+              <Card>
+                <CardHeader className="border-b py-3">
+                  <CardTitle className="text-sm uppercase tracking-wide text-muted-foreground">Customer Decisions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 p-4">
+                  {customerResponses.map((r) => (
+                    <div
+                      key={r.id}
+                      className={cn(
+                        "rounded border p-3 text-sm",
                         r.action === "approved" && "border-emerald-200 bg-emerald-50",
                         r.action === "changes_requested" && "border-amber-200 bg-amber-50",
                         r.action === "declined" && "border-red-200 bg-red-50",
-                      )}>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={r.action === "approved" ? "default" : r.action === "declined" ? "destructive" : "secondary"}>
-                            {r.action === "approved" ? "✅ Approved" : r.action === "changes_requested" ? "❓ Has Questions" : "❌ Declined"}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(r.responded_at), "MMM d, yyyy h:mm a")}
-                          </span>
-                        </div>
-                        {r.action === "approved" && (r as any).selected_tier && (
-                          <p className="mt-2 text-sm"><strong>System:</strong> <span className="capitalize">{(r as any).selected_tier}</span></p>
-                        )}
-                        {r.action === "approved" && r.payment_preference && (
-                          <p className="mt-1 text-sm"><strong>Payment:</strong> {paymentPreferenceLabel(r.payment_preference)}</p>
-                        )}
-                        {r.action === "approved" && (r as any).selected_addons && Array.isArray((r as any).selected_addons) && (r as any).selected_addons.length > 0 && (
-                          <p className="mt-1 text-sm"><strong>Add-ons:</strong> {(r as any).selected_addons.join(", ")}</p>
-                        )}
-                        {r.message && <p className="mt-2 text-sm italic text-muted-foreground">"{r.message}"</p>}
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <JobStatusBadge status={r.action} entityType="estimate" />
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(r.responded_at), "MMM d, yyyy h:mm a")}
+                        </span>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+                      {(r as any).selected_tier && <p className="mt-2"><strong>System:</strong> {(r as any).selected_tier}</p>}
+                      {r.payment_preference && <p className="mt-1"><strong>Payment:</strong> {paymentPreferenceLabel(r.payment_preference)}</p>}
+                      {(r as any).selected_addons && Array.isArray((r as any).selected_addons) && (r as any).selected_addons.length > 0 && (
+                        <p className="mt-1"><strong>Add-ons:</strong> {(r as any).selected_addons.join(", ")}</p>
+                      )}
+                      {r.message && <p className="mt-2 italic text-muted-foreground">"{r.message}"</p>}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              <Card className="overflow-hidden">
+                <div className="border-b px-4 py-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">SMS</h3>
+                </div>
+                {customerPhone ? <CustomerSmsTab phones={[customerPhone]} /> : <p className="p-4 text-sm text-muted-foreground">No customer phone on file</p>}
+              </Card>
+              <Card className="overflow-hidden">
+                <div className="border-b px-4 py-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Calls</h3>
+                </div>
+                {customerPhone ? (
+                  <CustomerCallsTab phones={[customerPhone]} customerId={estimate.customer_id || undefined} />
+                ) : (
+                  <p className="p-4 text-sm text-muted-foreground">No customer phone on file</p>
+                )}
+              </Card>
             </div>
-          </TabsContent>
-
-
-
-          <TabsContent value="sms" className="mt-0">
-            {estimate.customer_phone ? (
-              <CustomerSmsTab phones={[estimate.customer_phone].filter(Boolean)} />
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No customer phone on file</p>
-            )}
-          </TabsContent>
-
-          <TabsContent value="calls" className="mt-0">
-            {estimate.customer_phone ? (
-              <CustomerCallsTab
-                phones={[estimate.customer_phone].filter(Boolean)}
-                customerId={estimate.customer_id || undefined}
-              />
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No customer phone on file</p>
-            )}
-          </TabsContent>
-        </Tabs>
+          </section>
+        </div>
       </main>
-
     </div>
   );
 }
