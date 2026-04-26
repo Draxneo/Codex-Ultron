@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFollowUpJobs } from "@/hooks/useJobs";
 import { useAgreementVisitsDue, useExpiringAgreements, useServiceAgreements } from "@/hooks/useServiceAgreements";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { safeCount } from "@/lib/querySafety";
 import {
   AlertTriangle, CalendarX, MessageSquare, CreditCard, FileText, Shield,
   Receipt, FileCheck, Camera, ThumbsUp, CalendarCheck, ClipboardCheck, FileQuestion,
@@ -24,21 +25,6 @@ import {
 
 const GO_LIVE = '2026-03-24';
 export const GLOBAL_ACTION_NEEDED_ROUTE = "/copilot";
-
-/** Safe count extractor — returns 0 on error */
-function safeCount(result: PromiseSettledResult<{ count: number | null; error: any }>, label: string, errors: string[]): number {
-  if (result.status === "rejected") {
-    console.error(`[MissionControl] ${label} query rejected:`, result.reason);
-    errors.push(label);
-    return 0;
-  }
-  if (result.value.error) {
-    console.error(`[MissionControl] ${label} query error:`, result.value.error);
-    errors.push(label);
-    return 0;
-  }
-  return result.value.count || 0;
-}
 
 function useWorkflowBlockers() {
   return useQuery({
