@@ -104,6 +104,7 @@ const Jobs = () => {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const attentionFilter = searchParams.get("attention");
+  const typeParam = searchParams.get("type") as FilterType | null;
   const { data: jobs, isLoading } = useJobs();
   const { data: estimates, isLoading: estLoading } = useEstimates(true);
   const { data: employees } = useEmployees();
@@ -130,6 +131,12 @@ const Jobs = () => {
     const parsed = parseISO(dateParam);
     if (!Number.isNaN(parsed.getTime())) setCurrentDay(parsed);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (typeParam && FILTERS.some((filter) => filter.value === typeParam)) {
+      setTypeFilter(typeParam);
+    }
+  }, [typeParam]);
   const doneStatuses = ["done", "invoiced", "canceled", "completed"];
   const queueCount = useMemo(() => {
     const unschedCount = (jobs || []).filter(j => !j.scheduled_date && !doneStatuses.includes(j.status?.toLowerCase?.() ?? "")).length;

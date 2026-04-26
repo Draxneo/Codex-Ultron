@@ -1,8 +1,8 @@
 /**
- * TechJobDetail.tsx — HCP-clone job detail card stack for technicians.
+ * TechJobDetail.tsx - Job detail card stack for technicians.
  *
  * Mobile-only route: /tech/jobs/:id
- * Reuses existing data hooks (useJob, useCustomer) — no data changes.
+ * Reuses existing data hooks (useJob, useCustomer) with no data changes.
  */
 
 import { useNavigate, useParams } from "react-router-dom";
@@ -55,7 +55,7 @@ export default function TechJobDetail() {
     [linkedCustomer?.address, linkedCustomer?.city, linkedCustomer?.state, linkedCustomer?.zip].filter(Boolean).join(", ") ||
     null;
 
-  const jobNumber = job.job_number || job.hcp_job_number || "—";
+  const jobNumber = job.job_number || job.hcp_job_number || "-";
   const jobCount = customerJobs?.length;
 
   return (
@@ -91,7 +91,7 @@ export default function TechJobDetail() {
             rel="noopener"
             className="ml-auto flex items-center gap-1 text-[11px] text-primary font-medium px-2 h-8 rounded hover:bg-primary/10"
           >
-            <ExternalLink className="h-3.5 w-3.5" /> HCP
+            <ExternalLink className="h-3.5 w-3.5" /> Source
           </a>
         )}
       </div>

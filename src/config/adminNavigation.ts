@@ -34,11 +34,11 @@ export type SettingEntry = {
 
 export type SettingsGroup = {
   title: string;
-  emoji: string;
+  icon: React.ElementType;
   cards: SettingEntry[];
 };
 
-/* ── Tools & Builders (links to standalone routes) ─── */
+/* Tools & Builders (links to standalone routes) */
 export const TOOL_CARDS: ToolEntry[] = [
   { label: "JARVIS",            icon: Brain,         path: "/copilot",                     color: "text-violet-500",  bg: "bg-violet-500/10" },
   { label: "Catalog & Pricebook", icon: Package,     path: "/catalog",                     color: "text-orange-500",  bg: "bg-orange-500/10" },
@@ -55,18 +55,18 @@ export const TOOL_CARDS: ToolEntry[] = [
   { label: "SMS Templates",     icon: MessageSquareText, path: "/agent-training?section=output", color: "text-blue-500",   bg: "bg-blue-500/10" },
 ];
 
-/* ── Settings (each card opens an Admin section) ─── */
+/* Settings (each card opens an Admin section) */
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
     title: "People",
-    emoji: "👥",
+    icon: Users,
     cards: [
       { label: "Employees", icon: Users, section: "employees", color: "text-[hsl(var(--sky))]", bg: "bg-[hsl(var(--sky))]/10" },
     ],
   },
   {
     title: "Communications",
-    emoji: "📞",
+    icon: Phone,
     cards: [
       { label: "Voice & Phone", icon: Phone,     section: "voice",     color: "text-cyan-500",   bg: "bg-cyan-500/10" },
       { label: "Webhooks",      icon: Webhook,   section: "webhooks",  color: "text-indigo-500", bg: "bg-indigo-500/10" },
@@ -75,7 +75,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     title: "Money",
-    emoji: "💰",
+    icon: CreditCard,
     cards: [
       { label: "Invoicing", icon: CreditCard, section: "payments", color: "text-emerald-500", bg: "bg-emerald-500/10" },
       { label: "Reports",   icon: BarChart3,  section: "reports",  color: "text-amber-500",   bg: "bg-amber-500/10" },
@@ -83,7 +83,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     title: "System",
-    emoji: "⚙️",
+    icon: Settings2,
     cards: [
       { label: "Company",       icon: Settings2,  section: "company",    color: "text-muted-foreground", bg: "bg-muted" },
       { label: "JARVIS Config", icon: Brain,      section: "jarvis",     color: "text-violet-500",       bg: "bg-violet-500/10" },

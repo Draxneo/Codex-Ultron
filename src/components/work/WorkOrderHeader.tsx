@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, ExternalLink, Pencil } from "lucide-react";
+import { ChevronRight, ExternalLink } from "lucide-react";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
 import { HcpStatusBadge } from "@/components/HcpStatusBadge";
 
@@ -51,9 +51,6 @@ export function WorkOrderHeader({
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="min-w-0 break-words text-2xl font-bold leading-tight">{label} for {customerName}</h1>
-        <button className="rounded p-1 text-muted-foreground hover:text-foreground">
-          <Pencil className="h-4 w-4" />
-        </button>
         <JobStatusBadge status={status || "new"} entityType={entityType} />
         {entity?.hcp_status && <HcpStatusBadge status={entity.hcp_status} />}
         {hcpUrl && (
@@ -63,7 +60,7 @@ export function WorkOrderHeader({
             rel="noopener"
             className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline"
           >
-            <ExternalLink className="h-3.5 w-3.5" /> Open in HCP
+            <ExternalLink className="h-3.5 w-3.5" /> HCP source
           </a>
         )}
       </div>

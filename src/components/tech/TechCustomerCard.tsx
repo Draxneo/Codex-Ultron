@@ -1,15 +1,15 @@
 /**
- * TechCustomerCard.tsx — HCP-clone customer card for the tech job detail.
+ * TechCustomerCard.tsx - Customer card for the tech job detail.
  *
  * Layout:
  *   [ Street View thumbnail ]
  *   Customer name
  *   📍 Address
  *   [ Call ] [ Text ] [ Dispatch ] [ Navigate ]   ← large tap targets
- *   Customer History (n)  →  /tech/customers/:id
+ *   Customer History (n) -> /tech/customers/:id
  *
  * "Dispatch" sends an SMS to the office dispatch line (210-600-5091)
- * via our existing /sms compose route — replaces the old device-SMS chat icon.
+ * via our existing /sms compose route.
  */
 
 import { Card } from "@/components/ui/card";
@@ -91,7 +91,7 @@ export function TechCustomerCard({
               rel="noopener"
               className="text-[11px] text-primary hover:underline hidden md:inline"
             >
-              Open in HCP
+              HCP source
             </a>
           )}
         </div>
@@ -101,7 +101,7 @@ export function TechCustomerCard({
           <p className="text-sm text-foreground leading-snug">{address}</p>
         )}
 
-        {/* Big action grid — 4 large tap targets */}
+        {/* Big action grid - 4 large tap targets */}
         <div className="grid grid-cols-4 gap-2 pt-1">
           <ActionButton onClick={handleCall} disabled={!customerPhone} icon={Phone} label="Call Customer" tone="primary" />
           <ActionButton onClick={handleSms} disabled={!customerPhone} icon={MessageSquare} label="Text Customer" tone="primary" />

@@ -1,5 +1,5 @@
 /**
- * TechScheduleCard.tsx — HCP-clone schedule card.
+ * TechScheduleCard.tsx - Tech schedule card.
  * Shows From / To times, arrival window, assigned tech, and a pencil → reschedule.
  */
 

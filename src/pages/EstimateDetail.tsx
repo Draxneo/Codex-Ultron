@@ -70,6 +70,9 @@ function EstimateActionBar({
   estimate,
   estimateId,
   linkedJobId,
+  customerName,
+  customerPhone,
+  customerEmail,
   latestPresentationToken,
   converting,
   onConvert,
@@ -77,6 +80,9 @@ function EstimateActionBar({
   estimate: any;
   estimateId: string;
   linkedJobId: string | null;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
   latestPresentationToken?: string | null;
   converting: boolean;
   onConvert: () => void;
@@ -87,9 +93,9 @@ function EstimateActionBar({
     : "Not scheduled";
 
   const quoteParams = new URLSearchParams({ estimate_id: estimateId });
-  if (estimate.customer_name) quoteParams.set("customer_name", estimate.customer_name);
-  if (estimate.customer_phone) quoteParams.set("customer_phone", estimate.customer_phone);
-  if (estimate.customer_email) quoteParams.set("customer_email", estimate.customer_email);
+  if (customerName) quoteParams.set("customer_name", customerName);
+  if (customerPhone) quoteParams.set("customer_phone", customerPhone);
+  if (customerEmail) quoteParams.set("customer_email", customerEmail);
   const presentationUrl = latestPresentationToken ? `${window.location.origin}/presentation/${latestPresentationToken}` : null;
 
   const actionClass =
@@ -115,21 +121,21 @@ function EstimateActionBar({
         </button>
         <button
           type="button"
-          className={estimate.customer_phone ? actionClass : disabledActionClass}
-          disabled={!estimate.customer_phone}
+          className={customerPhone ? actionClass : disabledActionClass}
+          disabled={!customerPhone}
           onClick={() => {
-            if (!estimate.customer_phone) return;
-            const firstName = String(estimate.customer_name || "").split(" ")[0] || "there";
+            if (!customerPhone) return;
+            const firstName = String(customerName || "").split(" ")[0] || "there";
             const body = presentationUrl
               ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${presentationUrl}`
               : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
-            navigate(`/inbox?section=sms&phone=${encodeURIComponent(estimate.customer_phone)}&draft=${encodeURIComponent(body)}`);
+            navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
           }}
         >
           <Send className="h-5 w-5" />
           <span className="text-xs font-semibold uppercase tracking-wide">Send</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">
-            {estimate.customer_phone ? "Draft SMS" : "No phone"}
+            {customerPhone ? "Draft SMS" : "No phone"}
           </span>
         </button>
         {linkedJobId ? (
@@ -348,6 +354,9 @@ export default function EstimateDetail() {
               estimate={estimate}
               estimateId={id}
               linkedJobId={linkedJobId}
+              customerName={customerName}
+              customerPhone={customerPhone}
+              customerEmail={customerEmail}
               latestPresentationToken={latestPresentationToken}
               converting={convertingToJob || updateStatus.isPending}
               onConvert={handleConvert}

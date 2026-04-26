@@ -1,5 +1,5 @@
 /**
- * TechStatusCard.tsx — HCP-clone status card with 4 big circles:
+ * TechStatusCard.tsx - Tech status card with 4 big circles:
  * On My Way · Start · Pause · Finish
  *
  * Wires into our existing data model:

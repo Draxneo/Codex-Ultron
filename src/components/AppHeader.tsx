@@ -102,7 +102,7 @@ export function AppHeader() {
         <nav className="flex items-center gap-0.5 overflow-x-auto flex-1 min-w-0">
           {navItems.map((item) => {
             const active = item.to === "/"
-              ? location.pathname === "/" || location.pathname.startsWith("/jobs")
+              ? location.pathname === "/" || location.pathname.startsWith("/jobs") || location.pathname.startsWith("/estimates")
               : location.pathname.startsWith(item.to);
             const unread = unreadMap[item.to] || 0;
             return (

@@ -1,7 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Button } from "@/components/ui/button";
-import { ChevronDown, Plus, ClipboardList, Tag, Lock, Paperclip, Megaphone, Home, ListChecks } from "lucide-react";
+import { ChevronDown, ClipboardList, Tag, Lock, Paperclip, Megaphone, Home, ListChecks } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { JobPhotosGrid } from "@/components/job/JobPhotosGrid";
@@ -60,7 +59,6 @@ export function JobV2Sidebar({ job, jobId, customerId, customerLeadSource }: Pro
       <SidebarCard
         title="Checklists"
         icon={ListChecks}
-        action={<Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="h-3.5 w-3.5" /></Button>}
       >
         <ul className="text-sm divide-y">
           <li className="px-3 py-2 hover:bg-accent/40 cursor-pointer">New System Install Checklist</li>
@@ -71,16 +69,14 @@ export function JobV2Sidebar({ job, jobId, customerId, customerLeadSource }: Pro
       <SidebarCard
         title="Fields"
         icon={ClipboardList}
-        action={<Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="h-3.5 w-3.5" /></Button>}
       >
-        <p className="px-3 py-3 text-xs text-muted-foreground">No custom fields</p>
+        <p className="px-3 py-3 text-xs text-muted-foreground">No saved fields yet</p>
       </SidebarCard>
 
       <SidebarCard
         title="Job tags"
         icon={Tag}
         count={tags.length}
-        action={<Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="h-3.5 w-3.5" /></Button>}
       >
         {tags.length > 0 ? (
           <div className="px-3 py-2 flex flex-wrap gap-1.5">
@@ -107,7 +103,6 @@ export function JobV2Sidebar({ job, jobId, customerId, customerLeadSource }: Pro
         title="Attachments"
         icon={Paperclip}
         defaultOpen={false}
-        action={<Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="h-3.5 w-3.5" /></Button>}
       >
         <JobPhotosGrid jobId={jobId} />
       </SidebarCard>
@@ -115,7 +110,6 @@ export function JobV2Sidebar({ job, jobId, customerId, customerLeadSource }: Pro
       <SidebarCard
         title="Lead source"
         icon={Megaphone}
-        action={<Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="h-3.5 w-3.5" /></Button>}
       >
         <p className="px-3 py-3 text-sm">{customerLeadSource || <span className="text-muted-foreground">Not set</span>}</p>
       </SidebarCard>

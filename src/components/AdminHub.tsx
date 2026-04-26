@@ -1,5 +1,5 @@
 /**
- * AdminHub.tsx — Icon-grid landing page for /admin
+ * AdminHub.tsx - Icon-grid landing page for /admin
  * 
  * Categorized icon grids: Quick Actions, Metrics, Tools & Builders, Settings.
  * Universal layout for desktop (5-col) and mobile (3-col).
@@ -23,16 +23,16 @@ import { formatDistanceToNow } from "date-fns";
 import { useState, useCallback } from "react";
 import { TOOL_CARDS, SETTINGS_GROUPS } from "@/config/adminNavigation";
 
-/* ── Quick Actions ─────────────────────────────── */
+/* Quick Actions */
 const quickActions = [
   { label: "New Job", icon: Plus, path: "/?newJob=1", bg: "bg-[hsl(var(--success))]/15", color: "text-[hsl(var(--success))]" },
   { label: "New Customer", icon: UserPlus, path: "/customers?new=1", bg: "bg-[hsl(var(--sky))]/15", color: "text-[hsl(var(--sky))]" },
-  { label: "Estimates", icon: FileText, path: "/", bg: "bg-[hsl(var(--warm))]/15", color: "text-[hsl(var(--warm))]" },
+  { label: "Estimates", icon: FileText, path: "/?type=estimate", bg: "bg-[hsl(var(--warm))]/15", color: "text-[hsl(var(--warm))]" },
   { label: "Calls", icon: Phone, path: "/calls", bg: "bg-primary/10", color: "text-primary" },
   { label: "SMS", icon: MessageSquare, path: "/sms", bg: "bg-[hsl(var(--accent))]/15", color: "text-[hsl(var(--accent))]" },
 ];
 
-/* ── Metric Cards Config ───────────────────────── */
+/* Metric Cards Config */
 const metricCards = [
   { key: "dispatchedToday" as const, label: "Dispatched", icon: Briefcase, color: "text-[hsl(var(--sky))]", bg: "bg-[hsl(var(--sky))]/10" },
   { key: "totalActive" as const, label: "Active Jobs", icon: Clock, color: "text-[hsl(var(--warm))]", bg: "bg-[hsl(var(--warm))]/10" },
@@ -108,7 +108,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
               </div>
               <div className="min-w-0">
                 <p className="text-lg font-bold leading-none text-primary-foreground">
-                  {metricsLoading ? "–" : metrics?.[key] ?? 0}
+                  {metricsLoading ? "-" : metrics?.[key] ?? 0}
                 </p>
                 <p className="text-[10px] text-primary-foreground/60 mt-0.5 truncate">{label}</p>
               </div>
@@ -161,7 +161,10 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
         {settingsGroups.map((group) => (
           <div key={group.title}>
             <p className="text-[11px] font-semibold text-muted-foreground/80 mb-2 flex items-center gap-1.5">
-              <span>{group.emoji}</span>
+              {(() => {
+                const GroupIcon = group.icon;
+                return <GroupIcon className="h-3.5 w-3.5" />;
+              })()}
               <span className="uppercase tracking-wide">{group.title}</span>
             </p>
             <div className="grid grid-cols-3 md:grid-cols-5 gap-1">

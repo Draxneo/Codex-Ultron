@@ -1,5 +1,5 @@
 /**
- * TechCustomerDetail.tsx — Minimal HCP-clone customer view for tech mobile.
+ * TechCustomerDetail.tsx - Minimal tech customer view for mobile.
  *
  * Shows customer header, contact icons, recent job history, and equipment.
  * Reuses existing hooks; deeper editing happens on dispatch UI.
@@ -76,7 +76,7 @@ export default function TechCustomerDetail() {
                   rel="noopener"
                   className="text-[11px] text-primary hover:underline hidden md:inline"
                 >
-                  Open in HCP
+                  HCP source
                 </a>
               )}
             </div>
