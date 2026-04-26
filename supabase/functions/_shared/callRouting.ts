@@ -35,11 +35,11 @@ export async function isUserBusy(
 ): Promise<boolean> {
   if (!employeeName) return false;
   // We track active calls via call_log.status = 'in-progress'.
-  // Window down to the past 30 minutes — beyond that the row is almost
-  // certainly stuck/orphaned (max call timeLimit is 60min anyway). Using a
-  // smaller window avoids "ghost-busy" where a leaked in-progress row from
-  // a crashed browser tab keeps overflowing every future inbound call.
-  const sinceIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  // Cover the longest softphone Dial timeLimit (4h outbound) plus callback lag.
+  // This avoids a long live call becoming routeable again halfway through.
+  // Stale rows are cleaned by reconcile-stuck-calls instead of shortening this
+  // guard and risking a second inbound ring during an active call.
+  const sinceIso = new Date(Date.now() - 255 * 60 * 1000).toISOString();
   try {
     const { data } = await supabase
       .from("call_log")

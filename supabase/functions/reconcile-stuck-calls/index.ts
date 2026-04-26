@@ -118,12 +118,12 @@ Deno.serve(async (req) => {
 
   // ─────────────────────────────────────────────────────────────────────
   // FORCE-CLOSE STUCK in-progress ROWS (ghost-busy protection)
-  // Any row stuck at status='in-progress' for >65min cannot be a real call
-  // (Twilio's max timeLimit is 60min). These rows would otherwise block
-  // routing forever via isUserBusy() → callers ring busy users instead of
-  // overflowing to the answering service.
+  // The web softphone's outbound Dial path can allow long calls, so do not
+  // assume 65min means impossible. Only close old rows after the longest
+  // configured Dial window plus callback lag, and skip rows Twilio still
+  // reports as active.
   // ─────────────────────────────────────────────────────────────────────
-  const stuckCutoff = new Date(Date.now() - 65 * 60 * 1000).toISOString();
+  const stuckCutoff = new Date(Date.now() - 255 * 60 * 1000).toISOString();
   const { data: stuckRows, error: stuckErr } = await supabase
     .from("call_log")
     .select("id, twilio_sid, status, started_at")
@@ -132,6 +132,7 @@ Deno.serve(async (req) => {
     .limit(50);
 
   let forceClosedCount = 0;
+  const results: any[] = [];
   if (!stuckErr && stuckRows && stuckRows.length > 0) {
     console.log(`[reconcile] Force-closing ${stuckRows.length} stuck in-progress rows`);
     for (const stuck of stuckRows as Array<{ id: string; twilio_sid: string | null; started_at: string | null }>) {
@@ -143,6 +144,15 @@ Deno.serve(async (req) => {
       if (stuck.twilio_sid) {
         const twilioCall: TwilioCall | null = await fetchTwilio(`/Calls/${stuck.twilio_sid}.json`);
         if (twilioCall) {
+          if (["queued", "ringing", "in-progress"].includes(twilioCall.status)) {
+            results.push({
+              id: stuck.id,
+              sid: stuck.twilio_sid,
+              reconciled: false,
+              reason: `twilio_still_${twilioCall.status}`,
+            });
+            continue;
+          }
           finalStatus = ["completed", "no-answer", "busy", "canceled", "failed"].includes(twilioCall.status)
             ? twilioCall.status
             : "completed";
@@ -166,7 +176,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  const results: any[] = [];
   for (const row of rows) {
     const parent: TwilioCall | null = await fetchTwilio(`/Calls/${row.twilio_sid}.json`);
     if (!parent) {

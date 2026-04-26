@@ -90,6 +90,11 @@ export function useNativeSoftphone(enabled: boolean = true) {
     waitingCallerInfo: null,
     error: null,
   });
+  const statusRef = useRef<SoftphoneStatus>("offline");
+
+  useEffect(() => {
+    statusRef.current = state.status;
+  }, [state.status]);
 
   // Build employee-only contact map AND resolve current user's employee name
   // for answered_by attribution (see useSoftphone.ts for the same logic).
@@ -291,9 +296,20 @@ export function useNativeSoftphone(enabled: boolean = true) {
       // active-call audio route. Reject as busy immediately so the caller
       // gets routed to voicemail/overflow per the server's <Dial action="...">
       // and no second ring ever plays in our user's ear.
-      const currentStatus = (state as any).status as SoftphoneStatus;
-      if (currentStatus === "on-call" || currentStatus === "connecting") {
-        console.log("[NativeSoftphone] Auto-rejecting 2nd inbound call (already on-call)", callSid);
+      const currentStatus = statusRef.current;
+      if (
+        currentStatus === "on-call" ||
+        currentStatus === "connecting" ||
+        currentStatus === "ringing" ||
+        activeCallSidRef.current ||
+        incomingCallSidRef.current
+      ) {
+        console.log("[NativeSoftphone] Auto-rejecting duplicate inbound call", {
+          callSid,
+          currentStatus,
+          activeCallSid: activeCallSidRef.current,
+          incomingCallSid: incomingCallSidRef.current,
+        });
         try {
           if (callSid) await plugin.rejectCall({ callSid });
         } catch (e) {
@@ -305,7 +321,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       const resolvedName = await resolveCallerName(from);
       setState((s) => {
         // Defensive guard: state may have flipped to on-call during the await
-        if (s.status === "on-call" || s.status === "connecting") {
+        if (s.status === "on-call" || s.status === "connecting" || s.status === "ringing" || s.incomingCall) {
           try { plugin.rejectCall({ callSid }); } catch {}
           return s;
         }

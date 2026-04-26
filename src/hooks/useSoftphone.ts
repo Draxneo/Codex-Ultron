@@ -667,8 +667,16 @@ export function useSoftphone(enabled: boolean = true) {
         // Read LATEST status from ref (not the stale closure captured when
         // the listener was registered).
         const currentStatus = statusRef.current;
-        if (currentStatus === "on-call" || currentStatus === "connecting") {
-          console.log("[Softphone] Auto-rejecting 2nd inbound call (already on-call)");
+        if (
+          currentStatus === "on-call" ||
+          currentStatus === "connecting" ||
+          currentStatus === "ringing" ||
+          incomingCallSidRef.current
+        ) {
+          console.log("[Softphone] Auto-rejecting duplicate inbound call", {
+            currentStatus,
+            existingIncomingSid: incomingCallSidRef.current,
+          });
           try { call.reject(); } catch {}
           return;
         }
@@ -677,7 +685,7 @@ export function useSoftphone(enabled: boolean = true) {
 
         setState((s) => {
           // Defensive guard: if state changed mid-await to on-call, reject here too
-          if (s.status === "on-call" || s.status === "connecting") {
+          if (s.status === "on-call" || s.status === "connecting" || s.status === "ringing" || s.incomingCall) {
             try { call.reject(); } catch {}
             return s;
           }
@@ -1205,6 +1213,7 @@ export function useSoftphone(enabled: boolean = true) {
   // Accept incoming call — just call accept(), let the "accept" event drive state
   const acceptCall = useCallback(() => {
     if (state.incomingCall) {
+      setState((s) => ({ ...s, status: "connecting" }));
       state.incomingCall.accept();
       clearSafetyTimer();
       // State transition (activeCall, status: "on-call") is handled by the
