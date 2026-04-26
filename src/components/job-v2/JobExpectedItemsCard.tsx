@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
 
 const STATUS_META: Record<ExpectedItemStatus, { icon: React.ElementType; className: string; label: string }> = {
   done: { icon: CheckCircle2, className: "text-emerald-600 bg-emerald-600/10", label: "Done" },
@@ -24,6 +25,7 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
   const { data: invoices = [] } = useCustomerInvoices(jobId);
   const { data: partsOrders = [] } = usePartsOrders(jobId);
   const { cart, itemCount } = useJobCart(jobId);
+  const { send: sendOMW } = useSendOnMyWay();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const items = getExpectedJobItems(job, invoices as any[], partsOrders as any[], cart ? { ...cart, item_count: itemCount } : null);
@@ -57,13 +59,27 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
         };
       case "dispatch":
         return {
-          label: "Mark OMW",
-          run: () => stampJob(key, { on_my_way_sent_at: now, dispatch_sent_at: now, status: "on_my_way" }, "on_my_way_marked", "On-my-way marked"),
+          label: "Send OMW",
+          run: async () => {
+            setBusy(key);
+            try {
+              await sendOMW({
+                jobId,
+                customerPhone: job?.customer_phone,
+                customerName: job?.customer_name,
+                jobAddress: job?.address,
+                employeeName: job?.assigned_to,
+                employeeId: job?.assigned_employee_id || job?.employee_id || null,
+              });
+            } finally {
+              setBusy(null);
+            }
+          },
         };
       case "on_site":
         return {
           label: "Start job",
-          run: () => stampJob(key, { status: "in_progress" }, "job_started", "Job marked in progress"),
+          run: () => stampJob(key, { status: "in_progress", started_at: now }, "job_started", "Job marked in progress"),
         };
       case "completion":
       case "site_visit":

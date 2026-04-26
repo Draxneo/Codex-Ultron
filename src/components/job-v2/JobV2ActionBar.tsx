@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
 
 interface Props {
   job: any;
@@ -47,11 +48,13 @@ export function JobV2ActionBar({ job, jobId, onInvoiceClick }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
+  const { send: sendOMW, sending: sendingOMW } = useSendOnMyWay();
 
   const setStatus = async (newStatus: string, action: string) => {
     setBusy(action);
     try {
       const updates: any = { status: newStatus };
+      if (newStatus === "in_progress") updates.started_at = new Date().toISOString();
       if (newStatus === "done") updates.completed_at = new Date().toISOString();
       await supabase.from("jobs").update(updates).eq("id", jobId);
       await supabase.from("activity_log").insert({ job_id: jobId, action, details: `Status → ${newStatus}` });
@@ -87,9 +90,16 @@ export function JobV2ActionBar({ job, jobId, onInvoiceClick }: Props) {
         <ActionButton
           icon={Truck}
           label="OMW"
-          onClick={() => setStatus("on_my_way", "on_my_way")}
+          onClick={() => sendOMW({
+            jobId,
+            customerPhone: job?.customer_phone,
+            customerName: job?.customer_name,
+            jobAddress: job?.address,
+            employeeName: job?.assigned_to,
+            employeeId: job?.assigned_employee_id || job?.employee_id || null,
+          })}
           active={isOmw}
-          busy={busy === "on_my_way"}
+          busy={sendingOMW}
         />
         <ActionButton
           icon={Play}

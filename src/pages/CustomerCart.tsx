@@ -6,8 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, Loader2, Package, Wrench, Zap, Sparkles, Phone, ShieldCheck, FileText } from "lucide-react";
 import { toast } from "sonner";
-import { CartAddonSuggestions } from "@/components/cart/CartAddonSuggestions";
-import { PromoCodeField } from "@/components/cart/PromoCodeField";
 import { FinancingWidget } from "@/components/cart/FinancingWidget";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
 import { getCompanySettings } from "@/lib/companySettings";
@@ -46,24 +44,17 @@ export default function CustomerCart() {
     const load = async () => {
       if (!token) { setError("Missing token"); setLoading(false); return; }
       try {
-        const { data: cart, error: cartErr } = await (supabase as any)
-          .from("job_carts")
-          .select("*")
-          .eq("public_token", token)
-          .maybeSingle();
-        if (cartErr) throw cartErr;
-        if (!cart) { setError("Cart not found"); setLoading(false); return; }
-
-        const [{ data: items }, { data: job }, settingsMap] = await Promise.all([
-          (supabase as any).from("job_cart_items").select("*").eq("cart_id", cart.id).order("sort_order").order("created_at"),
-          supabase.from("jobs").select("customer_name, address, assigned_to, job_number").eq("id", cart.job_id).maybeSingle(),
+        const [{ data: publicCart, error: cartErr }, settingsMap] = await Promise.all([
+          (supabase as any).rpc("get_public_job_cart", { p_token: token }),
           getCompanySettings(["company_name", "company_phone", "company_tagline"]),
         ]);
+        if (cartErr) throw cartErr;
+        if (!publicCart?.cart) { setError("Cart not found"); setLoading(false); return; }
 
         setData({
-          cart,
-          items: (items || []) as JobCartItem[],
-          job: (job as any) || null,
+          cart: publicCart.cart as JobCart,
+          items: (publicCart.items || []) as JobCartItem[],
+          job: (publicCart.job as any) || null,
           company: {
             name: settingsMap.company_name || "Carnes and Sons Air Conditioning",
             phone: settingsMap.company_phone || "",
@@ -247,53 +238,6 @@ export default function CustomerCart() {
             })}
           </div>
         </Card>
-
-        {/* Add-on suggestions */}
-        {canEditCart && (
-          <CartAddonSuggestions
-            itemKinds={items.map((i) => i.kind)}
-            itemNames={items.map((i) => i.name)}
-            variant="customer"
-            onAdd={async (rule) => {
-              const qty = 1;
-              const { error } = await (supabase as any).from("job_cart_items").insert({
-                cart_id: cart.id,
-                kind: rule.suggestion_kind,
-                source_id: rule.suggestion_source_id ?? null,
-                name: rule.name,
-                description: rule.description,
-                image_url: rule.image_url,
-                quantity: qty,
-                unit_price: Number(rule.unit_price),
-                total_price: qty * Number(rule.unit_price),
-                metadata: { from_addon_rule: rule.id, added_by_customer: true },
-              });
-              if (error) { toast.error(error.message); return; }
-              toast.success(`${rule.name} added`);
-              setTimeout(() => window.location.reload(), 600);
-            }}
-          />
-        )}
-
-        {/* Promo code */}
-        {canEditCart && (
-          <Card className="p-4 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Have a promo code?</p>
-            <PromoCodeField
-              subtotal={Number(cart.subtotal)}
-              appliedCode={(cart as any).discount_code || null}
-              appliedAmount={Number((cart as any).discount_amount || 0)}
-              onApply={async (code, amount) => {
-                await (supabase as any).from("job_carts").update({ discount_code: code, discount_amount: amount }).eq("id", cart.id);
-                setTimeout(() => window.location.reload(), 400);
-              }}
-              onRemove={async () => {
-                await (supabase as any).from("job_carts").update({ discount_code: null, discount_amount: 0 }).eq("id", cart.id);
-                setTimeout(() => window.location.reload(), 400);
-              }}
-            />
-          </Card>
-        )}
 
         {/* Totals */}
         <Card className="p-4 space-y-1 text-sm">

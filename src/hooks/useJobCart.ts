@@ -72,7 +72,7 @@ export function useJobCart(jobId: string | undefined) {
         .from("job_carts")
         .select("*")
         .eq("job_id", jobId)
-        .not("status", "in", "(canceled,declined)")
+        .not("status", "in", "(canceled,declined,paid)")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

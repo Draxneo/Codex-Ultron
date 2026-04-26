@@ -57,27 +57,9 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
   useEffect(() => {
     if (presentation?.id && !viewRecorded.current && !isPaid) {
       viewRecorded.current = true;
-      recordPresentationView(presentation.id, presentation.view_count || 0, !presentation.first_viewed_at);
-      // Also update status to viewed
-      supabase
-        .from("estimate_presentations" as any)
-        .update({ status: "viewed" } as any)
-        .eq("id", presentation.id)
-        .eq("status", "pending")
-        .then(() => {});
+      recordPresentationView(presentation.token);
     }
-  }, [presentation?.id]);
-
-  // If returning from Stripe payment, mark as paid
-  useEffect(() => {
-    if (isPaid && presentation?.id) {
-      supabase
-        .from("estimate_presentations" as any)
-        .update({ status: "paid", paid_at: new Date().toISOString() } as any)
-        .eq("id", presentation.id)
-        .then(() => {});
-    }
-  }, [isPaid, presentation?.id]);
+  }, [presentation?.id, presentation?.token, isPaid]);
 
   const customerName = estimate?.customer_name?.split(" ")[0] || "";
   const addonTotal = Array.isArray(snapshot?.addons)

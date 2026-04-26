@@ -80,7 +80,11 @@ export function useSendOnMyWay() {
       return false;
     }
 
-    await supabase.from("jobs").update({ on_my_way_sent_at: new Date().toISOString() } as any).eq("id", jobId);
+    await supabase.from("jobs").update({
+      status: "on_my_way",
+      dispatch_sent_at: new Date().toISOString(),
+      on_my_way_sent_at: new Date().toISOString(),
+    } as any).eq("id", jobId);
     await supabase.from("activity_log").insert({
       job_id: jobId,
       action: "on_my_way_sent",

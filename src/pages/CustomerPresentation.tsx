@@ -78,7 +78,7 @@ export default function CustomerPresentation() {
 
     // Record view
     if (!viewRecorded) {
-      recordPresentationView(presentation.id, presentation.view_count, !presentation.first_viewed_at);
+      recordPresentationView(presentation.token);
       setViewRecorded(true);
     }
 

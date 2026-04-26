@@ -147,29 +147,17 @@ export function usePresentationByToken(token: string | undefined) {
     enabled: !!token,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("estimate_presentations" as any)
-        .select("*")
-        .eq("token", token!)
-        .single();
+        .rpc("get_public_estimate_presentation" as any, { p_token: token! });
       if (error) throw error;
+      if (!data) throw new Error("Presentation not found");
       return data as unknown as EstimatePresentation;
     },
   });
 }
 
 /** Record a view — stamps first_viewed_at and increments view_count */
-export async function recordPresentationView(presentationId: string, currentViewCount: number, firstViewed: boolean) {
-  const updates: any = {
-    last_viewed_at: new Date().toISOString(),
-    view_count: currentViewCount + 1,
-  };
-  if (firstViewed) {
-    updates.first_viewed_at = new Date().toISOString();
-  }
-  await supabase
-    .from("estimate_presentations" as any)
-    .update(updates)
-    .eq("id", presentationId);
+export async function recordPresentationView(presentationToken: string) {
+  await supabase.rpc("track_estimate_presentation_view" as any, { p_token: presentationToken });
 }
 
 /** Submit a customer response */
