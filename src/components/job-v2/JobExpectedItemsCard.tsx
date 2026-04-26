@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { CheckCircle2, CircleDashed, Clock3, SkipForward, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -11,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
+import { useJobActions } from "@/hooks/useJobActions";
 
 const STATUS_META: Record<ExpectedItemStatus, { icon: React.ElementType; className: string; label: string }> = {
   done: { icon: CheckCircle2, className: "text-emerald-600 bg-emerald-600/10", label: "Done" },
@@ -25,15 +24,13 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
   const { data: invoices = [] } = useCustomerInvoices(jobId);
   const { data: partsOrders = [] } = usePartsOrders(jobId);
   const { cart, itemCount } = useJobCart(jobId);
-  const { send: sendOMW } = useSendOnMyWay();
   const queryClient = useQueryClient();
-  const [busy, setBusy] = useState<string | null>(null);
+  const actions = useJobActions(jobId, job);
   const items = getExpectedJobItems(job, invoices as any[], partsOrders as any[], cart ? { ...cart, item_count: itemCount } : null);
   const summary = getExpectedJobSummary(items);
   const openItems = items.filter((item) => item.status !== "done" && item.status !== "skipped");
 
   const stampJob = async (key: string, updates: Record<string, unknown>, activity: string, label: string) => {
-    setBusy(key);
     try {
       const { error } = await supabase.from("jobs").update(updates as any).eq("id", jobId);
       if (error) throw error;
@@ -44,8 +41,6 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
       toast({ title: label });
     } catch (e: any) {
       toast({ title: "Could not update job", description: e.message, variant: "destructive" });
-    } finally {
-      setBusy(null);
     }
   };
 
@@ -54,47 +49,45 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
     switch (key) {
       case "confirmation":
         return {
-          label: "Mark sent",
-          run: () => stampJob(key, { confirmation_sent_at: now }, "appointment_reminder_marked_sent", "Reminder marked as sent"),
+          label: "Send",
+          busyKey: "reminder",
+          run: actions.sendAppointmentReminder,
+          secondaryLabel: "Mark manually",
+          secondaryBusyKey: "manual",
+          secondaryRun: actions.markReminderSentManually,
         };
       case "dispatch":
         return {
           label: "Send OMW",
-          run: async () => {
-            setBusy(key);
-            try {
-              await sendOMW({
-                jobId,
-                customerPhone: job?.customer_phone,
-                customerName: job?.customer_name,
-                jobAddress: job?.address,
-                employeeName: job?.assigned_to,
-                employeeId: job?.assigned_employee_id || job?.employee_id || null,
-              });
-            } finally {
-              setBusy(null);
-            }
-          },
+          busyKey: "omw",
+          run: actions.sendOnMyWay,
         };
       case "on_site":
         return {
           label: "Start job",
-          run: () => stampJob(key, { status: "in_progress", started_at: now }, "job_started", "Job marked in progress"),
+          busyKey: "start",
+          run: actions.startJob,
         };
       case "completion":
       case "site_visit":
         return {
           label: "Finish",
-          run: () => stampJob(key, { completed_at: now, completion_form_sent_at: now, status: "done" }, "job_finished", "Completion recorded"),
+          busyKey: "finish",
+          run: actions.finishJob,
         };
       case "review":
         return {
-          label: "Mark sent",
-          run: () => stampJob(key, { review_request_sent_at: now }, "review_request_marked_sent", "Review request marked as sent"),
+          label: "Send",
+          busyKey: "review",
+          run: actions.sendReviewRequest,
+          secondaryLabel: "Mark manually",
+          secondaryBusyKey: "manual",
+          secondaryRun: actions.markReviewSentManually,
         };
       case "follow_up":
         return {
           label: "Close",
+          busyKey: key,
           run: () => stampJob(key, { follow_up_completed_at: now }, "follow_up_closed", "Follow-up closed"),
         };
       default:
@@ -140,16 +133,30 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
                 <p className="text-xs text-muted-foreground mt-0.5">{item.reason}</p>
               </div>
               {quickAction && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 shrink-0 text-xs"
-                  disabled={busy === item.key}
-                  onClick={quickAction.run}
-                >
-                  {busy === item.key ? "Saving..." : quickAction.label}
-                </Button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={actions.busy === quickAction.busyKey || (quickAction.busyKey === "omw" && actions.sendingOMW)}
+                    onClick={quickAction.run}
+                  >
+                    {actions.busy === quickAction.busyKey ? "Saving..." : quickAction.label}
+                  </Button>
+                  {quickAction.secondaryRun && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={actions.busy === quickAction.secondaryBusyKey}
+                      onClick={quickAction.secondaryRun}
+                    >
+                      {quickAction.secondaryLabel}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           );

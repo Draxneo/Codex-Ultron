@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
     // universal `useSendSms` hook can pass it without setting custom headers.
     const sourceFunction = req.headers.get("x-source-function") || bodySource || "manual";
     const isManual = sourceFunction === "manual";
+    const isHitlApproved = req.headers.get("x-hitl-approved") === "true";
 
     const { data: testModeSetting } = await supabase
       .from("company_settings")
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const testingMode = testModeSetting?.value === "true";
 
-    if (!isManual && testingMode) {
+    if (!isManual && testingMode && !isHitlApproved) {
       console.log(`Test Mode: blocking AI message from source="${sourceFunction}" to ${to}`);
       return new Response(
         JSON.stringify({ blocked: true, reason: "test_mode_active" }),

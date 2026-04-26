@@ -18,6 +18,21 @@ const TIME_WINDOWS = [
   { label: "4 – 6 PM", start: "16:00", end: "18:00" },
 ];
 
+function getChicagoOffset(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    timeZoneName: "shortOffset",
+    hour: "2-digit",
+  }).formatToParts(date);
+  const zoneName = parts.find((part) => part.type === "timeZoneName")?.value || "GMT-6";
+  const match = zoneName.match(/GMT([+-]\d{1,2})(?::?(\d{2}))?/);
+  if (!match) return "-06:00";
+  const hours = Number(match[1]);
+  const minutes = match[2] || "00";
+  const sign = hours >= 0 ? "+" : "-";
+  return `${sign}${String(Math.abs(hours)).padStart(2, "0")}:${minutes}`;
+}
+
 interface RescheduleButtonProps {
   jobId: string;
   jobNumber: string | number | null;
@@ -43,7 +58,7 @@ export function RescheduleButton({ jobId, jobNumber, table = "jobs" }: Reschedul
     setSaving(true);
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const offsetStr = "-05:00"; // Central time approximation
+      const offsetStr = getChicagoOffset(new Date(`${dateStr}T12:00:00Z`));
       const arrivalStart = `${dateStr}T${tw.start}:00${offsetStr}`;
       const arrivalEnd = `${dateStr}T${tw.end}:00${offsetStr}`;
       const { error } = await supabase
