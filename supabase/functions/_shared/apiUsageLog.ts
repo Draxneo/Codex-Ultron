@@ -27,7 +27,12 @@ export async function logApiUsage(
       function_name: entry.function_name,
       endpoint: entry.endpoint || null,
       tokens_used: entry.tokens_used || null,
+      input_tokens: entry.input_tokens || null,
+      output_tokens: entry.output_tokens || null,
       estimated_cost_cents: entry.estimated_cost_cents ?? 0,
+      cost: entry.estimated_cost_cents ?? 0,
+      model: entry.service,
+      status: "ok",
       metadata: Object.keys(meta).length ? meta : null,
     });
   } catch (e) {
