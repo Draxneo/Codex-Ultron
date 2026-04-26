@@ -75,6 +75,47 @@ const extractTool = {
 
 // verifyAddress imported from _shared/verifyContact.ts
 
+async function loadKnownProperties(supabase: any, customerId: string | null) {
+  if (!customerId) return [];
+
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("id, address, city, state, zip")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  const { data: rows } = await supabase
+    .from("customer_addresses")
+    .select("id, address_type, street, street_line_2, city, state, zip, is_primary")
+    .eq("customer_id", customerId);
+
+  const properties = (rows || []).map((r: any) => ({
+    id: r.id,
+    label: r.address_type || (r.is_primary ? "Primary" : "Property"),
+    address: [r.street, r.street_line_2, r.city, r.state, r.zip].filter(Boolean).join(", "),
+    street: [r.street, r.street_line_2].filter(Boolean).join(" "),
+    city: r.city,
+    state: r.state,
+    zip: r.zip,
+    is_primary: !!r.is_primary,
+  }));
+
+  if (customer?.address && !properties.some((p: any) => p.is_primary || p.street?.toLowerCase() === customer.address.toLowerCase())) {
+    properties.unshift({
+      id: null,
+      label: "Primary",
+      address: [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(", "),
+      street: customer.address,
+      city: customer.city,
+      state: customer.state,
+      zip: customer.zip,
+      is_primary: true,
+    });
+  }
+
+  return properties;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -710,7 +751,10 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
       .maybeSingle();
     const aiDraftOn = autoDraftRow?.value !== "false";
 
+    // Disabled for JARVIS 2.0: post-call booking drafts were too eager and could
+    // fire before existing-job/estimate and multi-property checks ran.
     if (
+      false &&
       !isEmployeeCall &&
       aiDraftOn &&
       extracted.service_type &&
@@ -751,6 +795,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
     // ── CRITICAL: create the booking action_item FIRST, before any slow AI work ──
     // This guarantees the "Book It Now" card appears in the Now tab even if the
     // todo-extraction AI call below times out or hangs.
+    let shouldInjectBookingCard = true;
     if (!isEmployeeCall && extracted.service_type && extracted.service_type !== "other") {
       try {
         let activeJob: { id: string; hcp_job_number: string | null } | null = null;
@@ -774,6 +819,36 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
             if (jobByPhone) activeJob = { id: (jobByPhone as any).id, hcp_job_number: (jobByPhone as any).hcp_job_number };
           }
         }
+
+        let activeEstimate: { id: string; estimate_number?: string | null; scheduled_date?: string | null } | null = null;
+        if (resolvedCustomerId) {
+          const { data: estByCustomer } = await supabase
+            .from("estimates")
+            .select("id, estimate_number, scheduled_date")
+            .eq("customer_id", resolvedCustomerId)
+            .not("status", "in", '("lost","canceled","done")')
+            .not("work_status", "in", '("won","lost")')
+            .order("scheduled_date", { ascending: true, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+          activeEstimate = estByCustomer || null;
+        }
+        if (!activeEstimate && call.phone_number) {
+          const digits = String(call.phone_number).replace(/\D/g, "").slice(-10);
+          if (digits.length === 10) {
+            const { data: estimates } = await supabase
+              .from("estimates")
+              .select("id, estimate_number, scheduled_date, customer_phone")
+              .not("customer_phone", "is", null)
+              .not("status", "in", '("lost","canceled","done")')
+              .not("work_status", "in", '("won","lost")')
+              .limit(50);
+            activeEstimate = (estimates || []).find((e: any) => String(e.customer_phone || "").replace(/\D/g, "").slice(-10) === digits) || null;
+          }
+        }
+
+        const knownProperties = await loadKnownProperties(supabase, resolvedCustomerId);
+        const needsPropertySelection = knownProperties.length > 1 && !(verifiedAddress || extracted.address);
 
         if (activeJob) {
           const jobRef = activeJob.hcp_job_number ? `#${activeJob.hcp_job_number}` : "in progress";
@@ -799,7 +874,62 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               active_job_id: activeJob.id,
             },
           });
+          shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: SUPPRESSED booking — active job ${activeJob.id}; created follow_up instead`);
+        } else if (activeEstimate) {
+          const estimateRef = activeEstimate.estimate_number ? `#${activeEstimate.estimate_number}` : "upcoming estimate";
+          await supabase.from("action_items").insert({
+            title: customerName
+              ? `${customerName} called about estimate ${estimateRef}`
+              : `Caller has estimate ${estimateRef} - review notes`,
+            description: extracted.problem_description || extracted.summary || "Follow-up call on existing estimate",
+            category: "follow_up",
+            priority: "normal",
+            source: "jarvis",
+            status: "pending",
+            customer_phone: call.phone_number || null,
+            suggested_action: `Review estimate ${estimateRef} - caller likely has an update or question`,
+            metadata: {
+              customer_name: customerName || null,
+              customer_id: resolvedCustomerId || null,
+              phone: call.phone_number || null,
+              call_id,
+              suppressed_booking: true,
+              suppressed_reason: "active_estimate_in_progress",
+              active_estimate_id: activeEstimate.id,
+            },
+          });
+          shouldInjectBookingCard = false;
+          console.log(`Call ${call_id}: SUPPRESSED booking - active estimate ${activeEstimate.id}; created follow_up instead`);
+        } else if (needsPropertySelection) {
+          await supabase.from("action_items").insert({
+            title: customerName
+              ? `${customerName} called - choose service property`
+              : `Caller has multiple properties - choose service property`,
+            description: extracted.problem_description || extracted.summary || "New request detected, but customer has multiple properties and no address was confirmed.",
+            category: "new_appointment",
+            priority: "high",
+            source: "jarvis",
+            status: "pending",
+            customer_phone: call.phone_number || null,
+            suggested_action: "Choose the correct property before booking",
+            metadata: {
+              customer_name: customerName || null,
+              customer_id: resolvedCustomerId || null,
+              phone: call.phone_number || null,
+              call_id,
+              requires_property_selection: true,
+              property_options: knownProperties,
+              service_type: extracted.service_type || null,
+              job_type: extracted.service_type === "estimate" ? "estimate" : (extracted.service_type || "service"),
+              scheduling_preference: extracted.scheduling_preference || null,
+              scheduled_date: extracted.scheduled_date || null,
+              scheduled_time: extracted.scheduled_time || null,
+              description: extracted.problem_description || null,
+            },
+          });
+          shouldInjectBookingCard = false;
+          console.log(`Call ${call_id}: booking held for property selection (${knownProperties.length} properties)`);
         } else {
           const aiTitle = customerName
             ? `New ${extracted.service_type || "service"} request from ${customerName}`
@@ -839,7 +969,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
     // (Todo extraction removed — JARVIS no longer manages a To-Do list.)
 
     // ── Inject booking action card into copilot session (skip for employee calls) ──
-    if (!isEmployeeCall && extracted.service_type && extracted.service_type !== "other") {
+    if (shouldInjectBookingCard && !isEmployeeCall && extracted.service_type && extracted.service_type !== "other") {
       try {
         // Find the active copilot session for this call (by call_sid or phone)
         let sessionQuery = supabase

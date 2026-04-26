@@ -62,6 +62,42 @@ async function getWorkflowContext(supabase: any, jobId: string): Promise<string>
   return `\nJob is currently at workflow step: "${stage.label}" (owned by: ${stage.owner}). ${stage.hint}`;
 }
 
+async function loadKnownProperties(supabase: any, customerId: string | null) {
+  if (!customerId) return [];
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("id, address, city, state, zip")
+    .eq("id", customerId)
+    .maybeSingle();
+  const { data: rows } = await supabase
+    .from("customer_addresses")
+    .select("id, address_type, street, street_line_2, city, state, zip, is_primary")
+    .eq("customer_id", customerId);
+  const properties = (rows || []).map((r: any) => ({
+    id: r.id,
+    label: r.address_type || (r.is_primary ? "Primary" : "Property"),
+    address: [r.street, r.street_line_2, r.city, r.state, r.zip].filter(Boolean).join(", "),
+    street: [r.street, r.street_line_2].filter(Boolean).join(" "),
+    city: r.city,
+    state: r.state,
+    zip: r.zip,
+    is_primary: !!r.is_primary,
+  }));
+  if (customer?.address && !properties.some((p: any) => p.is_primary || p.street?.toLowerCase() === customer.address.toLowerCase())) {
+    properties.unshift({
+      id: null,
+      label: "Primary",
+      address: [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(", "),
+      street: customer.address,
+      city: customer.city,
+      state: customer.state,
+      zip: customer.zip,
+      is_primary: true,
+    });
+  }
+  return properties;
+}
+
 /** Server-side lightweight stage detection (mirrors client useWorkflowStage logic) */
 function detectServerStage(job: any): { label: string; owner: string; hint: string } {
   const jt = job.job_type || "service";
@@ -588,6 +624,22 @@ Deno.serve(async (req) => {
             }
           }
 
+          let promptCustomerId: string | null = null;
+          try {
+            const { data: promptCustomer } = await supabase
+              .rpc("find_customer_by_phone", { digits: normalizedFrom })
+              .maybeSingle();
+            promptCustomerId = (promptCustomer as any)?.id || null;
+          } catch {
+            promptCustomerId = null;
+          }
+          const knownProperties = await loadKnownProperties(supabase, promptCustomerId);
+          const propertyContext = knownProperties.length > 1
+            ? `\nKnown properties for this customer:\n${knownProperties.map((p: any, i: number) => `${i + 1}. ${p.label}: ${p.address}`).join("\n")}\nIf this SMS does not clearly name one of these properties or provide a service address, do NOT assume the primary address. Mark the request as needing property selection.`
+            : knownProperties.length === 1
+              ? `\nKnown property: ${knownProperties[0].address}`
+              : "";
+
           const customerContext = customerJob
             ? `Phone matches job #${customerJob.hcp_job_number} for ${customerJob.customer_name} (${customerJob.job_type}, scheduled ${customerJob.scheduled_date}).`
             : "No active job found for this phone number.";
@@ -612,6 +664,7 @@ Deno.serve(async (req) => {
 
 Customer: ${contactName || from} (${from})
 ${customerContext}
+${propertyContext}
 ${callContext}
 ${ragContext}${mediaHint}
 
@@ -625,6 +678,8 @@ IMPORTANT RULES:
 - If the customer is REPLYING to a prior phone call with their info, set intent to "info_reply"
 - If a recent call discussed scheduling/booking AND this SMS provides address or contact info, that's a BOOKING intent
 - If our last outbound message asked for contact info or scheduling details, and this SMS provides that, classify as BOOKING intent
+- If the customer has an active job or upcoming estimate, treat replies as updates/follow-ups unless they clearly ask for a separate new visit
+- If the customer has multiple properties and the message does not identify which property, do not assume their primary address
 - Infer service_type from call context if not explicit in SMS
 - Extract scheduling preferences from both SMS and call context
 - For addresses in Texas, default state to "TX" if not specified`;
@@ -903,25 +958,30 @@ IMPORTANT RULES:
               // FIX #4: Include MMS media URLs in metadata
               ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
             };
+            const needsPropertySelection = knownProperties.length > 1 && !extracted.address;
+            if (needsPropertySelection) {
+              (bookingMetadata as any).requires_property_selection = true;
+              (bookingMetadata as any).property_options = knownProperties;
+            }
 
             if (existingBooking) {
               // Merge richer data into existing action_item
               const mergedMeta = { ...((existingBooking.metadata as any) || {}), ...bookingMetadata };
               await supabase.from("action_items")
-                .update({ metadata: mergedMeta, description: extracted.suggested_action || `Updated booking info from follow-up SMS.` })
+                .update({ metadata: mergedMeta, description: needsPropertySelection ? "Customer has multiple properties. Choose the service address before booking." : (extracted.suggested_action || `Updated booking info from follow-up SMS.`) })
                 .eq("id", existingBooking.id);
               console.log(`Observer: UPDATED existing booking action_item ${existingBooking.id} for ${from} (dedup)`);
             } else {
               await supabase.from("action_items").insert({
                 title: `📱 ${customerName} — ${effectiveServiceType} booking request`,
-                description: extracted.suggested_action || `Customer provided contact info via SMS after a phone call. Ready to book ${effectiveServiceType}.`,
+                description: needsPropertySelection ? "Customer has multiple properties. Choose the service address before booking." : (extracted.suggested_action || `Customer provided contact info via SMS after a phone call. Ready to book ${effectiveServiceType}.`),
                 category: "new_appointment",
                 priority: "high",
                 source: "sms",
                 status: "pending",
                 customer_phone: from,
                 job_id: linkedJobId,
-                suggested_action: `Book ${effectiveServiceType} for ${customerName}`,
+                suggested_action: needsPropertySelection ? `Choose property for ${customerName}` : `Book ${effectiveServiceType} for ${customerName}`,
                 metadata: bookingMetadata,
               });
               console.log(`Observer: created BOOKING action_item for ${from} — correlated with call: ${!!callExtraction}`);
@@ -937,13 +997,15 @@ IMPORTANT RULES:
 
               if (sessions?.[0]) {
                 const actionCard = {
-                  type: effectiveServiceType === "estimate" ? "book_estimate" : "book_job",
+                  type: needsPropertySelection ? "select_property" : (effectiveServiceType === "estimate" ? "book_estimate" : "book_job"),
                   job_type: effectiveServiceType === "estimate" ? "estimate" : effectiveServiceType,
                   customer_name: customerName,
                   phone: from,
                   address: extracted.address || null,
                   email: extracted.email || null,
                   description: extracted.summary || callExtraction?.problem_description || "",
+                  parent_customer_id: resolvedCustomerId || undefined,
+                  property_options: needsPropertySelection ? knownProperties : undefined,
                 };
 
                 const parts: string[] = [];
