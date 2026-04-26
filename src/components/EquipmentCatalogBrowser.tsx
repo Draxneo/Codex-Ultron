@@ -50,7 +50,7 @@ export function EquipmentCatalogBrowser({ onAddToCart, compact, initialBrand, ma
   const effectiveTier = tier === "all_tiers" ? "" : tier;
   const effectiveApplication = application === "all_apps" ? "" : application;
 
-  const { results, loading } = useEquipmentSearch(query, {
+  const { results, loading, error } = useEquipmentSearch(query, {
     brand: effectiveBrand || undefined,
     systemType: effectiveSystemType || undefined,
     tier: effectiveTier || undefined,
@@ -176,6 +176,12 @@ export function EquipmentCatalogBrowser({ onAddToCart, compact, initialBrand, ma
       </div>
 
       {/* Results */}
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       {viewMode === "table" && !compact ? (
         loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">

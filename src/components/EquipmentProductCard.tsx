@@ -49,6 +49,17 @@ interface Props {
   editable?: boolean;
 }
 
+function normalizeFeatures(value: unknown): { icon: string; text: string }[] {
+  if (Array.isArray(value)) return value.filter((item) => item && typeof item.text === "string");
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.text === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function EquipmentProductCard({ matchup, onAddToCart, compact, editable }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -56,7 +67,7 @@ export function EquipmentProductCard({ matchup, onAddToCart, compact, editable }
   const tierStyle = TIER_STYLES[matchup.tier || "Good"] || TIER_STYLES.Good;
   const SystemIcon = SYSTEM_ICONS[matchup.system_type || "gas_heat"] || Flame;
   const systemLabel = SYSTEM_LABELS[matchup.system_type || "gas_heat"] || matchup.system_type;
-  const features = (matchup.features_benefits || []) as { icon: string; text: string }[];
+  const features = normalizeFeatures(matchup.features_benefits);
 
   const handleImageChange = async (url: string | null) => {
     await supabase.from("equipment_matchups" as any).update({ image_url: url } as any).eq("id", matchup.id);

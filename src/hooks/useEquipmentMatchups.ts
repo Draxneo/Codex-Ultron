@@ -36,7 +36,7 @@ export interface EquipmentMatchup {
   notes: string | null;
   low_margin_price: number | null;
   cps_rebate_tier: string | null;
-  features_benefits: { icon: string; text: string }[] | null;
+  features_benefits: { icon: string; text: string }[] | string | null;
   created_at: string;
 }
 

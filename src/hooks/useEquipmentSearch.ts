@@ -13,20 +13,16 @@ interface Filters {
 export function useEquipmentSearch(query: string, filters?: Filters) {
   const [results, setResults] = useState<EquipmentMatchup[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const hasFilter = !!filters?.brand || !!filters?.systemType || !!filters?.tier || !!filters?.application || !!filters?.tonnage;
-    if (!query && !hasFilter) {
-      setResults([]);
-      return;
-    }
-
     const timer = setTimeout(async () => {
       setLoading(true);
+      setError(null);
       try {
         let q = supabase
           .from("equipment_matchups" as any)
-          .select("id, brand, system_type, tier, application, condenser_model, furnace_model, coil_model, tonnage, seer2, eer2, hspf2, cooling_cap, afue, ahri_number, component_price, total_price, factory_rebate_price, monthly_payment, cps_tonnage, early_rebate, burnout_rebate, notes, low_margin_price, cps_rebate_tier, features_benefits, heat_kit, ahri_certificate_path, image_url, created_at")
+          .select("id, brand, system_type, tier, application, condenser_model, furnace_model, coil_model, tonnage, seer2, eer2, hspf2, cooling_cap, afue, ahri_number, component_price, total_price, factory_rebate_price, monthly_payment, monthly_payment_120, cps_tonnage, early_rebate, burnout_rebate, notes, low_margin_price, cps_rebate_tier, features_benefits, heat_kit, ahri_certificate_path, image_url, created_at")
           .order("brand")
           .order("tonnage")
           .order("tier")
@@ -41,9 +37,12 @@ export function useEquipmentSearch(query: string, filters?: Filters) {
           q = q.or(`condenser_model.ilike.%${query}%,furnace_model.ilike.%${query}%,coil_model.ilike.%${query}%,tier.ilike.%${query}%,ahri_number.ilike.%${query}%`);
         }
 
-        const { data } = await q;
+        const { data, error: queryError } = await q;
+        if (queryError) throw queryError;
         setResults((data || []) as unknown as EquipmentMatchup[]);
-      } catch {
+      } catch (e: any) {
+        console.error("Equipment search failed", e);
+        setError(e.message || "Equipment search failed");
         setResults([]);
       } finally {
         setLoading(false);
@@ -53,5 +52,5 @@ export function useEquipmentSearch(query: string, filters?: Filters) {
     return () => clearTimeout(timer);
   }, [query, filters?.brand, filters?.systemType, filters?.tier, filters?.application, filters?.tonnage]);
 
-  return { results, loading };
+  return { results, loading, error };
 }

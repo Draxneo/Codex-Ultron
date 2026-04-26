@@ -44,12 +44,21 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+function normalizeFeatures(value: unknown): FeatureBullet[] {
+  if (Array.isArray(value)) return value.filter((item) => item && typeof item.text === "string");
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.text === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function FeaturesEditor({ matchup, open, onOpenChange }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [features, setFeatures] = useState<FeatureBullet[]>(
-    (matchup.features_benefits as FeatureBullet[] | null) || []
-  );
+  const [features, setFeatures] = useState<FeatureBullet[]>(normalizeFeatures(matchup.features_benefits));
   const [saving, setSaving] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
 
@@ -71,7 +80,7 @@ export function FeaturesEditor({ matchup, open, onOpenChange }: Props) {
       const cleaned = features.filter(f => f.text.trim());
       const { error } = await supabase
         .from("equipment_matchups" as any)
-        .update({ features_benefits: cleaned } as any)
+        .update({ features_benefits: JSON.stringify(cleaned) } as any)
         .eq("id", matchup.id);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["equipment_matchups"] });
@@ -94,7 +103,7 @@ export function FeaturesEditor({ matchup, open, onOpenChange }: Props) {
       const cleaned = features.filter(f => f.text.trim());
       const { error } = await supabase
         .from("equipment_matchups" as any)
-        .update({ features_benefits: cleaned } as any)
+        .update({ features_benefits: JSON.stringify(cleaned) } as any)
         .eq("brand", matchup.brand)
         .eq("tier", matchup.tier);
       if (error) throw error;
