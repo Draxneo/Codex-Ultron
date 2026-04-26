@@ -37,6 +37,12 @@ function normalizeMedia(input: unknown): NormalizedMedia[] {
   return out;
 }
 
+const retiredSmsSources = new Set([
+  "auto-advance-workflow",
+  "run-lead-drip",
+  "rain_day_blast",
+]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -88,6 +94,14 @@ Deno.serve(async (req) => {
     const sourceFunction = req.headers.get("x-source-function") || bodySource || "manual";
     const isManual = sourceFunction === "manual";
     const isHitlApproved = req.headers.get("x-hitl-approved") === "true";
+
+    if (retiredSmsSources.has(sourceFunction)) {
+      console.log(`Retired SMS trigger blocked: source="${sourceFunction}" to ${to}`);
+      return new Response(
+        JSON.stringify({ blocked: true, reason: "retired_sms_trigger", source: sourceFunction }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const { data: testModeSetting } = await supabase
       .from("company_settings")
