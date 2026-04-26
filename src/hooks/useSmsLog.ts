@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { normalizeLast10 } from "@/lib/formatters";
+import {
+  addContactLookup,
+  buildCustomerDisplayName,
+  resolveContactFromLookup,
+  toE164Key,
+  type ContactLookupMap,
+} from "@/lib/communications";
 
 export type SmsMediaItem = {
   url: string;
@@ -41,17 +48,6 @@ export type SmsConversation = {
   toNumber?: string | null;
 };
 
-type ContactLookup = { name: string; type: "employee" | "customer" | "vendor" };
-
-
-/** Normalize any phone to E.164 (+1XXXXXXXXXX) for consistent grouping */
-function toE164Key(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return phone; // fallback for international
-}
-
 function compareByCreatedAt(a: SmsMessage, b: SmsMessage): number {
   const at = new Date(a.created_at).getTime();
   const bt = new Date(b.created_at).getTime();
@@ -85,7 +81,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const [messages, setMessages] = useState<SmsMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [contactMap, setContactMap] = useState<Record<string, ContactLookup>>({});
+  const [contactMap, setContactMap] = useState<ContactLookupMap>({});
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [techPhoneFilter, setTechPhoneFilter] = useState<Set<string> | null>(null);
@@ -94,7 +90,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   useEffect(() => {
     if (disabled) return;
     const buildContactMap = async () => {
-      const map: Record<string, ContactLookup> = {};
+      const map: ContactLookupMap = {};
 
       const [{ data: employees }, { data: customers }, { data: estimates }, { data: jobs }, { data: supplyHouses }, { data: vendorContacts }] = await Promise.all([
         supabase.from("employees").select("name, phone, is_active"),
@@ -108,47 +104,41 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       // Priority 1: employees
       for (const emp of employees || []) {
         if (!emp.phone || !emp.is_active) continue;
-        const key = normalizeLast10(emp.phone);
-        if (key) map[key] = { name: emp.name, type: "employee" };
+        addContactLookup(map, emp.phone, { name: emp.name, type: "employee" }, { overwrite: true });
       }
 
       // Priority 2: customers
       for (const cust of customers || []) {
-        const custName = [cust.first_name, cust.last_name].filter(Boolean).join(" ");
+        const custName = buildCustomerDisplayName(cust);
         if (!custName) continue;
         for (const ph of [cust.phone, cust.mobile_phone]) {
-          const key = normalizeLast10(ph);
-          if (key && !map[key]) map[key] = { name: custName, type: "customer" };
+          addContactLookup(map, ph, { name: custName, type: "customer" });
         }
       }
 
       // Priority 3: supply houses (vendor main phones)
       for (const sh of supplyHouses || []) {
         for (const ph of [sh.contact_phone, sh.text_support_phone]) {
-          const key = normalizeLast10(ph);
-          if (key && !map[key]) map[key] = { name: sh.name, type: "vendor" };
+          addContactLookup(map, ph, { name: sh.name, type: "vendor" });
         }
       }
 
       // Priority 4: vendor contacts (individual reps)
       for (const vc of (vendorContacts || []) as any[]) {
-        const key = normalizeLast10(vc.phone);
         const vcName = vc.supply_houses?.name ? `${vc.name} (${vc.supply_houses.name})` : vc.name;
-        if (key && !map[key]) map[key] = { name: vcName, type: "vendor" };
+        addContactLookup(map, vc.phone, { name: vcName, type: "vendor" });
       }
 
       // Priority 5: jobs (customer_name from job records)
       for (const job of jobs || []) {
         if (!job.customer_name || !job.customer_phone) continue;
-        const key = normalizeLast10(job.customer_phone);
-        if (key && !map[key]) map[key] = { name: job.customer_name, type: "customer" };
+        addContactLookup(map, job.customer_phone, { name: job.customer_name, type: "customer" });
       }
 
       // Priority 6: estimates (leads not yet converted to customers)
       for (const est of estimates || []) {
         if (!est.customer_name || !est.customer_phone) continue;
-        const key = normalizeLast10(est.customer_phone);
-        if (key && !map[key]) map[key] = { name: est.customer_name, type: "customer" };
+        addContactLookup(map, est.customer_phone, { name: est.customer_name, type: "customer" });
       }
 
       setContactMap(map);
@@ -386,13 +376,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   // Resolve a phone number to a contact via DB fields first, then client-side lookup
   const resolveContact = useCallback(
     (phone: string, dbName: string | null, dbType: string): { name: string | null; type: string } => {
-      // If the DB already has a resolved contact, use it
-      if (dbName && dbType !== "unknown") return { name: dbName, type: dbType };
-      // Otherwise try client-side match
-      const key = normalizeLast10(phone);
-      const match = key ? contactMap[key] : undefined;
-      if (match) return { name: match.name, type: match.type };
-      return { name: dbName, type: dbType };
+      return resolveContactFromLookup(contactMap, phone, dbName, dbType);
     },
     [contactMap]
   );

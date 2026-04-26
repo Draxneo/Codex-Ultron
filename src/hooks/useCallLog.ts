@@ -2,26 +2,27 @@ import { useMemo, useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeLast10 } from "@/lib/formatters";
+import {
+  addContactLookup,
+  buildCustomerDisplayName,
+  type ContactLookupMap,
+} from "@/lib/communications";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
-
-type ContactLookup = { name: string; type: string };
 
 function buildContactMap(
   employees: { name: string; phone: string | null; is_active: boolean | null }[] | null,
   customers: { first_name: string | null; last_name: string | null; phone: string | null; mobile_phone: string | null }[] | null
-): Record<string, ContactLookup> {
-  const map: Record<string, ContactLookup> = {};
+): ContactLookupMap {
+  const map: ContactLookupMap = {};
   for (const emp of employees || []) {
     if (!emp.phone || !emp.is_active) continue;
-    const key = normalizeLast10(emp.phone);
-    if (key) map[key] = { name: emp.name, type: "employee" };
+    addContactLookup(map, emp.phone, { name: emp.name, type: "employee" }, { overwrite: true });
   }
   for (const cust of customers || []) {
-    const custName = [cust.first_name, cust.last_name].filter(Boolean).join(" ");
+    const custName = buildCustomerDisplayName(cust);
     if (!custName) continue;
     for (const ph of [cust.phone, cust.mobile_phone]) {
-      const key = normalizeLast10(ph ?? "");
-      if (key && !map[key]) map[key] = { name: custName, type: "customer" };
+      addContactLookup(map, ph, { name: custName, type: "customer" });
     }
   }
   return map;
@@ -61,7 +62,7 @@ export type CallConversation = {
 
 export function useCallLog() {
   const queryClient = useQueryClient();
-  const [contactMap, setContactMap] = useState<Record<string, ContactLookup>>({});
+  const [contactMap, setContactMap] = useState<ContactLookupMap>({});
 
   // Build phone→name lookup from employees + customers
   useEffect(() => {

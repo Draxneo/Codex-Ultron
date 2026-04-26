@@ -4,6 +4,11 @@ import { Device, Call } from "@twilio/voice-sdk";
 import { supabase } from "@/integrations/supabase/client";
 import { warmAudioContext } from "@/lib/softphoneAudio";
 import { normalizeLast10 } from "@/lib/formatters";
+import {
+  addContactLookup,
+  buildCustomerDisplayName,
+  type ContactLookupMap,
+} from "@/lib/communications";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import {
@@ -30,8 +35,6 @@ export interface SoftphoneState {
   waitingCallerInfo: { number: string; name?: string } | null;
   error: string | null;
 }
-
-type ContactLookup = { name: string; type: "employee" | "customer" };
 
 /**
  * Structured call-lifecycle logger.
@@ -72,7 +75,7 @@ export function useSoftphone(enabled: boolean = true) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const contactMapRef = useRef<Record<string, ContactLookup>>({});
+  const contactMapRef = useRef<ContactLookupMap>({});
   // Current user's employee name — written to call_log.answered_by on accept so
   // server-side isUserBusy() can correctly skip this user when routing the next
   // inbound call (preventing auto-reject / call-drop and triggering the
@@ -172,7 +175,7 @@ export function useSoftphone(enabled: boolean = true) {
   // through profile.full_name → email-prefix so the ref is ALWAYS populated.
   useEffect(() => {
     const buildEmployeeMap = async () => {
-      const map: Record<string, ContactLookup> = {};
+      const map: ContactLookupMap = {};
       const { data: employees } = await supabase
         .from("employees")
         .select("name, phone, is_active, profile_id");
@@ -188,8 +191,7 @@ export function useSoftphone(enabled: boolean = true) {
           resolvedEmployeeName = emp.name;
         }
         if (!emp.phone || !emp.is_active) continue;
-        const key = normalizeLast10(emp.phone);
-        if (key) map[key] = { name: emp.name, type: "employee" };
+        addContactLookup(map, emp.phone, { name: emp.name, type: "employee" }, { overwrite: true });
       }
 
       // Fallback 1: match the profile's full_name against an employee name
@@ -245,7 +247,7 @@ export function useSoftphone(enabled: boolean = true) {
       .limit(1)
       .maybeSingle();
     if (match) {
-      const name = [match.first_name, match.last_name].filter(Boolean).join(" ");
+      const name = buildCustomerDisplayName(match);
       if (name) {
         // Cache for subsequent lookups in this session
         contactMapRef.current[key] = { name, type: "customer" };

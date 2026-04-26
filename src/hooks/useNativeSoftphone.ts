@@ -15,6 +15,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeLast10 } from "@/lib/formatters";
 import { toE164 } from "@/lib/formatters";
+import {
+  addContactLookup,
+  buildCustomerDisplayName,
+  type ContactLookupMap,
+} from "@/lib/communications";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import type { SoftphoneStatus, SoftphoneState } from "./useSoftphone";
 
@@ -49,10 +54,6 @@ function getPlugin(): any {
   return nativePlugin ?? null;
 }
 
-type ContactLookup = { name: string; type: "employee" | "customer" };
-
-
-
 export function useNativeSoftphone(enabled: boolean = true) {
   const { platform } = useCapacitor();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,7 +63,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listenerHandlesRef = useRef<Array<{ remove: () => Promise<void> | void }>>([]);
   const listenersRegisteredRef = useRef(false);
-  const contactMapRef = useRef<Record<string, ContactLookup>>({});
+  const contactMapRef = useRef<ContactLookupMap>({});
   const initializingRef = useRef(false);
   const registeredRef = useRef(false);
   const activeCallSidRef = useRef<string | null>(null);
@@ -94,7 +95,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
   // for answered_by attribution (see useSoftphone.ts for the same logic).
   useEffect(() => {
     const buildEmployeeMap = async () => {
-      const map: Record<string, ContactLookup> = {};
+      const map: ContactLookupMap = {};
       const { data: employees } = await supabase
         .from("employees")
         .select("name, phone, is_active, profile_id");
@@ -110,8 +111,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
           resolvedEmployeeName = emp.name;
         }
         if (!emp.phone || !emp.is_active) continue;
-        const key = normalizeLast10(emp.phone);
-        if (key) map[key] = { name: emp.name, type: "employee" };
+        addContactLookup(map, emp.phone, { name: emp.name, type: "employee" }, { overwrite: true });
       }
 
       if (!resolvedEmployeeName && myProfileId) {
@@ -160,7 +160,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       .limit(1)
       .maybeSingle();
     if (match) {
-      const name = [match.first_name, match.last_name].filter(Boolean).join(" ");
+      const name = buildCustomerDisplayName(match);
       if (name) {
         contactMapRef.current[key] = { name, type: "customer" };
         return name;
