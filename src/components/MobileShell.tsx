@@ -38,6 +38,7 @@ import { MobileCallScreen } from "@/components/MobileCallScreen";
 import { startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCompanySetting } from "@/lib/companySettings";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -143,10 +144,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   // Ringtone setting
   const { data: ringtoneSetting } = useQuery({
     queryKey: ["company_settings", "softphone_ringtone"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("value").eq("key", "softphone_ringtone").maybeSingle();
-      return (data as any)?.value ?? "classic";
-    },
+    queryFn: () => getCompanySetting("softphone_ringtone", "classic"),
   });
 
   // Ringtone playback for incoming calls

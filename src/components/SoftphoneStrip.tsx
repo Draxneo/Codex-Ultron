@@ -15,6 +15,7 @@ import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { playDtmfTone, startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getCompanySetting } from "@/lib/companySettings";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 function formatDuration(seconds: number): string {
@@ -57,17 +58,11 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("value").eq("key", "softphone_dial_tones").maybeSingle();
-      return (data as any)?.value ?? "true";
-    },
+    queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
   });
   const { data: ringtoneSetting } = useQuery({
     queryKey: ["company_settings", "softphone_ringtone"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("value").eq("key", "softphone_ringtone").maybeSingle();
-      return (data as any)?.value ?? "classic";
-    },
+    queryFn: () => getCompanySetting("softphone_ringtone", "classic"),
   });
 
   const dialTonesEnabled = dialTonesSetting !== "false";

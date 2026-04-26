@@ -11,7 +11,7 @@ import { playDtmfTone } from "@/lib/softphoneAudio";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCompanySetting } from "@/lib/companySettings";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { TelephonyHandoffRedirect } from "@/components/TelephonyHandoffRedirect";
 
@@ -37,10 +37,7 @@ function MobileDialPad() {
 
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("value").eq("key", "softphone_dial_tones").maybeSingle();
-      return (data as any)?.value ?? "true";
-    },
+    queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
   });
 
   const dialTonesEnabled = dialTonesSetting !== "false";
