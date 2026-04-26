@@ -7,13 +7,17 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export const GOOGLE_MAPS_API_KEY = "AIzaSyA4d0TZKvQRxaQad2kk5ba0m11cdAl2BQo";
+export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
 
 
 let _loadPromise: Promise<void> | null = null;
 
 /** Load Google Maps API via script tag (cached after first load) */
 export async function loadGoogleMaps(): Promise<void> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error("Google Maps API key is not configured");
+  }
+
   if (typeof google !== "undefined" && google.maps) return;
   if (_loadPromise) return _loadPromise;
 
@@ -106,4 +110,3 @@ export async function geocodeAddress(
     return null;
   }
 }
-
