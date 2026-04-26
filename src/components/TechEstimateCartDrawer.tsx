@@ -7,12 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useEquipmentSearch } from "@/hooks/useEquipmentSearch";
-import { BRANDS } from "@/hooks/useEquipmentMatchups";
 import type { EquipmentMatchup } from "@/hooks/useEquipmentMatchups";
-import { X, Plus, Search, Send, Trash2, Wrench, Home, ShieldPlus } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, CheckCircle2, Home, Leaf, Plus, Search, Send, ShieldPlus, Trash2, Wrench, X } from "lucide-react";
 import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
+import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
+import type { RepairCatalogItem } from "@/components/RepairProductCard";
 import { useQuery } from "@tanstack/react-query";
 
 interface CartItem {
@@ -20,7 +19,9 @@ interface CartItem {
   label: string;
   description: string;
   price: number;
+  quantity?: number;
   equipment_id?: string;
+  repair_id?: string;
   seer2?: number | null;
   brand?: string;
   tonnage?: number | null;
@@ -35,15 +36,33 @@ interface TierData {
 type CartType = "repair" | "new_system" | null;
 
 const REPAIR_TIERS = [
-  { key: "critical", label: "Critical Repair", emoji: "🔴", desc: "Must fix today", color: "bg-red-500/10 border-red-500/30 text-red-700" },
-  { key: "recommended", label: "Recommended Repair", emoji: "🟡", desc: "Should fix this season", color: "bg-yellow-500/10 border-yellow-500/30 text-yellow-700" },
-  { key: "reconditioning", label: "Reconditioning", emoji: "🟢", desc: "Extends life and efficiency", color: "bg-green-500/10 border-green-500/30 text-green-700" },
+  {
+    key: "critical",
+    label: "Option A: Critical",
+    Icon: AlertTriangle,
+    desc: "Restore safe operation today",
+    color: "bg-red-500/10 border-red-500/30 text-red-700",
+  },
+  {
+    key: "recommended",
+    label: "Option B: Recommended",
+    Icon: CheckCircle2,
+    desc: "Fix the failure and reduce repeat issues",
+    color: "bg-amber-500/10 border-amber-500/30 text-amber-700",
+  },
+  {
+    key: "reconditioning",
+    label: "Option C: Reconditioning",
+    Icon: Leaf,
+    desc: "Best repair scope for reliability and comfort",
+    color: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700",
+  },
 ] as const;
 
 const SYSTEM_TIERS = [
-  { key: "good", label: "Good", emoji: "⭐" },
-  { key: "better", label: "Better", emoji: "⭐⭐" },
-  { key: "best", label: "Best", emoji: "⭐⭐⭐" },
+  { key: "good", label: "Good" },
+  { key: "better", label: "Better" },
+  { key: "best", label: "Best" },
 ] as const;
 
 interface Props {
@@ -57,7 +76,7 @@ interface Props {
   techName?: string;
 }
 
-export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, customerId, customerName, customerPhone, techName }: Props) {
+export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, customerName, customerPhone, techName }: Props) {
   const { toast } = useToast();
   const [cartType, setCartType] = useState<CartType>(null);
   const [repairTiers, setRepairTiers] = useState<Record<string, TierData>>({
@@ -70,8 +89,6 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
     better: null,
     best: null,
   });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchBrand, setSearchBrand] = useState<string>("");
   const [activeTier, setActiveTier] = useState<string | null>(null);
   const [customLabel, setCustomLabel] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -86,28 +103,35 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
     },
   });
 
-  const { results: searchResults, loading: searchLoading } = useEquipmentSearch(searchQuery, { brand: searchBrand || undefined });
-
   const resetCart = () => {
     setCartType(null);
     setRepairTiers({ critical: { items: [] }, recommended: { items: [] }, reconditioning: { items: [] } });
     setSystemSlots({ good: null, better: null, best: null });
-    setSearchQuery("");
     setActiveTier(null);
     setSelectedAddons([]);
   };
 
-  const addRepairItem = (tier: string, item: CartItem) => {
-    setRepairTiers(prev => ({
+  const addRepairItem = (tier: string, item: CartItem, keepPickerOpen = false) => {
+    setRepairTiers((prev) => ({
       ...prev,
       [tier]: { items: [...prev[tier].items, item] },
     }));
-    setSearchQuery("");
-    setActiveTier(null);
+    if (!keepPickerOpen) setActiveTier(null);
+  };
+
+  const addRepairCatalogItem = (tier: string, item: RepairCatalogItem) => {
+    addRepairItem(tier, {
+      id: item.id,
+      repair_id: item.id,
+      label: item.name,
+      description: item.customer_description || item.tech_description || item.importance || "Repair service",
+      price: Number(item.base_price || 0),
+      quantity: 1,
+    }, true);
   };
 
   const removeRepairItem = (tier: string, idx: number) => {
-    setRepairTiers(prev => ({
+    setRepairTiers((prev) => ({
       ...prev,
       [tier]: { items: prev[tier].items.filter((_, i) => i !== idx) },
     }));
@@ -120,13 +144,14 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
       label: customLabel,
       description: "Custom line item",
       price: parseFloat(customPrice),
+      quantity: 1,
     });
     setCustomLabel("");
     setCustomPrice("");
   };
 
-  const setSystemSlot = (slot: string, equip: any) => {
-    setSystemSlots(prev => ({
+  const setSystemSlot = (slot: string, equip: EquipmentMatchup) => {
+    setSystemSlots((prev) => ({
       ...prev,
       [slot]: {
         id: equip.id,
@@ -141,29 +166,34 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
         features_benefits: equip.features_benefits || null,
       },
     }));
-    setSearchQuery("");
     setActiveTier(null);
   };
 
-  const getTierTotal = (tier: string) => repairTiers[tier]?.items.reduce((s, i) => s + i.price, 0) || 0;
+  const getTierTotal = (tier: string) => repairTiers[tier]?.items.reduce((s, i) => s + i.price * (i.quantity || 1), 0) || 0;
 
   const hasItems = cartType === "repair"
-    ? Object.values(repairTiers).some(t => t.items.length > 0)
-    : Object.values(systemSlots).some(s => s !== null);
+    ? Object.values(repairTiers).some((t) => t.items.length > 0)
+    : Object.values(systemSlots).some((s) => s !== null);
 
   const handleSend = async () => {
     if (!hasItems) return;
     setSending(true);
     try {
-      // Build pricing snapshot
       let pricingSnapshot: any;
-      let selectedTiers: string[] = [];
+      const selectedTiers: string[] = [];
 
       if (cartType === "repair") {
         const tiers: Record<string, any[]> = {};
         for (const [key, data] of Object.entries(repairTiers)) {
           if (data.items.length > 0) {
-            tiers[key] = data.items.map(i => ({ item: i.label, price: i.price, equipment_id: i.equipment_id }));
+            tiers[key] = data.items.map((i) => ({
+              id: i.repair_id || i.equipment_id || null,
+              item: i.label,
+              description: i.description,
+              quantity: i.quantity || 1,
+              price: i.price,
+              equipment_id: i.equipment_id,
+            }));
             selectedTiers.push(key);
           }
         }
@@ -189,9 +219,8 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
         pricingSnapshot = { cart_type: "new_system", system_options: options };
       }
 
-      // Add selected addons to snapshot
       if (selectedAddons.length > 0) {
-        const addonData = addons
+        pricingSnapshot.addons = addons
           .filter((a: any) => selectedAddons.includes(a.id))
           .map((a: any) => ({
             id: a.id,
@@ -200,10 +229,8 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
             price: a.promo_active ? Math.round(a.cost * (1 - a.promo_percent / 100) * 100) / 100 : a.cost,
             original_price: a.promo_active ? a.cost : undefined,
           }));
-        pricingSnapshot.addons = addonData;
       }
 
-      // Insert into estimate_presentations
       const { data: pres, error } = await supabase
         .from("estimate_presentations" as any)
         .insert({
@@ -219,19 +246,22 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
 
       if (error) throw error;
 
-      const presData = pres as any;
-      const link = `${window.location.origin}/presentation/${presData.token}`;
+      const link = `${window.location.origin}/presentation/${(pres as any).token}`;
 
-      // Send SMS to customer
       if (customerPhone) {
         const firstName = customerName?.split(" ")[0] || "there";
-        const body = `Hi ${firstName} — ${techName || "Your technician"} has prepared your options for today's visit.\n\nTap here to review and choose: ${link}`;
+        const body = `Hi ${firstName}, ${techName || "your technician"} from Carnes and Sons prepared options for today's visit.\n\nReview and choose here: ${link}`;
 
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({
-          to: customerPhone, body, jobId,
-          contactName: customerName || null, contactType: "customer",
-          source: "tech_estimate_cart", hitlApproved: true, silent: true,
+          to: customerPhone,
+          body,
+          jobId,
+          contactName: customerName || null,
+          contactType: "customer",
+          source: "tech_estimate_cart",
+          hitlApproved: true,
+          silent: true,
         });
       }
 
@@ -239,7 +269,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
       resetCart();
       onOpenChange(false);
     } catch (err: any) {
-      toast({ title: "Error sending estimate", description: err.message, variant: "destructive" });
+      toast({ title: "Error sending proposal", description: err.message, variant: "destructive" });
     } finally {
       setSending(false);
     }
@@ -250,7 +280,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
       <DrawerContent className="h-[95vh] max-h-[95vh] overflow-hidden flex flex-col">
         <DrawerHeader className="flex items-center justify-between border-b pb-3 shrink-0">
           <DrawerTitle className="text-lg">
-            {!cartType ? "Build Estimate" : cartType === "repair" ? "🔧 Repair Options" : "🏠 New System"}
+            {!cartType ? "Build Proposal" : cartType === "repair" ? "Repair Options" : "New System Options"}
           </DrawerTitle>
           {cartType && (
             <Button variant="ghost" size="sm" onClick={resetCart}>
@@ -260,7 +290,6 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
         </DrawerHeader>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Step 1: Type Selection */}
           {!cartType && (
             <div className="grid grid-cols-2 gap-4 pt-8">
               <button
@@ -269,7 +298,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
               >
                 <Wrench className="h-12 w-12 text-orange-500" />
                 <span className="text-lg font-semibold">Repair Options</span>
-                <span className="text-sm text-muted-foreground">3 tiers: Critical, Recommended, Reconditioning</span>
+                <span className="text-sm text-muted-foreground">Option A/B/C repair choices</span>
               </button>
               <button
                 onClick={() => setCartType("new_system")}
@@ -282,15 +311,14 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
             </div>
           )}
 
-          {/* Repair Cart Builder */}
           {cartType === "repair" && (
             <div className="space-y-4">
-              {REPAIR_TIERS.map(tier => (
+              {REPAIR_TIERS.map((tier) => (
                 <Card key={tier.key} className={`border ${tier.color}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{tier.emoji}</span>
+                        <tier.Icon className="h-5 w-5" />
                         <div>
                           <h3 className="font-semibold">{tier.label}</h3>
                           <p className="text-xs text-muted-foreground">{tier.desc}</p>
@@ -303,14 +331,13 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                       )}
                     </div>
 
-                    {/* Listed items */}
                     {repairTiers[tier.key].items.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-background/60 rounded-lg px-3 py-2">
-                        <div>
+                      <div key={`${item.id}-${idx}`} className="flex items-center justify-between bg-background/70 rounded-lg px-3 py-2 gap-3">
+                        <div className="min-w-0">
                           <p className="text-sm font-medium">{item.label}</p>
-                          {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                          {item.description && <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-semibold">${item.price.toLocaleString()}</span>
                           <button onClick={() => removeRepairItem(tier.key, idx)} className="text-muted-foreground hover:text-destructive">
                             <Trash2 className="h-4 w-4" />
@@ -319,60 +346,25 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                       </div>
                     ))}
 
-                    {/* Add items */}
                     {activeTier === tier.key ? (
-                      <div className="space-y-2 border-t pt-2">
-                        <div className="flex gap-2">
-                          <Select value={searchBrand} onValueChange={setSearchBrand}>
-                            <SelectTrigger className="w-32 h-9 text-xs"><SelectValue placeholder="Brand" /></SelectTrigger>
-                            <SelectContent>{BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-                          </Select>
-                          <div className="relative flex-1">
-                            <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              placeholder="Search equipment..."
-                              value={searchQuery}
-                              onChange={e => setSearchQuery(e.target.value)}
-                              className="pl-8 h-9 text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        {searchResults.length > 0 && (
-                          <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
-                            {searchResults.map(eq => (
-                              <button
-                                key={eq.id}
-                                className="w-full text-left px-3 py-2 hover:bg-accent/50 text-sm"
-                                onClick={() => addRepairItem(tier.key, {
-                                  id: eq.id,
-                                  label: eq.condenser_model,
-                                  description: `${eq.brand} ${eq.tonnage || ""}T`,
-                                  price: eq.total_price || 0,
-                                  equipment_id: eq.id,
-                                })}
-                              >
-                                <span className="font-medium">{eq.condenser_model}</span>
-                                <span className="text-muted-foreground ml-2">{eq.brand} {eq.tonnage}T — ${(eq.total_price || 0).toLocaleString()}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Custom item */}
+                      <div className="space-y-3 border-t pt-3">
+                        <RepairCatalogBrowser
+                          compact
+                          maxHeight="max-h-[42vh]"
+                          onAddToCart={(item) => addRepairCatalogItem(tier.key, item)}
+                        />
                         <div className="flex gap-2 items-end">
-                          <Input placeholder="Custom item" value={customLabel} onChange={e => setCustomLabel(e.target.value)} className="h-9 text-sm flex-1" />
-                          <Input placeholder="$" type="number" value={customPrice} onChange={e => setCustomPrice(e.target.value)} className="h-9 text-sm w-24" />
+                          <Input placeholder="Custom item" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="h-9 text-sm flex-1" />
+                          <Input placeholder="$" type="number" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} className="h-9 text-sm w-24" />
                           <Button size="sm" variant="secondary" onClick={() => addCustomItem(tier.key)} disabled={!customLabel || !customPrice}>
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
-
                         <Button size="sm" variant="ghost" onClick={() => setActiveTier(null)} className="w-full text-xs">Done</Button>
                       </div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => { setActiveTier(tier.key); setSearchQuery(""); setSearchBrand(""); }} className="w-full">
-                        <Plus className="h-4 w-4 mr-1" /> Add Item
+                      <Button size="sm" variant="outline" onClick={() => setActiveTier(tier.key)} className="w-full">
+                        <Plus className="h-4 w-4 mr-1" /> Add Repair
                       </Button>
                     )}
                   </CardContent>
@@ -381,16 +373,12 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
             </div>
           )}
 
-          {/* New System Cart Builder */}
           {cartType === "new_system" && (
             <div className="space-y-4">
-              {SYSTEM_TIERS.map(tier => (
+              {SYSTEM_TIERS.map((tier) => (
                 <Card key={tier.key} className="border">
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span>{tier.emoji}</span>
-                      <h3 className="font-semibold text-lg">{tier.label}</h3>
-                    </div>
+                    <h3 className="font-semibold text-lg">{tier.label}</h3>
 
                     {systemSlots[tier.key] ? (
                       <div className="bg-accent/30 rounded-lg p-3 space-y-2">
@@ -400,20 +388,20 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                             <p className="text-sm text-muted-foreground">{systemSlots[tier.key]!.description}</p>
                             {systemSlots[tier.key]!.seer2 && <Badge variant="outline" className="mt-1">{systemSlots[tier.key]!.seer2} SEER2</Badge>}
                           </div>
-                          <button onClick={() => setSystemSlots(prev => ({ ...prev, [tier.key]: null }))} className="text-muted-foreground hover:text-destructive">
+                          <button onClick={() => setSystemSlots((prev) => ({ ...prev, [tier.key]: null }))} className="text-muted-foreground hover:text-destructive">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                        {systemSlots[tier.key]!.features_benefits && systemSlots[tier.key]!.features_benefits!.length > 0 && (
+                        {systemSlots[tier.key]!.features_benefits?.length ? (
                           <div className="space-y-1 border-t border-border/50 pt-2">
                             {systemSlots[tier.key]!.features_benefits!.map((f, i) => (
                               <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span className="text-primary">✓</span>
+                                <CheckCircle2 className="h-3 w-3 text-primary" />
                                 <span>{f.text}</span>
                               </div>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                         <div className="text-right">
                           <p className="text-xl font-bold">${systemSlots[tier.key]!.price.toLocaleString()}</p>
                           {systemSlots[tier.key]!.monthly_payment && (
@@ -426,12 +414,12 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                         <EquipmentCatalogBrowser
                           compact
                           maxHeight="max-h-[50vh]"
-                          onAddToCart={(eq: EquipmentMatchup) => { setSystemSlot(tier.key, eq); setActiveTier(null); }}
+                          onAddToCart={(eq: EquipmentMatchup) => setSystemSlot(tier.key, eq)}
                         />
                         <Button size="sm" variant="ghost" onClick={() => setActiveTier(null)} className="w-full text-xs">Cancel</Button>
                       </div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => { setActiveTier(tier.key); setSearchQuery(""); setSearchBrand(""); }} className="w-full">
+                      <Button size="sm" variant="outline" onClick={() => setActiveTier(tier.key)} className="w-full">
                         <Search className="h-4 w-4 mr-1" /> Select System
                       </Button>
                     )}
@@ -441,7 +429,6 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
             </div>
           )}
 
-          {/* Addons Section */}
           {cartType && addons.length > 0 && (
             <Card className="border border-dashed">
               <CardContent className="p-4 space-y-3">
@@ -456,30 +443,21 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                       ? Math.round(addon.cost * (1 - addon.promo_percent / 100) * 100) / 100
                       : addon.cost;
                     return (
-                      <label
-                        key={addon.id}
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/30 cursor-pointer transition-colors"
-                      >
+                      <label key={addon.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/30 cursor-pointer transition-colors">
                         <Checkbox
                           checked={isChecked}
                           onCheckedChange={() =>
-                            setSelectedAddons(prev =>
-                              prev.includes(addon.id)
-                                ? prev.filter(id => id !== addon.id)
-                                : [...prev, addon.id]
+                            setSelectedAddons((prev) =>
+                              prev.includes(addon.id) ? prev.filter((id) => id !== addon.id) : [...prev, addon.id]
                             )
                           }
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{addon.name}</p>
-                          {addon.description && (
-                            <p className="text-xs text-muted-foreground truncate">{addon.description}</p>
-                          )}
+                          {addon.description && <p className="text-xs text-muted-foreground truncate">{addon.description}</p>}
                         </div>
                         <div className="text-right shrink-0">
-                          {addon.promo_active && (
-                            <p className="text-xs line-through text-muted-foreground">${addon.cost}</p>
-                          )}
+                          {addon.promo_active && <p className="text-xs line-through text-muted-foreground">${addon.cost}</p>}
                           <p className="text-sm font-semibold">${effectivePrice.toLocaleString()}</p>
                         </div>
                       </label>
@@ -491,15 +469,9 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
           )}
         </div>
 
-        {/* Send Button */}
         {cartType && hasItems && (
           <div className="p-4 border-t shrink-0">
-            <Button
-              onClick={handleSend}
-              disabled={sending}
-              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 text-white"
-              size="lg"
-            >
+            <Button onClick={handleSend} disabled={sending} className="w-full h-14 text-lg bg-green-600 hover:bg-green-700 text-white" size="lg">
               {sending ? (
                 <>Sending...</>
               ) : (
@@ -509,11 +481,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                 </>
               )}
             </Button>
-            {customerPhone && (
-              <p className="text-xs text-center text-muted-foreground mt-2">
-                Will text link to {customerPhone}
-              </p>
-            )}
+            {customerPhone && <p className="text-xs text-center text-muted-foreground mt-2">Will text link to {customerPhone}</p>}
           </div>
         )}
       </DrawerContent>

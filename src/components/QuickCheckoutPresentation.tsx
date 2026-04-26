@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Star, Shield, Zap, AlertTriangle, Loader2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Star, Shield, Zap, AlertTriangle, Loader2, Clock, Landmark, Banknote } from "lucide-react";
 import { getFeatureIcon } from "@/components/FeaturesEditor";
 import { cn } from "@/lib/utils";
 import { recordPresentationView } from "@/hooks/useEstimatePresentations";
@@ -80,6 +80,9 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
   }, [isPaid, presentation?.id]);
 
   const customerName = estimate?.customer_name?.split(" ")[0] || "";
+  const addonTotal = Array.isArray(snapshot?.addons)
+    ? snapshot.addons.reduce((sum: number, addon: any) => sum + Number(addon.price || 0), 0)
+    : 0;
 
   // Already approved / paid
   if (submitted) {
@@ -91,7 +94,7 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
           <p className="text-muted-foreground">
             {isPaid
               ? "Payment received! Your technician will get started. You'll receive a confirmation text."
-              : "Your technician will get started shortly. You'll receive a text confirmation."}
+              : "Your approval is saved. If you chose to pay after the work, we will keep this cart ready for checkout when the repair is complete."}
           </p>
         </Card>
       </div>
@@ -145,9 +148,9 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
   if (isRepair) {
     const tiers = snapshot.repair_tiers || {};
     const tierConfig = [
-      { key: "critical", label: "Critical Repair", emoji: "🔴", desc: "Must fix today", warning: "Declining critical repairs may result in complete system failure.", borderColor: "border-red-500/40", bgColor: "bg-red-500/5" },
-      { key: "recommended", label: "Recommended Repair", emoji: "🟡", desc: "Should fix this season", borderColor: "border-yellow-500/40", bgColor: "bg-yellow-500/5" },
-      { key: "reconditioning", label: "Reconditioning", emoji: "🟢", desc: "Extends life & efficiency", borderColor: "border-green-500/40", bgColor: "bg-green-500/5" },
+      { key: "critical", label: "Option A: Critical", Icon: AlertTriangle, desc: "Restore safe operation today", warning: "Declining critical repairs may result in complete system failure.", borderColor: "border-red-500/40", bgColor: "bg-red-500/5" },
+      { key: "recommended", label: "Option B: Recommended", Icon: CheckCircle2, desc: "Fix the failure and reduce repeat issues", borderColor: "border-amber-500/40", bgColor: "bg-amber-500/5" },
+      { key: "reconditioning", label: "Option C: Reconditioning", Icon: Shield, desc: "Best repair scope for reliability and comfort", borderColor: "border-emerald-500/40", bgColor: "bg-emerald-500/5" },
     ];
 
     const activeTiers = tierConfig.filter(t => tiers[t.key]?.length > 0);
@@ -163,16 +166,18 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
 
         <div className="p-4 space-y-4 max-w-lg mx-auto">
           {activeTiers.map(tier => {
-            const items = tiers[tier.key] as { item: string; price: number }[];
-            const total = items.reduce((s, i) => s + i.price, 0);
+            const items = tiers[tier.key] as { item: string; description?: string; price: number; quantity?: number }[];
+            const total = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1), 0);
+            const grandTotal = total + addonTotal;
             const monthly = Math.round(total * 0.0278);
             const isSelected = selectedOption === tier.key;
+            const Icon = tier.Icon;
 
             return (
               <Card key={tier.key} className={cn("border-2 transition-all", tier.borderColor, tier.bgColor, isSelected && "ring-2 ring-primary shadow-lg")}>
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{tier.emoji}</span>
+                    <Icon className="h-5 w-5 text-primary" />
                     <div>
                       <h3 className="font-bold text-lg">{tier.label}</h3>
                       <p className="text-xs text-muted-foreground">{tier.desc}</p>
@@ -181,16 +186,20 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
 
                   <div className="divide-y">
                     {items.map((item, i) => (
-                      <div key={i} className="flex justify-between py-2 text-sm">
-                        <span>{item.item}</span>
-                        <span className="font-medium">${item.price.toLocaleString()}</span>
+                      <div key={i} className="flex justify-between gap-3 py-2 text-sm">
+                        <div>
+                          <p className="font-medium">{item.item}</p>
+                          {item.description && <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>}
+                        </div>
+                        <span className="font-medium shrink-0">${Number(item.price || 0).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
 
                   <div className="border-t pt-3 flex justify-between items-end">
                     <div>
-                      <p className="text-2xl font-bold">${total.toLocaleString()}</p>
+                      <p className="text-2xl font-bold">${grandTotal.toLocaleString()}</p>
+                      {addonTotal > 0 && <p className="text-[11px] text-muted-foreground">Includes selected add-ons</p>}
                       <p className="text-xs text-muted-foreground">or ~${monthly}/mo with financing</p>
                     </div>
                     <Button
@@ -404,16 +413,19 @@ function PaymentSection({ paymentMethod, setPaymentMethod, onConfirm, submitting
 }) {
   const methods = [
     { key: "stripe", label: "Pay Online Now", desc: "Secure card payment", icon: CreditCard },
-    { key: "pay_after_completion", label: "Pay After Work", desc: "Approve today, pay when complete", icon: CreditCard },
-    { key: "financing_36mo", label: "0% APR - 36 Mo", desc: "No money down - easy approval", icon: CreditCard },
-    { key: "financing_120mo", label: "9.99% APR - 120 Mo", desc: "Lowest monthly payment", icon: CreditCard },
-    { key: "factory_rebate", label: "Cash/Check/Card Later", desc: "One-time price after completion", icon: CreditCard },
+    { key: "pay_after_completion", label: "Pay After Work", desc: "Approve today, pay after completion", icon: Clock },
+    { key: "financing_36mo", label: "0% APR - 36 Mo", desc: "No money down - easy approval", icon: Landmark },
+    { key: "financing_120mo", label: "9.99% APR - 120 Mo", desc: "Lowest monthly payment", icon: Landmark },
+    { key: "factory_rebate", label: "Cash/Check/Card Later", desc: "One-time price after completion", icon: Banknote },
   ];
 
   return (
     <Card className="border-2">
       <CardContent className="p-5 space-y-4">
-        <h3 className="font-bold text-lg">How would you like to pay?</h3>
+        <div>
+          <h3 className="font-bold text-lg">Choose how to proceed</h3>
+          <p className="text-xs text-muted-foreground mt-1">Your selection creates a saved Carnes and Sons cart so the office and tech can track the approved scope.</p>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {methods.map(m => (
@@ -444,7 +456,7 @@ function PaymentSection({ paymentMethod, setPaymentMethod, onConfirm, submitting
             {submitting ? (
               <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Processing...</>
             ) : paymentMethod === "stripe" ? (
-              "Proceed to Checkout →"
+              "Proceed to Checkout"
             ) : (
               "Approve & Save Cart"
             )}

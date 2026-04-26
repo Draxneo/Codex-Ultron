@@ -134,6 +134,7 @@ export default function CustomerCart() {
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
   const isPayAfterCompletion = (cart as any).payment_timing === "pay_after_completion";
+  const isFinancing = (cart as any).payment_timing === "financing" || cart.payment_method === "financing";
   const canEditCart = !isPaid && !isApproved;
   const canPayCart = !isPaid && (!isApproved || isPayAfterCompletion);
 
@@ -186,8 +187,15 @@ export default function CustomerCart() {
               <p className="font-semibold text-primary">
                 {isPayAfterCompletion
                   ? "Approved - this cart is saved for payment after the work is complete."
+                  : isFinancing
+                    ? "Approved - financing is selected and this cart is saved while financing is completed."
                   : "Approved - your tech will collect on site."}
               </p>
+              {isPayAfterCompletion && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  When the repair is finished, use the payment options below or call the office if you need help.
+                </p>
+              )}
             </div>
           </Card>
         )}
@@ -331,7 +339,9 @@ export default function CustomerCart() {
         {/* CTAs */}
         {canPayCart && (
           <Card className="p-4 space-y-2">
-            <p className="text-sm font-semibold mb-2">Choose how to proceed:</p>
+            <p className="text-sm font-semibold mb-2">
+              {isPayAfterCompletion ? "Ready to pay for the completed work?" : "Choose how to proceed:"}
+            </p>
             <Button className="w-full h-12 text-base" onClick={() => handlePay("stripe")} disabled={!!paying}>
               {paying === "stripe" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-5 w-5 mr-2" />}
               Pay Now — ${Number(cart.total).toFixed(2)}
