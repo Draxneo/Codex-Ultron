@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { GoodBetterBestPicker } from "@/components/tiers/GoodBetterBestPicker";
 import { TierPresetManager } from "@/components/tiers/TierPresetManager";
 import { useAuth } from "@/hooks/useAuth";
+import { cartToneClasses, getJobCartPermissions, getJobCartStatus } from "@/lib/jobCartStatus";
+import { cn } from "@/lib/utils";
 
 const CART_TIER_SCOPE = "cart_install_addon";
 
@@ -47,6 +49,8 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { cart, items, itemCount, removeItem, sendToCustomer, publicLink, isLoading, addItem } = useJobCart(jobId);
+  const statusInfo = getJobCartStatus(cart, itemCount);
+  const permissions = getJobCartPermissions(cart, itemCount);
 
   const copyLink = () => {
     if (!publicLink) return;
@@ -56,6 +60,10 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
 
   const applyPromo = async (code: string, amount: number) => {
     if (!cart?.id) return;
+    if (!permissions.canApplyPromo) {
+      toast.error(permissions.lockedReason || "This cart cannot be changed.");
+      return;
+    }
     const { error } = await (supabase as any)
       .from("job_carts")
       .update({ discount_code: code, discount_amount: amount })
@@ -66,6 +74,10 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
 
   const removePromo = async () => {
     if (!cart?.id) return;
+    if (!permissions.canApplyPromo) {
+      toast.error(permissions.lockedReason || "This cart cannot be changed.");
+      return;
+    }
     await (supabase as any).from("job_carts").update({ discount_code: null, discount_amount: 0 }).eq("id", cart.id);
     queryClient.invalidateQueries({ queryKey: ["job_cart", jobId] });
   };
@@ -85,6 +97,10 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
           </div>
           <div>
             <p className="font-bold text-lg">${Number(cart?.total || 0).toFixed(2)}</p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <Badge className={cn("border text-[10px]", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
+              {permissions.lockedReason && <span className="text-[11px] text-muted-foreground">{permissions.lockedReason}</span>}
+            </div>
             <p className="text-xs text-muted-foreground">{itemCount} item{itemCount !== 1 ? "s" : ""} • {cart?.status || "draft"}</p>
             {cart?.id && (
               <CartViewStatus
@@ -98,16 +114,16 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setPickerOpen(true)} size="sm">
+          <Button onClick={() => setPickerOpen(true)} size="sm" disabled={!permissions.canEditItems}>
             <Plus className="h-4 w-4 mr-1" /> Add Items
           </Button>
           <Button
             onClick={() => sendToCustomer.mutate({ phone: customerPhone, customerName })}
             size="sm"
             variant="default"
-            disabled={items.length === 0 || sendToCustomer.isPending}
+            disabled={(!permissions.canSendForApproval && !permissions.canSendPaymentLink) || sendToCustomer.isPending}
           >
-            <Send className="h-4 w-4 mr-1" /> Send
+            <Send className="h-4 w-4 mr-1" /> {permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Send Payment Link" : "Send"}
           </Button>
         </div>
       </Card>
@@ -126,7 +142,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
       )}
 
       {/* Good / Better / Best equipment quick-add */}
-      <Card className="p-4 space-y-3">
+      {permissions.canEditItems && <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-accent" />
@@ -155,7 +171,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
             });
           }}
         />
-      </Card>
+      </Card>}
 
       {/* Items list */}
       {items.length === 0 ? (
@@ -189,7 +205,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-bold text-sm">${Number(item.total_price).toFixed(2)}</p>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeItem.mutate(item.id)}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeItem.mutate(item.id)} disabled={!permissions.canEditItems}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -198,7 +214,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
           })}
 
           {/* Add-on suggestions */}
-          <CartAddonSuggestions
+          {permissions.canEditItems && <CartAddonSuggestions
             itemKinds={items.map((i) => i.kind)}
             itemNames={items.map((i) => i.name)}
             onAdd={(rule) => addItem.mutate({
@@ -211,10 +227,10 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
               metadata: { from_addon_rule: rule.id, badge: rule.badge },
             })}
             variant="tech"
-          />
+          />}
 
           {/* Promo code */}
-          <Card className="p-3 space-y-2">
+          {permissions.canApplyPromo && <Card className="p-3 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Promo Code</p>
             <PromoCodeField
               subtotal={Number(cart?.subtotal || 0)}
@@ -224,7 +240,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
               onRemove={removePromo}
               compact
             />
-          </Card>
+          </Card>}
 
           {/* A/B/C payment framing — mirrors what the customer sees on the public cart */}
           {(() => {

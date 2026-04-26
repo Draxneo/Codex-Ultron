@@ -37,7 +37,7 @@ import { JobCartPicker } from "@/components/cart/JobCartPicker";
 import { CartAddonSuggestions } from "@/components/cart/CartAddonSuggestions";
 import { CartViewStatus } from "@/components/cart/CartViewStatus";
 import { cn } from "@/lib/utils";
-import { cartToneClasses, getJobCartStatus } from "@/lib/jobCartStatus";
+import { cartToneClasses, getJobCartPermissions, getJobCartStatus } from "@/lib/jobCartStatus";
 import { formatDistanceToNow } from "date-fns";
 
 interface Props {
@@ -66,6 +66,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const firstViewedAt = (cart as any)?.first_viewed_at;
   const lastViewedAt = (cart as any)?.last_viewed_at;
   const statusInfo = getJobCartStatus(cart, itemCount);
+  const permissions = getJobCartPermissions(cart, itemCount);
 
   const handleAddCustom = () => {
     const price = parseFloat(customPrice);
@@ -315,7 +316,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
       )}
 
       {/* Add row — disabled once customer has approved/paid */}
-      {status !== "approved" && status !== "paid" && (
+      {permissions.canEditItems && (
         <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border">
           <Button
             variant="outline"
@@ -336,7 +337,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
         </div>
       )}
 
-      {items.length > 0 && status !== "approved" && status !== "paid" && (
+      {items.length > 0 && permissions.canEditItems && (
         <div className="border-t border-border px-3 py-2">
           <CartAddonSuggestions
             itemKinds={items.map((i) => i.kind)}

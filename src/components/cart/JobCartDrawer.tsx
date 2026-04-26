@@ -9,6 +9,8 @@ import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
 import { calcMonthly36, calcMonthly120 } from "@/lib/paymentOptions";
 import { toast } from "sonner";
+import { cartToneClasses, getJobCartPermissions, getJobCartStatus } from "@/lib/jobCartStatus";
+import { cn } from "@/lib/utils";
 
 interface Props {
   jobId: string;
@@ -36,6 +38,8 @@ const KIND_COLOR: Record<JobCartItem["kind"], string> = {
 export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerName, customerPhone }: Props) {
   const isMobile = useIsMobile();
   const { cart, items, itemCount, updateItem, removeItem, sendToCustomer, publicLink } = useJobCart(jobId);
+  const statusInfo = getJobCartStatus(cart, itemCount);
+  const permissions = getJobCartPermissions(cart, itemCount);
 
   const copyLink = () => {
     if (!publicLink) return;
@@ -49,9 +53,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
       <div className="px-4 pt-2 pb-3 border-b">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span>
-          {cart?.status && cart.status !== "draft" && (
-            <Badge variant={cart.status === "paid" ? "default" : "secondary"} className="capitalize">{cart.status}</Badge>
-          )}
+          <Badge className={cn("border", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
         </div>
       </div>
 
@@ -61,7 +63,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
           <div className="text-center py-12 text-muted-foreground">
             <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Cart is empty</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={onAddMore}>
+            <Button variant="outline" size="sm" className="mt-3" onClick={onAddMore} disabled={!permissions.canEditItems}>
               <Plus className="h-4 w-4 mr-1" /> Add Items
             </Button>
           </div>
@@ -83,17 +85,17 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
                       <p className="font-semibold text-sm leading-tight truncate">{item.name}</p>
                       {item.description && <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeItem.mutate(item.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeItem.mutate(item.id)} disabled={!permissions.canEditItems}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1">
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem.mutate({ id: item.id, quantity: Math.max(1, Number(item.quantity) - 1) })}>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem.mutate({ id: item.id, quantity: Math.max(1, Number(item.quantity) - 1) })} disabled={!permissions.canEditItems}>
                         <Minus className="h-3 w-3" />
                       </Button>
                       <span className="text-sm font-medium w-7 text-center">{Number(item.quantity)}</span>
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem.mutate({ id: item.id, quantity: Number(item.quantity) + 1 })}>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem.mutate({ id: item.id, quantity: Number(item.quantity) + 1 })} disabled={!permissions.canEditItems}>
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
@@ -129,7 +131,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
           <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>${Number(cart?.total || 0).toFixed(2)}</span></div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={onAddMore}>
+          <Button variant="outline" size="sm" className="flex-1" onClick={onAddMore} disabled={!permissions.canEditItems}>
             <Plus className="h-4 w-4 mr-1" /> Add
           </Button>
           <Button variant="outline" size="sm" onClick={copyLink} disabled={!publicLink}>
@@ -143,10 +145,10 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
           <Button
             size="sm"
             className="flex-1"
-            disabled={items.length === 0 || sendToCustomer.isPending}
+            disabled={(!permissions.canSendForApproval && !permissions.canSendPaymentLink) || sendToCustomer.isPending}
             onClick={() => sendToCustomer.mutate({ phone: customerPhone, customerName })}
           >
-            <Send className="h-4 w-4 mr-1" /> {sendToCustomer.isPending ? "Sending..." : "Send to Customer"}
+            <Send className="h-4 w-4 mr-1" /> {sendToCustomer.isPending ? "Sending..." : permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Send Payment Link" : "Send to Customer"}
           </Button>
         </div>
       </div>

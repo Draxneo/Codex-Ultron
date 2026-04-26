@@ -16,6 +16,16 @@ export type JobCartStatusInfo = {
   hasBeenViewed: boolean;
 };
 
+export type JobCartPermissions = {
+  canEditItems: boolean;
+  canApplyPromo: boolean;
+  canSendForApproval: boolean;
+  canSendPaymentLink: boolean;
+  canOpenPayment: boolean;
+  canCopyLink: boolean;
+  lockedReason: string | null;
+};
+
 function normalized(value?: string | null) {
   return (value || "").trim().toLowerCase();
 }
@@ -154,6 +164,33 @@ export function getJobCartStatus(cart?: JobCart | null, itemCount = 0): JobCartS
     isFinancing,
     isPayAfterCompletion,
     hasBeenViewed,
+  };
+}
+
+export function getJobCartPermissions(cart?: JobCart | null, itemCount = 0): JobCartPermissions {
+  const statusInfo = getJobCartStatus(cart, itemCount);
+  const status = normalized(cart?.status);
+  const hasItems = itemCount > 0;
+  const isCanceled = status === "canceled";
+  const isDeclined = status === "declined";
+  const lockedReason = statusInfo.isPaid
+    ? "This cart is paid and locked."
+    : statusInfo.isApproved
+      ? "This cart is approved and locked. Create a new cart for changes."
+      : isCanceled
+        ? "This cart is canceled."
+        : null;
+
+  const canEditItems = Boolean(cart && !statusInfo.isPaid && !statusInfo.isApproved && !isCanceled);
+
+  return {
+    canEditItems,
+    canApplyPromo: canEditItems,
+    canSendForApproval: Boolean(cart && hasItems && !statusInfo.isPaid && !statusInfo.isApproved && !isCanceled),
+    canSendPaymentLink: statusInfo.canSendPaymentLink,
+    canOpenPayment: Boolean(cart && (statusInfo.canCollectNow || statusInfo.isApproved || status === "sent")),
+    canCopyLink: Boolean(cart && !isCanceled && !isDeclined),
+    lockedReason,
   };
 }
 

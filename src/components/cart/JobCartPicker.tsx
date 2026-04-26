@@ -12,6 +12,7 @@ import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
 import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
 import { usePartsCatalog } from "@/hooks/usePartsCatalog";
 import { useJobCart } from "@/hooks/useJobCart";
+import { getJobCartPermissions } from "@/lib/jobCartStatus";
 import type { EquipmentMatchup } from "@/hooks/useEquipmentMatchups";
 import type { RepairCatalogItem } from "@/components/RepairProductCard";
 
@@ -29,11 +30,13 @@ const HOURLY_LABOR_RATE = 165; // fallback only when catalog has no base_price
 export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) {
   const isMobile = useIsMobile();
   const { itemCount, cart, addItem } = useJobCart(jobId);
+  const permissions = getJobCartPermissions(cart, itemCount);
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
   const [customDesc, setCustomDesc] = useState("");
 
   const handleAddEquipment = (m: EquipmentMatchup) => {
+    if (!permissions.canEditItems) return;
     addItem.mutate({
       kind: "equipment",
       source_id: m.id,
@@ -52,6 +55,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   };
 
   const handleAddRepair = (r: RepairCatalogItem) => {
+    if (!permissions.canEditItems) return;
     // Prefer catalog base_price; fall back to labor math only if catalog has no price set
     const catalogPrice = Number(r.base_price ?? 0);
     const price = catalogPrice > 0
@@ -75,6 +79,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   };
 
   const handleAddCustom = () => {
+    if (!permissions.canEditItems) return;
     const price = Number(customPrice);
     if (!customName.trim() || isNaN(price) || price <= 0) return;
     addItem.mutate({
@@ -91,6 +96,11 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   const body = (
     <div className="flex flex-col h-full">
       <Tabs defaultValue="equipment" className="flex-1 flex flex-col min-h-0">
+        {!permissions.canEditItems && (
+          <div className="mx-3 mt-3 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            {permissions.lockedReason || "This cart cannot be edited."}
+          </div>
+        )}
         <TabsList className="w-full bg-muted/60 flex-wrap h-auto gap-1 p-1 mx-auto">
           <TabsTrigger value="equipment" className="flex-1 gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Zap className="h-4 w-4" /> Equipment
@@ -114,7 +124,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
             <RepairCatalogBrowser onAddToCart={handleAddRepair} compact={isMobile} />
           </TabsContent>
           <TabsContent value="parts" className="mt-0">
-            <PartsPickerGrid onAdd={(p) => addItem.mutate({
+            <PartsPickerGrid disabled={!permissions.canEditItems} onAdd={(p) => addItem.mutate({
               kind: "part",
               source_id: p.id,
               name: p.name,
@@ -136,7 +146,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
                 <Label htmlFor="custom-price">Price ($)</Label>
                 <Input id="custom-price" type="number" inputMode="decimal" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder="0.00" />
               </div>
-              <Button onClick={handleAddCustom} className="w-full" disabled={!customName.trim() || !customPrice}>
+              <Button onClick={handleAddCustom} className="w-full" disabled={!permissions.canEditItems || !customName.trim() || !customPrice}>
                 <Plus className="h-4 w-4 mr-1" /> Add to Cart
               </Button>
             </Card>
@@ -193,7 +203,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   );
 }
 
-function PartsPickerGrid({ onAdd }: { onAdd: (p: { id: string; name: string; description: string | null; unit_price: number }) => void }) {
+function PartsPickerGrid({ onAdd, disabled = false }: { onAdd: (p: { id: string; name: string; description: string | null; unit_price: number }) => void; disabled?: boolean }) {
   const { parts, isLoading } = usePartsCatalog();
   const [q, setQ] = useState("");
 
@@ -221,7 +231,7 @@ function PartsPickerGrid({ onAdd }: { onAdd: (p: { id: string; name: string; des
               {p.description && <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>}
               <div className="flex items-center justify-between mt-auto pt-2">
                 <span className="font-bold text-sm">${cost.toFixed(2)}</span>
-                <Button size="sm" onClick={() => onAdd({ id: p.id, name: p.name, description: p.description, unit_price: cost })}>
+                <Button size="sm" onClick={() => onAdd({ id: p.id, name: p.name, description: p.description, unit_price: cost })} disabled={disabled}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add
                 </Button>
               </div>

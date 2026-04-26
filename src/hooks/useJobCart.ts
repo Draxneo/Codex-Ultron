@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getJobCartPermissions } from "@/lib/jobCartStatus";
 
 export interface JobCart {
   id: string;
@@ -108,6 +109,8 @@ export function useJobCart(jobId: string | undefined) {
   const addItem = useMutation({
     mutationFn: async (item: NewCartItem) => {
       if (!cartQuery.data?.id) throw new Error("No cart available");
+      const permissions = getJobCartPermissions(cartQuery.data, itemCount);
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
       const qty = item.quantity ?? 1;
       const { data, error } = await (supabase as any)
         .from("job_cart_items")
@@ -140,6 +143,8 @@ export function useJobCart(jobId: string | undefined) {
   const updateItem = useMutation({
     mutationFn: async ({ id, quantity, unit_price }: { id: string; quantity?: number; unit_price?: number }) => {
       const updates: any = {};
+      const permissions = getJobCartPermissions(cartQuery.data, itemCount);
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
       if (quantity !== undefined) updates.quantity = quantity;
       if (unit_price !== undefined) updates.unit_price = unit_price;
       // Recompute total if either changed — fetch existing first if needed
@@ -160,6 +165,8 @@ export function useJobCart(jobId: string | undefined) {
 
   const removeItem = useMutation({
     mutationFn: async (id: string) => {
+      const permissions = getJobCartPermissions(cartQuery.data, itemCount);
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
       const { error } = await (supabase as any).from("job_cart_items").delete().eq("id", id);
       if (error) throw error;
     },
@@ -173,19 +180,25 @@ export function useJobCart(jobId: string | undefined) {
   const sendToCustomer = useMutation({
     mutationFn: async ({ phone, customerName }: { phone?: string | null; customerName?: string | null }) => {
       if (!cartQuery.data?.id) throw new Error("No cart");
+      const permissions = getJobCartPermissions(cartQuery.data, itemCount);
+      if (!permissions.canSendForApproval && !permissions.canSendPaymentLink) {
+        throw new Error(permissions.lockedReason || "This cart cannot be sent.");
+      }
       const link = `${window.location.origin}/cart/${cartQuery.data.public_token}`;
-      // Mark sent
-      await (supabase as any)
-        .from("job_carts")
-        .update({ status: "sent", sent_at: new Date().toISOString() })
-        .eq("id", cartQuery.data.id);
+      if (permissions.canSendForApproval) {
+        await (supabase as any)
+          .from("job_carts")
+          .update({ status: "sent", sent_at: new Date().toISOString() })
+          .eq("id", cartQuery.data.id);
+      }
       // Send SMS via centralized pipeline
       if (phone) {
         const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
+        const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "cart";
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({
           to: phone,
-          body: `${greeting}here's your cart from Carnes and Sons Air Conditioning: ${link}`,
+          body: `${greeting}here's your ${linkLabel} from Carnes and Sons Air Conditioning: ${link}`,
           jobId,
           contactName: customerName || null,
           contactType: "customer",
