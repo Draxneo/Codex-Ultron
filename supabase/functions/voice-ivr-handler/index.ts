@@ -3,7 +3,7 @@ import { sendIvrSms } from "../_shared/smsHelper.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { buildDepartmentDialList, buildClientTags } from "../_shared/callRouting.ts";
+import { buildDepartmentDialList, buildClientTags, isUserBusy } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 
 /** Map an IVR menu label like "Sales" / "Service" to this app's department-routing key. */
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     const formData = await req.text();
     const params = new URLSearchParams(formData);
-    const digit = params.get("Digits") || "";
+    const digit = params.get("Digits") || url.searchParams.get("Digit") || "";
     const attemptParam = url.searchParams.get("Attempt") || "";
 
             const supabase = getSupabaseAdmin();
@@ -569,7 +569,126 @@ Deno.serve(async (req) => {
       console.log(`[ivr-handler] dept "${option.label}" → ${chosenEmployees.join(", ")}`);
     } else if (assignedIds.length > 0 && evaluation.reason === "no_rules") {
       // Fallback only when no department-routing rules exist for this IVR option.
-      clientTags = assignedIds.map((uid: string) => {
+      const { data: assignedEmployees } = await supabase
+        .from("employees")
+        .select("name, profile_id, ooo_enabled")
+        .eq("is_active", true)
+        .in("profile_id", assignedIds);
+
+      const employeesByProfile = new Map<string, { name?: string | null; profile_id?: string | null; ooo_enabled?: boolean | null }>();
+      for (const employee of assignedEmployees || []) {
+        if (employee.profile_id) employeesByProfile.set(employee.profile_id, employee);
+      }
+
+      const availableAssignedIds: string[] = [];
+      let fallbackBusyCount = 0;
+      let fallbackAwayCount = 0;
+
+      for (const uid of assignedIds) {
+        const employee = employeesByProfile.get(uid);
+        const employeeName = employee?.name || `user_${uid}`;
+        if (employee?.ooo_enabled) {
+          fallbackAwayCount++;
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-ivr-handler",
+            eventKind: "candidate_skipped",
+            summary: `${employeeName} skipped for ${option.label}: away from desk`,
+            reason: "out_of_office",
+            severity: "info",
+            traceGroup: callSid,
+            entityType: "call",
+            entityId: callSid,
+            callSid,
+            metadata: { digit, label: option.label, profile_id: uid },
+          });
+          continue;
+        }
+
+        if (employee?.name && await isUserBusy(supabase, employee.name)) {
+          fallbackBusyCount++;
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-ivr-handler",
+            eventKind: "candidate_skipped",
+            summary: `${employee.name} skipped for ${option.label}: busy`,
+            reason: "busy",
+            severity: "info",
+            traceGroup: callSid,
+            entityType: "call",
+            entityId: callSid,
+            callSid,
+            metadata: { digit, label: option.label, profile_id: uid },
+          });
+          continue;
+        }
+
+        availableAssignedIds.push(uid);
+        chosenEmployees.push(employeeName);
+      }
+
+      if (availableAssignedIds.length === 0) {
+        if (fallbackBusyCount > 0 && !queueRetry) {
+          console.log(`[ivr-handler] dept "${option.label}": assigned users busy - queueing caller for ${queueWaitSeconds}s`);
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-ivr-handler",
+            eventKind: "queue_entered",
+            summary: `Caller queued for ${option.label}`,
+            reason: "assigned_users_busy",
+            severity: "info",
+            traceGroup: callSid,
+            entityType: "call",
+            entityId: callSid,
+            callSid,
+            metadata: {
+              digit,
+              label: option.label,
+              dept_key: deptKey,
+              queue_wait_seconds: queueWaitSeconds,
+              hold_music_audio_url: (config as any).hold_music_audio_url || null,
+              busy_count: fallbackBusyCount,
+              away_count: fallbackAwayCount,
+              total_candidates: assignedIds.length,
+            },
+          });
+          return new Response(
+            buildQueueTwiml({
+              holdMusicUrl: (config as any).hold_music_audio_url,
+              waitSeconds: queueWaitSeconds,
+              redirectUrl: queueRedirectUrl,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+          );
+        }
+
+        console.log(`[ivr-handler] dept "${option.label}": no assigned users available after busy/away checks`);
+        if (overflowOnNoAnswer && answeringServiceEnabled && answeringServiceNumber) {
+          const twiml = overflowDialTwiml({
+            to: answeringServiceNumber,
+            sayText: "We are connecting you to our answering service now.",
+            dialTimeout: Math.max(10, Math.min(60, Number((config as any).answering_service_timeout_seconds || 30))),
+            from,
+            twilioNumber,
+            callerIdMode,
+            statusCallbackUrl,
+            actionUrl: supabaseUrl ? `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName || "")}&ContactType=${encodeURIComponent(contactType || "")}&Department=${encodeURIComponent(option.label)}&OverflowAttempt=1` : undefined,
+          });
+          return new Response(twiml, { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 });
+        }
+        if (config?.voicemail_enabled) {
+          return new Response(
+            `<Response><Say voice="Polly.Joanna">No one is available right now. Please leave a message.</Say><Redirect method="POST">${escapeXml(voicemailUrl)}</Redirect></Response>`,
+            { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+          );
+        }
+        return new Response(`<Response><Say voice="Polly.Joanna">No one is available right now. Goodbye.</Say><Hangup/></Response>`, {
+          headers: { ...corsHeaders, "Content-Type": "text/xml" },
+          status: 200,
+        });
+      }
+
+      clientTags = availableAssignedIds.map((uid: string) => {
         const identity = `user_${uid.replace(/-/g, "")}`;
         return `<Client>${escapeXml(identity)}</Client>`;
       }).join("\n    ");
