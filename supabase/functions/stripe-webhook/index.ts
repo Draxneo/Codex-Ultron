@@ -77,33 +77,70 @@ Deno.serve(async (req) => {
     else if (type === "charge.dispute.created") description = `Payment disputed`;
     else if (type === "invoice.payment_failed") description = `Subscription payment failed`;
 
+    let stripeEventRowId: string | null = null;
+
     if (event.id) {
       const { data: existingEvent } = await supabase
         .from("stripe_events")
-        .select("id")
+        .select("id, processing_status")
         .eq("stripe_event_id", event.id)
         .maybeSingle();
 
-      if (existingEvent) {
-        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+      if (existingEvent?.processing_status === "processed") {
+        return new Response(JSON.stringify({ received: true, duplicate: true, processed: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      if (existingEvent) {
+        stripeEventRowId = existingEvent.id;
+        await supabase.from("stripe_events").update({
+          processing_status: "processing",
+          last_processing_error: null,
+          last_processing_error_at: null,
+        } as any).eq("id", stripeEventRowId);
+        await supabase.rpc("increment_stripe_event_attempts" as any, { p_stripe_event_id: event.id });
+      } else {
+        const { data: insertedEvent, error: insertEventErr } = await supabase.from("stripe_events").insert({
+          stripe_event_id: event.id,
+          event_type: type,
+          amount,
+          currency,
+          customer_email: customerEmail,
+          description,
+          metadata: { stripe_data: data, original_metadata: meta },
+          status: eventStatus,
+          job_id: jobId,
+          invoice_id: invoiceId,
+          processing_status: "processing",
+          processing_attempts: 1,
+        } as any).select("id").single();
+        if (insertEventErr) throw insertEventErr;
+        stripeEventRowId = insertedEvent.id;
+      }
     }
 
-    // Log every event to stripe_events before side effects so retries are idempotent.
-    await supabase.from("stripe_events").insert({
-      stripe_event_id: event.id,
-      event_type: type,
-      amount,
-      currency,
-      customer_email: customerEmail,
-      description,
-      metadata: { stripe_data: data, original_metadata: meta },
-      status: eventStatus,
-      job_id: jobId,
-      invoice_id: invoiceId,
-    });
+    const markStripeEventProcessed = async () => {
+      if (!stripeEventRowId) return;
+      await supabase.from("stripe_events").update({
+        processing_status: "processed",
+        processed_at: new Date().toISOString(),
+        last_processing_error: null,
+        last_processing_error_at: null,
+      } as any).eq("id", stripeEventRowId);
+    };
+
+    const markStripeEventFailed = async (err: unknown) => {
+      if (!stripeEventRowId) return;
+      const message = err instanceof Error ? err.message : String(err);
+      await supabase.from("stripe_events").update({
+        processing_status: "failed",
+        last_processing_error: message.slice(0, 2000),
+        last_processing_error_at: new Date().toISOString(),
+      } as any).eq("id", stripeEventRowId);
+    };
+
+    try {
 
     // --- Handle specific event types ---
 
@@ -245,7 +282,7 @@ Deno.serve(async (req) => {
           // Create customer_invoice (snapshot)
           const { data: inv, error: invErr } = await supabase
             .from("customer_invoices")
-            .insert({
+            .upsert({
               job_id: jobIdLocal,
               status: "paid",
               paid_at: new Date().toISOString(),
@@ -256,11 +293,12 @@ Deno.serve(async (req) => {
               tax_amount: cart?.tax_amount ?? 0,
               total: cart?.total ?? amount,
               notes: `Auto-generated from Job Cart ${cartId}`,
-            } as any)
+            } as any, { onConflict: "stripe_payment_intent_id" })
             .select()
             .single();
 
           if (!invErr && inv && cartItems?.length) {
+            await supabase.from("customer_invoice_items").delete().eq("invoice_id", inv.id);
             const rows = (cartItems as any[]).map((it, idx) => ({
               invoice_id: inv.id,
               description: it.name + (it.description ? ` — ${it.description}` : ""),
@@ -311,14 +349,23 @@ Deno.serve(async (req) => {
           stripe_payment_intent_id: data.payment_intent,
         } as any).eq("id", meta.presentation_id);
 
-        // Submit estimate response
-        await supabase.from("estimate_responses").insert({
-          estimate_id: meta.estimate_id || meta.presentation_id,
-          presentation_id: meta.presentation_id,
-          action: "approved",
-          selected_tier: meta.selected_option || null,
-          payment_preference: "stripe",
-        } as any);
+        // Submit estimate response once. Stripe may retry this webhook.
+        const { data: existingResponse } = await supabase
+          .from("estimate_responses")
+          .select("id")
+          .eq("presentation_id", meta.presentation_id)
+          .eq("action", "approved")
+          .maybeSingle();
+
+        if (!existingResponse) {
+          await supabase.from("estimate_responses").insert({
+            estimate_id: meta.estimate_id || meta.presentation_id,
+            presentation_id: meta.presentation_id,
+            action: "approved",
+            selected_tier: meta.selected_option || null,
+            payment_preference: "stripe",
+          } as any);
+        }
 
         // Log activity
         if (meta.estimate_id) {
@@ -400,9 +447,15 @@ Deno.serve(async (req) => {
       console.log(`Invoice payment failed: ${data.id}`);
     }
 
+    await markStripeEventProcessed();
+
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+    } catch (processingErr) {
+      await markStripeEventFailed(processingErr);
+      throw processingErr;
+    }
   } catch (err: any) {
     console.error("Webhook error:", err);
     // Critical: Stripe webhooks failing means lost revenue events. Page admin.
