@@ -572,12 +572,15 @@ Deno.serve(async (req) => {
       });
 
       const holidayGreeting = getHolidayGreeting(holiday, cn);
+      const holidayGreetingTwiml = config.voicemail_audio_url
+        ? `<Play>${escapeXml(config.voicemail_audio_url)}</Play>`
+        : `<Say voice="Polly.Joanna">${escapeXml(holidayGreeting)}</Say>`;
       if (config.voicemail_enabled) {
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Say voice="Polly.Joanna">${escapeXml(holidayGreeting)}</Say>
+  ${holidayGreetingTwiml}
   <Record maxLength="600" action="${
             escapeXml(voicemailUrl)
           }" recordingStatusCallback="${
@@ -594,7 +597,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Say voice="Polly.Joanna">${escapeXml(holidayGreeting)}</Say>
+  ${holidayGreetingTwiml}
   <Hangup />
 </Response>`,
         {
