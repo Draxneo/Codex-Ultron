@@ -5,7 +5,7 @@ import {
   Star, CreditCard, CheckCircle2, Loader2, MapPin, Camera, Shield,
   Receipt, CalendarCheck, CheckSquare, DollarSign, Phone, FileBarChart,
   CalendarPlus, Play, Truck, BookOpen, Flag, Banknote, AlertTriangle,
-  Undo2, ExternalLink, Copy, Building2, Info, Mail as MailIcon,
+  Undo2, ExternalLink, Building2, Info, Mail as MailIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -27,42 +27,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-
-/* ─── Brand warranty portal URLs ─── */
-const BRAND_PORTALS: Record<string, string> = {
-  Carrier: "https://productregistration.carrier.com/public/RegistrationForm_Carrier?brand=CARRIER",
-  "Day and Night": "https://productregistration2.icpusa.com/public/RegistrationForm?brand=ICP",
-  "Day & Night": "https://productregistration2.icpusa.com/public/RegistrationForm?brand=ICP",
-  Goodman: "https://warranty.goodmanmfg.com/newregistration/#/reg-layout",
-  Trane: "https://www.trane.com/residential/en/resources/warranty-and-registration/register/",
-};
-
-function getWarrantyPortalUrl(brand?: string): string {
-  if (!brand) return BRAND_PORTALS["Carrier"];
-  const key = Object.keys(BRAND_PORTALS).find((k) => k.toLowerCase() === brand.toLowerCase());
-  return BRAND_PORTALS[key || "Carrier"] || BRAND_PORTALS["Carrier"];
-}
-
-/* ─── Inline copy helper ─── */
-function ActionCopyField({ label, value }: { label: string; value: string }) {
-  const copy = () => {
-    if (!value) return;
-    navigator.clipboard.writeText(value);
-  };
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wide w-24 shrink-0">{label}</span>
-      <span className={cn("text-xs font-mono truncate flex-1", !value && "text-muted-foreground italic")}>
-        {value || "—"}
-      </span>
-      {value && (
-        <button onClick={copy} className="shrink-0 h-5 w-5 rounded border border-border flex items-center justify-center hover:bg-accent">
-          <Copy className="h-2.5 w-2.5" />
-        </button>
-      )}
-    </div>
-  );
-}
+import { ActionCopyField } from "@/components/workflow/ActionCopyField";
+import { getCompanySetting } from "@/lib/companySettings";
+import { getWarrantyPortalUrl } from "@/lib/warrantyPortals";
+import { WORKFLOW_ICON_MAP } from "@/lib/workflowIcons";
 
 interface WorkflowActionBarProps {
   job: any;
@@ -75,8 +43,6 @@ interface WorkflowActionBarProps {
   /** Which table to update — defaults to "jobs" */
   tableName?: "jobs" | "estimates";
 }
-
-import { WORKFLOW_ICON_MAP } from "@/lib/workflowIcons";
 
 export function WorkflowActionBar({ job, jobId, employees, onSendForm, onDispatch, dispatching, workflowSteps, tableName = "jobs" }: WorkflowActionBarProps) {
   const queryClient = useQueryClient();
@@ -122,10 +88,7 @@ export function WorkflowActionBar({ job, jobId, employees, onSendForm, onDispatc
   /* ─── Financing portal URL from company_settings ─── */
   const { data: financingPortalUrl } = useQuery({
     queryKey: ["company_settings_financing_portal"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("value").eq("key", "financing_portal_url").maybeSingle();
-      return data?.value || "";
-    },
+    queryFn: () => getCompanySetting("financing_portal_url", ""),
     staleTime: 10 * 60 * 1000,
   });
 
