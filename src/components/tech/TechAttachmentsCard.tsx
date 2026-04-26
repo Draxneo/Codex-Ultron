@@ -19,6 +19,7 @@ import { useJobAttachments } from "@/hooks/useJobAttachments";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { MediaThumbnail } from "@/components/media";
 
 const DISPATCH_LINE = "+12106005091";
 
@@ -238,16 +239,16 @@ export function TechAttachmentsCard({
                   isSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent",
                 )}
               >
-                <img
-                  src={
+                <MediaThumbnail
+                  url={
                     a.url ||
                     (a.file_path
                       ? supabase.storage.from("job-photos").getPublicUrl(a.file_path).data.publicUrl
                       : "")
                   }
-                  alt={a.file_name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
+                  fileName={a.file_name}
+                  fileType={a.file_type}
+                  className="h-full w-full rounded-none border-0"
                 />
                 {isSelected && (
                   <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">

@@ -23,6 +23,7 @@ import { DayDivider } from "@/components/shared/DayDivider";
 import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
 import type { SmsConversation } from "@/hooks/useSmsLog";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 
 const INITIAL_MSG_COUNT = 10;
 const LOAD_MORE_COUNT = 20;
@@ -402,10 +403,15 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
                       </span>
                     </div>
                     <p className="whitespace-pre-wrap break-words overflow-hidden">{renderMessageBody(msg.body || "")}</p>
-                    {(msg as any).media_urls && (msg as any).media_urls.length > 0 && (
+                    {normalizeMediaAttachments(msg.media_urls).length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {((msg as any).media_urls as { url: string; content_type: string }[]).map((media, i) => (
-                          <MmsMediaRenderer key={i} url={media.url} contentType={media.content_type} />
+                        {normalizeMediaAttachments(msg.media_urls).map((media, i) => (
+                          <MmsMediaRenderer
+                            key={`${media.url}-${i}`}
+                            url={media.url}
+                            contentType={media.fileType || undefined}
+                            fileName={media.fileName}
+                          />
                         ))}
                       </div>
                     )}

@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "react-router-dom";
 import { formatDateTimeUS, normalizeLast10 } from "@/lib/formatters";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 
 type SmsMediaItem = { url: string; content_type: string };
 
@@ -187,10 +188,16 @@ function SmsMessageList({ messages }: { messages: SmsRow[] }) {
                     </span>
                   </div>
                   <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{msg.body}</p>
-                  {msg.media_urls && msg.media_urls.length > 0 && (
+                  {normalizeMediaAttachments(msg.media_urls).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {msg.media_urls.map((media, i) => (
-                        <MmsMediaRenderer key={i} url={media.url} contentType={media.content_type} compact />
+                      {normalizeMediaAttachments(msg.media_urls).map((media, i) => (
+                        <MmsMediaRenderer
+                          key={`${media.url}-${i}`}
+                          url={media.url}
+                          contentType={media.fileType || undefined}
+                          fileName={media.fileName}
+                          compact
+                        />
                       ))}
                     </div>
                   )}
