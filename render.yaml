@@ -14,6 +14,13 @@ services:
         value: tqkqqjvddfrcxrxfvzvz
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
+    headers:
+      - path: /ivr-greetings/**/*.mp3
+        name: Content-Type
+        value: audio/mpeg
+      - path: /ivr-greetings/**/*.wav
+        name: Content-Type
+        value: audio/wav
     routes:
       - type: rewrite
         source: /*
