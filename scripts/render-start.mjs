@@ -24,8 +24,17 @@ const contentTypes = {
 };
 
 function sendFile(res, filePath) {
+  const extension = extname(filePath).toLowerCase();
+  const cacheControl =
+    extension === ".html"
+      ? "no-store, no-cache, must-revalidate, proxy-revalidate"
+      : filePath.includes(`${join(root, "assets")}`)
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=300";
+
   res.writeHead(200, {
-    "Content-Type": contentTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
+    "Content-Type": contentTypes[extension] || "application/octet-stream",
+    "Cache-Control": cacheControl,
   });
   createReadStream(filePath).pipe(res);
 }
