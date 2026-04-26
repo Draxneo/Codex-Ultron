@@ -1,10 +1,15 @@
+import { useState } from "react";
 import { CheckCircle2, CircleDashed, Clock3, SkipForward, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { useCustomerInvoices } from "@/hooks/useCustomerInvoices";
 import { usePartsOrders } from "@/hooks/usePartsOrders";
 import { getExpectedJobItems, getExpectedJobSummary, type ExpectedItemStatus } from "@/lib/expectedJobItems";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 const STATUS_META: Record<ExpectedItemStatus, { icon: React.ElementType; className: string; label: string }> = {
   done: { icon: CheckCircle2, className: "text-emerald-600 bg-emerald-600/10", label: "Done" },
@@ -17,9 +22,67 @@ const STATUS_META: Record<ExpectedItemStatus, { icon: React.ElementType; classNa
 export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }) {
   const { data: invoices = [] } = useCustomerInvoices(jobId);
   const { data: partsOrders = [] } = usePartsOrders(jobId);
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
   const items = getExpectedJobItems(job, invoices as any[], partsOrders as any[]);
   const summary = getExpectedJobSummary(items);
   const openItems = items.filter((item) => item.status !== "done" && item.status !== "skipped");
+
+  const stampJob = async (key: string, updates: Record<string, unknown>, activity: string, label: string) => {
+    setBusy(key);
+    try {
+      const { error } = await supabase.from("jobs").update(updates as any).eq("id", jobId);
+      if (error) throw error;
+      await supabase.from("activity_log").insert({ job_id: jobId, action: activity, details: label });
+      queryClient.invalidateQueries({ queryKey: ["jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity_log"] });
+      toast({ title: label });
+    } catch (e: any) {
+      toast({ title: "Could not update job", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const getQuickAction = (key: string) => {
+    const now = new Date().toISOString();
+    switch (key) {
+      case "confirmation":
+        return {
+          label: "Mark sent",
+          run: () => stampJob(key, { confirmation_sent_at: now }, "appointment_reminder_marked_sent", "Reminder marked as sent"),
+        };
+      case "dispatch":
+        return {
+          label: "Mark OMW",
+          run: () => stampJob(key, { on_my_way_sent_at: now, dispatch_sent_at: now, status: "on_my_way" }, "on_my_way_marked", "On-my-way marked"),
+        };
+      case "on_site":
+        return {
+          label: "Start job",
+          run: () => stampJob(key, { status: "in_progress" }, "job_started", "Job marked in progress"),
+        };
+      case "completion":
+      case "site_visit":
+        return {
+          label: "Finish",
+          run: () => stampJob(key, { completed_at: now, completion_form_sent_at: now, status: "done" }, "job_finished", "Completion recorded"),
+        };
+      case "review":
+        return {
+          label: "Mark sent",
+          run: () => stampJob(key, { review_request_sent_at: now }, "review_request_marked_sent", "Review request marked as sent"),
+        };
+      case "follow_up":
+        return {
+          label: "Close",
+          run: () => stampJob(key, { follow_up_completed_at: now }, "follow_up_closed", "Follow-up closed"),
+        };
+      default:
+        return null;
+    }
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -43,6 +106,7 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
         {items.map((item) => {
           const meta = STATUS_META[item.status];
           const Icon = meta.icon;
+          const quickAction = item.status === "done" || item.status === "skipped" ? null : getQuickAction(item.key);
           return (
             <div key={item.key} className="px-4 py-2.5 flex items-start gap-3">
               <span className={cn("mt-0.5 h-7 w-7 rounded-full flex items-center justify-center shrink-0", meta.className)}>
@@ -57,6 +121,18 @@ export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{item.reason}</p>
               </div>
+              {quickAction && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 text-xs"
+                  disabled={busy === item.key}
+                  onClick={quickAction.run}
+                >
+                  {busy === item.key ? "Saving..." : quickAction.label}
+                </Button>
+              )}
             </div>
           );
         })}

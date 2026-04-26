@@ -52,7 +52,7 @@ export function JobV2ActionBar({ job, jobId, onInvoiceClick }: Props) {
     setBusy(action);
     try {
       const updates: any = { status: newStatus };
-      if (newStatus === "done" || newStatus === "invoiced") updates.completed_at = new Date().toISOString();
+      if (newStatus === "done") updates.completed_at = new Date().toISOString();
       await supabase.from("jobs").update(updates).eq("id", jobId);
       await supabase.from("activity_log").insert({ job_id: jobId, action, details: `Status → ${newStatus}` });
       queryClient.invalidateQueries({ queryKey: ["jobs", jobId] });
@@ -73,7 +73,7 @@ export function JobV2ActionBar({ job, jobId, onInvoiceClick }: Props) {
   const status = job?.status || "new";
   const isOmw = status === "on_my_way";
   const isStarted = status === "in_progress" || status === "started";
-  const isDone = status === "done" || status === "invoiced";
+  const isDone = status === "done" || status === "completed" || Boolean(job?.completed_at);
 
   return (
     <Card className="p-3">

@@ -26,7 +26,16 @@ function normalized(value?: string | null) {
 }
 
 function isCompleteStatus(status?: string | null) {
-  return ["done", "completed", "complete", "invoiced", "paid", "closed"].includes(normalized(status));
+  return ["done", "completed", "complete", "closed"].includes(normalized(status));
+}
+
+function isFieldStarted(job: any, status?: string | null) {
+  return Boolean(
+    job?.on_site_at ||
+    job?.started_at ||
+    job?.completed_at ||
+    ["in_progress", "started", "done", "completed", "complete", "closed"].includes(normalized(status))
+  );
 }
 
 function hasSentInvoice(job: any, invoices: InvoiceLike[]) {
@@ -75,14 +84,14 @@ export function getExpectedJobItems(
 ): ExpectedJobItem[] {
   const type = normalized(job?.job_type || "service");
   const status = normalized(job?.status);
-  const isDone = isCompleteStatus(status) || Boolean(job?.completed_at);
+  const fieldDone = isCompleteStatus(status) || Boolean(job?.completed_at || job?.completion_form_sent_at);
   const paymentMethod = normalized(job?.payment_method);
 
   if (type === "estimate") {
     return [
       item("estimate_scheduled", "Schedule estimate", "office", Boolean(job?.scheduled_date), "Estimate is scheduled.", "Needs a scheduled date."),
       item("estimator_assigned", "Assign estimator", "office", Boolean(job?.assigned_to), "Estimator is assigned.", "Needs an assigned estimator."),
-      item("site_visit", "Complete visit and notes", "tech", Boolean(job?.completed_at || job?.completion_form_sent_at || isDone), "Visit is complete.", "Waiting on visit notes/photos.", "waiting"),
+      item("site_visit", "Complete visit and notes", "tech", fieldDone, "Visit is complete.", "Waiting on visit notes/photos.", "waiting"),
       item("quote_built", "Build quote", "office", Boolean(job?.quote_generated_at), "Quote has been generated.", "Needs quote/pricing built."),
       item("presentation_sent", "Send presentation", "office", Boolean(job?.presentation_sent_at), "Presentation was sent.", "Needs quote presentation sent."),
       item("customer_decision", "Customer decision", "customer", Boolean(job?.customer_approved_at || job?.estimate_id || status === "won" || status === "lost"), "Customer decision recorded.", "Waiting on customer decision.", "waiting"),
@@ -94,8 +103,8 @@ export function getExpectedJobItems(
     item("assigned", "Assign technician", "office", Boolean(job?.assigned_to), "Technician is assigned.", "Needs an assigned technician."),
     item("confirmation", "Send appointment reminder", "system", Boolean(job?.confirmation_sent_at), "Reminder was sent.", "Reminder has not been sent.", "upcoming"),
     item("dispatch", "Dispatch / on my way", "tech", Boolean(job?.dispatch_sent_at || job?.on_my_way_sent_at), "Dispatch/OMW was sent.", "Waiting on dispatch or on-my-way.", "waiting"),
-    item("on_site", "Mark on site", "tech", ["in_progress", "done", "completed", "invoiced"].includes(status) || Boolean(job?.completed_at), "Job reached on-site/in-progress.", "Tech has not marked on-site yet.", "waiting"),
-    item("completion", "Complete work/checklist", "tech", Boolean(job?.completion_form_sent_at || job?.completed_at || isDone), "Completion is recorded.", "Needs completion form or done status.", "waiting"),
+    item("on_site", "Mark on site", "tech", isFieldStarted(job, status), "Job reached on-site/in-progress.", "Tech has not marked on-site yet.", "waiting"),
+    item("completion", "Complete work/checklist", "tech", fieldDone, "Completion is recorded.", "Needs completion form or done status.", "waiting"),
     item("invoice", "Create/send invoice", "office", hasSentInvoice(job, invoices), "Invoice is sent.", "Needs invoice created and sent."),
     item("payment", "Collect payment", "customer", hasPaidInvoice(job, invoices), "Payment is collected.", "Payment has not been collected.", "waiting"),
     item("review", "Request review", "system", Boolean(job?.review_request_sent_at), "Review request was sent.", "Review request not sent yet.", "upcoming"),
