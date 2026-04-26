@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
 
     // Use AI to fix spelling, grammar, and punctuation
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
       const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
