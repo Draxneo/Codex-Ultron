@@ -33,7 +33,7 @@ export interface JobCartItem {
   quantity: number;
   unit_price: number;
   total_price: number;
-  tier: "good" | "better" | "best" | null;
+  tier: "good" | "better" | "best" | "critical" | "recommended" | "reconditioning" | "premium" | null;
   metadata: Record<string, any>;
   sort_order: number;
 }

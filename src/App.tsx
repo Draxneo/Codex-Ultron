@@ -66,7 +66,6 @@ import SystemLog from "./pages/SystemLog";
 import PortalLogin from "./pages/PortalLogin";
 import PortalDashboard from "./pages/PortalDashboard";
 import ReferralPublic from "./pages/ReferralPublic";
-import PortalPreview from "./pages/PortalPreview";
 import CustomerPresentation from "./pages/CustomerPresentation";
 import AgreementPresentation from "./pages/AgreementPresentation";
 import CertificateView from "./pages/CertificateView";
@@ -96,9 +95,6 @@ import NotFound from "./pages/NotFound";
 
 import IvrBuilder from "./pages/IvrBuilder";
 import CallRoutingSettings from "./pages/CallRoutingSettings";
-import SequenceBuilder from "./pages/SequenceBuilder";
-import CustomerJourney from "./pages/CustomerJourney";
-import PaymentFlow from "./pages/PaymentFlow";
 import AgentPipeline from "./pages/AgentPipeline";
 import AgentNetwork from "./pages/AgentNetwork";
 import Leads from "./pages/Leads";
@@ -518,13 +514,13 @@ function AppRouter() {
         <Route path="/admin/vendor-email-mapping" element={<Navigate to="/vendors" replace />} />
         <Route path="/system-log" element={<ProtectedRoute><SystemLog /></ProtectedRoute>} />
         
-        <Route path="/portal/preview" element={<ProtectedRoute><PortalPreview /></ProtectedRoute>} />
+        <Route path="/portal/preview" element={<Navigate to="/admin?section=tools" replace />} />
         
         <Route path="/ivr-builder" element={<ProtectedRoute><IvrBuilder /></ProtectedRoute>} />
         <Route path="/admin/call-routing" element={<ProtectedRoute><CallRoutingSettings /></ProtectedRoute>} />
-        <Route path="/sequence-builder" element={<ProtectedRoute><SequenceBuilder /></ProtectedRoute>} />
-        <Route path="/customer-journey" element={<ProtectedRoute><CustomerJourney /></ProtectedRoute>} />
-        <Route path="/payment-flow" element={<ProtectedRoute><PaymentFlow /></ProtectedRoute>} />
+        <Route path="/sequence-builder" element={<Navigate to="/agent-training?section=output" replace />} />
+        <Route path="/customer-journey" element={<Navigate to="/copilot" replace />} />
+        <Route path="/payment-flow" element={<Navigate to="/payments" replace />} />
         <Route path="/agent-pipeline" element={<ProtectedRoute><AgentPipeline /></ProtectedRoute>} />
         <Route path="/agent-network" element={<ProtectedRoute><AgentNetwork /></ProtectedRoute>} />
         <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />

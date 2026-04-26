@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
-  Package, CreditCard, Brain, BookOpen, ChevronRight, ChevronLeft, Gift, Phone, Mail, Eye,
+  Package, CreditCard, Brain, BookOpen, ChevronRight, ChevronLeft, Gift, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, Store, MapPin, RefreshCw, ScanSearch, Activity,
 } from "lucide-react";
@@ -160,16 +160,10 @@ const TOOL_CARDS: ToolCardDef[] = [
   { key: "shopping-cart", title: "Catalog & Pricebook", description: "Browse and manage equipment matchups, repairs, parts, and AHRI lookups — your master pricebook.", icon: Package, borderColor: "border-l-orange-500", iconColor: "text-orange-500", iconBg: "bg-orange-500/10", to: "/catalog" },
   { key: "sales-presentations", title: "Presentation Design Studio", description: "Design and preview all customer-facing presentations.", icon: BookOpen, borderColor: "border-l-amber-500", iconColor: "text-amber-500", iconBg: "bg-amber-500/10", to: "/sales-presentations" },
   { key: "agent-training", title: "JARVIS Training", description: "Configure JARVIS instructions, tools, knowledge base, and output templates.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/agent-training" },
-  { key: "portal-preview", title: "Customer Portal Preview", description: "Preview the customer portal with sample data.", icon: Eye, borderColor: "border-l-emerald-500", iconColor: "text-emerald-500", iconBg: "bg-emerald-500/10", to: "/portal/preview" },
-  
   { key: "phone-system", title: "IVR Builder", description: "Canonical IVR editor for greetings, departments, queues, and routing.", icon: Phone, borderColor: "border-l-cyan-500", iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", to: "/ivr-builder", hasCanvas: true },
   { key: "payments", title: "Payments Dashboard", description: "Track invoices, payment plans, and revenue.", icon: CreditCard, borderColor: "border-l-sky-500", iconColor: "text-sky-500", iconBg: "bg-sky-500/10", to: "/payments" },
   { key: "locations", title: "Supply Houses & Vendors", description: "Manage vendors, ordering portals, brand mappings, and locations.", icon: Store, borderColor: "border-l-teal-500", iconColor: "text-teal-500", iconBg: "bg-teal-500/10", to: "/vendors" },
-  { key: "sequences", title: "Message Sequences", description: "Visual drip sequence builder for automated SMS & email flows.", icon: MessageSquare, borderColor: "border-l-green-500", iconColor: "text-green-500", iconBg: "bg-green-500/10", to: "/sequence-builder", hasCanvas: true },
   { key: "agent-network", title: "AI Agent Network", description: "Visual map of specialist AI agents, their tools, and handoff connections.", icon: Brain, borderColor: "border-l-purple-500", iconColor: "text-purple-500", iconBg: "bg-purple-500/10", to: "/agent-network", hasCanvas: true },
-  { key: "customer-journey", title: "Customer Journey", description: "Live lifecycle funnel from lead to referral with real metrics.", icon: Users, borderColor: "border-l-blue-500", iconColor: "text-blue-500", iconBg: "bg-blue-500/10", to: "/customer-journey", hasCanvas: true },
-  { key: "payment-flow", title: "Payment Flow", description: "Invoice-to-payment lifecycle with live dollar amounts.", icon: CreditCard, borderColor: "border-l-emerald-500", iconColor: "text-emerald-500", iconBg: "bg-emerald-500/10", to: "/payment-flow", hasCanvas: true },
-  
   { key: "lsa-leads", title: "LSA Leads", description: "View and manage Google LSA leads.", icon: MapPin, borderColor: "border-l-blue-500", iconColor: "text-blue-500", iconBg: "bg-blue-500/10", to: "/leads?source=google_lsa" },
   { key: "system-log", title: "System Log (Mission Control)", description: "Errors, cron health, retry queue, and on-call pages — full operational telemetry.", icon: Activity, borderColor: "border-l-rose-500", iconColor: "text-rose-500", iconBg: "bg-rose-500/10", to: "/system-log" },
 ];
@@ -912,7 +906,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Sales & Pricing</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["shopping-cart", "sales-presentations", "portal-preview"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["shopping-cart", "sales-presentations"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>
@@ -923,7 +917,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Operations</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["phone-system", "sequences"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["phone-system"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>
@@ -934,7 +928,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financials & Reporting</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["payments", "locations", "customer-journey", "lsa-leads"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["payments", "locations", "lsa-leads"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>
@@ -945,7 +939,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Dev & Testing</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["payment-flow", "system-log"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["system-log"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>

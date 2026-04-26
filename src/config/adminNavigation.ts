@@ -11,8 +11,8 @@
  */
 import {
   Brain, Package, BookOpen, Phone, CreditCard,
-  Store, Eye, MapPin, Settings2, Webhook, BarChart3,
-  Building2, Users, Layers, Route, Bot, ClipboardList, Calculator,
+  Store, MapPin, Settings2, Webhook, BarChart3,
+  Building2, Users, Route, Bot, ClipboardList, Calculator,
   GraduationCap, MessageSquareText,
 } from "lucide-react";
 
@@ -45,11 +45,7 @@ export const TOOL_CARDS: ToolEntry[] = [
   { label: "Presentations",     icon: BookOpen,      path: "/sales-presentations",         color: "text-amber-500",   bg: "bg-amber-500/10" },
   { label: "IVR Builder",       icon: Phone,         path: "/ivr-builder",                 color: "text-cyan-500",    bg: "bg-cyan-500/10" },
   { label: "Call Routing",      icon: Route,         path: "/admin/call-routing",          color: "text-cyan-600",    bg: "bg-cyan-600/10" },
-  { label: "Sequences",         icon: Layers,        path: "/sequence-builder",            color: "text-green-500",   bg: "bg-green-500/10" },
   { label: "AI Agents",         icon: Bot,           path: "/agent-network",               color: "text-purple-500",  bg: "bg-purple-500/10" },
-  { label: "Journeys",          icon: Route,         path: "/customer-journey",            color: "text-blue-500",    bg: "bg-blue-500/10" },
-  { label: "Payment Flow",      icon: CreditCard,    path: "/payment-flow",                color: "text-emerald-500", bg: "bg-emerald-500/10" },
-  { label: "Portal Preview",    icon: Eye,           path: "/portal/preview",              color: "text-emerald-500", bg: "bg-emerald-500/10" },
   { label: "LSA Leads",         icon: MapPin,        path: "/leads?source=google_lsa",     color: "text-blue-500",    bg: "bg-blue-500/10" },
   { label: "Vendors",           icon: Store,         path: "/vendors",                     color: "text-teal-500",    bg: "bg-teal-500/10" },
   { label: "Payments",          icon: CreditCard,    path: "/payments",                    color: "text-sky-500",     bg: "bg-sky-500/10" },
