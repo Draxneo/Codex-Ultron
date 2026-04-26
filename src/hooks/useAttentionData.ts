@@ -46,8 +46,7 @@ function useAttentionCounts() {
         .select("job_id")
         .eq("status", "paid")
         .not("job_id", "is", null);
-      const paidJobIds = Array.from(new Set((paidInvoiceRows || []).map((r: any) => r.job_id))).filter(Boolean);
-      const paidJobIdsCsv = paidJobIds.length ? `(${paidJobIds.map(id => `"${id}"`).join(",")})` : null;
+      const paidJobIds = new Set(Array.from(new Set((paidInvoiceRows || []).map((r: any) => r.job_id))).filter(Boolean));
 
       // ALL queries fire simultaneously via Promise.allSettled — one failure won't break others
       const results = await Promise.allSettled([
@@ -90,16 +89,14 @@ function useAttentionCounts() {
           .not("status", "in", '("done","invoiced","canceled")')
           .gte("created_at", GO_LIVE),
 
-        // 4: Invoices not sent — excludes jobs that already have a paid customer invoice
-        (() => {
-          let q = supabase.from("jobs").select("id", { count: "exact", head: true })
-            .in("status", ["done", "in_progress"])
-            .is("invoice_sent_at", null)
-            .not("completion_form_sent_at", "is", null)
-            .gte("created_at", GO_LIVE);
-          if (paidJobIdsCsv) q = q.not("id", "in", paidJobIdsCsv);
-          return q;
-        })(),
+        // 4: Invoices not sent — fetch candidates, then exclude paid jobs locally.
+        // This avoids generating a huge `not in (...)` URL when many paid invoices exist.
+        supabase.from("jobs").select("id")
+          .in("status", ["done", "in_progress"])
+          .is("invoice_sent_at", null)
+          .not("completion_form_sent_at", "is", null)
+          .gte("created_at", GO_LIVE)
+          .limit(5000),
 
         // 5: Warranty not registered
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -195,7 +192,9 @@ function useAttentionCounts() {
       const waitingOnParts     = safeCount(results[2], "Waiting on Parts", errors);
       const deposits           = safeCount(results[3], "Deposits", errors);
       const finance            = safeCount(results[4], "Finance", errors);
-      const invoices           = safeCount(results[5], "Invoices", errors);
+      const invoices           = results[5].status === "fulfilled" && !results[5].value.error
+        ? ((results[5].value.data as any[]) || []).filter((job: any) => !paidJobIds.has(job.id)).length
+        : safeCount(results[5] as PromiseSettledResult<any>, "Invoices", errors);
       const warranty           = safeCount(results[6], "Warranty", errors);
       const inspection         = safeCount(results[7], "Inspection", errors);
       const unpaid             = safeCount(results[8], "Unpaid Invoices", errors);

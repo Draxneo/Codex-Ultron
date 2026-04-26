@@ -53,7 +53,6 @@ import EstimateDetail from "./pages/EstimateDetail";
 import JobPhotos from "./pages/JobPhotos";
 
 import AgentTraining from "./pages/AgentTraining";
-import SalesPresentationAdmin from "./pages/SalesPresentationAdmin";
 import Customers from "./pages/Customers";
 import CustomerDetail from "./pages/CustomerDetail";
 import Agreements from "./pages/Agreements";
@@ -504,8 +503,8 @@ function AppRouter() {
         <Route path="/agent-training" element={<ProtectedRoute><AgentTraining /></ProtectedRoute>} />
         <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/customers/:id" element={<ProtectedRoute><CustomerDetail /></ProtectedRoute>} />
-        <Route path="/sales-presentations" element={<ProtectedRoute><SalesPresentationAdmin /></ProtectedRoute>} />
-        <Route path="/brochure" element={<Navigate to="/sales-presentations" replace />} />
+        <Route path="/sales-presentations" element={<Navigate to="/catalog" replace />} />
+        <Route path="/brochure" element={<Navigate to="/catalog" replace />} />
         <Route path="/agreements" element={<ProtectedRoute><Agreements /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

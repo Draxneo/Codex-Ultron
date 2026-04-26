@@ -2725,6 +2725,10 @@ serve(async (req) => {
       console.warn(`Blocked non-gateway model "${requestedModel}" in ai_model_config[${taskKey}] — falling back to Lovable AI`);
       requestedModel = "gpt-5-mini";
     }
+    if (requestedModel.startsWith("google/") || requestedModel.startsWith("gemini") || requestedModel.startsWith("gpt-5")) {
+      console.warn(`Model "${requestedModel}" is not safe for the current OpenAI chat-completions path; using gpt-4o-mini.`);
+      requestedModel = "gpt-4o-mini";
+    }
 
     // ===== COST GUARD: Force Flash unless intent explicitly justifies Pro =====
     // Gemini 2.5 Pro is ~10× the price of Flash. Only allow Pro for modes that

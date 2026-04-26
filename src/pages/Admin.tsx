@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
-  Package, CreditCard, Brain, BookOpen, ChevronRight, ChevronLeft, Gift, Phone, Mail,
+  Package, CreditCard, Brain, ChevronRight, ChevronLeft, Gift, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, Store, MapPin, RefreshCw, ScanSearch, Activity,
 } from "lucide-react";
@@ -157,7 +157,6 @@ interface ToolCardDef {
 const TOOL_CARDS: ToolCardDef[] = [
   { key: "jarvis", title: "JARVIS", description: "Proactive dashboard — what needs attention, AI activity, and quick actions.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/copilot" },
   { key: "shopping-cart", title: "Catalog & Pricebook", description: "Browse and manage equipment matchups, repairs, parts, and AHRI lookups — your master pricebook.", icon: Package, borderColor: "border-l-orange-500", iconColor: "text-orange-500", iconBg: "bg-orange-500/10", to: "/catalog" },
-  { key: "sales-presentations", title: "Presentation Design Studio", description: "Design and preview all customer-facing presentations.", icon: BookOpen, borderColor: "border-l-amber-500", iconColor: "text-amber-500", iconBg: "bg-amber-500/10", to: "/sales-presentations" },
   { key: "agent-training", title: "JARVIS Training", description: "Configure JARVIS instructions, tools, knowledge base, and output templates.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/agent-training" },
   { key: "phone-system", title: "IVR Builder", description: "Canonical IVR editor for greetings, departments, queues, and routing.", icon: Phone, borderColor: "border-l-cyan-500", iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", to: "/ivr-builder", hasCanvas: true },
   { key: "payments", title: "Payments Dashboard", description: "Track invoices, payment plans, and revenue.", icon: CreditCard, borderColor: "border-l-sky-500", iconColor: "text-sky-500", iconBg: "bg-sky-500/10", to: "/payments" },
