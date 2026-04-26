@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Star, Shield, Zap, AlertTriangle, Loader2 } from "lucide-react";
 import { getFeatureIcon } from "@/components/FeaturesEditor";
 import { cn } from "@/lib/utils";
-import { submitEstimateResponse, recordPresentationView } from "@/hooks/useEstimatePresentations";
+import { recordPresentationView } from "@/hooks/useEstimatePresentations";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
 
@@ -132,15 +132,6 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
       });
 
       if (error) throw error;
-
-      // Also submit the legacy estimate response
-      await submitEstimateResponse({
-        estimate_id: presentation.estimate_id,
-        presentation_id: presentation.id,
-        action: "approved",
-        selected_tier: selectedOption,
-        payment_preference: paymentMethod,
-      });
 
       setSubmitted(true);
     } catch (err) {
@@ -412,10 +403,11 @@ function PaymentSection({ paymentMethod, setPaymentMethod, onConfirm, submitting
   submitting: boolean;
 }) {
   const methods = [
-    { key: "financing_36mo", label: "0% APR · 36 Mo", desc: "No money down · Easy approval", icon: CreditCard },
-    { key: "financing_120mo", label: "9.99% APR · 120 Mo", desc: "Lowest monthly payment", icon: CreditCard },
-    { key: "factory_rebate", label: "Instant Factory Rebate", desc: "One-time price · Cash, check, card", icon: CreditCard },
     { key: "stripe", label: "Pay Online Now", desc: "Secure card payment", icon: CreditCard },
+    { key: "pay_after_completion", label: "Pay After Work", desc: "Approve today, pay when complete", icon: CreditCard },
+    { key: "financing_36mo", label: "0% APR - 36 Mo", desc: "No money down - easy approval", icon: CreditCard },
+    { key: "financing_120mo", label: "9.99% APR - 120 Mo", desc: "Lowest monthly payment", icon: CreditCard },
+    { key: "factory_rebate", label: "Cash/Check/Card Later", desc: "One-time price after completion", icon: CreditCard },
   ];
 
   return (
@@ -454,7 +446,7 @@ function PaymentSection({ paymentMethod, setPaymentMethod, onConfirm, submitting
             ) : paymentMethod === "stripe" ? (
               "Proceed to Checkout →"
             ) : (
-              "Confirm & Approve ✓"
+              "Approve & Save Cart"
             )}
           </Button>
         )}
