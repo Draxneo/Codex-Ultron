@@ -3,9 +3,12 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { lookupCadProperty } from "../_shared/cad-scraper.ts";
 import { resolveCad } from "../_shared/tx-county-router.ts";
+import { logApiUsage } from "../_shared/apiUsageLog.ts";
 
 /** Daily kill-switch: hard cap on property lookups per day to prevent runaway cost. */
 const DAILY_LOOKUP_CAP = 100;
+const DAILY_FIRECRAWL_PROPERTY_CAP = 80;
+const DAILY_GOOGLE_PROPERTY_CAP = 250;
 
 
 
@@ -37,6 +40,67 @@ function looksLikeCaptcha(markdown: string): boolean {
 
 // shouldRefreshCachedImage removed — trust cache once populated
 
+function startOfTodayIso(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+}
+
+async function countDailyUsage(supabase: any, service: string, functionName: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("api_usage_log")
+    .select("id", { count: "exact", head: true })
+    .eq("service", service)
+    .eq("function_name", functionName)
+    .gte("created_at", startOfTodayIso());
+
+  if (error) {
+    console.warn("api usage cap check failed:", error);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function cacheGooglePropertyImage(supabase: any, imageUrl: string | null | undefined, address: string): Promise<string | null> {
+  if (!imageUrl || !imageUrl.includes("maps.googleapis.com")) return imageUrl || null;
+
+  try {
+    await supabase.storage.createBucket("property-images", { public: true }).catch(() => null);
+
+    const resp = await fetch(imageUrl);
+    if (!resp.ok) {
+      console.warn("Google property image fetch failed:", resp.status);
+      return imageUrl;
+    }
+
+    const bytes = await resp.arrayBuffer();
+    const path = `street-view/${await sha256Hex(address)}.jpg`;
+    const { error } = await supabase.storage
+      .from("property-images")
+      .upload(path, bytes, {
+        contentType: resp.headers.get("content-type") || "image/jpeg",
+        upsert: true,
+      });
+
+    if (error) {
+      console.warn("property image cache upload failed:", error);
+      return imageUrl;
+    }
+
+    const { data } = supabase.storage.from("property-images").getPublicUrl(path);
+    return data?.publicUrl || imageUrl;
+  } catch (e) {
+    console.warn("property image cache failed:", e);
+    return imageUrl;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -66,6 +130,16 @@ Deno.serve(async (req) => {
     // Return cache immediately if valid and has meaningful data (permanent cache)
     if (!force && cached && isCacheValid(cached) && (cached.bedrooms || cached.sqft) && cached.street_view_url) {
       console.log("Cache hit (permanent) for:", address);
+      if (cached.street_view_url.includes("maps.googleapis.com")) {
+        const cachedImageUrl = await cacheGooglePropertyImage(supabase, cached.street_view_url, address);
+        if (cachedImageUrl && cachedImageUrl !== cached.street_view_url) {
+          cached.street_view_url = cachedImageUrl;
+          await supabase
+            .from("property_data")
+            .update({ street_view_url: cachedImageUrl })
+            .eq("address", address);
+        }
+      }
       return new Response(JSON.stringify(cached), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -94,6 +168,10 @@ Deno.serve(async (req) => {
     }
 
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
+    const firecrawlCallsToday = await countDailyUsage(supabase, "firecrawl", "lookup-property");
+    const googlePropertyCallsToday = await countDailyUsage(supabase, "google_maps", "lookup-property");
+    const canUseFirecrawl = !!firecrawlKey && firecrawlCallsToday < DAILY_FIRECRAWL_PROPERTY_CAP;
+    const canUseGooglePropertyImages = googlePropertyCallsToday < DAILY_GOOGLE_PROPERTY_CAP;
     const inCadArea = !!resolveCad(address);
 
     // When user explicitly forces a refresh AND the address is in CAD area,
@@ -119,10 +197,20 @@ Deno.serve(async (req) => {
     // Supabase's 150s idle limit (we still need budget for Zillow + Street View).
     // ══════════════════════════════════════════════════════════════════
     let cadHit = false;
-    if (firecrawlKey && inCadArea) {
+    if (canUseFirecrawl) {
+      logApiUsage(supabase, {
+        service: "firecrawl",
+        function_name: "lookup-property",
+        endpoint: "property_lookup",
+        estimated_cost_cents: 1.5,
+        metadata: { address },
+      });
+    }
+
+    if (canUseFirecrawl && inCadArea) {
       try {
         const cadData = await Promise.race([
-          lookupCadProperty(address, firecrawlKey),
+          lookupCadProperty(address, firecrawlKey!),
           new Promise<null>((resolve) =>
             setTimeout(() => {
               console.warn("🗺️ CAD: hard timeout (60s) — abandoning");
@@ -147,7 +235,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (firecrawlKey) {
+    if (canUseFirecrawl) {
       // ══════════════════════════════════════════════════════════════════
       // STRATEGY 2: Zillow — primarily for the photo + listing link.
       // If CAD missed (out-of-area or new construction), Zillow also fills facts.
@@ -155,7 +243,7 @@ Deno.serve(async (req) => {
       const needsFacts = !cadHit && !result.bedrooms && !result.sqft;
       const needsPhoto = !result.screenshot_url;
       if (needsFacts || needsPhoto) {
-        const zillowData = await scrapeZillowV2(firecrawlKey, address, supabase);
+        const zillowData = await scrapeZillowV2(firecrawlKey!, address, supabase);
         if (zillowData) {
           for (const [k, v] of Object.entries(zillowData)) {
             if (v == null) continue;
@@ -172,7 +260,7 @@ Deno.serve(async (req) => {
 
       // ── Strategy 3: Redfin fallback (only if still missing facts) ──
       if (!cadHit && (!result.bedrooms && !result.sqft)) {
-        const redfinData = await scrapeViaSearch(firecrawlKey, address, "redfin.com", supabase);
+        const redfinData = await scrapeViaSearch(firecrawlKey!, address, "redfin.com", supabase);
         if (redfinData) {
           for (const [k, v] of Object.entries(redfinData)) {
             if (v != null && (result[k] == null || k === "screenshot_url")) result[k] = v;
@@ -183,7 +271,7 @@ Deno.serve(async (req) => {
 
       // ── Strategy 4: Realtor.com fallback ──
       if (!cadHit && (!result.bedrooms && !result.sqft)) {
-        const realtorData = await scrapeViaSearch(firecrawlKey, address, "realtor.com", supabase);
+        const realtorData = await scrapeViaSearch(firecrawlKey!, address, "realtor.com", supabase);
         if (realtorData) {
           for (const [k, v] of Object.entries(realtorData)) {
             if (v != null && (result[k] == null || k === "screenshot_url")) result[k] = v;
@@ -191,6 +279,8 @@ Deno.serve(async (req) => {
           if (!result.source || result.source === "firecrawl") result.source = "realtor";
         }
       }
+    } else if (firecrawlKey) {
+      console.warn(`Firecrawl property daily cap (${DAILY_FIRECRAWL_PROPERTY_CAP}) reached; returning cached/Google-only data for ${address}`);
     }
 
     // ── Fallback: RealtyMole API ──
@@ -233,7 +323,7 @@ Deno.serve(async (req) => {
     // ── Always fetch Google Street View (primary navigation image) ──
     {
       const googleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-      if (googleKey) {
+      if (googleKey && canUseGooglePropertyImages) {
         try {
           const getStreetViewMeta = async (location: string, radius?: number) => {
             const params = new URLSearchParams({
@@ -243,6 +333,13 @@ Deno.serve(async (req) => {
             });
             if (radius) params.set("radius", String(radius));
             const metaRes = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?${params.toString()}`);
+            logApiUsage(supabase, {
+              service: "google_maps",
+              function_name: "lookup-property",
+              endpoint: "streetview_metadata",
+              estimated_cost_cents: 0.7,
+              metadata: { address, radius: radius ?? null },
+            });
             return await metaRes.json();
           };
 
@@ -254,6 +351,13 @@ Deno.serve(async (req) => {
               const geoRes = await fetch(
                 `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleKey}`
               );
+              logApiUsage(supabase, {
+                service: "google_maps",
+                function_name: "lookup-property",
+                endpoint: "geocode",
+                estimated_cost_cents: 0.5,
+                metadata: { address },
+              });
               if (geoRes.ok) {
                 const geoData = await geoRes.json();
                 const loc = geoData?.results?.[0]?.geometry?.location;
@@ -348,17 +452,26 @@ Deno.serve(async (req) => {
           fallbackParams.set("fov", "80");
           result.street_view_url = `https://maps.googleapis.com/maps/api/streetview?${fallbackParams.toString()}`;
         }
+      } else if (googleKey) {
+        console.warn(`Google property image daily cap (${DAILY_GOOGLE_PROPERTY_CAP}) reached; skipping fresh property image for ${address}`);
       }
     }
 
     // ── Geocode fallback ──
     if (!result.lat || !result.lng) {
       const googleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-      if (googleKey) {
+      if (googleKey && canUseGooglePropertyImages) {
         try {
           const geoRes = await fetch(
             `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleKey}`
           );
+          logApiUsage(supabase, {
+            service: "google_maps",
+            function_name: "lookup-property",
+            endpoint: "geocode",
+            estimated_cost_cents: 0.5,
+            metadata: { address },
+          });
           if (geoRes.ok) {
             const geoData = await geoRes.json();
             const loc = geoData?.results?.[0]?.geometry?.location;
@@ -374,6 +487,8 @@ Deno.serve(async (req) => {
     }
 
     // ── Cache — never overwrite good data with nulls ──
+    result.street_view_url = await cacheGooglePropertyImage(supabase, result.street_view_url, address);
+
     const upsertPayload: Record<string, any> = {
       address: result.address,
       bedrooms: result.bedrooms ?? cached?.bedrooms ?? null,

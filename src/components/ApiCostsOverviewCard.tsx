@@ -54,7 +54,7 @@ export function ApiCostsOverviewCard() {
                 <span>All figures are <span className="font-semibold text-foreground">per day</span> (resets at midnight Central).</span>
                 <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 h-5">
                   <Briefcase className="h-2.5 w-2.5" />
-                  {activeJobCount} active job{activeJobCount === 1 ? "" : "s"} on board
+                  {activeJobCount} jobs/estimates on board
                 </Badge>
               </p>
             </div>
@@ -136,7 +136,7 @@ export function ApiCostsOverviewCard() {
                           <p className={`text-[11px] mt-0.5 ${overExpected ? "text-destructive font-medium" : "text-muted-foreground"}`}>
                             Should be ≤ <span className="font-semibold">{expectedCeiling}</span> calls today
                             <span className="text-muted-foreground/70">
-                              {" "}({limit.baselineCalls || 0} baseline + {activeJobCount} jobs × {limit.expectedCallsPerJob})
+                              {" "}({limit.baselineCalls || 0} baseline + {activeJobCount} jobs/estimates x {limit.expectedCallsPerJob})
                             </span>
                           </p>
                         )}

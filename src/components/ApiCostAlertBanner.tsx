@@ -29,7 +29,7 @@ export function ApiCostAlertBanner() {
       <div className="flex items-center gap-3 px-4 py-2 max-w-full">
         <AlertTriangle className="h-5 w-5 shrink-0" />
         <div className="flex-1 min-w-0 text-sm font-bold tracking-wide">
-          ⚠️ ABNORMAL API VOLUME — {services} running 3× expected for {activeJobCount} job{activeJobCount === 1 ? "" : "s"} on board · ${totalToday} since {sinceLabel}
+          ABNORMAL API VOLUME — {services} running 3x expected for {activeJobCount} jobs/estimates on board · ${totalToday} since {sinceLabel}
         </div>
         <Link to="/admin?section=reports#api-costs">
           <Button
