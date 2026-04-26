@@ -17,6 +17,16 @@ export interface JobCart {
   approved_at: string | null;
   paid_at: string | null;
   payment_method: string | null;
+  payment_timing: string | null;
+  source_presentation_id: string | null;
+  selected_option_key: string | null;
+  approved_scope_snapshot: Record<string, any> | null;
+  payment_due_at: string | null;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  view_count: number | null;
+  discount_code: string | null;
+  discount_amount: number | null;
   stripe_checkout_url: string | null;
   created_at: string;
   updated_at: string;
@@ -62,7 +72,7 @@ export function useJobCart(jobId: string | undefined) {
         .from("job_carts")
         .select("*")
         .eq("job_id", jobId)
-        .not("status", "in", "(canceled,declined,paid)")
+        .not("status", "in", "(canceled,declined)")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

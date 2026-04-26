@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useCustomerInvoices } from "@/hooks/useCustomerInvoices";
 import { usePartsOrders } from "@/hooks/usePartsOrders";
+import { useJobCart } from "@/hooks/useJobCart";
 import { getExpectedJobItems, getExpectedJobSummary, type ExpectedItemStatus } from "@/lib/expectedJobItems";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,9 +23,10 @@ const STATUS_META: Record<ExpectedItemStatus, { icon: React.ElementType; classNa
 export function JobExpectedItemsCard({ job, jobId }: { job: any; jobId: string }) {
   const { data: invoices = [] } = useCustomerInvoices(jobId);
   const { data: partsOrders = [] } = usePartsOrders(jobId);
+  const { cart, itemCount } = useJobCart(jobId);
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
-  const items = getExpectedJobItems(job, invoices as any[], partsOrders as any[]);
+  const items = getExpectedJobItems(job, invoices as any[], partsOrders as any[], cart ? { ...cart, item_count: itemCount } : null);
   const summary = getExpectedJobSummary(items);
   const openItems = items.filter((item) => item.status !== "done" && item.status !== "skipped");
 

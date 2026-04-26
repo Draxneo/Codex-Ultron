@@ -21,6 +21,19 @@ type PartsOrderLike = {
   picked_up_at?: string | null;
 };
 
+type JobCartLike = {
+  status?: string | null;
+  sent_at?: string | null;
+  approved_at?: string | null;
+  paid_at?: string | null;
+  payment_method?: string | null;
+  payment_timing?: string | null;
+  source_presentation_id?: string | null;
+  first_viewed_at?: string | null;
+  total?: number | null;
+  item_count?: number | null;
+};
+
 function normalized(value?: string | null) {
   return (value || "").trim().toLowerCase();
 }
@@ -52,6 +65,10 @@ function hasPaidInvoice(job: any, invoices: InvoiceLike[]) {
   );
 }
 
+function hasPaidCart(cart?: JobCartLike | null) {
+  return Boolean(cart?.paid_at || normalized(cart?.status) === "paid");
+}
+
 function hasEquipmentOrdered(job: any, partsOrders: PartsOrderLike[]) {
   return Boolean(
     job?.equipment_ordered_at ||
@@ -80,12 +97,23 @@ function item(
 export function getExpectedJobItems(
   job: any,
   invoices: InvoiceLike[] = [],
-  partsOrders: PartsOrderLike[] = []
+  partsOrders: PartsOrderLike[] = [],
+  cart?: JobCartLike | null
 ): ExpectedJobItem[] {
   const type = normalized(job?.job_type || "service");
   const status = normalized(job?.status);
   const fieldDone = isCompleteStatus(status) || Boolean(job?.completed_at || job?.completion_form_sent_at);
   const paymentMethod = normalized(job?.payment_method);
+  const cartStatus = normalized(cart?.status);
+  const cartPaymentTiming = normalized(cart?.payment_timing);
+  const cartPaymentMethod = normalized(cart?.payment_method);
+  const cartHasItems = Number(cart?.item_count || 0) > 0 || Number(cart?.total || 0) > 0;
+  const cartIsInPlay = Boolean(cartHasItems || cart?.source_presentation_id || ["sent", "approved", "paid"].includes(cartStatus));
+  const cartSent = Boolean(cart?.sent_at || cart?.first_viewed_at || ["sent", "approved", "paid"].includes(cartStatus));
+  const cartApproved = Boolean(cart?.approved_at || ["approved", "paid"].includes(cartStatus));
+  const cartPaid = hasPaidCart(cart);
+  const cartFinancing = cartPaymentTiming === "financing" || cartPaymentMethod === "financing";
+  const cartPayAfter = cartPaymentTiming === "pay_after_completion" || cartPaymentMethod === "pay_after_completion";
 
   if (type === "estimate") {
     return [
@@ -105,8 +133,18 @@ export function getExpectedJobItems(
     item("dispatch", "Dispatch / on my way", "tech", Boolean(job?.dispatch_sent_at || job?.on_my_way_sent_at), "Dispatch/OMW was sent.", "Waiting on dispatch or on-my-way.", "waiting"),
     item("on_site", "Mark on site", "tech", isFieldStarted(job, status), "Job reached on-site/in-progress.", "Tech has not marked on-site yet.", "waiting"),
     item("completion", "Complete work/checklist", "tech", fieldDone, "Completion is recorded.", "Needs completion form or done status.", "waiting"),
-    item("invoice", "Create/send invoice", "office", hasSentInvoice(job, invoices), "Invoice is sent.", "Needs invoice created and sent."),
-    item("payment", "Collect payment", "customer", hasPaidInvoice(job, invoices), "Payment is collected.", "Payment has not been collected.", "waiting"),
+    ...(cartIsInPlay ? [
+      item("cart_sent", "Send customer options", "office", cartSent, "Customer options were sent.", "Options are drafted but not sent."),
+      item("cart_approved", "Customer approves option", "customer", cartApproved, "Customer approved an option.", cartSent ? "Waiting on customer approval." : "Send options before approval.", cartSent ? "waiting" : "upcoming"),
+      ...(cartFinancing ? [
+        item("financing_pending", "Financing selected", "customer", cartPaid, "Financing/payment is complete.", "Customer selected financing. Track approval before closing payment.", "waiting"),
+      ] : []),
+      ...(cartPayAfter ? [
+        item("pay_after_work", "Payment due after work", "customer", cartPaid, "Pay-after-work balance is collected.", fieldDone ? "Work is complete. Collect payment." : "Customer will pay after completion.", fieldDone ? "needs_attention" : "waiting"),
+      ] : []),
+    ] : []),
+    item("invoice", "Create/send invoice", "office", hasSentInvoice(job, invoices) || cartSent, cartSent ? "Customer cart/payment link is sent." : "Invoice is sent.", "Needs invoice or customer cart sent."),
+    item("payment", "Collect payment", "customer", hasPaidInvoice(job, invoices) || cartPaid, "Payment is collected.", cartApproved ? "Approved scope is unpaid." : "Payment has not been collected.", cartApproved ? "needs_attention" : "waiting"),
     item("review", "Request review", "system", Boolean(job?.review_request_sent_at), "Review request was sent.", "Review request not sent yet.", "upcoming"),
     item("follow_up", "Quality follow-up", "office", Boolean(job?.follow_up_completed_at), "Follow-up is complete.", "Follow-up still open.", "upcoming"),
   ];

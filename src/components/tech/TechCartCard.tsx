@@ -12,7 +12,6 @@
  * so buttons swap as the customer interacts with the public cart link.
  */
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +37,7 @@ import { JobCartPicker } from "@/components/cart/JobCartPicker";
 import { CartAddonSuggestions } from "@/components/cart/CartAddonSuggestions";
 import { CartViewStatus } from "@/components/cart/CartViewStatus";
 import { cn } from "@/lib/utils";
+import { cartToneClasses, getJobCartStatus } from "@/lib/jobCartStatus";
 import { formatDistanceToNow } from "date-fns";
 
 interface Props {
@@ -55,8 +55,7 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
 };
 
 export function TechCartCard({ jobId, customerPhone, customerName, bare = false }: Props) {
-  const navigate = useNavigate();
-  const { cart, items, itemCount, addItem, removeItem, sendToCustomer, presentLink } = useJobCart(jobId);
+  const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -66,6 +65,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const status = (cart as any)?.status || "draft";
   const firstViewedAt = (cart as any)?.first_viewed_at;
   const lastViewedAt = (cart as any)?.last_viewed_at;
+  const statusInfo = getJobCartStatus(cart, itemCount);
 
   const handleAddCustom = () => {
     const price = parseFloat(customPrice);
@@ -85,7 +85,9 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
     if (presentLink) window.open(presentLink, "_blank", "noopener");
   };
 
-  const handleCharge = () => navigate(`/jobs/${jobId}?tab=invoice`);
+  const handleCollectPayment = () => {
+    if (publicLink) window.open(publicLink, "_blank", "noopener");
+  };
 
   // ── Status-driven action row ──────────────────────────────────────
   const renderActionRow = () => {
@@ -106,14 +108,27 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
     if (status === "approved") {
       return (
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 h-8 px-3">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Approved
+          <Badge className={cn("gap-1.5 h-8 px-3", cartToneClasses(statusInfo.tone))}>
+            <CheckCircle2 className="h-3.5 w-3.5" /> {statusInfo.label}
           </Badge>
-          <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleCharge}>
-            <CreditCard className="h-3.5 w-3.5" /> Charge / Invoice
-          </Button>
+          {statusInfo.canCollectNow && (
+            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleCollectPayment} disabled={!publicLink}>
+              <CreditCard className="h-3.5 w-3.5" /> Collect Payment
+            </Button>
+          )}
+          {statusInfo.canSendPaymentLink && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={handleSend}
+              disabled={sendToCustomer.isPending || !customerPhone}
+            >
+              <Send className="h-3.5 w-3.5" /> Send Payment Link
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
-            <Presentation className="h-3.5 w-3.5" /> Present receipt
+            <Presentation className="h-3.5 w-3.5" /> Present
           </Button>
         </div>
       );

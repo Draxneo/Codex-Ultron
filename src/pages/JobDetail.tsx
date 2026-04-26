@@ -14,6 +14,7 @@ import { JobV2Sidebar } from "@/components/job-v2/JobV2Sidebar";
 import { JobV2LineItems } from "@/components/job-v2/JobV2LineItems";
 import { JobV2CollapsibleSections } from "@/components/job-v2/JobV2CollapsibleSections";
 import { JobExpectedItemsCard } from "@/components/job-v2/JobExpectedItemsCard";
+import { JobCartStatusCard } from "@/components/cart/JobCartStatusCard";
 import CustomerInvoicePanel from "@/components/CustomerInvoicePanel";
 import { JobActivityFeed } from "@/components/ActivityFeed";
 import { PhotoLocationMap } from "@/components/PhotoLocationMap";
@@ -120,6 +121,8 @@ export default function JobDetail() {
             <JobV2ActionBar job={job} jobId={id!} onInvoiceClick={scrollToInvoice} />
 
             <JobExpectedItemsCard job={job} jobId={id!} />
+
+            <JobCartStatusCard jobId={id!} customerName={customerName} customerPhone={customerPhone} />
 
             <Card className="p-4">
               <div className="flex items-center justify-between mb-2">
