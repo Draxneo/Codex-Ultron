@@ -133,6 +133,9 @@ export default function CustomerCart() {
   const { cart, items, job, company } = data;
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
+  const isPayAfterCompletion = (cart as any).payment_timing === "pay_after_completion";
+  const canEditCart = !isPaid && !isApproved;
+  const canPayCart = !isPaid && (!isApproved || isPayAfterCompletion);
 
   // System-purchase pricing framing — shows the same A/B/C stack the tech showed in person
   const hasEquipment = items.some((i) => i.kind === "equipment");
@@ -180,13 +183,17 @@ export default function CustomerCart() {
           <Card className="p-4 bg-primary/10 border-primary/30 flex items-center gap-3">
             <CheckCircle2 className="h-6 w-6 text-primary" />
             <div>
-              <p className="font-semibold text-primary">Approved — your tech will collect on site.</p>
+              <p className="font-semibold text-primary">
+                {isPayAfterCompletion
+                  ? "Approved - this cart is saved for payment after the work is complete."
+                  : "Approved - your tech will collect on site."}
+              </p>
             </div>
           </Card>
         )}
 
         {/* Greeting */}
-        {!isPaid && !isApproved && (
+        {canEditCart && (
           <div className="space-y-1">
             <h1 className="text-2xl font-bold">
               {job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Cart"}
@@ -234,7 +241,7 @@ export default function CustomerCart() {
         </Card>
 
         {/* Add-on suggestions */}
-        {!isPaid && !isApproved && (
+        {canEditCart && (
           <CartAddonSuggestions
             itemKinds={items.map((i) => i.kind)}
             itemNames={items.map((i) => i.name)}
@@ -261,7 +268,7 @@ export default function CustomerCart() {
         )}
 
         {/* Promo code */}
-        {!isPaid && !isApproved && (
+        {canEditCart && (
           <Card className="p-4 space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Have a promo code?</p>
             <PromoCodeField
@@ -294,14 +301,14 @@ export default function CustomerCart() {
         </Card>
 
         {/* Payment framing — A/B/C stack on system purchases, simple widget on small carts */}
-        {!isPaid && !isApproved && showPaymentStack ? (
+        {canPayCart && showPaymentStack ? (
           <PaymentOptionStack
             financed={total}
             monthly36={monthly36}
             monthly120={monthly120}
             rebatePrice={rebatePrice}
           />
-        ) : !isPaid && !isApproved ? (
+        ) : canPayCart ? (
           <FinancingWidget
             total={total}
             onApply={() => handlePay("financing")}
@@ -309,7 +316,7 @@ export default function CustomerCart() {
         ) : null}
 
         {/* Rebate paperwork assistance — only when there's real system equipment */}
-        {!isPaid && !isApproved && hasEquipment && (
+        {canEditCart && hasEquipment && (
           <Card className="p-3 flex items-start gap-3 bg-primary/5 border-primary/20">
             <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div className="text-xs leading-snug">
@@ -322,7 +329,7 @@ export default function CustomerCart() {
         )}
 
         {/* CTAs */}
-        {!isPaid && !isApproved && (
+        {canPayCart && (
           <Card className="p-4 space-y-2">
             <p className="text-sm font-semibold mb-2">Choose how to proceed:</p>
             <Button className="w-full h-12 text-base" onClick={() => handlePay("stripe")} disabled={!!paying}>
