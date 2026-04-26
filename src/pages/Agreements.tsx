@@ -224,7 +224,7 @@ export default function Agreements() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate("/sales-presentations?tab=agreement")}>
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate("/catalog")}>
               <Crown className="h-4 w-4 mr-1" /> Plan Templates
             </Button>
             <Button size="sm" className="text-xs bg-[hsl(var(--complete))] text-white hover:bg-[hsl(var(--complete))]/90" onClick={() => setCreating(true)}>

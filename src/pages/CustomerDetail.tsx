@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
 import { useCustomerOverview } from "@/hooks/useCustomerOverview";
 import { CustomerHeaderV2 } from "@/components/customer-v2/CustomerHeaderV2";
@@ -12,16 +12,19 @@ import { CallsTab } from "@/components/customer-v2/tabs/CallsTab";
 import { AttachmentsTab } from "@/components/customer-v2/tabs/AttachmentsTab";
 import { NotesTab } from "@/components/customer-v2/tabs/NotesTab";
 import { LeadsTab } from "@/components/customer-v2/tabs/LeadsTab";
+import { AlertTriangle, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const tabTriggerClass =
   "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm font-semibold uppercase tracking-wide";
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("profile");
-  const { data: overview, isLoading } = useCustomerOverview(id);
+  const { data: overview, isLoading, isError } = useCustomerOverview(id);
 
-  if (isLoading || !overview) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="max-w-[1600px] mx-auto p-6 space-y-4">
@@ -29,6 +32,23 @@ export default function CustomerDetail() {
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-96 w-full" />
         </div>
+      </div>
+    );
+  }
+
+  if (isError || !overview) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="px-6 py-3 flex items-center bg-background border-b">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-4 w-4" /> Back
+          </Button>
+        </div>
+        <main className="max-w-xl mx-auto px-6 py-16 text-center">
+          <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+          <h1 className="text-xl font-semibold">Customer not found</h1>
+          <p className="text-sm text-muted-foreground mt-2">This customer may have been deleted, moved, or the link is invalid.</p>
+        </main>
       </div>
     );
   }

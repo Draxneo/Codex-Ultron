@@ -2,6 +2,7 @@ import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withRetry, isRetryable, logSystemError, enqueueRetry, pageOnCall } from "../_shared/resilience.ts";
+import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
 
 type MediaInput = string | { url: string; content_type?: string };
 
@@ -49,6 +50,15 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabase = getSupabaseAdmin();
+    const auth = await requireStaffOrInternal(req, supabase);
+    if (!auth.ok) {
+      return new Response(
+        JSON.stringify({ error: auth.error }),
+        { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const reqBody = await req.json();
     const {
       to,
@@ -86,14 +96,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = getSupabaseAdmin();
-
     // ── HITL gate removed ──────────────────────────────────────
     // Header takes precedence; body `source` is a fallback so callers using the
     // universal `useSendSms` hook can pass it without setting custom headers.
+    // x-source-function / x-hitl-approved are workflow hints only; authorization
+    // above requires staff auth, service-role bearer, or x-internal-function-secret.
     const sourceFunction = req.headers.get("x-source-function") || bodySource || "manual";
     const isManual = sourceFunction === "manual";
-    const isHitlApproved = req.headers.get("x-hitl-approved") === "true";
+    const isInternalCaller = auth.kind === "service_role" || auth.kind === "internal_secret";
+    const isHitlApproved = isInternalCaller || req.headers.get("x-hitl-approved") === "true";
 
     if (retiredSmsSources.has(sourceFunction)) {
       console.log(`Retired SMS trigger blocked: source="${sourceFunction}" to ${to}`);

@@ -17,7 +17,8 @@ import { getRoleDefaults } from "@/lib/roleAccessDefaults";
 
 /** Map a pathname to its access-control key. Returns undefined for unknown routes. */
 export function routeToTabKey(pathname: string, search?: string): string | undefined {
-  if (pathname === "/" || pathname.startsWith("/jobs") || pathname === "/tech" || pathname.startsWith("/form/")) return "jobs";
+  if (pathname === "/" || pathname.startsWith("/jobs") || pathname === "/tech" || pathname.startsWith("/tech/jobs") || pathname.startsWith("/estimates") || pathname.startsWith("/form/")) return "jobs";
+  if (pathname.startsWith("/tech/customers")) return "jobs";
   // /inbox sections map via search param
   if (pathname.startsWith("/inbox")) {
     if (search?.includes("sms")) return "sms";
@@ -28,10 +29,19 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (pathname.startsWith("/sms")) return "sms";
   if (pathname.startsWith("/email")) return "inbox";
   if (pathname.startsWith("/customers")) return "customers";
+  if (pathname.startsWith("/agreements") || pathname.startsWith("/leads")) return "customers";
   if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "vendors";
   if (pathname.startsWith("/copilot")) return "copilot";
+  if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
   if (pathname.startsWith("/pay")) return "pay";
-  if (pathname.startsWith("/admin")) return "admin";
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/agent-training") ||
+    pathname.startsWith("/agent-pipeline") ||
+    pathname.startsWith("/agent-network") ||
+    pathname.startsWith("/ivr-builder") ||
+    pathname.startsWith("/system-log")
+  ) return "admin";
   if (pathname.startsWith("/quick-quote")) return "jobs";
   return undefined;
 }

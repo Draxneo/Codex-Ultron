@@ -499,7 +499,7 @@ function AppRouter() {
         <Route path="/vendors/:id" element={<ProtectedRoute><VendorDetail /></ProtectedRoute>} />
         <Route path="/locations" element={<Navigate to="/vendors" replace />} />
         <Route path="/estimates/:id" element={<ProtectedRoute><EstimateDetail /></ProtectedRoute>} />
-        <Route path="/settings" element={<Navigate to="/admin?tab=config" replace />} />
+        <Route path="/settings" element={<Navigate to="/admin?section=company" replace />} />
         <Route path="/agent-training" element={<ProtectedRoute><AgentTraining /></ProtectedRoute>} />
         <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/customers/:id" element={<ProtectedRoute><CustomerDetail /></ProtectedRoute>} />
@@ -533,7 +533,7 @@ function AppRouter() {
         
         <Route path="/estimates" element={<Navigate to="/" replace />} />
         <Route path="/paysheet" element={<Navigate to="/pay" replace />} />
-        <Route path="/reports" element={<Navigate to="/admin?tab=reports" replace />} />
+        <Route path="/reports" element={<Navigate to="/admin?section=reports" replace />} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -554,7 +554,7 @@ function SmsLogGate({ children }: { children: React.ReactNode }) {
   const publicPrefixes = [
     "/login", "/reset-password", "/form/", "/photos/", "/portal/",
     "/refer/", "/presentation/", "/agreement/", "/certificate/",
-    "/invoice/", "/intake/", "/cart/",
+    "/invoice/", "/intake/", "/cart/", "/q/",
   ];
   const isPublicRoute = publicPrefixes.some((p) =>
     location.pathname === p || location.pathname.startsWith(p)

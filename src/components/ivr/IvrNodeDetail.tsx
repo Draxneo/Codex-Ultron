@@ -96,12 +96,37 @@ interface IvrNodeDetailProps {
   menuOption?: IvrMenuOption;
   profiles: { id: string; full_name: string }[];
   onUpdateConfig: (updates: Partial<IvrConfig>) => void;
-  onUpdateDept: (updates: Partial<IvrMenuOption> & { digit: string }, silent?: boolean) => void;
+  onUpdateDept: (updates: IvrMenuOptionUpdate, silent?: boolean) => void;
   onDeleteDept: (id: string) => void;
   postCallSettings?: { enabled: boolean; customerTemplate: string; customerTemplateKey: string; unknownTemplate: string; unknownTemplateKey: string };
   onUpdatePostCallSettings?: (updates: Record<string, string>) => void;
   missedCallSettings?: { enabled: boolean; duringHoursTemplate: string; duringHoursTemplateKey: string; afterHoursTemplate: string; afterHoursTemplateKey: string };
   onUpdateMissedCallSettings?: (updates: Record<string, string>) => void;
+}
+
+type IvrMenuOptionWithRoutingKey = IvrMenuOption & { routing_department_key?: string | null };
+type IvrMenuOptionUpdate = Partial<IvrMenuOption> & { digit: string; routing_department_key?: string | null };
+
+const ROUTING_DEPARTMENT_OPTIONS = [
+  { value: "service", label: "Service" },
+  { value: "sales", label: "Sales" },
+  { value: "billing", label: "Billing" },
+  { value: "general", label: "General" },
+] as const;
+
+function keyFromLegacyLabel(label: string | null | undefined): string {
+  const l = (label || "").toLowerCase().trim();
+  if (l.includes("sales")) return "sales";
+  if (l.includes("service") || l.includes("repair") || l.includes("tech")) return "service";
+  if (l.includes("bill") || l.includes("pay") || l.includes("invoic")) return "billing";
+  return "general";
+}
+
+function routingDepartmentKeyForOption(option: IvrMenuOptionWithRoutingKey): string {
+  const explicit = (option.routing_department_key || "").toLowerCase().trim();
+  return ROUTING_DEPARTMENT_OPTIONS.some((routingOption) => routingOption.value === explicit)
+    ? explicit
+    : keyFromLegacyLabel(option.label);
 }
 
 function TemplateBindingCard({
@@ -209,9 +234,9 @@ function GreetingEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
 }
 
 function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: {
-  option: IvrMenuOption;
-  onSave: (updates: Partial<IvrMenuOption> & { digit: string }) => void;
-  onSaveSilent: (updates: Partial<IvrMenuOption> & { digit: string }) => void;
+  option: IvrMenuOptionWithRoutingKey;
+  onSave: (updates: IvrMenuOptionUpdate) => void;
+  onSaveSilent: (updates: IvrMenuOptionUpdate) => void;
   onDelete: () => void;
   profiles: { id: string; full_name: string }[];
 }) {
@@ -233,6 +258,23 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Routing Key</Label>
+        <Select
+          value={routingDepartmentKeyForOption(option)}
+          onValueChange={(v) => onSave({ digit: option.digit, routing_department_key: v })}
+        >
+          <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ROUTING_DEPARTMENT_OPTIONS.map((routingOption) => (
+              <SelectItem key={routingOption.value} value={routingOption.value}>
+                {routingOption.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {option.action_type !== "forward_client" && (
@@ -594,7 +636,7 @@ function HoldMusicEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpda
 }
 
 export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, profiles, onUpdateConfig, onUpdateDept, onDeleteDept, postCallSettings, onUpdatePostCallSettings, missedCallSettings, onUpdateMissedCallSettings }: IvrNodeDetailProps) {
-  const handleSilentSave = useCallback((updates: Partial<IvrMenuOption> & { digit: string }) => {
+  const handleSilentSave = useCallback((updates: IvrMenuOptionUpdate) => {
     onUpdateDept(updates, true);
   }, [onUpdateDept]);
 

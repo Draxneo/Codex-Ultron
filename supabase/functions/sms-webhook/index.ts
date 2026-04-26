@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getTaskModel } from "../_shared/getTaskModel.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
 import { verifyAddress } from "../_shared/verifyContact.ts";
+import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 
 import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
 
@@ -124,6 +125,20 @@ Deno.serve(async (req) => {
 
   try {
     const formData = await req.text();
+    let sigValid = false;
+    try {
+      sigValid = await validateTwilioSignature(req, formData);
+    } catch (sigErr) {
+      console.error("SMS webhook Twilio signature validation error:", sigErr);
+    }
+    if (!sigValid) {
+      console.warn("Rejecting SMS webhook: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 }
+      );
+    }
+
     const params = new URLSearchParams(formData);
 
     const from = params.get("From") || "";

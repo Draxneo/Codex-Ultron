@@ -6,7 +6,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Plus, Send, Printer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Send, Printer } from "lucide-react";
 import { JobV2Header } from "@/components/job-v2/JobV2Header";
 import { JobV2ActionBar } from "@/components/job-v2/JobV2ActionBar";
 import { JobV2CustomerCard } from "@/components/job-v2/JobV2CustomerCard";
@@ -25,7 +25,7 @@ export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { data: job, isLoading } = useJob(id!);
+  const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const invoiceRef = useRef<HTMLDivElement>(null);
   const lineItemsRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ export default function JobDetail() {
     }
   }, [tabParam, isLoading, job]);
 
-  if (isLoading || !job) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
@@ -52,6 +52,27 @@ export default function JobDetail() {
             <Skeleton className="h-[400px] col-span-8" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isError || !job) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <div className="px-6 py-3 flex items-center bg-background border-b">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+        </div>
+        <main className="max-w-xl mx-auto px-6 py-16 text-center">
+          <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+          <h1 className="text-xl font-semibold">Job not found</h1>
+          <p className="text-sm text-muted-foreground mt-2">This job may have been deleted, moved, or the link is invalid.</p>
+        </main>
       </div>
     );
   }

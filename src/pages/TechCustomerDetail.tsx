@@ -6,7 +6,7 @@
  */
 
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, MapPin, Phone, MessageSquare, Calendar, Wrench, ChevronRight } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MapPin, Phone, MessageSquare, Calendar, Wrench, ChevronRight } from "lucide-react";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useCustomerJobs } from "@/hooks/useCustomerHistory";
 import { useCustomerEquipment } from "@/hooks/useCustomerEquipment";
@@ -26,17 +26,38 @@ export default function TechCustomerDetail() {
   const { isNative } = useCapacitor();
   const softphone = useSoftphoneContext();
   const telephony = useTelephonyMode();
-  const { data: customer, isLoading } = useCustomer(id);
+  const { data: customer, isLoading, isError } = useCustomer(id);
   const { data: jobs } = useCustomerJobs(id);
   const { data: equipment } = useCustomerEquipment(id);
   const { data: agreements } = useCustomerAgreements(id);
 
-  if (isLoading || !customer) {
+  if (isLoading) {
     return (
       <div className="p-4 space-y-3">
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-32 w-full rounded-lg" />
         <Skeleton className="h-48 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (isError || !customer) {
+    return (
+      <div className="flex flex-col min-h-full bg-background">
+        <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-card border-b border-border">
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)} aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1 text-center">
+            <p className="text-sm font-semibold text-foreground">Customer not found</p>
+          </div>
+          <div className="w-9" />
+        </header>
+        <main className="px-6 py-16 text-center">
+          <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+          <h1 className="text-lg font-semibold">Customer not found</h1>
+          <p className="text-sm text-muted-foreground mt-2">This customer may have been deleted, moved, or the link is invalid.</p>
+        </main>
       </div>
     );
   }

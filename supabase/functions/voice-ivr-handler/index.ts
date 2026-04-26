@@ -3,19 +3,19 @@ import { sendIvrSms } from "../_shared/smsHelper.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { buildDepartmentDialList, buildClientTags, isUserBusy } from "../_shared/callRouting.ts";
+import {
+  buildDepartmentDialList,
+  buildClientTags,
+  fallbackRoutingDepartmentsForIvrOption,
+  isUserBusy,
+  resolveIvrRoutingDepartmentKey,
+} from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 
-/** Map an IVR menu label like "Sales" / "Service" to this app's department-routing key. */
-function deptKeyFromLabel(label: string): "sales" | "service" | "billing" | "general" {
-  const l = (label || "").toLowerCase();
-  if (l.includes("sales")) return "sales";
-  if (l.includes("service") || l.includes("repair") || l.includes("tech")) return "service";
-  if (l.includes("bill") || l.includes("pay") || l.includes("invoic")) return "billing";
-  return "general";
-}
-
-
+type IvrRoutingOption = {
+  label?: string | null;
+  routing_department_key?: string | null;
+};
 
 function escapeXml(str: string): string {
   return str
@@ -235,6 +235,10 @@ Deno.serve(async (req) => {
     }
 
     // ── Department hours check ──
+    const routingOption = option as IvrRoutingOption;
+    const deptKey = resolveIvrRoutingDepartmentKey(routingOption);
+    const fallbackDepartmentKeys = fallbackRoutingDepartmentsForIvrOption(routingOption);
+
     if (option.dept_hours_start && option.dept_hours_end && option.dept_business_days) {
       const c = getCentralNow();
       const currentDay = c.getUTCDay();
@@ -423,7 +427,7 @@ Deno.serve(async (req) => {
         await supabase.from("call_log").update({
           // ivr_digit lets voice-status-callback look up the per-dept SMS body
           // (the IVR canvas is now the single source of truth for after-call SMS)
-          extracted_data: { ...existing, ivr_department: option.label, ivr_digit: digit },
+          extracted_data: { ...existing, ivr_department: option.label, ivr_department_key: deptKey, ivr_digit: digit },
         }).eq("id", callRow.id);
       }
     } catch (e) { console.error("Failed to store IVR department:", e); }
@@ -555,14 +559,14 @@ Deno.serve(async (req) => {
     }
 
     // ── Build dial list using this app's IVR department routing ──
-    // Department comes from the IVR menu label (Sales/Service/Billing/General).
+    // Department comes from the IVR menu's stable routing key; labels are only legacy fallbacks.
     // We skip anyone busy or marked away-from-desk so a 2nd caller is never
     // routed to the same active client that's already on a live call.
-    const deptKey = deptKeyFromLabel(option.label);
     const { clientIdentities, chosenEmployees, evaluation } = await buildDepartmentDialList(supabase, deptKey, {
       callSid,
       traceGroup: callSid,
       sourceName: "voice-ivr-handler",
+      fallbackDepartments: fallbackDepartmentKeys,
     });
 
     let clientTags: string;

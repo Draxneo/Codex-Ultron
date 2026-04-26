@@ -11,6 +11,9 @@
  */
 import { logSystemTrace } from "./systemTrace.ts";
 
+export const DEPARTMENT_ROUTING_KEYS = ["sales", "service", "billing", "general"] as const;
+export type DepartmentRoutingKey = typeof DEPARTMENT_ROUTING_KEYS[number];
+
 function escapeXmlSafe(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -26,6 +29,46 @@ function normalizePersonName(value: string | null | undefined): string {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeRoutingDepartmentValue(value: string | null | undefined): string {
+  return (value || "").toLowerCase().trim();
+}
+
+export function isDepartmentRoutingKey(value: string | null | undefined): value is DepartmentRoutingKey {
+  return DEPARTMENT_ROUTING_KEYS.includes(normalizeRoutingDepartmentValue(value) as DepartmentRoutingKey);
+}
+
+export function departmentKeyFromLegacyLabel(label: string | null | undefined): DepartmentRoutingKey {
+  const l = normalizeRoutingDepartmentValue(label);
+  if (l.includes("sales")) return "sales";
+  if (l.includes("service") || l.includes("repair") || l.includes("tech")) return "service";
+  if (l.includes("bill") || l.includes("pay") || l.includes("invoic")) return "billing";
+  return "general";
+}
+
+export function resolveIvrRoutingDepartmentKey(option: {
+  label?: string | null;
+  routing_department_key?: string | null;
+}): DepartmentRoutingKey {
+  const explicitKey = normalizeRoutingDepartmentValue(option.routing_department_key);
+  if (isDepartmentRoutingKey(explicitKey)) return explicitKey;
+  return departmentKeyFromLegacyLabel(option.label);
+}
+
+export function fallbackRoutingDepartmentsForIvrOption(option: {
+  label?: string | null;
+  routing_department_key?: string | null;
+}): string[] {
+  const explicitKey = normalizeRoutingDepartmentValue(option.routing_department_key);
+  if (isDepartmentRoutingKey(explicitKey)) return [];
+
+  const primary = resolveIvrRoutingDepartmentKey(option);
+  const fallbacks = [
+    departmentKeyFromLegacyLabel(option.label),
+    normalizeRoutingDepartmentValue(option.label),
+  ];
+  return Array.from(new Set(fallbacks.filter((value) => value && value !== primary)));
 }
 
 /** Fast check: is this user (by employee name) currently on a live call? */
@@ -134,11 +177,28 @@ async function resolveClientIdentityForEmployee(
 
 export type DepartmentDialEvaluation = {
   reason: "available" | "all_busy" | "ooo_only" | "no_rules" | "missing_identity";
+  requestedDepartment: string;
+  matchedDepartment: string | null;
+  usedFallbackDepartment: boolean;
   totalCandidates: number;
   busyCount: number;
   oooCount: number;
   missingIdentityCount: number;
 };
+
+async function fetchRoutingRules(
+  supabase: any,
+  department: string,
+): Promise<Array<{ employee_name: string; priority?: number | null }>> {
+  const { data } = await supabase
+    .from("call_routing_rules")
+    .select("employee_name, priority")
+    .eq("department", department)
+    .eq("is_active", true)
+    .order("priority", { ascending: true });
+
+  return (data || []) as Array<{ employee_name: string; priority?: number | null }>;
+}
 
 /**
  * Given a department, return the ordered list of <Client> identity strings
@@ -151,16 +211,34 @@ export type DepartmentDialEvaluation = {
 export async function buildDepartmentDialList(
   supabase: any,
   department: string,
-  trace?: { callSid?: string | null; parentCallSid?: string | null; traceGroup?: string | null; sourceName?: string },
+  trace?: {
+    callSid?: string | null;
+    parentCallSid?: string | null;
+    traceGroup?: string | null;
+    sourceName?: string;
+    fallbackDepartments?: string[];
+  },
 ): Promise<{ clientIdentities: string[]; chosenEmployees: string[]; evaluation: DepartmentDialEvaluation }> {
-  const { data: rules } = await supabase
-    .from("call_routing_rules")
-    .select("employee_name, priority")
-    .eq("department", department)
-    .eq("is_active", true)
-    .order("priority", { ascending: true });
+  const requestedDepartment = normalizeRoutingDepartmentValue(department);
+  const fallbackDepartments = Array.from(new Set(
+    (trace?.fallbackDepartments || [])
+      .map(normalizeRoutingDepartmentValue)
+      .filter((value) => value && value !== requestedDepartment),
+  ));
 
-  const candidates = ((rules || []) as Array<{ employee_name: string }>).map(
+  let rules = await fetchRoutingRules(supabase, requestedDepartment);
+  let matchedDepartment: string | null = rules.length > 0 ? requestedDepartment : null;
+
+  for (const fallbackDepartment of fallbackDepartments) {
+    if (rules.length > 0) break;
+    rules = await fetchRoutingRules(supabase, fallbackDepartment);
+    if (rules.length > 0) {
+      matchedDepartment = fallbackDepartment;
+      console.warn(`[callRouting] no rules for ${requestedDepartment}; using fallback department ${fallbackDepartment}`);
+    }
+  }
+
+  const candidates = rules.map(
     (r) => r.employee_name,
   );
   if (candidates.length === 0) {
@@ -169,6 +247,9 @@ export async function buildDepartmentDialList(
       chosenEmployees: [],
       evaluation: {
         reason: "no_rules",
+        requestedDepartment,
+        matchedDepartment: null,
+        usedFallbackDepartment: false,
         totalCandidates: 0,
         busyCount: 0,
         oooCount: 0,
@@ -193,6 +274,7 @@ export async function buildDepartmentDialList(
   let busyCount = 0;
   let oooCount = 0;
   let missingIdentityCount = 0;
+  const traceDepartment = matchedDepartment || requestedDepartment;
 
   for (const name of candidates) {
     if (oooSet.has(name.toLowerCase())) {
@@ -202,15 +284,15 @@ export async function buildDepartmentDialList(
         sourceType: "voice",
         sourceName: trace?.sourceName || "call-routing",
         eventKind: "candidate_skipped",
-        summary: `${name} skipped during ${department} routing`,
+        summary: `${name} skipped during ${traceDepartment} routing`,
         reason: "out_of_office",
         severity: "info",
         traceGroup: trace?.traceGroup ?? trace?.callSid ?? null,
         entityType: "department",
-        entityId: department,
+        entityId: traceDepartment,
         callSid: trace?.callSid ?? null,
         parentCallSid: trace?.parentCallSid ?? null,
-        metadata: { employee_name: name, department },
+        metadata: { employee_name: name, department: traceDepartment, requested_department: requestedDepartment },
       });
       continue;
     }
@@ -221,15 +303,15 @@ export async function buildDepartmentDialList(
         sourceType: "voice",
         sourceName: trace?.sourceName || "call-routing",
         eventKind: "candidate_skipped",
-        summary: `${name} skipped during ${department} routing`,
+        summary: `${name} skipped during ${traceDepartment} routing`,
         reason: "busy",
         severity: "warning",
         traceGroup: trace?.traceGroup ?? trace?.callSid ?? null,
         entityType: "department",
-        entityId: department,
+        entityId: traceDepartment,
         callSid: trace?.callSid ?? null,
         parentCallSid: trace?.parentCallSid ?? null,
-        metadata: { employee_name: name, department },
+        metadata: { employee_name: name, department: traceDepartment, requested_department: requestedDepartment },
       });
       continue;
     }
@@ -244,15 +326,15 @@ export async function buildDepartmentDialList(
         sourceType: "voice",
         sourceName: trace?.sourceName || "call-routing",
         eventKind: "candidate_skipped",
-        summary: `${name} skipped during ${department} routing`,
+        summary: `${name} skipped during ${traceDepartment} routing`,
         reason: "missing_client_identity",
         severity: "warning",
         traceGroup: trace?.traceGroup ?? trace?.callSid ?? null,
         entityType: "department",
-        entityId: department,
+        entityId: traceDepartment,
         callSid: trace?.callSid ?? null,
         parentCallSid: trace?.parentCallSid ?? null,
-        metadata: { employee_name: name, department },
+        metadata: { employee_name: name, department: traceDepartment, requested_department: requestedDepartment },
       });
     }
   }
@@ -270,6 +352,9 @@ export async function buildDepartmentDialList(
     chosenEmployees: chosen,
     evaluation: {
       reason,
+      requestedDepartment,
+      matchedDepartment,
+      usedFallbackDepartment: matchedDepartment !== null && matchedDepartment !== requestedDepartment,
       totalCandidates: candidates.length,
       busyCount,
       oooCount,

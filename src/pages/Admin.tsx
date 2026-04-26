@@ -10,6 +10,7 @@ import {
   Package, CreditCard, Brain, ChevronRight, ChevronLeft, Gift, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, Store, MapPin, RefreshCw, ScanSearch, Activity,
+  BookOpen,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
@@ -839,6 +840,28 @@ const ADMIN_SECTIONS = [
   { key: "reports", label: "Dashboard & Reports", icon: BarChart3 },
 ];
 
+const SECTION_KEYS = new Set(ADMIN_SECTIONS.map((section) => section.key));
+const LEGACY_TAB_TO_SECTION: Record<string, string> = {
+  config: "company",
+  settings: "company",
+  team: "employees",
+  employees: "employees",
+  tools: "tools",
+  reports: "reports",
+  payments: "payments",
+  voice: "voice",
+  jarvis: "jarvis",
+  marketing: "marketing",
+  operations: "operations",
+  webhooks: "webhooks",
+};
+
+function resolveAdminSection(section: string | null, legacyTab: string | null) {
+  if (section && SECTION_KEYS.has(section)) return section;
+  if (legacyTab) return LEGACY_TAB_TO_SECTION[legacyTab] ?? null;
+  return null;
+}
+
 function AdminSectionContent({ section }: { section: string }) {
   switch (section) {
     case "company":
@@ -978,7 +1001,7 @@ function AdminSectionContent({ section }: { section: string }) {
 export default function Admin() {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeSection = searchParams.get("section") || null;
+  const activeSection = resolveAdminSection(searchParams.get("section"), searchParams.get("tab"));
   const { role, loading } = useAuth();
   const allowedTabs = useEmployeeTabAccess();
 

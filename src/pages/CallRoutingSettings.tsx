@@ -33,6 +33,31 @@ type Rule = {
 };
 
 type Department = { value: string; label: string; emoji: string; description: string };
+type IvrMenuRoutingRow = {
+  digit: string;
+  label: string | null;
+  routing_department_key?: string | null;
+};
+
+const ROUTING_DEPARTMENT_KEYS = ["sales", "service", "billing", "general"] as const;
+type RoutingDepartmentKey = typeof ROUTING_DEPARTMENT_KEYS[number];
+
+function isRoutingDepartmentKey(value: string | null | undefined): value is RoutingDepartmentKey {
+  return ROUTING_DEPARTMENT_KEYS.includes((value || "").toLowerCase().trim() as RoutingDepartmentKey);
+}
+
+function keyFromLegacyLabel(label: string | null | undefined): RoutingDepartmentKey {
+  const l = (label || "").toLowerCase().trim();
+  if (l.includes("sales")) return "sales";
+  if (l.includes("service") || l.includes("repair") || l.includes("tech")) return "service";
+  if (l.includes("bill") || l.includes("pay") || l.includes("invoic")) return "billing";
+  return "general";
+}
+
+function routingKeyForOption(option: { label?: string | null; routing_department_key?: string | null }): RoutingDepartmentKey {
+  const explicit = (option.routing_department_key || "").toLowerCase().trim();
+  return isRoutingDepartmentKey(explicit) ? explicit : keyFromLegacyLabel(option.label);
+}
 
 // Map an IVR menu label → emoji for visual grouping. Falls back to 📞.
 function emojiFor(label: string): string {
@@ -60,18 +85,36 @@ export function CallRoutingSettings() {
     queryFn: async () => {
       const { data } = await supabase
         .from("ivr_menu_options")
-        .select("digit, label, is_active, sort_order")
+        .select("digit, label, routing_department_key, is_active, sort_order")
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
-      const fromIvr: Department[] = ((data || []) as any[])
-        .map((o) => ({
-          value: (o.label || "").toLowerCase().trim(),
-          label: o.label || `Option ${o.digit}`,
-          emoji: emojiFor(o.label || ""),
-          description: `IVR key ${o.digit}`,
-        }))
-        .filter((d) => d.value);
+      const departmentByKey = new Map<string, Department & { digits: string[]; labels: string[]; usedFallback: boolean }>();
+      for (const option of ((data || []) as IvrMenuRoutingRow[])) {
+        const key = routingKeyForOption(option);
+        const label = option.label || `Option ${option.digit}`;
+        const existing = departmentByKey.get(key);
+        const usedFallback = !isRoutingDepartmentKey(option.routing_department_key);
+        if (existing) {
+          existing.digits.push(option.digit);
+          if (!existing.labels.includes(label)) existing.labels.push(label);
+          existing.usedFallback = existing.usedFallback || usedFallback;
+          existing.label = existing.labels.join(" / ");
+          existing.description = `IVR key ${existing.digits.join(", ")} - routing key ${key}${existing.usedFallback ? " (legacy fallback)" : ""}`;
+        } else {
+          departmentByKey.set(key, {
+            value: key,
+            label,
+            emoji: emojiFor(label),
+            description: `IVR key ${option.digit} - routing key ${key}${usedFallback ? " (legacy fallback)" : ""}`,
+            digits: [option.digit],
+            labels: [label],
+            usedFallback,
+          });
+        }
+      }
+      const fromIvr: Department[] = Array.from(departmentByKey.values()).map(({ digits, labels, usedFallback, ...department }) => department);
       // Always include "general" for non-IVR direct dials
+      if (fromIvr.some((department) => department.value === "general")) return fromIvr;
       return [
         ...fromIvr,
         { value: "general", label: "General", emoji: "📞", description: "Direct dial / no IVR menu" },

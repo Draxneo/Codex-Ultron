@@ -243,22 +243,26 @@ function CronPanel() {
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="h-[40vh]">
-            {runs.map((r: any) => (
-              <div key={r.id} className="border-b last:border-b-0 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
+            {runs.map((r: any, index: number) => {
+              const message = r.return_message ?? r.error_message;
+              const rowKey = `${r.job_name}-${r.started_at ?? "unknown"}-${index}`;
+              return (
+              <div key={rowKey} className="border-b last:border-b-0 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs">{r.job_name}</span>
                 <StatusBadge s={r.status} />
                 {typeof r.rows_processed === "number" && (
                   <span className="text-xs text-muted-foreground">{r.rows_processed} rows</span>
                 )}
                 {r.duration_ms != null && <span className="text-xs text-muted-foreground">{r.duration_ms}ms</span>}
-                {r.error_message && <span className="text-xs text-rose-600 truncate max-w-[40%]">{r.error_message}</span>}
+                {message && <span className="text-xs text-rose-600 truncate max-w-[40%]">{message}</span>}
                 <span className="ml-auto text-xs text-muted-foreground text-right">
                   <span className="font-medium text-foreground">{ctHeaderLabel(r.started_at)}</span>
                   <span className="mx-1.5 opacity-60">·</span>
                   <span>{format(new Date(r.started_at), "HH:mm:ss")} CT</span>
                 </span>
               </div>
-            ))}
+              );
+            })}
           </ScrollArea>
         </CardContent>
       </Card>
@@ -292,9 +296,14 @@ function RetryQueuePanel() {
   };
 
   const drop = async (id: string) => {
-    const { error } = await supabase.from("retry_queue" as any).delete().eq("id", id);
+    const { error } = await supabase.from("retry_queue" as any)
+      .update({
+        status: "dead_letter",
+        dead_lettered_at: new Date().toISOString(),
+      })
+      .eq("id", id);
     if (error) toast.error(`Failed: ${error.message}`);
-    else { toast.success("Removed from queue"); qc.invalidateQueries({ queryKey: ["retry_queue"] }); }
+    else { toast.success("Moved to dead-letter"); qc.invalidateQueries({ queryKey: ["retry_queue"] }); }
   };
 
   const triggerProcessor = async () => {

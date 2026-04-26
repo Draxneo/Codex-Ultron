@@ -55,7 +55,7 @@ function TierPrice({ items, isMember, memberDiscount }: { items: RepairTier[]; i
 
 export default function CustomerPresentation() {
   const { token } = useParams<{ token: string }>();
-  const { data: presentation, isLoading: presLoading } = usePresentationByToken(token);
+  const { data: presentation, isLoading: presLoading, isError: presError } = usePresentationByToken(token);
   const [estimate, setEstimate] = useState<any>(null);
   const [blocks, setBlocks] = useState<BrochureBlock[]>([]);
   const [compBlocks, setCompBlocks] = useState<ComparisonBlock[]>([]);
@@ -151,6 +151,18 @@ export default function CustomerPresentation() {
     );
   };
 
+  if (presError || (!presLoading && !presentation)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="text-center space-y-2 max-w-sm">
+          <Eye className="h-12 w-12 mx-auto text-muted-foreground/40" />
+          <h1 className="text-xl font-bold">Presentation Not Found</h1>
+          <p className="text-muted-foreground text-sm">This link may have expired or is invalid.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (presLoading || loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -158,18 +170,6 @@ export default function CustomerPresentation() {
           <Skeleton className="h-8 w-3/4 mx-auto" />
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-32 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!presentation) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <Eye className="h-12 w-12 mx-auto text-muted-foreground/40" />
-          <h1 className="text-xl font-bold">Presentation Not Found</h1>
-          <p className="text-muted-foreground text-sm">This link may have expired or is invalid.</p>
         </div>
       </div>
     );

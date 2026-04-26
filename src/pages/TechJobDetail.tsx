@@ -6,7 +6,7 @@
  */
 
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MoreVertical, FileText, DollarSign, CreditCard, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreVertical, FileText, DollarSign, CreditCard, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun } from "lucide-react";
 import { useJob } from "@/hooks/useJobs";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
@@ -29,16 +29,37 @@ export default function TechJobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employeeId } = useEffectiveAuth();
-  const { data: job, isLoading } = useJob(id!);
+  const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const { data: customerJobs } = useCustomerJobs(job?.customer_id || undefined);
 
-  if (isLoading || !job) {
+  if (isLoading) {
     return (
       <div className="p-4 space-y-3">
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-48 w-full rounded-lg" />
         <Skeleton className="h-32 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (isError || !job) {
+    return (
+      <div className="flex flex-col min-h-full bg-background">
+        <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-card border-b border-border">
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)} aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1 text-center">
+            <p className="text-sm font-semibold text-foreground">Job not found</p>
+          </div>
+          <div className="w-9" />
+        </header>
+        <main className="px-6 py-16 text-center">
+          <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+          <h1 className="text-lg font-semibold">Job not found</h1>
+          <p className="text-sm text-muted-foreground mt-2">This job may have been deleted, moved, or the link is invalid.</p>
+        </main>
       </div>
     );
   }

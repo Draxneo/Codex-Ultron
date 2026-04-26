@@ -110,11 +110,19 @@ Deno.serve(async (req) => {
 
   try {
     const formData = await req.text();
-
-    // Signature validation disabled — Supabase edge-function proxy rewrites
-    // the request URL, making HMAC validation unreliable. The function is
-    // already protected by obscure URL + Supabase API gateway.
-    // TODO: re-enable once we can log Twilio's signed URL reliably.
+    let sigValid = false;
+    try {
+      sigValid = await validateTwilioSignature(req, formData);
+    } catch (sigErr) {
+      console.error("Voice webhook Twilio signature validation error:", sigErr);
+    }
+    if (!sigValid) {
+      console.warn("Rejecting voice webhook: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
+    }
 
     const params = new URLSearchParams(formData);
 
