@@ -1,0 +1,1 @@
+ALTER TABLE public.jobs ADD COLUMN permit_portal_url text;

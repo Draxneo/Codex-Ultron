@@ -1,0 +1,1 @@
+UPDATE public.brochure_blocks SET brand = 'dayandnight' WHERE brand = 'payne';

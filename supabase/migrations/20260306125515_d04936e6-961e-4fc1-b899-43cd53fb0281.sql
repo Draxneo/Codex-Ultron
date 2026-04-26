@@ -1,0 +1,1 @@
+ALTER TABLE public.employees ADD COLUMN home_address text;

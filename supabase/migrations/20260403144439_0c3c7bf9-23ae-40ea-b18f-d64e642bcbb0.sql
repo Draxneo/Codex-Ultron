@@ -1,0 +1,5 @@
+ALTER TABLE public.sms_log
+  ADD COLUMN IF NOT EXISTS from_city text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS from_state text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS from_zip text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS num_segments integer DEFAULT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS lsa_booked_notified boolean DEFAULT false;

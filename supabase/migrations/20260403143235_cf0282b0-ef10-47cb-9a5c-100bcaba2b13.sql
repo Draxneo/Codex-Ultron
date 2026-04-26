@@ -1,0 +1,1 @@
+ALTER TABLE public.sms_log ADD COLUMN IF NOT EXISTS media_urls jsonb DEFAULT NULL;

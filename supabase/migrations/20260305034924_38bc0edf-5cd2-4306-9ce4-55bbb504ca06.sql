@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS supply_house_locations_house_branch_key ON public.supply_house_locations (supply_house_id, branch_name);

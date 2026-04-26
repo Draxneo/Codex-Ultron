@@ -1,0 +1,1 @@
+UPDATE public.equipment_matchups SET brand = 'Carrier' WHERE brand = 'CARRIER';

@@ -1,0 +1,1 @@
+ALTER TABLE public.sms_log ADD COLUMN to_number text;

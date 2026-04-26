@@ -1,0 +1,1 @@
+INSERT INTO storage.buckets (id, name, public) VALUES ('mms-media', 'mms-media', true) ON CONFLICT (id) DO NOTHING;

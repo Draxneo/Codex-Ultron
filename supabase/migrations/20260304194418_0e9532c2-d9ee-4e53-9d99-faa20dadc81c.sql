@@ -1,0 +1,1 @@
+ALTER TABLE public.jobs ADD COLUMN tonnage numeric, ADD COLUMN system_type text, ADD COLUMN brand text;

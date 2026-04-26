@@ -1,0 +1,181 @@
+project_id = "rjubzymeivdsjjhvdlci"
+
+[functions.recording-proxy]
+verify_jwt = false
+
+[functions.sync-hcp-jobs]
+verify_jwt = false
+
+[functions.hcp-webhook]
+verify_jwt = false
+
+
+[functions.ai-task-agent]
+verify_jwt = false
+
+[functions.ahri-lookup]
+verify_jwt = false
+
+[functions.extract-equipment-photo]
+verify_jwt = false
+
+[functions.send-rebate-email]
+verify_jwt = false
+
+[functions.scout-warranty-portal]
+verify_jwt = false
+
+[functions.auto-register-warranty]
+verify_jwt = false
+
+[functions.reconcile-equipment]
+verify_jwt = false
+
+[functions.import-hcp-history]
+verify_jwt = false
+
+[functions.extract-document-text]
+verify_jwt = false
+
+[functions.fetch-job-attachments]
+verify_jwt = false
+
+[functions.archive-hcp-photos]
+verify_jwt = false
+
+[functions.backfill-created-at]
+verify_jwt = false
+
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.stripe-subscription]
+verify_jwt = false
+
+[functions.seed-chat-channels]
+verify_jwt = false
+
+[functions.email-inbound-webhook]
+verify_jwt = false
+
+[functions.backfill-paid-dates]
+verify_jwt = false
+
+[functions.calculate-travel-times]
+verify_jwt = false
+
+[functions.calculate-route-cache]
+verify_jwt = false
+
+[functions.email-ai-actions]
+verify_jwt = false
+
+[functions.email-send]
+verify_jwt = false
+
+[functions.extract-invoice]
+verify_jwt = false
+
+[functions.fetch-site-logos]
+verify_jwt = false
+
+[functions.invite-user]
+verify_jwt = false
+
+[functions.lookup-property]
+verify_jwt = false
+
+[functions.scrape-supply-locations]
+verify_jwt = false
+
+[functions.send-brochure-email]
+verify_jwt = false
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.sms-webhook]
+verify_jwt = false
+
+[functions.tech-form-chat]
+verify_jwt = false
+
+[functions.email-agent]
+verify_jwt = false
+
+[functions.voice-webhook]
+verify_jwt = false
+
+[functions.voice-status-callback]
+verify_jwt = false
+
+[functions.twilio-token]
+verify_jwt = false
+
+[functions.twilio-voice-twiml]
+verify_jwt = false
+
+[functions.voice-ivr-handler]
+verify_jwt = false
+
+[functions.voice-voicemail]
+verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
+[functions.live-transcribe]
+verify_jwt = false
+
+[functions.grammar-check]
+verify_jwt = false
+
+[functions.seed-armstrong-matchups]
+verify_jwt = false
+
+[functions.sync-meta-audience]
+verify_jwt = false
+
+[functions.customer-actions]
+verify_jwt = false
+
+[functions.auto-apply-permit]
+verify_jwt = false
+
+[functions.supplyhouse-agent]
+verify_jwt = false
+
+[functions.carrier-enterprise-agent]
+verify_jwt = false
+
+[functions.backfill-call-records]
+verify_jwt = false
+
+
+[functions.facebook-lead-webhook]
+verify_jwt = false
+
+[functions.simulate-intake]
+verify_jwt = false
+
+[functions.smart-scheduler]
+verify_jwt = false
+
+[functions.daily-lsa-booked-report]
+verify_jwt = false
+
+[functions.sync-job-to-hcp]
+verify_jwt = false
+
+[functions.sync-hcp-customers]
+verify_jwt = false
+
+[functions.upload-to-hcp]
+verify_jwt = false
+
+[functions.jarvis-context-builder]
+verify_jwt = false
+

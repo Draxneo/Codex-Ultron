@@ -1,0 +1,1 @@
+ALTER TABLE public.call_log ADD COLUMN IF NOT EXISTS ai_summary text, ADD COLUMN IF NOT EXISTS extracted_data jsonb;

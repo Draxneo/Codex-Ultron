@@ -1,0 +1,1 @@
+ALTER TABLE public.maintenance_plan_templates ADD COLUMN IF NOT EXISTS value_comparison jsonb DEFAULT '[]'::jsonb;

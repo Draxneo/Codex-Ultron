@@ -1,0 +1,1 @@
+ALTER TABLE public.emails ADD COLUMN IF NOT EXISTS extracted_data jsonb DEFAULT NULL;

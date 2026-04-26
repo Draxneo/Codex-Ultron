@@ -1,0 +1,1 @@
+ALTER TABLE public.pay_rates ADD COLUMN IF NOT EXISTS rate_type text DEFAULT 'flat';

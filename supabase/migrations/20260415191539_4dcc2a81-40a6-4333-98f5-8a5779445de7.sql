@@ -1,0 +1,1 @@
+ALTER TABLE public.job_attachments ADD COLUMN IF NOT EXISTS synced_to_hcp boolean DEFAULT false;

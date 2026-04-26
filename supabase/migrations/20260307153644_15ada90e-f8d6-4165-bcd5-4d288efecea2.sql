@@ -1,0 +1,1 @@
+ALTER TABLE public.tech_forms ADD COLUMN IF NOT EXISTS is_service_agreement boolean NOT NULL DEFAULT false;

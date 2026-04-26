@@ -1,0 +1,1 @@
+UPDATE public.company_settings SET value = '+12107718430', updated_at = now() WHERE key = 'jarvis_alert_phone';

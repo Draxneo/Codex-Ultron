@@ -1,0 +1,1 @@
+UPDATE property_data SET screenshot_url = NULL, fetched_at = NULL WHERE screenshot_url IS NOT NULL AND bedrooms IS NULL AND sqft IS NULL;

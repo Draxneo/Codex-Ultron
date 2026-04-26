@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_matchups ADD COLUMN factory_rebate_price numeric;

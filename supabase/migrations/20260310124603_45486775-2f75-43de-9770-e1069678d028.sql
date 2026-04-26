@@ -1,0 +1,2 @@
+ALTER TABLE public.copilot_messages ADD COLUMN employee_id uuid REFERENCES public.employees(id) ON DELETE SET NULL;
+CREATE INDEX idx_copilot_messages_employee ON public.copilot_messages (user_id, employee_id);

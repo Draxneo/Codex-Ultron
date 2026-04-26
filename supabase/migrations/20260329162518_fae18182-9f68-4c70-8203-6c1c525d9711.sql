@@ -1,0 +1,1 @@
+UPDATE property_data SET fetched_at = '2026-03-01', screenshot_url = NULL WHERE screenshot_url IS NULL OR screenshot_url = '';

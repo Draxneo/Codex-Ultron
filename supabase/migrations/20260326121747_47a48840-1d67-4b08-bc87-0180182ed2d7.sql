@@ -1,0 +1,1 @@
+ALTER TABLE public.supply_houses ADD COLUMN text_support_phone text;

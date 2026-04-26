@@ -1,0 +1,1 @@
+ALTER TABLE public.emails ADD COLUMN linked_estimate_id uuid REFERENCES public.estimates(id);

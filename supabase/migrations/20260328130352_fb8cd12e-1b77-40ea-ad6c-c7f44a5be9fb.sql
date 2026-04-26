@@ -1,0 +1,1 @@
+ALTER TABLE public.jobs ADD COLUMN equipment_ordered_at timestamptz;

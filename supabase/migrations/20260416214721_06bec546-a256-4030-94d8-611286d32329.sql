@@ -1,0 +1,1 @@
+UPDATE public.job_reminders SET status = 'pending' WHERE id IN ('33d90fde-443a-4a36-9f76-bdc195fa3635','bc3cb32f-5b0e-4d81-a3ac-2768253ba1f9','e0d4e9ef-84a6-4d88-ac1d-7c732b79aa17','b96ae006-5971-4b6f-964c-494980c40d1a');

@@ -1,0 +1,2 @@
+ALTER TABLE estimate_reviews ADD COLUMN payment_preference text DEFAULT null;
+COMMENT ON COLUMN estimate_reviews.payment_preference IS 'financing_36mo or pay_in_full — mutually exclusive customer choice';

@@ -1,0 +1,1 @@
+ALTER TABLE public.tech_form_fields ADD COLUMN step_group text;

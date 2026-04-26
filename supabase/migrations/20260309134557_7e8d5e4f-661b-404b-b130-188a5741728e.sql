@@ -1,0 +1,1 @@
+ALTER TABLE public.employees ALTER COLUMN role SET DEFAULT 'service_tech';

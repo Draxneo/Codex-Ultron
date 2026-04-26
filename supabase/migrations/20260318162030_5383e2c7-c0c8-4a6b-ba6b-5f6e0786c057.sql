@@ -1,0 +1,1 @@
+ALTER TABLE public.ivr_config ADD COLUMN IF NOT EXISTS after_hours_caller_id_mode text NOT NULL DEFAULT 'company';

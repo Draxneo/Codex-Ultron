@@ -1,0 +1,1 @@
+ALTER TABLE public.ahri_lookups ADD COLUMN certificate_path text;

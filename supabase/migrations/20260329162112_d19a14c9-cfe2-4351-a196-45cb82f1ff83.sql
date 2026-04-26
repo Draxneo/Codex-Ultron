@@ -1,0 +1,1 @@
+UPDATE property_data SET fetched_at = '2026-03-01' WHERE address = '4602 Warpath St, San Antonio, TX 78238' AND (screenshot_url IS NULL OR screenshot_url = '');

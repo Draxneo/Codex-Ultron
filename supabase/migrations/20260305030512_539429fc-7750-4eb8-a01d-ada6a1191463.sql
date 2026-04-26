@@ -1,0 +1,1 @@
+ALTER TABLE public.estimates ADD COLUMN IF NOT EXISTS arrival_start timestamptz, ADD COLUMN IF NOT EXISTS arrival_end timestamptz;

@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 215 25% 96%;
+    --foreground: 215 40% 12%;
+
+    --card: 215 20% 99%;
+    --card-foreground: 215 40% 12%;
+
+    --popover: 215 20% 99%;
+    --popover-foreground: 215 40% 12%;
+
+    --primary: 215 60% 18%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 215 30% 94%;
+    --secondary-foreground: 215 60% 18%;
+
+    --muted: 215 25% 93%;
+    --muted-foreground: 215 18% 42%;
+
+    --accent: 38 95% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 80% 58%;
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 40 95% 48%;
+    --warning-foreground: 38 80% 20%;
+
+    --success: 160 75% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --overdue: 4 80% 58%;
+    --overdue-bg: 4 75% 96%;
+    --today: 40 95% 48%;
+    --today-bg: 40 80% 94%;
+    --complete: 160 75% 38%;
+    --complete-bg: 160 45% 94%;
+
+    --border: 215 28% 86%;
+    --input: 215 28% 86%;
+    --ring: 215 60% 18%;
+
+    --radius: 0.5rem;
+
+    --navy: 215 60% 18%;
+    --navy-light: 215 50% 28%;
+    --navy-dark: 215 65% 12%;
+    --sky: 195 90% 52%;
+    --sky-light: 195 85% 92%;
+    --warm: 38 95% 50%;
+    --warm-light: 38 90% 95%;
+
+    --sidebar-background: 215 20% 97%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 215 20% 94%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 215 28% 86%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 215 35% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 215 30% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 215 30% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 200 90% 50%;
+    --primary-foreground: 215 65% 10%;
+
+    --secondary: 215 28% 16%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 215 28% 14%;
+    --muted-foreground: 215 18% 55%;
+
+    --accent: 38 95% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 70% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 40 95% 48%;
+    --warning-foreground: 38 80% 20%;
+
+    --success: 160 75% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --overdue: 4 70% 42%;
+    --overdue-bg: 4 60% 12%;
+    --today: 40 92% 45%;
+    --today-bg: 40 55% 12%;
+    --complete: 160 75% 40%;
+    --complete-bg: 160 50% 10%;
+
+    --border: 215 25% 20%;
+    --input: 215 25% 20%;
+    --ring: 200 90% 50%;
+
+    --navy: 215 60% 18%;
+    --navy-light: 215 50% 28%;
+    --navy-dark: 215 65% 12%;
+    --sky: 195 90% 52%;
+    --sky-light: 195 50% 20%;
+    --warm: 38 95% 50%;
+    --warm-light: 38 50% 15%;
+
+    --sidebar-background: 215 35% 8%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 200 90% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 28% 14%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 215 25% 20%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+    font-size: 16px;
+  }
+
+
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Scale up text for high-res (2K/4K) displays */
+@media (min-width: 2000px) {
+  html { font-size: 18px; }
+}
+@media (min-width: 2800px) {
+  html { font-size: 20px; }
+}
+@media (min-width: 3600px) {
+  html { font-size: 22px; }
+}
+
+/* Safe area insets for phones with gesture bars / notches */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Global navy bottom spacer for Android software nav buttons — site-wide */
+@media (max-width: 767px) {
+  body::after {
+    content: "";
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.5rem;
+    background: hsl(var(--navy));
+    z-index: 9998;
+    pointer-events: none;
+  }
+}
+
+/* Universal scrollbars — orange, fat, easy to grab */
+::-webkit-scrollbar { width: 14px; height: 14px; }
+::-webkit-scrollbar-track { background: hsl(var(--muted)); border-radius: 7px; }
+::-webkit-scrollbar-thumb { background: hsl(25 95% 53%); border-radius: 7px; border: 3px solid hsl(var(--muted)); min-width: 60px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(25 95% 40%); }
+/* Firefox */
+* { scrollbar-width: auto; scrollbar-color: hsl(25 95% 53%) hsl(var(--muted)); }
+
+/* Extra-fat horizontal scrollbar for dispatch board */
+.fat-scrollbar::-webkit-scrollbar { height: 28px; }
+.fat-scrollbar::-webkit-scrollbar-track { border-radius: 14px; }
+.fat-scrollbar::-webkit-scrollbar-thumb { border-radius: 14px; border: 4px solid hsl(var(--muted)); min-width: 80px; }
+
+/* Page transition */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 1rem;
+  }
+  .print\\:hidden {
+    display: none !important;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}

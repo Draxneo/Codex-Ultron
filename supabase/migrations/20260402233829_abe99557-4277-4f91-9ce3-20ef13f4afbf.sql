@@ -1,0 +1,1 @@
+ALTER TABLE public.sms_log REPLICA IDENTITY FULL;

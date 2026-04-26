@@ -1,0 +1,1 @@
+ALTER TABLE public.employee_pay_rates ADD COLUMN IF NOT EXISTS rate_type text NOT NULL DEFAULT 'flat' CHECK (rate_type IN ('flat', 'percentage'));

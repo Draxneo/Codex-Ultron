@@ -1,0 +1,1 @@
+alter table public.ivr_config add column if not exists hold_music_audio_url text;

@@ -1,0 +1,1 @@
+ALTER TABLE public.employee_tab_access ALTER COLUMN allowed_tabs SET DEFAULT ARRAY['jobs','phone','sms','chat','pay','email','customers','vendors','supply','copilot','admin'];

@@ -1,0 +1,80 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { getTaskModel } from "../_shared/getTaskModel.ts";
+
+/**
+ * draft-sms-reply
+ * Generates a short, friendly SMS reply for a thread_attention action_item on demand.
+ * Input: { action_item_id }
+ * Returns: { reply: string }
+ */
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const { action_item_id } = await req.json();
+    if (!action_item_id) {
+      return new Response(JSON.stringify({ error: "action_item_id required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+
+    const { data: item, error: itemErr } = await supabase
+      .from("action_items").select("*").eq("id", action_item_id).single();
+    if (itemErr || !item) throw new Error("action_item not found");
+
+    const meta = (item.metadata as any) || {};
+    const inbound = meta.inbound_message || meta.thread_snippet || "";
+    const customerName = meta.customer_name || "the customer";
+    const jobRef = meta.job_ref ? ` (job ${meta.job_ref})` : "";
+    const jobType = meta.job_type ? `, ${meta.job_type}` : "";
+    const jobAddr = meta.job_address ? `, address: ${meta.job_address}` : "";
+    const jobWhen = meta.job_scheduled ? `, scheduled ${meta.job_scheduled}` : "";
+
+    const prompt = `Draft a short, friendly SMS reply (1-2 sentences, no greeting, no signature) for an HVAC company's dispatcher to send to a customer.
+
+Customer: ${customerName}${jobRef}${jobType}${jobAddr}${jobWhen}
+Customer's message: "${inbound}"
+Dispatcher's intent: ${item.suggested_action || item.description || "respond appropriately"}
+
+Rules:
+- Plain text only, no quotes around the reply
+- Sound like a real person, not a bot
+- Confirm what you can confirm, ask for what you need
+- Do NOT promise specific times unless they were given in the dispatcher's intent`;
+
+    const model = await getTaskModel(supabase, "sms_auto_reply").catch(() => "google/gemini-2.5-flash");
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!aiResp.ok) {
+      const txt = await aiResp.text();
+      throw new Error(`AI gateway error ${aiResp.status}: ${txt.slice(0, 200)}`);
+    }
+    const data = await aiResp.json();
+    const reply = (data.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "");
+
+    // Cache the draft back into metadata so it persists if the user reloads
+    await supabase.from("action_items")
+      .update({ metadata: { ...meta, suggested_reply: reply } })
+      .eq("id", action_item_id);
+
+    return new Response(JSON.stringify({ reply }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e: any) {
+    console.error("draft-sms-reply error:", e);
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

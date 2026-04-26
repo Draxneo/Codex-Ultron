@@ -1,0 +1,1 @@
+UPDATE property_data SET screenshot_url = NULL, fetched_at = NULL WHERE address = '2810 Roan Creek, San Antonio, TX 78259';

@@ -1,0 +1,1 @@
+ALTER TABLE property_data ADD COLUMN IF NOT EXISTS street_view_url text;

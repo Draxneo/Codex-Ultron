@@ -1,0 +1,1 @@
+ALTER TABLE public.outbound_drafts ADD COLUMN IF NOT EXISTS alert_sent boolean NOT NULL DEFAULT false;

@@ -1,0 +1,1 @@
+UPDATE property_data SET fetched_at = '2026-03-01' WHERE screenshot_url IS NULL OR screenshot_url = '' OR screenshot_url LIKE '%mapbox%';

@@ -1,0 +1,1 @@
+UPDATE sms_log SET contact_type = 'marketing', contact_name = 'Yelu Marketing' WHERE right(regexp_replace(phone_number, '\D', '', 'g'), 10) = '6264984959';

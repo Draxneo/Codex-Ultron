@@ -1,0 +1,1 @@
+ALTER TABLE public.call_log ADD COLUMN hcp_note_synced boolean DEFAULT false;

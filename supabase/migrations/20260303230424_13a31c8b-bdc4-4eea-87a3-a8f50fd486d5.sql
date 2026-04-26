@@ -1,0 +1,1 @@
+ALTER TABLE public.job_tasks ADD COLUMN delivery_method text DEFAULT NULL;

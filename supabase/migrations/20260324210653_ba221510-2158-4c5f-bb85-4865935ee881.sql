@@ -1,0 +1,1 @@
+ALTER TABLE ivr_menu_options ADD COLUMN assigned_user_ids uuid[] DEFAULT '{}';

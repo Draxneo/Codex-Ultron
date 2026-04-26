@@ -1,0 +1,1 @@
+ALTER TABLE public.equipment_matchups ADD COLUMN tier text DEFAULT NULL;

@@ -1,0 +1,18 @@
+export const ROUTE_LABELS: Record<string, string> = {
+  "/": "Jobs board",
+  "/ivr-builder": "IVR Builder",
+  "/inbox": "Inbox",
+  "/customers": "Customer CRM",
+  "/parts": "Parts catalog",
+  "/agreements": "Service agreements",
+  "/payments": "Payments",
+  "/settings": "Settings",
+  "/brochure": "Brochure admin",
+  "/agent-training": "JARVIS settings",
+  "/admin": "Admin",
+  "/locations": "Vendors",
+  "/copilot": "JARVIS",
+  "/quick-quote": "Quick Quote",
+  "/catalog": "Catalog & Pricebook",
+  "/shopping-cart": "Catalog & Pricebook",
+};

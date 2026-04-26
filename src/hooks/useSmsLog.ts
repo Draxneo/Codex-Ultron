@@ -1,0 +1,537 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { normalizeLast10 } from "@/lib/formatters";
+
+export type SmsMediaItem = {
+  url: string;
+  content_type: string;
+};
+
+export type SmsMessage = {
+  id: string;
+  direction: "inbound" | "outbound";
+  phone_number: string;
+  body: string;
+  twilio_sid: string | null;
+  related_job_id: string | null;
+  is_read: boolean;
+  contact_name: string | null;
+  contact_type: string;
+  created_at: string;
+  delivery_status?: string | null;
+  media_urls?: SmsMediaItem[] | null;
+  to_number?: string | null;
+  client_id?: string | null;
+  /** CT day key (YYYY-MM-DD) — server-computed. */
+  day_ct?: string | null;
+  /** CT time label ("HH:MM AM") — server-computed. */
+  time_ct?: string | null;
+};
+
+export type SmsConversation = {
+  phoneNumber: string;
+  contactName: string | null;
+  contactType: string;
+  lastMessage: SmsMessage;
+  unreadCount: number;
+  messages: SmsMessage[];
+  latestJobId: string | null;
+  toNumber?: string | null;
+};
+
+type ContactLookup = { name: string; type: "employee" | "customer" | "vendor" };
+
+
+/** Normalize any phone to E.164 (+1XXXXXXXXXX) for consistent grouping */
+function toE164Key(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return phone; // fallback for international
+}
+
+function compareByCreatedAt(a: SmsMessage, b: SmsMessage): number {
+  const at = new Date(a.created_at).getTime();
+  const bt = new Date(b.created_at).getTime();
+  if (at !== bt) return at - bt;
+  return a.id.localeCompare(b.id);
+}
+
+function sortMessagesChrono(list: SmsMessage[]): SmsMessage[] {
+  return [...list].sort(compareByCreatedAt);
+}
+
+function mergeMessagesChrono(existing: SmsMessage[], incoming: SmsMessage[]): SmsMessage[] {
+  const byId = new Map<string, SmsMessage>();
+  for (const m of existing) byId.set(m.id, m);
+  for (const m of incoming) byId.set(m.id, m);
+  return sortMessagesChrono(Array.from(byId.values()));
+}
+
+const PAGE_SIZE = 500;
+
+interface UseSmsLogOptions {
+  role?: string | null;
+  employeeId?: string | null;
+  /** When true, skip all fetches and realtime subscriptions. Useful when a
+   *  parent provider already owns the SMS state. */
+  disabled?: boolean;
+}
+
+export function useSmsLog(options: UseSmsLogOptions = {}) {
+  const { role, employeeId, disabled = false } = options;
+  const [messages, setMessages] = useState<SmsMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [contactMap, setContactMap] = useState<Record<string, ContactLookup>>({});
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [techPhoneFilter, setTechPhoneFilter] = useState<Set<string> | null>(null);
+
+  // Fetch employees + customers to build a phone→contact lookup
+  useEffect(() => {
+    if (disabled) return;
+    const buildContactMap = async () => {
+      const map: Record<string, ContactLookup> = {};
+
+      const [{ data: employees }, { data: customers }, { data: estimates }, { data: jobs }, { data: supplyHouses }, { data: vendorContacts }] = await Promise.all([
+        supabase.from("employees").select("name, phone, is_active"),
+        supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
+        supabase.from("estimates").select("customer_name, customer_phone").not("customer_phone", "is", null).not("customer_name", "is", null),
+        supabase.from("jobs").select("customer_name, customer_phone").not("customer_phone", "is", null).not("customer_name", "is", null),
+        supabase.from("supply_houses").select("name, contact_phone, text_support_phone").not("contact_phone", "is", null),
+        supabase.from("vendor_contacts").select("name, phone, supply_house_id, supply_houses(name)").not("phone", "is", null),
+      ]);
+
+      // Priority 1: employees
+      for (const emp of employees || []) {
+        if (!emp.phone || !emp.is_active) continue;
+        const key = normalizeLast10(emp.phone);
+        if (key) map[key] = { name: emp.name, type: "employee" };
+      }
+
+      // Priority 2: customers
+      for (const cust of customers || []) {
+        const custName = [cust.first_name, cust.last_name].filter(Boolean).join(" ");
+        if (!custName) continue;
+        for (const ph of [cust.phone, cust.mobile_phone]) {
+          const key = normalizeLast10(ph);
+          if (key && !map[key]) map[key] = { name: custName, type: "customer" };
+        }
+      }
+
+      // Priority 3: supply houses (vendor main phones)
+      for (const sh of supplyHouses || []) {
+        for (const ph of [sh.contact_phone, sh.text_support_phone]) {
+          const key = normalizeLast10(ph);
+          if (key && !map[key]) map[key] = { name: sh.name, type: "vendor" };
+        }
+      }
+
+      // Priority 4: vendor contacts (individual reps)
+      for (const vc of (vendorContacts || []) as any[]) {
+        const key = normalizeLast10(vc.phone);
+        const vcName = vc.supply_houses?.name ? `${vc.name} (${vc.supply_houses.name})` : vc.name;
+        if (key && !map[key]) map[key] = { name: vcName, type: "vendor" };
+      }
+
+      // Priority 5: jobs (customer_name from job records)
+      for (const job of jobs || []) {
+        if (!job.customer_name || !job.customer_phone) continue;
+        const key = normalizeLast10(job.customer_phone);
+        if (key && !map[key]) map[key] = { name: job.customer_name, type: "customer" };
+      }
+
+      // Priority 6: estimates (leads not yet converted to customers)
+      for (const est of estimates || []) {
+        if (!est.customer_name || !est.customer_phone) continue;
+        const key = normalizeLast10(est.customer_phone);
+        if (key && !map[key]) map[key] = { name: est.customer_name, type: "customer" };
+      }
+
+      setContactMap(map);
+    };
+
+    buildContactMap();
+  }, [disabled]);
+
+  // For tech role: build a set of phone numbers they're allowed to see
+  useEffect(() => {
+    if (disabled) return;
+    if (role !== "tech" || !employeeId) {
+      setTechPhoneFilter(null);
+      return;
+    }
+
+    const buildFilter = async () => {
+      // Get employee name
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("name")
+        .eq("id", employeeId)
+        .single();
+
+      if (!emp?.name) {
+        setTechPhoneFilter(new Set());
+        return;
+      }
+
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const cutoff = ninetyDaysAgo.toISOString().split("T")[0];
+
+      // Fetch assigned job phones and estimate phones in parallel
+      const [jobsRes, estimatesRes] = await Promise.all([
+        supabase
+          .from("jobs")
+          .select("customer_phone")
+          .eq("assigned_to", emp.name)
+          .gte("scheduled_date", cutoff)
+          .not("customer_phone", "is", null),
+        supabase
+          .from("estimates")
+          .select("customer_phone")
+          .eq("assigned_to", emp.name)
+          .gte("scheduled_date", cutoff)
+          .not("customer_phone", "is", null),
+      ]);
+
+      const phones = new Set<string>();
+      for (const row of jobsRes.data || []) {
+        if (row.customer_phone) phones.add(toE164Key(row.customer_phone));
+      }
+      for (const row of estimatesRes.data || []) {
+        if (row.customer_phone) phones.add(toE164Key(row.customer_phone));
+      }
+
+      // Also include any phones the tech has directly sent SMS to
+      const { data: sentMsgs } = await supabase
+        .from("sms_log")
+        .select("phone_number")
+        .eq("direction", "outbound");
+      
+      for (const row of sentMsgs || []) {
+        if (row.phone_number) phones.add(toE164Key(row.phone_number));
+      }
+
+      setTechPhoneFilter(phones);
+    };
+
+    buildFilter();
+  }, [role, employeeId, disabled]);
+
+  const fetchMessages = useCallback(async (offset = 0, append = false) => {
+    if (disabled) return;
+    // For tech role, wait until filter is ready
+    if (role === "tech" && techPhoneFilter === null) return;
+
+    if (!append) setLoading(true);
+    else setLoadingMore(true);
+
+    let query = (supabase as any)
+      .from("v_sms_log_with_day")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    // Tech role: filter to only their assigned phone numbers
+    if (role === "tech" && techPhoneFilter) {
+      const phoneArray = Array.from(techPhoneFilter);
+      if (phoneArray.length === 0) {
+        // No assigned phones, return empty
+        setMessages([]);
+        setHasMore(false);
+        if (!append) setLoading(false);
+        else setLoadingMore(false);
+        return;
+      }
+      query = query.in("phone_number", phoneArray);
+    }
+
+    query = query.range(offset, offset + PAGE_SIZE - 1);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Failed to fetch SMS log:", error);
+      if (!append) setLoading(false);
+      else setLoadingMore(false);
+      return;
+    }
+
+    const fetched = (data as unknown as SmsMessage[]) || [];
+
+    // PINNED TEAM THREADS: Always include the most recent SMS per active employee,
+    // even if their thread is older than the current page. This guarantees team
+    // members never disappear from the conversation list as overall SMS volume grows.
+    // Only run on initial load (offset=0, !append) and skip for tech role (already scoped).
+    let pinnedTeam: SmsMessage[] = [];
+    if (!append && offset === 0 && role !== "tech") {
+      const { data: employees } = await supabase
+        .from("employees")
+        .select("phone")
+        .eq("is_active", true)
+        .not("phone", "is", null);
+
+      const empPhoneKeys = (employees || [])
+        .map((e: any) => normalizeLast10(e.phone))
+        .filter(Boolean) as string[];
+
+      if (empPhoneKeys.length > 0) {
+        // Build all possible E.164 / formatted variants for the IN clause
+        const phoneVariants = empPhoneKeys.flatMap((d) => [`+1${d}`, d, `1${d}`]);
+        const { data: teamMsgs } = await (supabase as any)
+          .from("v_sms_log_with_day")
+          .select("*")
+          .in("phone_number", phoneVariants)
+          .order("created_at", { ascending: false })
+          .limit(500); // plenty of headroom for full team history within initial view
+        pinnedTeam = (teamMsgs as unknown as SmsMessage[]) || [];
+      }
+    }
+
+    const combined = pinnedTeam.length > 0
+      ? mergeMessagesChrono(fetched, pinnedTeam)
+      : fetched;
+
+    if (append) {
+      setMessages((prev) => mergeMessagesChrono(prev, combined));
+    } else {
+      setMessages(sortMessagesChrono(combined));
+    }
+    setHasMore(fetched.length === PAGE_SIZE);
+
+    if (!append) setLoading(false);
+    else setLoadingMore(false);
+  }, [role, techPhoneFilter, disabled]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    fetchMessages(messages.length, true);
+  }, [fetchMessages, messages.length, loadingMore, hasMore]);
+
+  // Refetch SMS when app resumes from background (Android WebView kills WS)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchMessages();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    if (disabled) return;
+    fetchMessages();
+
+    let channel = supabase
+      .channel("sms_log_realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sms_log" },
+        (payload) => {
+          const msg = payload.new as SmsMessage & { client_id?: string | null };
+          if (role === "tech" && techPhoneFilter && !techPhoneFilter.has(toE164Key(msg.phone_number))) {
+            return;
+          }
+          // Prefer exact client_id match for instant optimistic→real swap;
+          // fall back to phone+direction match for older flows.
+          setMessages((prev) => {
+            const withoutOptimistic = prev.filter((m) => {
+              if (!m.id.startsWith("optimistic-")) return true;
+              if (msg.client_id && (m as any).client_id === msg.client_id) return false;
+              if (m.direction === "outbound" && toE164Key(m.phone_number) === toE164Key(msg.phone_number)) return false;
+              return true;
+            });
+            return mergeMessagesChrono(withoutOptimistic, [msg]);
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "sms_log" },
+        (payload) => {
+          setMessages((prev) => {
+            const next = prev.map((m) => (m.id === payload.new.id ? (payload.new as SmsMessage) : m));
+            return sortMessagesChrono(next);
+          });
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("SMS realtime channel error, reconnecting...", status);
+          supabase.removeChannel(channel);
+          // Will re-subscribe on next effect cycle
+          fetchMessages();
+        }
+      });
+
+    // Heartbeat: check channel health every 30s
+    const heartbeat = setInterval(() => {
+      if ((channel as any).state !== "joined") {
+        console.warn("SMS realtime channel not joined, triggering reconnect");
+        supabase.removeChannel(channel);
+        fetchMessages();
+      }
+    }, 30_000);
+
+    return () => {
+      clearInterval(heartbeat);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchMessages, role, techPhoneFilter, disabled]);
+
+  // Resolve a phone number to a contact via DB fields first, then client-side lookup
+  const resolveContact = useCallback(
+    (phone: string, dbName: string | null, dbType: string): { name: string | null; type: string } => {
+      // If the DB already has a resolved contact, use it
+      if (dbName && dbType !== "unknown") return { name: dbName, type: dbType };
+      // Otherwise try client-side match
+      const key = normalizeLast10(phone);
+      const match = key ? contactMap[key] : undefined;
+      if (match) return { name: match.name, type: match.type };
+      return { name: dbName, type: dbType };
+    },
+    [contactMap]
+  );
+
+  const conversations = useMemo(() => {
+    const grouped: Record<string, SmsMessage[]> = {};
+    for (const msg of sortMessagesChrono(messages)) {
+      const key = toE164Key(msg.phone_number);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(msg);
+    }
+
+    const convos: SmsConversation[] = Object.entries(grouped).map(([phone, msgs]) => {
+      const convoMsgs = sortMessagesChrono(msgs);
+      const lastMsg = convoMsgs[convoMsgs.length - 1];
+      const unread = convoMsgs.filter((m) => m.direction === "inbound" && !m.is_read).length;
+      const latestJob = [...convoMsgs].reverse().find((m) => m.related_job_id)?.related_job_id || null;
+
+      // Try DB-stored contact info from most recent message first
+      const withContact = [...convoMsgs].reverse().find((m) => m.contact_name);
+      const withType = [...convoMsgs].reverse().find((m) => m.contact_type !== "unknown");
+
+      // Fall back to client-side phone matching
+      const resolved = resolveContact(
+        phone,
+        withContact?.contact_name || null,
+        withType?.contact_type || "unknown"
+      );
+
+      // Get the most recent to_number for this conversation
+      const latestToNumber = [...convoMsgs].reverse().find((m) => m.to_number)?.to_number || null;
+
+      return {
+        phoneNumber: phone,
+        contactName: resolved.name,
+        contactType: resolved.type,
+        lastMessage: lastMsg,
+        unreadCount: unread,
+        messages: convoMsgs,
+        latestJobId: latestJob,
+        toNumber: latestToNumber,
+      };
+    });
+
+    // Sort: unread first, then by most recent
+    convos.sort((a, b) => {
+      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+      if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+      return new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime();
+    });
+
+    return convos;
+  }, [messages, resolveContact]);
+
+  const queryClient = useQueryClient();
+
+  const markAsRead = useCallback(async (phoneNumber: string) => {
+    const unreadIds = messages
+      .filter((m) => m.phone_number === phoneNumber && m.direction === "inbound" && !m.is_read)
+      .map((m) => m.id);
+
+    if (unreadIds.length === 0) return;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        unreadIds.includes(m.id) ? { ...m, is_read: true } : m
+      )
+    );
+
+    const { error } = await supabase
+      .from("sms_log")
+      .update({ is_read: true })
+      .in("id", unreadIds);
+
+    if (error) console.error("Failed to mark SMS as read:", error);
+
+    // Immediately update the header badge count
+    queryClient.invalidateQueries({ queryKey: ["unread_sms_count"] });
+  }, [messages, queryClient]);
+
+  const sendSms = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
+    setSending(true);
+
+    // Optimistic placeholder — shows instantly in the thread.
+    // We tag it with a client_id (UUID) so the server-inserted row can
+    // swap it cleanly via realtime (no body fuzzy matching, no flicker).
+    const clientId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `c-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const optimisticId = "optimistic-" + clientId;
+    const optimisticMsg: SmsMessage = {
+      id: optimisticId,
+      direction: "outbound",
+      phone_number: to,
+      body,
+      twilio_sid: null,
+      related_job_id: jobId || null,
+      is_read: true,
+      contact_name: contactName || null,
+      contact_type: "unknown",
+      created_at: new Date().toISOString(),
+      delivery_status: "sending",
+      media_urls: null,
+      to_number: null,
+      client_id: clientId,
+    };
+    setMessages((prev) => mergeMessagesChrono(prev, [optimisticMsg]));
+
+    try {
+      // Route through the universal sender so all the request-shape and
+      // toast-error logic lives in ONE place. We pass `silent: true` because
+      // the SMS panel renders its own optimistic UI + success state.
+      const { sendSmsImpl } = await import("@/hooks/useSendSms");
+      const result = await sendSmsImpl({
+        to,
+        body,
+        jobId,
+        mediaUrls,
+        contactName,
+        clientId,
+        silent: true,
+      });
+      if (!result.success) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        const msg = result.error || "Send failed";
+        const isBlocked = msg.includes("testing mode") || msg.includes("Safety Lock") || msg.includes("test mode");
+        toast({ title: isBlocked ? "SMS Blocked" : "SMS Failed", description: msg, variant: "destructive" });
+        return false;
+      }
+      toast({ title: "SMS Sent", description: `Message sent to ${contactName || to}` });
+      return true;
+    } catch (e: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      toast({ title: "SMS Failed", description: e.message, variant: "destructive" });
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return { messages, conversations, loading, sending, sendSms, markAsRead, refetch: fetchMessages, hasMore, loadMore, loadingMore };
+}

@@ -1,0 +1,1 @@
+DELETE FROM public.job_attachment_cache WHERE jsonb_typeof(attachments) <> 'array';

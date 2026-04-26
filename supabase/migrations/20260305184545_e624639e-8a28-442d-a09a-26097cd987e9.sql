@@ -1,0 +1,2 @@
+INSERT INTO tech_form_fields (job_type, label, field_type, sort_order, is_required, options)
+VALUES ('estimate', 'Customer is a public servant (military, first responder, teacher, nurse)', 'checkbox', 25, false, null);

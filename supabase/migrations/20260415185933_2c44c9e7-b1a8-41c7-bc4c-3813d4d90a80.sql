@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS job_attachments_hcp_attachment_id_key ON public.job_attachments (hcp_attachment_id) WHERE hcp_attachment_id IS NOT NULL;

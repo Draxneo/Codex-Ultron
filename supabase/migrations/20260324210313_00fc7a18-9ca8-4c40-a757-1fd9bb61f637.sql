@@ -1,0 +1,1 @@
+UPDATE ivr_menu_options SET forward_to = 'softphone' WHERE action_type = 'forward_client' AND (forward_to IS NULL OR forward_to = '');

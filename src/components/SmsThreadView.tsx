@@ -1,0 +1,528 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Loader2, ArrowDownLeft, ArrowUpRight, User, Wrench, LinkIcon, ArrowLeft, ChevronUp, CheckCheck, Clock, AlertCircle, Phone, Mail, MapPin, ExternalLink, Building2, Paperclip, X, FileText, File as FileIcon } from "lucide-react";
+import { toast } from "sonner";
+import { SmsForwardButton } from "@/components/sms/SmsForwardButton";
+import { InspectTwilioSmsButton } from "@/components/inbox/InspectTwilioSmsButton";
+import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
+import { getFileCategory } from "@/lib/fileTypes";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
+import { ClickToCall } from "@/components/ClickToCall";
+import { Link } from "react-router-dom";
+import { formatDateTimeUS, formatPhone, formatPhoneInput, toE164 } from "@/lib/formatters";
+import { useCallerLookup } from "@/hooks/useCallerLookup";
+import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
+import { GrammarPreview } from "@/components/ui/GrammarPreview";
+import { DictateButton } from "@/components/voice/DictateButton";
+import { insertAtSelection } from "@/lib/insertAtCursor";
+import { DayDivider } from "@/components/shared/DayDivider";
+import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
+import type { SmsConversation } from "@/hooks/useSmsLog";
+import { useTelephonyMode } from "@/hooks/useTelephonyMode";
+
+const INITIAL_MSG_COUNT = 10;
+const LOAD_MORE_COUNT = 20;
+const INLINE_PHONE_REGEX = /(\+?1?[\s.-]*\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4})/g;
+
+interface Props {
+  conversation: SmsConversation | null;
+  sending: boolean;
+  onSend: (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => Promise<boolean>;
+  onMarkRead: (phone: string) => void;
+  onBack?: () => void;
+  newMessageMode?: boolean;
+  prefillPhone?: string;
+  prefillBody?: string | null;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+}
+
+function DeliveryIcon({ status }: { status?: string | null }) {
+  if (!status) return null;
+  switch (status) {
+    case "delivered":
+      return <CheckCheck className="h-3 w-3 text-green-500" />;
+    case "sent":
+    case "queued":
+      return <Clock className="h-3 w-3 text-muted-foreground" />;
+    case "failed":
+    case "undelivered":
+      return <AlertCircle className="h-3 w-3 text-destructive" />;
+    default:
+      return null;
+  }
+}
+
+export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBack, newMessageMode, prefillPhone, prefillBody, hasMore, loadingMore, onLoadMore }: Props) {
+  const callerLookup = useCallerLookup(conversation?.phoneNumber);
+  const telephony = useTelephonyMode();
+  const [body, setBody] = useState(prefillBody || "");
+  const [newTo, setNewTo] = useState(prefillPhone ? formatPhoneInput(prefillPhone) : "");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_MSG_COUNT);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Re-apply draft if it changes (e.g., user navigates from another todo)
+  useEffect(() => {
+    if (prefillBody) setBody(prefillBody);
+  }, [prefillBody]);
+  const prevConvoPhone = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; preview?: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Reset visible count when switching conversations
+  useEffect(() => {
+    if (conversation?.phoneNumber !== prevConvoPhone.current) {
+      prevConvoPhone.current = conversation?.phoneNumber ?? null;
+      setVisibleCount(INITIAL_MSG_COUNT);
+    }
+  }, [conversation?.phoneNumber]);
+
+  // Mark as read
+  useEffect(() => {
+    if (conversation && conversation.unreadCount > 0) {
+      onMarkRead(conversation.phoneNumber);
+    }
+  }, [conversation?.phoneNumber, conversation?.unreadCount]);
+
+  // Slice messages to only show visibleCount from the end
+  const allMessages = conversation?.messages ?? [];
+  const totalCount = allMessages.length;
+  const startIdx = Math.max(0, totalCount - visibleCount);
+  const visibleMessages = allMessages.slice(startIdx);
+  const hasOlderLocal = startIdx > 0;
+
+  const handleLoadOlder = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const prevHeight = container?.scrollHeight ?? 0;
+
+    setVisibleCount((prev) => prev + LOAD_MORE_COUNT);
+
+    // Preserve scroll position after DOM updates
+    requestAnimationFrame(() => {
+      if (container) {
+        const newHeight = container.scrollHeight;
+        container.scrollTop += newHeight - prevHeight;
+      }
+    });
+  }, []);
+
+  const uploadFiles = async (files: { file: File }[]) => {
+    const urls: string[] = [];
+    for (const { file } of files) {
+      const ext = file.name.split(".").pop() || "bin";
+      const path = `outbound/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("mms-media").upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from("mms-media").getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    return urls;
+  };
+
+  const executeSend = async (text: string): Promise<boolean> => {
+    let to = newMessageMode ? newTo.trim() : conversation?.phoneNumber;
+    if (newMessageMode && to) {
+      const e164 = toE164(to);
+      if (!e164) {
+        toast.error("Invalid phone number — enter a 10-digit US number (e.g. (210) 555-1234)");
+        return false;
+      }
+      to = e164;
+    }
+    if (!to || (!text.trim() && pendingFiles.length === 0) || sending) return false;
+
+    let mediaUrls: string[] | undefined;
+    if (pendingFiles.length > 0) {
+      setUploading(true);
+      try {
+        mediaUrls = await uploadFiles(pendingFiles);
+      } catch (err: any) {
+        toast.error("Failed to upload file", { description: err?.message || "Check your connection and try again" });
+        setUploading(false);
+        return false;
+      }
+      setUploading(false);
+    }
+
+    const success = await onSend(to, text.trim() || "📎", conversation?.latestJobId || undefined, conversation?.contactName || undefined, mediaUrls);
+    if (success) {
+      setBody("");
+      setPendingFiles([]);
+    }
+    return !!success;
+  };
+
+  const composer = useComposerIntelligence({
+    value: body,
+    setValue: setBody,
+    context: "sms",
+    onSend: executeSend,
+  });
+  const {
+    inputRef: bodyInputRef,
+    handleChange: handleBodyChange,
+    handleBlur: handleBodyBlur,
+    handleSend: smartSend,
+    polishing,
+    isBusy,
+    preview: polishPreview,
+    acceptPolish,
+    rejectPolish,
+    cancelPolish,
+  } = composer;
+
+  // Wrapper: if user has only attachments (no text), bypass the polish flow.
+  const handleSend = async () => {
+    if (sending || polishing) return;
+    if (!body.trim() && pendingFiles.length > 0) {
+      await executeSend("");
+      return;
+    }
+    await smartSend();
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const fileItems = items.filter((item) => item.type.startsWith("image/") || item.type === "application/pdf" || item.type.startsWith("video/"));
+    if (fileItems.length === 0) return;
+    e.preventDefault();
+    const newFiles = fileItems
+      .map((item) => item.getAsFile())
+      .filter(Boolean)
+      .map((file) => ({
+        file: file!,
+        preview: file!.type.startsWith("image/") ? URL.createObjectURL(file!) : undefined,
+      }));
+    setPendingFiles((prev) => [...prev, ...newFiles]);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newFiles = files.map((f) => ({
+      file: f,
+      preview: f.type.startsWith("image/") ? URL.createObjectURL(f) : undefined,
+    }));
+    setPendingFiles((prev) => [...prev, ...newFiles]);
+    e.target.value = "";
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const renderMessageBody = (raw: string) => {
+    const parts = raw.split(INLINE_PHONE_REGEX);
+    return parts.map((part, index) => {
+      const normalized = toE164(part);
+      if (!normalized) return <span key={`${part}-${index}`}>{part}</span>;
+
+      const lookupName = [callerLookup.data?.first_name, callerLookup.data?.last_name].filter(Boolean).join(" ") || callerLookup.data?.company || undefined;
+
+      return (
+        <ClickToCall
+          key={`${normalized}-${index}`}
+          phone={normalized}
+          contactName={conversation?.contactName || lookupName}
+          customerId={callerLookup.data?.id || undefined}
+          className="font-medium underline underline-offset-2"
+          iconClassName="hidden"
+          showIcon={false}
+        >
+          {part}
+        </ClickToCall>
+      );
+    });
+  };
+
+  if (!conversation && !newMessageMode) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <p className="text-sm">Select a conversation or start a new message</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="border-b px-4 py-3 flex items-center gap-3 bg-card">
+        {onBack && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 md:hidden" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
+        {newMessageMode ? (
+          <div className="flex-1">
+            <p className="text-sm font-semibold">New Message</p>
+          </div>
+        ) : conversation && (
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold truncate">
+                {conversation.contactName || formatPhone(conversation.phoneNumber) || conversation.phoneNumber}
+              </p>
+              <Badge variant={conversation.contactType === "employee" ? "default" : conversation.contactType === "vendor" ? "outline" : "secondary"} className="text-[10px] h-5">
+                {conversation.contactType === "employee" ? (
+                  <><Wrench className="h-3 w-3 mr-1" /> Tech</>
+                ) : conversation.contactType === "customer" ? (
+                  <><User className="h-3 w-3 mr-1" /> Customer</>
+                ) : conversation.contactType === "vendor" ? (
+                  <><Building2 className="h-3 w-3 mr-1" /> Vendor</>
+                ) : conversation.contactType === "marketing" ? (
+                  <>📣 Marketing</>
+                ) : "Unknown"}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <ClickToCall
+                phone={conversation.phoneNumber}
+                contactName={conversation.contactName || undefined}
+                className="text-xs text-muted-foreground hover:text-primary gap-1"
+                iconClassName="h-3 w-3"
+              >
+                {formatPhone(conversation.phoneNumber) || conversation.phoneNumber}
+              </ClickToCall>
+
+              {callerLookup.data?.email && (
+                <a
+                  href={`mailto:${callerLookup.data.email}`}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Mail className="h-3 w-3 shrink-0" />
+                  {callerLookup.data.email}
+                </a>
+              )}
+
+              {callerLookup.data?.address && (() => {
+                const addr = [callerLookup.data.address, callerLookup.data.city, callerLookup.data.state, callerLookup.data.zip].filter(Boolean).join(", ");
+                return (
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(addr)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[200px]">{addr}</span>
+                  </a>
+                );
+              })()}
+
+              {callerLookup.data?.id && (
+                <Link
+                  to={`/customers/${callerLookup.data.id}`}
+                  className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="h-3 w-3" /> Profile
+                </Link>
+              )}
+
+              {conversation.latestJobId && (
+                <Link to={`/jobs/${conversation.latestJobId}`} className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+                  <LinkIcon className="h-3 w-3" /> View Job
+                </Link>
+              )}
+
+              {callerLookup.data?.hcp_customer_id && (
+                <a
+                  href={`https://pro.housecallpro.com/app/customers/${callerLookup.data.hcp_customer_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Open in Housecall Pro"
+                >
+                  <ExternalLink className="h-3 w-3" /> HCP
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Messages — flex-col-reverse anchors scroll to bottom like Google Messages */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4"
+        style={{ display: "flex", flexDirection: "column-reverse" }}
+      >
+        <div className="space-y-2 py-3" style={{ display: "flex", flexDirection: "column" }}>
+          {/* Load older button at top */}
+          {hasOlderLocal && (
+            <div className="flex justify-center pb-2">
+              <Button variant="ghost" size="sm" onClick={handleLoadOlder} className="text-xs gap-1">
+                <ChevronUp className="h-3 w-3" />
+                Load older messages ({totalCount - visibleCount} more)
+              </Button>
+            </div>
+          )}
+          {/* If all local messages shown but server has more */}
+          {!hasOlderLocal && hasMore && onLoadMore && (
+            <div className="flex justify-center pb-2">
+              <Button variant="ghost" size="sm" onClick={onLoadMore} disabled={loadingMore} className="text-xs gap-1">
+                {loadingMore ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronUp className="h-3 w-3" />}
+                Load older messages
+              </Button>
+            </div>
+          )}
+          {groupByDay(visibleMessages, (m) => m.created_at, (m) => (m as any).day_ct).map((group) => (
+            <div key={group.key}>
+              <DayDivider label={group.label} />
+              {group.items.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex items-start gap-2 mb-2 ${
+                    msg.direction === "outbound" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg p-3 text-sm overflow-hidden break-words ${
+                      msg.direction === "outbound"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      {msg.direction === "inbound" ? (
+                        <ArrowDownLeft className="h-3 w-3 opacity-60" />
+                      ) : (
+                        <ArrowUpRight className="h-3 w-3 opacity-60" />
+                      )}
+                      <span className="text-[10px] font-medium opacity-60">
+                        {msg.direction === "inbound" ? (msg.contact_name || msg.phone_number) : "You"}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words overflow-hidden">{renderMessageBody(msg.body || "")}</p>
+                    {(msg as any).media_urls && (msg as any).media_urls.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {((msg as any).media_urls as { url: string; content_type: string }[]).map((media, i) => (
+                          <MmsMediaRenderer key={i} url={media.url} contentType={media.content_type} />
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 mt-1">
+                      <p className="text-[10px] opacity-50">
+                        {ctTimeLabel(msg.created_at)}
+                      </p>
+                      {msg.direction === "outbound" && (
+                        <DeliveryIcon status={(msg as any).delivery_status} />
+                      )}
+                      {msg.direction === "outbound" && (msg as any).twilio_sid &&
+                        ["failed", "undelivered", "sending"].includes(String((msg as any).delivery_status || "").toLowerCase()) && (
+                          <InspectTwilioSmsButton messageSid={(msg as any).twilio_sid} className="h-5 px-1.5 text-[10px]" />
+                        )}
+                      <SmsForwardButton
+                        messageBody={msg.body || ""}
+                        senderName={msg.direction === "inbound" ? (msg.contact_name || msg.phone_number) : "You"}
+                        mediaUrls={(msg as any).media_urls}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Compose */}
+      <div className="border-t bg-card pt-3 pb-8 px-3 space-y-2">
+        {polishPreview && (
+          <GrammarPreview
+            original={polishPreview.original}
+            polished={polishPreview.polished}
+            onAccept={acceptPolish}
+            onReject={rejectPolish}
+            onCancel={cancelPolish}
+          />
+        )}
+        {newMessageMode && (
+          <Input
+            value={newTo}
+            onChange={(e) => setNewTo(formatPhoneInput(e.target.value))}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData.getData("text");
+              setNewTo(formatPhoneInput(pasted));
+            }}
+            placeholder="To: (210) 555-1234"
+            inputMode="tel"
+            autoComplete="tel"
+            className="text-sm"
+          />
+        )}
+        {/* Pending image previews */}
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingFiles.map((pf, i) => (
+              <div key={i} className="relative group">
+                {pf.preview ? (
+                  <img src={pf.preview} alt="pending" className="h-16 w-16 object-cover rounded border" />
+                ) : (
+                  <div className="h-16 w-16 rounded border bg-muted flex flex-col items-center justify-center gap-0.5 px-1">
+                    {getFileCategory(pf.file.name, pf.file.type) === "pdf" ? (
+                      <FileText className="h-5 w-5 text-red-500" />
+                    ) : (
+                      <FileIcon className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className="text-[8px] text-muted-foreground truncate w-full text-center">{pf.file.name}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => removePendingFile(i)}
+                  className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.csv,.txt,.xlsx,video/*,application/pdf" multiple className="hidden" onChange={handleFileSelect} />
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => fileInputRef.current?.click()} title="Attach image">
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
+          <SmsTemplatePicker onSelect={(t) => setBody((prev) => (prev ? prev + "\n" + t : t))} />
+          <DictateButton
+            onTranscript={(text) => {
+              const el = bodyInputRef.current;
+              const { value, caret } = insertAtSelection(body, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);
+              setBody(value);
+              requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+            }}
+          />
+          <Input
+            ref={bodyInputRef}
+            value={body}
+            onChange={handleBodyChange}
+            onBlur={handleBodyBlur}
+            onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === "Enter" && !e.shiftKey) handleSend(); }}
+            onPaste={handlePaste}
+            placeholder="Type a message… (paste images)"
+            className="flex-1"
+            disabled={sending || uploading || polishing}
+          />
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={sending || uploading || isBusy || (!body.trim() && pendingFiles.length === 0) || (newMessageMode && !newTo.trim())}
+            title={polishing ? "Checking grammar..." : "Send"}
+          >
+            {sending || uploading || polishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

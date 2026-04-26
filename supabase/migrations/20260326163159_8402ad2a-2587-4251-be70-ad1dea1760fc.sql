@@ -1,0 +1,1 @@
+UPDATE public.emails SET category = 'inspect_permit' WHERE from_address ILIKE '%sanantonio.gov%' AND (subject ILIKE '%inspection%' OR subject ILIKE '%MEP-MEC%' OR subject ILIKE '%PMT%') AND (category IS NULL OR category != 'inspect_permit');

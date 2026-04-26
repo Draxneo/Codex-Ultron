@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS call_log_twilio_sid_unique ON public.call_log (twilio_sid) WHERE twilio_sid IS NOT NULL;

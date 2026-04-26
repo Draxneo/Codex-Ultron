@@ -1,0 +1,1 @@
+ALTER TABLE public.call_log ADD COLUMN IF NOT EXISTS transcription text;

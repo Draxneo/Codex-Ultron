@@ -1,0 +1,1 @@
+ALTER TABLE public.estimates ADD COLUMN IF NOT EXISTS source_job_id uuid REFERENCES public.jobs(id);

@@ -1,0 +1,1 @@
+ALTER TABLE public.todos ADD COLUMN IF NOT EXISTS action_type text, ADD COLUMN IF NOT EXISTS action_meta jsonb;

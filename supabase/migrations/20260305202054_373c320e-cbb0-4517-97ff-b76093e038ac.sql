@@ -1,0 +1,1 @@
+ALTER TABLE public.customers ADD CONSTRAINT customers_hcp_customer_id_key UNIQUE (hcp_customer_id);

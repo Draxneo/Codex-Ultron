@@ -1,0 +1,1 @@
+ALTER TABLE public.service_agreements ADD COLUMN IF NOT EXISTS plan_source text NOT NULL DEFAULT 'purchased';
