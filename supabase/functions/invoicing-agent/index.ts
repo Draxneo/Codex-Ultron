@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";impor
 import { corsHeaders } from "../_shared/cors.ts";
 
 
-const APP_BASE_URL = "https://csultramode.lovable.app";
+const APP_BASE_URL = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://codex-ultron.onrender.com";
 
 
 serve(async (req) => {

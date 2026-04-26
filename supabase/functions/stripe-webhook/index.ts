@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
     const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
     const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
-    if (!STRIPE_SECRET_KEY) {
+    if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
       return new Response("Stripe not configured", { status: 500, headers: corsHeaders });
     }
 
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
 
     let event: any;
 
-    if (STRIPE_WEBHOOK_SECRET && sig) {
+    if (sig) {
       const encoder = new TextEncoder();
       const parts = sig.split(",");
       const timestamp = parts.find((p: string) => p.startsWith("t="))?.split("=")[1];
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       }
       event = JSON.parse(body);
     } else {
-      event = JSON.parse(body);
+      return new Response("Missing Stripe signature", { status: 400, headers: corsHeaders });
     }
 
     const supabase = getSupabaseAdmin();
@@ -77,7 +77,21 @@ Deno.serve(async (req) => {
     else if (type === "charge.dispute.created") description = `Payment disputed`;
     else if (type === "invoice.payment_failed") description = `Subscription payment failed`;
 
-    // Log every event to stripe_events
+    if (event.id) {
+      const { data: existingEvent } = await supabase
+        .from("stripe_events")
+        .select("id")
+        .eq("stripe_event_id", event.id)
+        .maybeSingle();
+
+      if (existingEvent) {
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Log every event to stripe_events before side effects so retries are idempotent.
     await supabase.from("stripe_events").insert({
       stripe_event_id: event.id,
       event_type: type,
@@ -103,9 +117,7 @@ Deno.serve(async (req) => {
           payment_method: "stripe",
         } as any).eq("id", meta.invoice_id);
         console.log(`Invoice ${meta.invoice_id} marked paid via Stripe`);
-
-        // ── FIX #1: Bridge to job workflow ──
-        // Stamp payment_collected_at on the parent job so the workflow advances
+        // Stamp payment_collected_at on the parent job so expected items auto-close.
         if (meta.job_id) {
           await supabase.from("jobs").update({
             payment_collected_at: new Date().toISOString(),
@@ -113,7 +125,7 @@ Deno.serve(async (req) => {
             last_payment_error_at: null,
           } as any).eq("id", meta.job_id);
 
-          // Auto-advance job status to "invoiced" when payment received
+          // Auto-close job payment state when payment is received.
           await supabase.from("jobs").update({
             status: "invoiced",
           } as any).eq("id", meta.job_id);
@@ -207,7 +219,6 @@ Deno.serve(async (req) => {
           stripe_subscription_id: data.subscription,
         } as any).eq("id", meta.agreement_id);
         console.log(`Agreement ${meta.agreement_id} subscription activated`);
-      }
       }
 
       // ── Handle Job Cart payments ──
@@ -319,6 +330,8 @@ Deno.serve(async (req) => {
         }
         console.log(`Estimate presentation ${meta.presentation_id} marked paid via Stripe`);
       }
+
+    }
 
     // ── FIX: Handle payment failures ──
     if (type === "checkout.session.expired" || type === "checkout.session.async_payment_failed") {

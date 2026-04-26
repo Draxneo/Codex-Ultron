@@ -15,6 +15,12 @@ Deno.serve(async (req) => {
     }
 
     const { type, invoice_id, job_id, amount, customer_name, customer_email, customer_phone, description, success_url, cancel_url, payment_plan_count, payment_plan_interval } = await req.json();
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return new Response(JSON.stringify({ error: "Payment amount must be greater than zero." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -47,7 +53,7 @@ Deno.serve(async (req) => {
 
     if (installments) {
       // Create a subscription-based checkout for installments
-      const installmentAmount = Math.round((amount / payment_plan_count) * 100);
+      const installmentAmount = Math.round((numericAmount / payment_plan_count) * 100);
       const interval = payment_plan_interval || "month";
 
       metadata.payment_plan_count = String(payment_plan_count);
@@ -105,7 +111,7 @@ Deno.serve(async (req) => {
     params.append("mode", "payment");
     params.append("line_items[0][price_data][currency]", "usd");
     params.append("line_items[0][price_data][product_data][name]", lineItemName);
-    params.append("line_items[0][price_data][unit_amount]", String(Math.round(amount * 100)));
+    params.append("line_items[0][price_data][unit_amount]", String(Math.round(numericAmount * 100)));
     params.append("line_items[0][quantity]", "1");
     params.append("success_url", success_url || "https://example.com/payment-success");
     params.append("cancel_url", cancel_url || "https://example.com/payment-cancelled");
@@ -139,7 +145,7 @@ Deno.serve(async (req) => {
     } else if (type === "deposit" && job_id) {
       await supabase.from("jobs").update({
         stripe_deposit_session_id: session.id,
-        deposit_amount: amount,
+        deposit_amount: numericAmount,
       } as any).eq("id", job_id);
     }
 
