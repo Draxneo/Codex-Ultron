@@ -24,7 +24,7 @@ async function fetchHealth() {
       .select("id", { count: "exact", head: true })
       .in("severity", ["error", "critical"])
       .is("resolved_at", null)
-      .gte("created_at", since),
+      .gte("occurred_at", since),
     supabase
       .from("retry_queue")
       .select("id", { count: "exact", head: true })
@@ -33,7 +33,7 @@ async function fetchHealth() {
       .from("oncall_alerts")
       .select("id", { count: "exact", head: true })
       .is("acknowledged_at", null)
-      .gte("created_at", since),
+      .gte("triggered_at", since),
     supabase.rpc("get_cron_health"),
   ]);
 
