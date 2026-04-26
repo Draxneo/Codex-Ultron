@@ -97,17 +97,19 @@ export function CallRoutingSettings() {
     },
   });
 
-  const { data: employees = [] } = useQuery<Array<{ name: string }>>({
+  const { data: employees = [] } = useQuery<Array<{ name: string; ooo_enabled: boolean | null }>>({
     queryKey: ["employees-for-routing"],
     queryFn: async () => {
       const { data } = await supabase
         .from("employees")
-        .select("name")
+        .select("name, ooo_enabled")
         .eq("is_active", true)
         .order("name", { ascending: true });
-      return (data || []) as Array<{ name: string }>;
+      return (data || []) as Array<{ name: string; ooo_enabled: boolean | null }>;
     },
   });
+
+  const employeeByName = new Map(employees.map((e) => [e.name, e]));
 
   const addMut = useMutation({
     mutationFn: async (input: { department: Rule["department"]; employee_name: string; priority: number }) => {
@@ -132,6 +134,21 @@ export function CallRoutingSettings() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["call_routing_rules"] }),
     onError: (e: any) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  const updateAwayMut = useMutation({
+    mutationFn: async (input: { employee_name: string; away: boolean }) => {
+      const { error } = await supabase
+        .from("employees")
+        .update({ ooo_enabled: input.away } as any)
+        .eq("name", input.employee_name);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees-for-routing"] });
+      toast({ title: "Availability updated" });
+    },
+    onError: (e: any) => toast({ title: "Availability update failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -261,7 +278,8 @@ export function CallRoutingSettings() {
                       <TableHead className="w-12"></TableHead>
                       <TableHead className="w-20">Order</TableHead>
                       <TableHead>Employee</TableHead>
-                      <TableHead className="w-28">Active</TableHead>
+                      <TableHead className="w-28">Route</TableHead>
+                      <TableHead className="w-32">Away</TableHead>
                       <TableHead className="w-24 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -291,6 +309,14 @@ export function CallRoutingSettings() {
                             checked={rule.is_active}
                             onCheckedChange={(checked) =>
                               updateMut.mutate({ id: rule.id, patch: { is_active: checked } })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={employeeByName.get(rule.employee_name)?.ooo_enabled === true}
+                            onCheckedChange={(checked) =>
+                              updateAwayMut.mutate({ employee_name: rule.employee_name, away: checked })
                             }
                           />
                         </TableCell>

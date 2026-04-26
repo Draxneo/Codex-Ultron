@@ -1,8 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import logo from "@/assets/logo.png";
-import { PhoneForwarded, MessageCircle, Bot, LogOut, Settings, Moon, Sun } from "lucide-react";
+import { LogOut, Settings, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess, routeToTabKey } from "@/hooks/useEmployeeTabAccess";
@@ -12,10 +11,6 @@ import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
 
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SmartSearchBar } from "@/components/SmartSearchBar";
 import { NewItemDropdown } from "@/components/NewItemDropdown";
 import { AdminToolsGrid } from "@/components/AdminToolsGrid";
@@ -55,14 +50,8 @@ export function AppHeader() {
   const { role, signOut, user } = useAuth();
   const allowedTabs = useEmployeeTabAccess();
   const { order } = useNavOrder();
-  const { settings, isLoading: settingsLoading, updateSettings } = useCompanySettings();
-  const [fwdNumber, setFwdNumber] = useState("");
+  const { settings } = useCompanySettings();
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
-  useEffect(() => {
-    if (!settingsLoading) {
-      setFwdNumber(settings.call_forwarding_number || settings.jarvis_alert_phone || "");
-    }
-  }, [settingsLoading, settings.call_forwarding_number, settings.jarvis_alert_phone]);
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: unreadVoicemails } = useVoicemails();
 
@@ -132,75 +121,6 @@ export function AppHeader() {
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <SmartSearchBar />
             <NewItemDropdown />
-
-            {/* Forward/SMS popover */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground relative">
-                  <PhoneForwarded className="h-4.5 w-4.5" />
-                  {(settings.call_forwarding_enabled === "true" || settings.sms_alert_enabled === "true") && (
-                    <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72" align="end">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <PhoneForwarded className="h-4 w-4 text-muted-foreground" />
-                        <Label htmlFor="fwd-toggle" className="text-sm font-medium">Forward calls</Label>
-                      </div>
-                      <Switch id="fwd-toggle" checked={settings.call_forwarding_enabled === "true"}
-                        onCheckedChange={(checked) => updateSettings.mutate({ call_forwarding_enabled: checked ? "true" : "false" })} />
-                    </div>
-                    {settings.call_forwarding_enabled === "true" && (
-                      <p className="text-xs text-amber-600 font-medium ml-6">Calls are forwarding to cell, so the softphone will not ring.</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                        <Label htmlFor="sms-alert-toggle" className="text-sm font-medium">SMS alerts to cell</Label>
-                      </div>
-                      <Switch id="sms-alert-toggle" checked={settings.sms_alert_enabled === "true"}
-                        onCheckedChange={(checked) => updateSettings.mutate({ sms_alert_enabled: checked ? "true" : "false" })} />
-                    </div>
-                    {settings.sms_alert_enabled === "true" && (
-                      <p className="text-xs text-emerald-600 font-medium ml-6">Inbound customer texts are forwarded to cell.</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Bot className="h-4 w-4 text-muted-foreground" />
-                        <Label htmlFor="ai-draft-toggle" className="text-sm font-medium">AI auto-draft replies</Label>
-                      </div>
-                      <Switch id="ai-draft-toggle" checked={settings.ai_sms_auto_draft !== "false"}
-                        onCheckedChange={(checked) => updateSettings.mutate({ ai_sms_auto_draft: checked ? "true" : "false" })} />
-                    </div>
-                    {settings.ai_sms_auto_draft === "false" && (
-                      <p className="text-xs text-muted-foreground font-medium ml-6">JARVIS will not draft SMS replies.</p>
-                    )}
-                  </div>
-                  <div className="space-y-1 border-t pt-3">
-                    <Label htmlFor="fwd-number" className="text-xs text-muted-foreground">Cell number for forwarding and SMS alerts</Label>
-                    <Input id="fwd-number" type="tel" value={fwdNumber}
-                      onChange={(e) => setFwdNumber(e.target.value)}
-                      onBlur={() => {
-                        if (fwdNumber !== settings.call_forwarding_number || fwdNumber !== settings.jarvis_alert_phone) {
-                          updateSettings.mutate({
-                            call_forwarding_number: fwdNumber,
-                            jarvis_alert_phone: fwdNumber,
-                          });
-                        }
-                      }}
-                      className="h-9 text-sm" placeholder="+12105551234" />
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
 
             <AdminToolsGrid />
             <SystemStatusIndicator />

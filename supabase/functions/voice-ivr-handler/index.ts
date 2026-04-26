@@ -476,7 +476,9 @@ Deno.serve(async (req) => {
       .in("key", ["call_forwarding_enabled", "call_forwarding_number"]);
     const fwdMap: Record<string, string> = {};
     for (const r of (fwdRows || []) as any[]) fwdMap[r.key] = r.value;
-    const callFwdEnabled = fwdMap["call_forwarding_enabled"] === "true";
+    // Retired global "forward all calls" override. Use per-person Away from Desk
+    // and IVR overflow instead so answering-service handoff still works.
+    const callFwdEnabled = false;
     const callFwdNumber = fwdMap["call_forwarding_number"] || "";
 
     if (callFwdEnabled && callFwdNumber) {

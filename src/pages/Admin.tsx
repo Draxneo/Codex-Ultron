@@ -50,7 +50,6 @@ import { ViewAsCard } from "@/components/ViewAsCard";
 import { CompanyDocumentsCard } from "@/components/CompanyDocumentsCard";
 import { RingtoneSettingsCard } from "@/components/RingtoneSettingsCard";
 import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard";
-import { TelephonyHandoffCard } from "@/components/admin/TelephonyHandoffCard";
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
 
 import { PayRatesCard } from "@/components/PayRatesCard";
@@ -851,7 +850,7 @@ function AdminSectionContent({ section }: { section: string }) {
     case "webhooks":
       return <WebhooksIntegrationsSection />;
     case "voice":
-      return <div className="space-y-4"><TelephonyHandoffCard /><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
+      return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
     case "jarvis":

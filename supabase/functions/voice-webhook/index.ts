@@ -341,7 +341,10 @@ Deno.serve(async (req) => {
     const csMap: Record<string, string> = {};
     for (const r of (fwdRows || []) as any[]) csMap[r.key] = r.value;
 
-    const callForwardingEnabled = csMap["call_forwarding_enabled"] === "true";
+    // Retired global "forward all calls" override. Availability now belongs to
+    // IVR department routing and per-person Away from Desk state so busy callers
+    // can overflow to the answering service predictably.
+    const callForwardingEnabled = false;
     const callForwardingNumber = csMap["call_forwarding_number"] || "";
     const liveTranscribeEnabled =
       csMap["live_transcription_enabled"] === "true";
