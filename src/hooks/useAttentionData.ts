@@ -26,9 +26,9 @@ import {
 const GO_LIVE = '2026-03-24';
 export const GLOBAL_ACTION_NEEDED_ROUTE = "/copilot";
 
-function useWorkflowBlockers() {
+function useAttentionCounts() {
   return useQuery({
-    queryKey: ["hud_workflow_blockers"],
+    queryKey: ["hud_attention_counts"],
     staleTime: 30000,
     queryFn: async () => {
       const sevenDaysAgo = new Date();
@@ -302,7 +302,7 @@ export interface AttentionItem {
 }
 
 export function useAttentionData() {
-  const { data: blockers, error: blockersError, isError } = useWorkflowBlockers();
+  const { data: blockers, error: blockersError, isError } = useAttentionCounts();
   const { data: followUpJobs } = useFollowUpJobs();
   const { data: visitsDue } = useAgreementVisitsDue();
   const { data: expiringAgreements } = useExpiringAgreements(30);
@@ -311,11 +311,11 @@ export function useAttentionData() {
   // Realtime: auto-invalidate HUD on ANY change to attention-driving tables
   useRealtimeInvalidation(
     [
-      { table: "outbound_drafts", queryKeys: [["hud_workflow_blockers"], ["outbound_drafts"], ["outbox_pending_count"]] },
-      { table: "sms_log", queryKeys: [["hud_workflow_blockers"]] },
-      { table: "jobs", queryKeys: [["hud_workflow_blockers"]] },
-      { table: "action_items", queryKeys: [["hud_workflow_blockers"]] },
-      { table: "workflow_alerts", queryKeys: [["hud_workflow_blockers"]] },
+      { table: "outbound_drafts", queryKeys: [["hud_attention_counts"], ["outbound_drafts"], ["outbox_pending_count"]] },
+      { table: "sms_log", queryKeys: [["hud_attention_counts"]] },
+      { table: "jobs", queryKeys: [["hud_attention_counts"]] },
+      { table: "action_items", queryKeys: [["hud_attention_counts"]] },
+      { table: "workflow_alerts", queryKeys: [["hud_attention_counts"]] },
     ],
     "hud-realtime-sync"
   );

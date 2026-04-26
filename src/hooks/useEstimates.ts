@@ -244,7 +244,7 @@ async function createJobFromEstimate(estimateId: string) {
     .single();
   if (jobErr) throw jobErr;
 
-  // Centralized post-creation: format, chat, line items, workflow, HCP, activity log
+  // Centralized post-creation: format, chat, line items, HCP, activity log
   try {
     await supabase.functions.invoke("finalize-job", {
       body: { job_id: newJob.id, created_by: "EstimateConversion" },

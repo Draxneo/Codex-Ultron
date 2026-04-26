@@ -229,7 +229,7 @@ export function JobDataTab({ jobId, jobDescription, jobType }: { jobId: string; 
     uploadInvoice.mutate({ jobId, file });
     e.target.value = "";
     toast({ title: "Invoice uploading...", description: "AI will extract data automatically" });
-    // Workflow engine handles step completion via timestamps
+    // Completion timestamps are tracked directly on the job
   };
 
   // Aggregate data

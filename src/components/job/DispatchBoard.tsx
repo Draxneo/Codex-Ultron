@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { getStageInfo } from "@/hooks/useWorkflowStage";
+import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { Badge } from "@/components/ui/badge";
 import { useCustomerEnrichment } from "@/hooks/useCustomerEnrichment";
 import { CustomerStatusBadges, getAvatarColor } from "@/components/CustomerStatusBadges";
@@ -34,7 +34,7 @@ interface BoardItem {
   estimate_number?: string | null;
   work_status?: string | null;
   status?: string | null;
-  [key: string]: any; // Allow workflow timestamps to flow through for getStageInfo()
+  [key: string]: any;
 }
 
 const jobTypeBorderColors: Record<string, string> = {
@@ -454,11 +454,11 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                           {cardDensity !== "compact" && (
                             <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
                               {(() => {
-                                const si = getStageInfo({
+                                const lifecycle = getLifecycleInfo({
                                   ...item,
                                   ...(item.item_type === "estimate" ? { job_type: "estimate", status: item.work_status } : {}),
-                                } as any);
-                                return si.isComplete ? (
+                                });
+                                return lifecycle.isComplete ? (
                                   <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-xs bg-[hsl(var(--complete)/0.15)] text-[hsl(var(--complete))]">✓ Complete</span>
                                 ) : (
                                   <span className={cn(
@@ -466,7 +466,7 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                                     "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]",
                                     "shadow-sm break-words"
                                   )}>
-                                    ▸ {si.label}
+                                    ▸ {lifecycle.label}
                                   </span>
                                 );
                               })()}
@@ -575,11 +575,11 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                       {cardDensity !== "compact" && (
                         <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
                           {(() => {
-                            const si = getStageInfo({
-                              ...item,
-                              ...(item.item_type === "estimate" ? { job_type: "estimate", status: item.work_status } : {}),
-                            } as any);
-                            return si.isComplete ? (
+                            const lifecycle = getLifecycleInfo({
+                                  ...item,
+                                  ...(item.item_type === "estimate" ? { job_type: "estimate", status: item.work_status } : {}),
+                                });
+                            return lifecycle.isComplete ? (
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-xs bg-[hsl(var(--complete)/0.15)] text-[hsl(var(--complete))]">✓ Complete</span>
                             ) : (
                               <span className={cn(
@@ -587,7 +587,7 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                                 "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]",
                                 "shadow-sm break-words"
                               )}>
-                                ▸ {si.label}
+                                ▸ {lifecycle.label}
                               </span>
                             );
                           })()}

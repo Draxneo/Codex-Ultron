@@ -87,7 +87,7 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
       toast({ title: "SMS failed", description: result.error, variant: "destructive" });
     } else {
       await updateStatus.mutateAsync({ invoiceId, status: "sent", jobId, sentVia: "sms" });
-      // Bridge: stamp invoice_sent_at on the job so workflow advances
+      // Stamp invoice_sent_at on the job for attention/lifecycle tracking
       await supabase.from("jobs").update({ invoice_sent_at: new Date().toISOString() } as any).eq("id", jobId).is("invoice_sent_at" as any, null);
       await supabase.from("activity_log").insert({ job_id: jobId, action: "invoice_sent_sms", details: `Invoice ${invoiceNumber} sent via SMS` });
       toast({ title: "Invoice sent via SMS" });

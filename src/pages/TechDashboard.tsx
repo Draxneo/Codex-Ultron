@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getStageInfo } from "@/hooks/useWorkflowStage";
+import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { useQueryClient } from "@tanstack/react-query";
 import { OnMyWayButton } from "@/components/OnMyWayButton";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
@@ -250,9 +250,7 @@ export default function TechDashboard() {
             const isEstimate = job._itemType === "estimate";
             const formToken = employeeId ? `${job.id}__${employeeId}` : null;
 
-            // For estimates, map work_status -> status for the legacy lifecycle label helper
-            const stageJob = isEstimate ? { ...job, status: job.work_status || "new" } : job;
-            const si = getStageInfo(stageJob as any);
+            const lifecycle = getLifecycleInfo(isEstimate ? { ...job, status: job.work_status || "new" } : job);
 
             let timeRange: string | null = null;
             try {
@@ -320,7 +318,7 @@ export default function TechDashboard() {
                     )}
 
                     <div className="flex items-center gap-2 mt-1">
-                      {si.isComplete ? (
+                      {lifecycle.isComplete ? (
                         <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-xs bg-[hsl(var(--complete)/0.15)] text-[hsl(var(--complete))]">
                           ✓ Complete
                         </span>
@@ -328,7 +326,7 @@ export default function TechDashboard() {
                         <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
                           {/* Communication group */}
                           <div className="flex gap-2">
-                            {!si.isComplete && phone && (
+                            {!lifecycle.isComplete && phone && (
                               <OnMyWayButton
                                 jobId={job.id}
                                 customerPhone={phone}

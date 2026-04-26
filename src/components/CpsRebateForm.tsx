@@ -427,7 +427,7 @@ export default function CpsRebateForm({ job, equipment, company }: Props) {
 
       toast({ title: "Email Sent", description: `Rebate form sent to ${email}` });
 
-      // Workflow engine handles step completion via timestamps
+      // Completion timestamps are tracked directly on the job
     } catch (err: any) {
       console.error("Email error:", err);
       toast({ title: "Email Failed", description: err.message || "Failed to send email", variant: "destructive" });

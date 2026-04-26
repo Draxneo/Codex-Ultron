@@ -171,7 +171,7 @@ export function BookingIntentAlert() {
       }).eq("id", alert.id);
 
       qc.invalidateQueries({ queryKey: ["action_items_pending"] });
-      qc.invalidateQueries({ queryKey: ["hud_workflow_blockers"] });
+      qc.invalidateQueries({ queryKey: ["hud_attention_counts"] });
       dismiss(alert.id);
       reset(alert.id);
     },

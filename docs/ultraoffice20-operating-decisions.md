@@ -22,7 +22,7 @@ The current workflow engine attempted to model each job or estimate as a rigid s
 
 Preferred future direction:
 
-- Keep the existing workflow pages available while testing.
+- Retired the workflow builder UI in favor of attention/action-item surfaces.
 - Avoid large new investments in the old workflow engine.
 - Build an AI-driven outstanding-items layer instead.
 - Let the agent inspect jobs, estimates, calls, SMS, invoices, photos, agreements, and catalog/cart state.

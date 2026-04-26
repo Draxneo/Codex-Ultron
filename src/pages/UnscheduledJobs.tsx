@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useBacklogJobs } from "@/hooks/useJobs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getStageInfo } from "@/hooks/useWorkflowStage";
+import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -66,10 +66,10 @@ function JobCard({ job, navigate }: { job: any; navigate: (path: string) => void
         </div>
       )}
       {(() => {
-        const si = getStageInfo(job as any);
-        return !si.isComplete ? (
+        const lifecycle = getLifecycleInfo(job);
+        return !lifecycle.isComplete ? (
           <span className="inline-flex items-center gap-1 mt-1 px-2.5 py-1 rounded-lg font-bold text-[11px] bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] shadow-sm">
-            ▸ {si.label}
+            {lifecycle.label}
           </span>
         ) : null;
       })()}

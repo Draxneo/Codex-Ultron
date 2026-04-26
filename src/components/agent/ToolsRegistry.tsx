@@ -22,7 +22,6 @@ const CATEGORY_MAP: Record<string, { label: string; emoji: string; order: number
   invoicing: { label: "Invoicing", emoji: "💰", order: 7 },
   repair: { label: "Repair Quoting", emoji: "🔧", order: 8 },
   intelligence: { label: "Intelligence & Learning", emoji: "🧠", order: 9 },
-  workflow: { label: "Workflow", emoji: "⚡", order: 10 },
   other: { label: "Other", emoji: "⚙️", order: 99 },
 };
 
@@ -37,7 +36,6 @@ function getCategoryKey(fn: string): string {
   if (["invoke_invoicing", "create_invoice", "generate_payment_link"].includes(fn)) return "invoicing";
   if (["invoke_repair_quote"].includes(fn)) return "repair";
   if (["scrape_url", "web_search", "log_learning", "update_instruction", "update_warranty_status"].includes(fn)) return "intelligence";
-  if (["get_workflow_status"].includes(fn)) return "workflow";
   return "other";
 }
 
@@ -79,7 +77,6 @@ const FRIENDLY_DESCRIPTIONS: Record<string, string> = {
   create_customer: "Creates a new customer record in the CRM.",
   create_job: "Books a new job on the dispatch board.",
   update_job_field: "Stamps a timestamp or status field on a job record.",
-  get_workflow_status: "Checks current step, blocked steps, and progress for a job.",
   create_parts_order: "Creates a parts/equipment order for a job.",
   update_warranty_status: "Updates warranty registration status for a job.",
   order_from_carrier_enterprise: "Places an order through the Carrier Enterprise portal.",

@@ -47,7 +47,7 @@ export function ContextualActions() {
     );
   } else if (path.startsWith("/jobs/") && path.split("/").length === 3) {
     actions.push(
-      { label: "Advance Workflow", icon: ArrowRight, action: () => sendQuery(`What's the next workflow step for this job and what's needed to advance it?`) },
+      { label: "What's Next", icon: ArrowRight, action: () => sendQuery(`Review this job and tell me what is still outstanding, who owns it, and the next best action.`) },
       { label: "Text Tech", icon: MessageSquare, action: () => sendQuery(`Draft a text to the tech assigned to this job with the job details and schedule.`) },
       { label: "View Form Status", icon: FileText, action: () => sendQuery(`What's the status of the tech form and completion form for this job?`) },
     );

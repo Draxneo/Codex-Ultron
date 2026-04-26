@@ -66,7 +66,7 @@ const TOOL_CATEGORIES = [
     border: "border-cyan-500/20",
     description: "CRM creation, job booking, field updates",
     status: "collapsed" as const,
-    tools: ["create_customer", "create_job", "update_job_field", "get_workflow_status"],
+    tools: ["create_customer", "create_job", "update_job_field"],
   },
   {
     id: "procurement",

@@ -132,7 +132,7 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
       return;
     }
 
-    // Centralized post-creation: format, chat, line items, workflow, HCP, activity log
+    // Centralized post-creation: format, chat, line items, HCP, activity log
     if (newJob) {
       try {
         await supabase.functions.invoke("finalize-job", {

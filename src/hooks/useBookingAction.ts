@@ -147,7 +147,7 @@ export function useBookingAction() {
         qc.invalidateQueries({ queryKey: ["action_items_pending"] });
         qc.invalidateQueries({ queryKey: ["jobs"] });
         qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
-        qc.invalidateQueries({ queryKey: ["hud_workflow_blockers"] });
+        qc.invalidateQueries({ queryKey: ["hud_attention_counts"] });
 
         // Mark as booked after a short delay so user sees the success state
         setTimeout(() => setState(action_item_id, { phase: "booked", result }), 1500);

@@ -1,6 +1,6 @@
 # Organize Plus — HVAC Operations Platform
 
-An HVAC operations platform that runs as a **communication and enrichment overlay on top of Housecall Pro (HCP)** — not a replacement. HCP is the source of truth for jobs, customers, estimates, and invoices. The local database is an overlay/cache that adds AI, telephony, dispatch intelligence, sales presentations, technician workflows, and customer-facing portals on top of it.
+An HVAC operations platform that runs as a **communication and enrichment overlay on top of Housecall Pro (HCP)** — not a replacement. HCP is the source of truth for jobs, customers, estimates, and invoices. The local database is an overlay/cache that adds AI, telephony, dispatch intelligence, sales presentations, technician tools, and customer-facing portals on top of it.
 
 Powered by **JARVIS** (the Lovable AI gateway orchestrator) for the dispatcher copilot, CSR intake, parts sourcing, and multimodal chat. Unified Twilio + Deepgram telephony/SMS pipeline. Capacitor mobile shell for technicians. Electron desktop shell for the dispatch desk.
 
@@ -41,7 +41,7 @@ If you find yourself calling Twilio/HCP/AI directly, stop — use the pipeline.
 Jobs and estimates are **never** inserted locally. Flow:
 1. POST to HCP via `create-hcp-job`
 2. HCP webhook fires
-3. `hcp-webhook` creates the local row and calls `finalize-job` with `skip_hcp: true` for side effects (chat channel, line items, workflow attachment, activity log).
+3. `hcp-webhook` creates the local row and calls `finalize-job` with `skip_hcp: true` for side effects (chat channel, line items, activity log).
 
 ### 4. No hardcoded company identifiers
 Company name, phone, email, address, TACLA — always read from `company_settings` via `loadCompanyInfo()`. No string literals.
@@ -168,7 +168,7 @@ npm run dev   # Vite, strictPort: true on :8080
 - **`docs/hcp-api-integration.md`** — Our HCP field mappings, job-type detection, sync strategy
 - **`.lovable/memory/index.md`** — Living project rules: the 6 core rules, JARVIS policies, branding constraints, security hardening
 - **`.lovable/memory/architecture/*`** — Per-subsystem architecture notes (HCP-first job creation, webhook sync engine, job finalization pipeline, JARVIS orchestrator, electron shell, llm gateway enforcement, centralized SMS pipeline)
-- **`.lovable/memory/features/*`** — Per-feature notes (dispatch board, workflow builder, sales presentations, voice IVR, customer portal, ...)
+- **`.lovable/memory/features/*`** — Per-feature notes (dispatch board, attention system, sales presentations, voice IVR, customer portal, ...)
 - **`.lovable/plan.md`** — Most recent audit / planning notes
 
 ---

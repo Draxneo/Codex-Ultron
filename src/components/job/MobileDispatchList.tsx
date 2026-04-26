@@ -12,7 +12,7 @@ import { CustomerCard } from "@/components/CustomerCard";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getStageInfo } from "@/hooks/useWorkflowStage";
+import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { useCustomerEnrichment } from "@/hooks/useCustomerEnrichment";
 import { useTechStatusMap } from "@/hooks/useTechStatusMap";
 import { TechStatusBadge } from "@/components/TechStatusBadge";
@@ -205,10 +205,10 @@ export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) 
                   const time = formatTime(item);
                   const ro = routeOrders.get(item.id);
                   const typeLabel = item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV";
-                  const stageInfo = getStageInfo({
+                  const lifecycle = getLifecycleInfo({
                     ...item,
                     ...(item.item_type === "estimate" ? { job_type: "estimate", status: item.work_status } : {}),
-                  } as any);
+                  });
 
                   return (
                     <div
@@ -261,13 +261,13 @@ export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) 
 
                       {/* Bottom row: stage badge, travel, task progress */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        {stageInfo.isComplete ? (
+                        {lifecycle.isComplete ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] bg-[hsl(var(--complete)/0.15)] text-[hsl(var(--complete))]">
                             ✓ Complete
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">
-                            ▸ {stageInfo.label}
+                            ▸ {lifecycle.label}
                           </span>
                         )}
 
