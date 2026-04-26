@@ -59,10 +59,10 @@ export function AppHeader() {
   const [fwdNumber, setFwdNumber] = useState("");
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   useEffect(() => {
-    if (!settingsLoading && settings.call_forwarding_number) {
-      setFwdNumber(settings.call_forwarding_number);
+    if (!settingsLoading) {
+      setFwdNumber(settings.call_forwarding_number || settings.jarvis_alert_phone || "");
     }
-  }, [settingsLoading, settings.call_forwarding_number]);
+  }, [settingsLoading, settings.call_forwarding_number, settings.jarvis_alert_phone]);
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: unreadVoicemails } = useVoicemails();
 
@@ -185,10 +185,17 @@ export function AppHeader() {
                     )}
                   </div>
                   <div className="space-y-1 border-t pt-3">
-                    <Label htmlFor="fwd-number" className="text-xs text-muted-foreground">Cell number</Label>
+                    <Label htmlFor="fwd-number" className="text-xs text-muted-foreground">Cell number for forwarding and SMS alerts</Label>
                     <Input id="fwd-number" type="tel" value={fwdNumber}
                       onChange={(e) => setFwdNumber(e.target.value)}
-                      onBlur={() => { if (fwdNumber !== settings.call_forwarding_number) updateSettings.mutate({ call_forwarding_number: fwdNumber }); }}
+                      onBlur={() => {
+                        if (fwdNumber !== settings.call_forwarding_number || fwdNumber !== settings.jarvis_alert_phone) {
+                          updateSettings.mutate({
+                            call_forwarding_number: fwdNumber,
+                            jarvis_alert_phone: fwdNumber,
+                          });
+                        }
+                      }}
                       className="h-9 text-sm" placeholder="+12105551234" />
                   </div>
                 </div>
