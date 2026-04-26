@@ -628,6 +628,35 @@ Deno.serve(async (req) => {
       }
 
       if (availableAssignedIds.length === 0) {
+        if (fallbackBusyCount > 0 && overflowEnabled && overflowNumber && (config as any).overflow_on_busy !== false) {
+          console.log(`[ivr-handler] dept "${option.label}": assigned users busy - sending to answering service`);
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-ivr-handler",
+            eventKind: "route_selected",
+            summary: `Assigned users busy; overflow to ${(config as any).answering_service_label || "Answering Service"}`,
+            reason: "assigned_users_busy",
+            severity: "warning",
+            traceGroup: callSid,
+            entityType: "call",
+            entityId: callSid,
+            callSid,
+            metadata: {
+              digit,
+              label: option.label,
+              dept_key: deptKey,
+              overflow_number: overflowNumber,
+              busy_count: fallbackBusyCount,
+              away_count: fallbackAwayCount,
+              total_candidates: assignedIds.length,
+            },
+          });
+          return new Response(
+            overflowDialTwiml("assigned_users_busy"),
+            { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+          );
+        }
+
         if (fallbackBusyCount > 0 && !queueRetry) {
           console.log(`[ivr-handler] dept "${option.label}": assigned users busy - queueing caller for ${queueWaitSeconds}s`);
           await logSystemTrace({
@@ -663,18 +692,11 @@ Deno.serve(async (req) => {
         }
 
         console.log(`[ivr-handler] dept "${option.label}": no assigned users available after busy/away checks`);
-        if (overflowOnNoAnswer && answeringServiceEnabled && answeringServiceNumber) {
-          const twiml = overflowDialTwiml({
-            to: answeringServiceNumber,
-            sayText: "We are connecting you to our answering service now.",
-            dialTimeout: Math.max(10, Math.min(60, Number((config as any).answering_service_timeout_seconds || 30))),
-            from,
-            twilioNumber,
-            callerIdMode,
-            statusCallbackUrl,
-            actionUrl: supabaseUrl ? `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName || "")}&ContactType=${encodeURIComponent(contactType || "")}&Department=${encodeURIComponent(option.label)}&OverflowAttempt=1` : undefined,
-          });
-          return new Response(twiml, { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 });
+        if (overflowEnabled && overflowNumber && (config as any).overflow_on_no_answer !== false) {
+          return new Response(
+            overflowDialTwiml("no_available_assigned_users"),
+            { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+          );
         }
         if (config?.voicemail_enabled) {
           return new Response(
@@ -694,6 +716,34 @@ Deno.serve(async (req) => {
       }).join("\n    ");
       console.log(`[ivr-handler] dept "${option.label}": routing rule yielded nobody — falling back to ${assignedIds.length} assigned users`);
     } else if (evaluation.reason === "all_busy" && !queueRetry) {
+      if (overflowEnabled && overflowNumber && (config as any).overflow_on_busy !== false) {
+        console.log(`[ivr-handler] dept "${option.label}": all recipients busy - sending to answering service`);
+        await logSystemTrace({
+          sourceType: "voice",
+          sourceName: "voice-ivr-handler",
+          eventKind: "route_selected",
+          summary: `All recipients busy; overflow to ${(config as any).answering_service_label || "Answering Service"}`,
+          reason: "all_busy",
+          severity: "warning",
+          traceGroup: callSid,
+          entityType: "call",
+          entityId: callSid,
+          callSid,
+          metadata: {
+            digit,
+            label: option.label,
+            dept_key: deptKey,
+            overflow_number: overflowNumber,
+            busy_count: evaluation.busyCount,
+            total_candidates: evaluation.totalCandidates,
+          },
+        });
+        return new Response(
+          overflowDialTwiml("all_busy"),
+          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+        );
+      }
+
       console.log(`[ivr-handler] dept "${option.label}": all recipients busy — queueing caller for ${queueWaitSeconds}s`);
       await logSystemTrace({
         sourceType: "voice",
