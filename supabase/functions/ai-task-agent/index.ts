@@ -947,24 +947,6 @@ async function getPropertyDataContext(sb: any) {
   return `\n\nPROPERTY DATA (${lines.length} properties):\n${lines.join("\n")}`;
 }
 
-// ==================== Workflow Visibility Context Loaders ====================
-
-async function getWorkflowAlertsContext(sb: any) {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await sb.from("workflow_alerts")
-    .select("id, alert_type, severity, message, job_id, step_id, resolved, created_at, jobs(hcp_job_number, customer_name)")
-    .eq("resolved", false)
-    .gte("created_at", sevenDaysAgo)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (!data || data.length === 0) return "";
-  const lines = data.map((a: any) =>
-    `- [${a.severity}] ${a.alert_type}: "${a.message}" — Job #${a.jobs?.hcp_job_number || "?"} (${a.jobs?.customer_name || "?"}) step: ${a.step_id || "?"} (${formatDateUS(a.created_at)})`
-  );
-  const critical = data.filter((a: any) => a.severity === "critical").length;
-  return `\n\nWORKFLOW ALERTS (${lines.length} unresolved, ${critical} critical):\n${lines.join("\n")}`;
-}
-
 async function getActionItemsContext(sb: any) {
   const { data } = await sb.from("action_items")
     .select("id, title, description, category, priority, status, source, job_id, suggested_action, created_at, jobs(hcp_job_number, customer_name)")
@@ -1108,8 +1090,7 @@ const invokeSupplyhouseTool = { type: "function", function: { name: "invoke_supp
 const invokeCarrierEnterpriseTool = { type: "function", function: { name: "invoke_carrier_enterprise", description: "PRIORITY TOOL for Carrier/Bryant/Payne OEM parts, equipment, compressors, coils. Searches YOUR Carrier Enterprise contractor account for real wholesale pricing and order history. Use this FIRST for any Carrier-brand parts question. Actions: search, add_to_cart, check_pricing, fetch_orders, fetch_order_detail, import_orders, analyze_patterns, get_suggestions.", parameters: { type: "object", properties: { action: { type: "string" }, query: { type: "string" }, product_url: { type: "string" }, job_id: { type: "string" }, job_type: { type: "string" }, system_type: { type: "string" }, orientation: { type: "string" }, order_number: { type: "string" } }, required: ["action"], additionalProperties: false } } };
 const invokeInvoicingTool = { type: "function", function: { name: "invoke_invoicing", description: "Create invoices and generate payment links.", parameters: { type: "object", properties: { action: { type: "string", enum: ["create_invoice", "generate_payment_link"] }, job_id: { type: "string" }, invoice_id: { type: "string" }, include_line_items: { type: "boolean" } }, required: ["action"], additionalProperties: false } } };
 
-// Workflow tools (new — visibility + execution)
-const getWorkflowStatusTool = { type: "function", function: { name: "get_workflow_status", description: "Check current step, completed/skipped/blocked steps, and progress for a specific job. Use when asked 'what\\'s next' on a job.", parameters: { type: "object", properties: { job_id: { type: "string", description: "The job UUID to check workflow status for" } }, required: ["job_id"], additionalProperties: false } } };
+// Operational job tools
 const updateJobFieldTool = { type: "function", function: { name: "update_job_field", description: "Update a field on a job record. Use for timestamps (permit, inspection, warranty, etc.), status changes, scheduled_date, assigned_to, and arrival_start/arrival_end (ISO timestamps for appointment window). When a customer agrees to a specific time, update arrival_start and arrival_end accordingly.", parameters: { type: "object", properties: { job_id: { type: "string" }, field_name: { type: "string", description: "Field to update (e.g. permit_pulled_at, status, scheduled_date, arrival_start, arrival_end)" }, value: { type: "string", description: "Value to set. For arrival_start/arrival_end use full ISO timestamp e.g. '2026-03-30T13:00:00-05:00'. Defaults to current timestamp for *_at fields." } }, required: ["job_id", "field_name"], additionalProperties: false } } };
 const createPartsOrderTool = { type: "function", function: { name: "create_parts_order", description: "Create a parts/equipment order for a job.", parameters: { type: "object", properties: { job_id: { type: "string" }, description: { type: "string" }, supply_house_id: { type: "string" }, po_number: { type: "string" }, expected_arrival: { type: "string" }, notes: { type: "string" } }, required: ["job_id"], additionalProperties: false } } };
 const updateWarrantyStatusTool = { type: "function", function: { name: "update_warranty_status", description: "Update warranty registration status for a job.", parameters: { type: "object", properties: { job_id: { type: "string" }, status: { type: "string", enum: ["registered", "pending", "denied"] }, confirmation_number: { type: "string" }, notes: { type: "string" } }, required: ["job_id", "status"], additionalProperties: false } } };
@@ -2400,121 +2381,7 @@ async function executeToolCall(
     } else if (toolName === "invoke_invoicing") {
       result = await invokeSpecialist("invoicing-agent", args);
 
-    // ═══════ Workflow tools ═══════
-    } else if (toolName === "get_workflow_status") {
-      // Fetch the job with all timestamp fields
-      const { data: job, error: jobErr } = await sb.from("jobs")
-        .select("*")
-        .eq("id", args.job_id)
-        .single();
-      if (jobErr || !job) throw new Error("Job not found");
-
-      // Load workflow definition (custom or defaults)
-      const jobType = job.job_type || "service";
-      let steps: any[] | null = null;
-      const { data: wfDef } = await sb.from("workflow_definitions")
-        .select("steps")
-        .eq("job_type", jobType)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (wfDef?.steps) {
-        steps = typeof wfDef.steps === "string" ? JSON.parse(wfDef.steps) : wfDef.steps;
-      }
-
-      // Port of isStepComplete logic from useWorkflowStage.ts
-      function isStepSkipped(step: any, j: any): boolean {
-        if (!step.skip_when) return false;
-        const fieldVal = j[step.skip_when.field];
-        if (step.skip_when.value !== undefined) return fieldVal === step.skip_when.value;
-        if (step.skip_when.not_value !== undefined) return !fieldVal || fieldVal !== step.skip_when.not_value;
-        return false;
-      }
-      function isStepComplete(step: any, j: any): boolean {
-        if (isStepSkipped(step, j)) return true;
-        switch (step.completion_check) {
-          case "timestamp": return !!j[step.timestamp_field];
-          case "status": {
-            const target = step.field_check?.value;
-            const status = j.status || "new";
-            if (target === "in_progress") return status === "in_progress" || status === "done" || status === "invoiced";
-            return status === target;
-          }
-          case "field_set": {
-            const field = step.field_check?.field || step.timestamp_field;
-            if (!field) return false;
-            const val = j[field];
-            if (step.field_check?.value) return val === step.field_check.value;
-            return !!val;
-          }
-          default: return false;
-        }
-      }
-
-      // Use defaults if no custom definition
-      const DEFAULT_STEPS: Record<string, any[]> = {
-        install: [
-          { id: "order_equipment", label: "Order Equipment", completion_check: "timestamp", timestamp_field: "equipment_ordered_at" },
-          { id: "schedule", label: "Schedule Install", completion_check: "field_set", field_check: { field: "scheduled_date" } },
-          { id: "assign", label: "Assign Crew", completion_check: "field_set", field_check: { field: "assigned_to" } },
-          { id: "deposit", label: "Collect Deposit", completion_check: "timestamp", timestamp_field: "deposit_paid_at", skip_when: { field: "payment_method", value: "financed" } },
-          { id: "confirmation", label: "Appointment Reminder", completion_check: "timestamp", timestamp_field: "confirmation_sent_at" },
-          { id: "dispatch", label: "Dispatch Installer", completion_check: "timestamp", timestamp_field: "dispatch_sent_at" },
-          { id: "in_progress", label: "Mark On-Site", completion_check: "status", field_check: { field: "status", value: "in_progress" } },
-          { id: "completion_form", label: "Completion Checklist", completion_check: "timestamp", timestamp_field: "completion_form_sent_at" },
-          { id: "invoice", label: "Send Invoice", completion_check: "timestamp", timestamp_field: "invoice_sent_at" },
-          { id: "payment", label: "Confirm Payment", completion_check: "timestamp", timestamp_field: "payment_collected_at" },
-          { id: "warranty", label: "Register Warranty", completion_check: "timestamp", timestamp_field: "warranty_registered_at" },
-          { id: "inspection_pass", label: "Inspection Passed", completion_check: "timestamp", timestamp_field: "inspection_passed_at", skip_when: { field: "permit_required", value: false } },
-          { id: "review", label: "Google Review", completion_check: "timestamp", timestamp_field: "review_request_sent_at" },
-          { id: "follow_up", label: "Quality Check", completion_check: "timestamp", timestamp_field: "follow_up_completed_at" },
-        ],
-        service: [
-          { id: "schedule", label: "Schedule Service", completion_check: "field_set", field_check: { field: "scheduled_date" } },
-          { id: "assign", label: "Assign Tech", completion_check: "field_set", field_check: { field: "assigned_to" } },
-          { id: "confirmation", label: "Appointment Reminder", completion_check: "timestamp", timestamp_field: "confirmation_sent_at" },
-          { id: "dispatch", label: "Dispatch Tech", completion_check: "timestamp", timestamp_field: "dispatch_sent_at" },
-          { id: "in_progress", label: "Mark On-Site", completion_check: "status", field_check: { field: "status", value: "in_progress" } },
-          { id: "completion_form", label: "Service Checklist", completion_check: "timestamp", timestamp_field: "completion_form_sent_at" },
-          { id: "invoice", label: "Send Invoice", completion_check: "timestamp", timestamp_field: "invoice_sent_at" },
-          { id: "payment", label: "Confirm Payment", completion_check: "timestamp", timestamp_field: "payment_collected_at" },
-          { id: "review", label: "Google Review", completion_check: "timestamp", timestamp_field: "review_request_sent_at" },
-          { id: "follow_up", label: "Quality Check", completion_check: "timestamp", timestamp_field: "follow_up_completed_at" },
-        ],
-      };
-      const resolvedSteps = steps || DEFAULT_STEPS[jobType] || DEFAULT_STEPS.service;
-
-      const allSteps = resolvedSteps.map((s: any) => {
-        const skipped = isStepSkipped(s, job);
-        const completed = isStepComplete(s, job);
-        return { id: s.id, label: s.label, completed, skipped, skip_reason: skipped ? `${s.skip_when?.field} condition met` : null };
-      });
-
-      let currentIdx = allSteps.findIndex((s: any) => !s.completed);
-      const isComplete = currentIdx === -1;
-      if (isComplete) currentIdx = allSteps.length - 1;
-
-      // Get unresolved workflow alerts for this job
-      const { data: alerts } = await sb.from("workflow_alerts")
-        .select("alert_type, severity, message, step_id, created_at")
-        .eq("job_id", args.job_id)
-        .eq("resolved", false)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      result = {
-        status: "success",
-        job_number: job.hcp_job_number || job.job_number,
-        customer: job.customer_name,
-        job_type: jobType,
-        is_complete: isComplete,
-        current_step: isComplete ? null : { id: allSteps[currentIdx].id, label: allSteps[currentIdx].label, index: currentIdx, total: allSteps.length },
-        completed_steps: allSteps.filter((s: any) => s.completed && !s.skipped).map((s: any) => s.id),
-        skipped_steps: allSteps.filter((s: any) => s.skipped).map((s: any) => ({ id: s.id, reason: s.skip_reason })),
-        remaining_steps: allSteps.filter((s: any) => !s.completed).map((s: any) => s.id),
-        unresolved_alerts: (alerts || []).length,
-        alerts: (alerts || []).map((a: any) => ({ type: a.alert_type, severity: a.severity, message: a.message, step: a.step_id })),
-      };
-
+    // ═══════ Operational job tools ═══════
     } else if (toolName === "update_job_field") {
       // Whitelist of allowed fields for security
       const ALLOWED_FIELDS = new Set([
@@ -3003,7 +2870,6 @@ serve(async (req) => {
     }
     // Workflow visibility — route-aware, NOT always-loaded
     if (needed.has("workflow")) {
-      addLoader("workflowAlerts", getWorkflowAlertsContext(sb));
       addLoader("actionItems", getActionItemsContext(sb));
       addLoader("outboundDrafts", getOutboundDraftsContext(sb));
       addLoader("jobReminders", getJobRemindersContext(sb));
@@ -3239,7 +3105,7 @@ Use the actual UUIDs from the data above. This makes entities clickable in the U
 `;
 
     const runtimeData = `${companySettingsCtx}${brandProfilesCtx}${presentationSectionsCtx}${scheduleSummaryCtx}${trainingContext}
-${employeeList}${agentToolsSection}${smsTemplates}${emailTemplates}${ctx("activityLog")}${ctx("todos")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("email")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("emailActions")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("workflowAlerts")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
+${employeeList}${agentToolsSection}${smsTemplates}${emailTemplates}${ctx("activityLog")}${ctx("todos")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("email")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("emailActions")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
 ${customerLookupCtx}${ragContext}
 ${navigationLinksInstruction}
 CURRENT TASK DATA:
@@ -3340,7 +3206,6 @@ TOOL ROUTING RULES (follow strictly)
       invoke_carrier_enterprise: invokeCarrierEnterpriseTool,
       invoke_invoicing: invokeInvoicingTool,
       // Workflow
-      get_workflow_status: getWorkflowStatusTool,
       update_job_field: updateJobFieldTool,
       create_parts_order: createPartsOrderTool,
       update_warranty_status: updateWarrantyStatusTool,
@@ -3361,10 +3226,10 @@ TOOL ROUTING RULES (follow strictly)
     // call any DB-enabled tool by name — but the model only "sees" the relevant ones.
     //
     // Tools always available (every page): search_customer, create_todo, complete_todo,
-    // suggest_actions, web_search, lookup_equipment, verify_address, get_workflow_status.
+    // suggest_actions, web_search, lookup_equipment, verify_address.
     const ALWAYS_ON_TOOLS = new Set([
       "search_customer", "create_todo", "complete_todo", "suggest_actions",
-      "web_search", "lookup_equipment", "verify_address", "get_workflow_status",
+      "web_search", "lookup_equipment", "verify_address",
       "update_instruction", "log_learning",
     ]);
 

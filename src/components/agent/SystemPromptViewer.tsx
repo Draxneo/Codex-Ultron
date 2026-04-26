@@ -36,6 +36,10 @@ function tokensOf(s: string) {
   return Math.round((s?.length || 0) / 4);
 }
 
+function labelForCategory(category: string) {
+  return category === "workflow" ? "operations" : category.replace(/_/g, " ");
+}
+
 function SectionCard({ section }: { section: PromptSection }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -105,7 +109,7 @@ function SectionCard({ section }: { section: PromptSection }) {
             </button>
           </CollapsibleTrigger>
           <Badge variant="outline" className={cn("text-[10px] font-normal h-5", catColor)}>
-            {section.category}
+            {labelForCategory(section.category)}
           </Badge>
           <Badge variant="secondary" className="text-[10px] font-mono h-5">
             ~{tokens}t
@@ -220,7 +224,7 @@ export function SystemPromptViewer() {
         {orderedCats.map(cat => (
           <div key={cat} className="space-y-1.5">
             <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold px-1">
-              {cat.replace(/_/g, " ")}
+              {labelForCategory(cat)}
             </h3>
             {grouped[cat].map(s => (
               <SectionCard key={s.id} section={s} />

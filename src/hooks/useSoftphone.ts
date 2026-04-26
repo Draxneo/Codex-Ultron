@@ -1023,7 +1023,7 @@ export function useSoftphone(enabled: boolean = true) {
 
   // Listen for the "phone window shown/focused" IPC from Electron main and
   // run the safe recovery path. This replaces the old "refresh to fix it"
-  // workflow without ever tearing down a live call.
+  // flow without ever tearing down a live call.
   useEffect(() => {
     if (isElectronMainWindow || !enabled) return;
     // Only the pop-out should react

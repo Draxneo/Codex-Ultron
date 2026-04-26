@@ -143,7 +143,7 @@ export function useEstimateCloseRate(range: ReportRange = "6m") {
   });
 }
 
-/** @deprecated Legacy overdue task trend removed — workflow engine handles progression */
+/** @deprecated Legacy overdue task trend removed — attention data handles stuck work */
 export function useOverdueTaskTrend(range: ReportRange = "6m") {
   return useQuery({
     queryKey: ["report_overdue_trend", range],

@@ -4,7 +4,7 @@
  * the current job pinned as page context.
  *
  * Replaces the legacy "Estimate / Line Items / Job Inputs / Job Fields …"
- * accordion stack on the tech job detail. Techs don't need workflow
+ * accordion stack on the tech job detail. Techs don't need office process
  * scaffolding — they need to ask JARVIS a question hands-free.
  */
 

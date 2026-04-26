@@ -5,9 +5,8 @@
  * 1. Format data (Title Case names, standardize address/phone)
  * 2. Create chat channel
  * 3. Auto-stamp line items from templates (jobs only)
- * 4. Invoke auto-advance-workflow (jobs only)
- * 5. Push to HCP (route to /estimates or /jobs based on type)
- * 6. Log activity
+ * 4. Push to HCP (route to /estimates or /jobs based on type)
+ * 5. Log activity
  *
  * This is the ONE SOURCE OF TRUTH for post-creation logic.
  * Every pathway (UI, HITL, estimate conversion, customer-actions) calls this.
@@ -444,7 +443,7 @@ Deno.serve(async (req) => {
       const sb = getSupabaseAdmin();
 
   try {
-    const { job_id, estimate_id, created_by, skip_hcp, skip_workflow } = await req.json();
+    const { job_id, estimate_id, created_by, skip_hcp } = await req.json();
     if (!job_id && !estimate_id) throw new Error("job_id or estimate_id required");
 
     // Determine source table and fetch record
@@ -581,18 +580,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ─── 4. INVOKE AUTO-ADVANCE-WORKFLOW (jobs only, non-estimate) ───
-    if (!skip_workflow && !isEstimateTable && !isEstimateType) {
-      try {
-        await sb.functions.invoke("auto-advance-workflow", { body: { job_id: recordId } });
-        results.workflow_started = true;
-      } catch (e) {
-        console.error("auto-advance-workflow failed:", e);
-        results.workflow_error = String(e);
-      }
-    }
-
-    // ─── 6. LOG ACTIVITY ───
+    // ─── 5. LOG ACTIVITY ───
     const actionType = isEstimateType ? "estimate_created" : "job_created";
     const logEntry: any = {
       action: actionType,

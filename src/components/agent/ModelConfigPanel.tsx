@@ -19,7 +19,7 @@ const TASK_META: Record<string, { icon: typeof MessageSquare; group: "conversati
   portal_chat: { icon: Globe, group: "conversational", description: "Customer portal chatbot — answers customer questions about their jobs and agreements." },
   tech_form: { icon: Wrench, group: "conversational", description: "Field assistant chat embedded in tech forms — helps techs with diagnostics and notes." },
   communications: { icon: Send, group: "processing", description: "Drafts and sends outbound communications — emails, SMS sequences, and notifications." },
-  email_agent: { icon: Mail, group: "processing", description: "Composes email replies and handles outbound email workflows." },
+  email_agent: { icon: Mail, group: "processing", description: "Composes email replies and handles outbound email routines." },
   email_classification: { icon: Mail, group: "processing", description: "Classifies inbound emails (customer, supply house, vendor, solicitor) and routes to correct inbox." },
   vision_extraction: { icon: Eye, group: "processing", description: "Reads data plates, supply tickets, invoices, and documents from photos using vision/OCR." },
   sms_auto_reply: { icon: MessageCircle, group: "processing", description: "Generates auto-reply SMS to customer texts using job context." },
@@ -154,10 +154,10 @@ export function ModelConfigPanel() {
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-sm flex items-center gap-2 font-medium">
             <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-            Workflow Stall Detection
+            Attention Stall Detection
           </CardTitle>
           <CardDescription className="text-xs mt-0.5">
-            JARVIS texts the responsible party when a job is stuck at a step longer than these thresholds. If no response, escalates to you.
+            JARVIS texts the responsible party when a job has gone quiet longer than these thresholds. If no response, escalates to you.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 space-y-4">
