@@ -130,8 +130,7 @@ export function CopilotTraining() {
 
       <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground">
         <strong className="text-foreground">Note:</strong> Company name, phone, hours, and service area are managed in{" "}
-        <span className="font-medium text-foreground">Admin → Company Settings</span> and automatically injected into every AI request. Job statuses are defined by{" "}
-        <span className="font-medium text-foreground">Workflow Builder</span> steps. No need to duplicate that info here.
+        <span className="font-medium text-foreground">Admin -&gt; Company Settings</span> and automatically injected into every AI request. Train JARVIS on business judgment here, not basic company facts.
       </div>
 
       {allCategories.map(cat => (

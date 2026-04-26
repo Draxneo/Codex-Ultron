@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
   Package, CreditCard, Brain, BookOpen, ChevronRight, ChevronLeft, Gift, Phone, Mail, Eye,
-  Settings2, GitBranch, FileText, Webhook, MessageSquare, Users, Shield,
+  Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, Store, MapPin, RefreshCw, ScanSearch, Activity,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
@@ -159,7 +159,6 @@ const TOOL_CARDS: ToolCardDef[] = [
   { key: "jarvis", title: "JARVIS", description: "Proactive dashboard — what needs attention, AI activity, and quick actions.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/copilot" },
   { key: "shopping-cart", title: "Catalog & Pricebook", description: "Browse and manage equipment matchups, repairs, parts, and AHRI lookups — your master pricebook.", icon: Package, borderColor: "border-l-orange-500", iconColor: "text-orange-500", iconBg: "bg-orange-500/10", to: "/catalog" },
   { key: "sales-presentations", title: "Presentation Design Studio", description: "Design and preview all customer-facing presentations.", icon: BookOpen, borderColor: "border-l-amber-500", iconColor: "text-amber-500", iconBg: "bg-amber-500/10", to: "/sales-presentations" },
-  { key: "workflow", title: "Workflow Builder", description: "Design step-by-step flows for each job type.", icon: GitBranch, borderColor: "border-l-indigo-500", iconColor: "text-indigo-500", iconBg: "bg-indigo-500/10", to: "/workflow-builder", hasCanvas: true },
   { key: "agent-training", title: "JARVIS Training", description: "Configure JARVIS instructions, tools, knowledge base, and output templates.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/agent-training" },
   { key: "portal-preview", title: "Customer Portal Preview", description: "Preview the customer portal with sample data.", icon: Eye, borderColor: "border-l-emerald-500", iconColor: "text-emerald-500", iconBg: "bg-emerald-500/10", to: "/portal/preview" },
   
@@ -920,11 +919,11 @@ function AdminSectionContent({ section }: { section: string }) {
           </div>
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <GitBranch className="h-4 w-4 text-indigo-500" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Workflow & Operations</h2>
+              <Phone className="h-4 w-4 text-cyan-500" />
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Operations</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["workflow", "phone-system", "sequences"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["phone-system", "sequences"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>

@@ -58,8 +58,8 @@ Universal contact resolver order: **Employee → Customer → Vendor → Lead.**
 ### 7. AI is observer-only on inbound
 JARVIS extracts intent and proposes actions, but **never** sends customer-facing messages without HITL (human-in-the-loop) approval. Approval flows live in the dispatcher action cards.
 
-### 8. One Workflow, One Source
-The "What's Next" engine is governed by the React Flow builder at `/workflow-builder`. Don't fork workflow logic into components — extend the builder.
+### 8. Attention First
+The old workflow builder is retired. "What's next" should come from attention data, action items, communications, invoices, photos, and AI-readable job/estimate state.
 
 ### 9. Never edit auto-generated files
 - `src/integrations/supabase/client.ts`
@@ -93,7 +93,7 @@ The "What's Next" engine is governed by the React Flow builder at `/workflow-bui
 | **Job Finalization Pipeline** | `finalize-job` |
 | **CSR Intake** (popup with live Deepgram transcription + extraction) | `/csr-intake`, `csr-extract` |
 | **Dispatch Board** | `/jobs/board` |
-| **Workflow Builder** (React Flow) | `/workflow-builder` |
+| **Attention / What's Next** | `/copilot`, `useAttentionData`, `action_items` |
 | **Tech Mobile Shell** (no swipe, bottom-tab nav, native keyboard support) | `/tech`, `MobileShell` |
 | **Visual Pricebook** (Vaul drawer) | tech form line item picker |
 | **Quick Quote** (deterministic, non-AI) | `/quick-quote` |
@@ -175,7 +175,7 @@ npm run dev   # Vite, strictPort: true on :8080
 
 ## The 6 Core Rules (cheat sheet)
 
-1. **One Workflow** — extend the builder, don't fork logic.
+1. **Attention First** - build toward AI-tracked outstanding items, not rigid workflow steps.
 2. **One Source of Truth** — HCP for jobs/customers, `company_settings` for identity, `user_roles` for permissions.
 3. **Centralized Pipelines** — `send-sms`, `voice-webhook`, `create-hcp-job`, Lovable AI gateway.
 4. **HCP-First** — never insert jobs/estimates locally; wait for the webhook.

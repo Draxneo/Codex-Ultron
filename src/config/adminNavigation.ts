@@ -10,7 +10,7 @@
  *  - `section` for settings = the ?section= query param Admin.tsx switches on
  */
 import {
-  Brain, Package, BookOpen, GitBranch, Phone, CreditCard,
+  Brain, Package, BookOpen, Phone, CreditCard,
   Store, Eye, MapPin, Settings2, Webhook, BarChart3,
   Building2, Users, Layers, Route, Bot, ClipboardList, Calculator,
   GraduationCap, MessageSquareText,
@@ -43,7 +43,6 @@ export const TOOL_CARDS: ToolEntry[] = [
   { label: "JARVIS",            icon: Brain,         path: "/copilot",                     color: "text-violet-500",  bg: "bg-violet-500/10" },
   { label: "Catalog & Pricebook", icon: Package,     path: "/catalog",                     color: "text-orange-500",  bg: "bg-orange-500/10" },
   { label: "Presentations",     icon: BookOpen,      path: "/sales-presentations",         color: "text-amber-500",   bg: "bg-amber-500/10" },
-  { label: "Workflow",          icon: GitBranch,     path: "/workflow-builder",            color: "text-indigo-500",  bg: "bg-indigo-500/10" },
   { label: "IVR Builder",       icon: Phone,         path: "/ivr-builder",                 color: "text-cyan-500",    bg: "bg-cyan-500/10" },
   { label: "Call Routing",      icon: Route,         path: "/admin/call-routing",          color: "text-cyan-600",    bg: "bg-cyan-600/10" },
   { label: "Sequences",         icon: Layers,        path: "/sequence-builder",            color: "text-green-500",   bg: "bg-green-500/10" },

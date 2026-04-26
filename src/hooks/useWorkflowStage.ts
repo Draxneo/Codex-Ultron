@@ -5,8 +5,6 @@
  * in order and finds the first incomplete one — that's the current step.
  * 
  * USED BY:
- * - WorkflowActionBar (determines which button to show)
- * - WorkflowProgressStrip (determines which dots are filled)
  * - DispatchBoard (shows where each job is in its lifecycle)
  * - AttentionStrip (detects stuck jobs)
  * 
@@ -36,7 +34,7 @@ export interface StageInfo {
   stepIndex: number;
   /** Total number of steps in this workflow */
   totalSteps: number;
-  /** All steps with their completion status — used by WorkflowProgressStrip */
+  /** All legacy lifecycle steps with their completion status. */
   allSteps: Array<WorkflowStep & { completed: boolean; current: boolean }>;
   /** Is the entire workflow complete? (all steps done) */
   isComplete: boolean;
@@ -168,7 +166,7 @@ const STAGE_COLORS: Record<string, string> = {
  * 4. Returns everything the UI needs to render
  * 
  * @param job - The job/estimate record (any shape — reads fields dynamically)
- * @param steps - Optional custom steps (from WorkflowBuilder). Falls back to defaults for the job_type.
+ * @param steps - Optional legacy steps. Falls back to defaults for the job_type.
  */
 export function getStageInfo(
   job: Record<string, any>,

@@ -24,10 +24,6 @@ import { cn } from "@/lib/utils";
 
 import { CustomerSmsTab } from "@/components/SmsEmbedTab";
 import { CustomerCallsTab } from "@/components/CallLogEmbedTab";
-import { WorkflowProgressStrip } from "@/components/WorkflowProgressStrip";
-import { WorkflowActionBar } from "@/components/WorkflowActionBar";
-import { getDefaultSteps } from "@/hooks/useWorkflowDefinitions";
-import { useQuery } from "@tanstack/react-query";
 import { usePresentationsForEstimate, useResponsesForEstimate } from "@/hooks/useEstimatePresentations";
 import { formatDistanceToNow } from "date-fns";
 
@@ -56,16 +52,6 @@ function EstimateStatusBadge({ status }: { status: string }) {
 }
 
 
-function useEstimateEmployees() {
-  return useQuery({
-    queryKey: ["employees_active"],
-    queryFn: async () => {
-      const { data } = await supabase.from("employees").select("*").eq("is_active", true);
-      return data || [];
-    },
-  });
-}
-
 const tabTriggerClass = "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm flex items-center gap-1.5";
 
 export default function EstimateDetail() {
@@ -74,7 +60,6 @@ export default function EstimateDetail() {
   const isMobile = useIsMobile();
   const { data: estimate, isLoading } = useEstimate(id);
   const updateStatus = useUpdateEstimateStatus();
-  const { data: employees } = useEstimateEmployees();
   const [review, setReview] = useState<EstimateReview | null>(null);
   const [reviewLoading, setReviewLoading] = useState(true);
   
@@ -128,25 +113,6 @@ export default function EstimateDetail() {
 
   const reviewConfig = review ? (reviewStatusConfig[review.status] || reviewStatusConfig.pending_review) : null;
   const ws = estimate.work_status || "new";
-
-  /* Build a "job-like" record for the workflow engine */
-  const estimateAsJob: Record<string, any> = {
-    ...estimate,
-    job_type: "estimate",
-    status: estimate.work_status || "new",
-    customer_name: estimate.customer_name,
-    customer_phone: estimate.customer_phone,
-  };
-
-  const estimateSteps = getDefaultSteps("estimate");
-
-  /* Stub callbacks for WorkflowActionBar — estimates use the `estimates` table */
-  const handleSendForm = (type: "install_checklist" | "techform") => {
-    toast.info("Send form from the estimate review flow");
-  };
-  const handleDispatch = () => {
-    toast.info("Dispatch from the estimate workflow");
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -274,21 +240,7 @@ export default function EstimateDetail() {
             {estimate.assigned_to && <> · {estimate.assigned_to}</>}
           </div>
 
-          {/* Workflow Action Bar — "What's Next" for estimates */}
-          <WorkflowActionBar
-            job={estimateAsJob}
-            jobId={id!}
-            employees={employees}
-            onSendForm={handleSendForm}
-            onDispatch={handleDispatch}
-            dispatching={false}
-            workflowSteps={estimateSteps}
-            tableName="estimates"
-          />
         </div>
-
-        {/* Workflow Progress Strip */}
-        <WorkflowProgressStrip job={estimateAsJob} steps={estimateSteps} />
 
         {/* Property Info Card */}
         {estimate.address && <PropertyCard address={estimate.address} />}

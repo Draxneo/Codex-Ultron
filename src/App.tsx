@@ -94,7 +94,6 @@ import UnscheduledJobs from "./pages/UnscheduledJobs";
 import CustomerIntakePublic from "./pages/CustomerIntakePublic";
 import NotFound from "./pages/NotFound";
 
-import WorkflowBuilder from "./pages/WorkflowBuilder";
 import IvrBuilder from "./pages/IvrBuilder";
 import CallRoutingSettings from "./pages/CallRoutingSettings";
 import SequenceBuilder from "./pages/SequenceBuilder";
@@ -521,7 +520,7 @@ function AppRouter() {
         
         <Route path="/portal/preview" element={<ProtectedRoute><PortalPreview /></ProtectedRoute>} />
         
-        <Route path="/workflow-builder" element={<ProtectedRoute><WorkflowBuilder /></ProtectedRoute>} />
+        <Route path="/workflow-builder" element={<Navigate to="/copilot" replace />} />
         <Route path="/ivr-builder" element={<ProtectedRoute><IvrBuilder /></ProtectedRoute>} />
         <Route path="/admin/call-routing" element={<ProtectedRoute><CallRoutingSettings /></ProtectedRoute>} />
         <Route path="/sequence-builder" element={<ProtectedRoute><SequenceBuilder /></ProtectedRoute>} />

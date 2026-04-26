@@ -250,7 +250,7 @@ export default function TechDashboard() {
             const isEstimate = job._itemType === "estimate";
             const formToken = employeeId ? `${job.id}__${employeeId}` : null;
 
-            // For estimates, map work_status → status so the workflow engine reads it correctly
+            // For estimates, map work_status -> status for the legacy lifecycle label helper
             const stageJob = isEstimate ? { ...job, status: job.work_status || "new" } : job;
             const si = getStageInfo(stageJob as any);
 
