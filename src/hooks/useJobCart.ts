@@ -175,7 +175,7 @@ export function useJobCart(jobId: string | undefined) {
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({
           to: phone,
-          body: `${greeting}here's your cart from Comfort Solutions: ${link}`,
+          body: `${greeting}here's your cart from Carnes and Sons Air Conditioning: ${link}`,
           jobId,
           contactName: customerName || null,
           contactType: "customer",

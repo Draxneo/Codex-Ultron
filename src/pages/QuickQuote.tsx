@@ -53,7 +53,7 @@ const LOCATION_ORIENTATIONS: Record<string, string[]> = {
   Closet: ["Multiposition", "Vertical"],
 };
 
-const PUBLISHED_DOMAIN = "https://csultramode.lovable.app";
+const PUBLISHED_DOMAIN = "https://codex-ultron.onrender.com";
 
 export default function QuickQuote() {
   const navigate = useNavigate();

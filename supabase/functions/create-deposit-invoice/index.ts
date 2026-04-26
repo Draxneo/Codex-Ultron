@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .maybeSingle();
 
-      const baseUrl = Deno.env.get("APP_BASE_URL") || "https://csultramode.lovable.app";
+      const baseUrl = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://codex-ultron.onrender.com";
       const invoiceUrl = `${baseUrl}/invoice/${invoice.public_token}`;
 
       const replacements: Record<string, string> = {

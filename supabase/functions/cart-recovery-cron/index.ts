@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
 
       const firstName = (job?.customer_name as string | null | undefined)?.split(" ")[0];
       const greeting = firstName ? `Hi ${firstName}, ` : "";
-      const link = `${Deno.env.get("PUBLIC_APP_URL") || "https://csultramode.lovable.app"}/cart/${c.public_token}`;
+      const appUrl = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || Deno.env.get("PUBLIC_APP_URL") || "https://codex-ultron.onrender.com";
+      const link = `${appUrl}/cart/${c.public_token}`;
       const message = `${greeting}just checking in on your quote ($${Number(c.total).toFixed(2)}). Any questions we can answer? Reply here or view it again: ${link}`;
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

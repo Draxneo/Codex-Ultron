@@ -4,7 +4,7 @@
  *
  * Used to silence the JARVIS announcer + desktop/toast notifications in the
  * dev preview so they don't race the Electron app or talk over the developer
- * while building. Production (csultramode.lovable.app), Electron, and
+ * while building. Production, Electron, and
  * Capacitor native all return false and stay fully active.
  */
 export function isLovableDevPreview(): boolean {

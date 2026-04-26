@@ -11,7 +11,7 @@ import { calcMonthly120 } from "../_shared/paymentOptions.ts";
 
 
 // Production base URL for form links
-const APP_BASE_URL = "https://csultramode.lovable.app";
+const APP_BASE_URL = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://codex-ultron.onrender.com";
 
 async function getTaskContext(sb: any) {
   // OPTIMIZED: capped at 40 active jobs (was 100). The schedule summary already

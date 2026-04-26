@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     for (const r of (settings as any[]) || []) cs[r.key] = r.value;
 
     const company = {
-      name: cs.company_name || "Comfort Solutions",
+      name: cs.company_name || "Carnes and Sons Air Conditioning",
       phone: cs.company_phone || "",
       email: cs.company_email || "",
       address: cs.company_address || "",
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             personalizations: [{ to: [{ email: customerEmail }] }],
-            from: { email: company.email || "no-reply@comfortsolutionssa.com", name: company.name },
+            from: { email: company.email || "office@carnesandsons.com", name: company.name },
             subject: `Your receipt from ${company.name} — Order #${job?.job_number || cart.id.slice(0, 8)}`,
             content: [{ type: "text/html", value: html }],
           }),
@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
     // Optional SMS notification with link
     let smsSent = false;
     if (job?.customer_phone) {
-      const link = `${Deno.env.get("PUBLIC_APP_URL") || "https://csultramode.lovable.app"}/cart/${cart.public_token}`;
+      const appUrl = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || Deno.env.get("PUBLIC_APP_URL") || "https://codex-ultron.onrender.com";
+      const link = `${appUrl}/cart/${cart.public_token}`;
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const resp = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {

@@ -399,7 +399,8 @@ serve(async (req) => {
         throw new Error(`Token create error: ${tokenError.message}`);
       }
 
-      const intakeUrl = `https://csultramode.lovable.app/intake/${tokenData.token}`;
+      const baseUrl = Deno.env.get("PUBLIC_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://codex-ultron.onrender.com";
+      const intakeUrl = `${baseUrl}/intake/${tokenData.token}`;
 
       // Send SMS with intake link
       const smsResp = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
