@@ -330,6 +330,24 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("Street View error:", e);
         }
+
+        if (!result.street_view_url) {
+          const fallbackParams = new URLSearchParams({
+            size: "800x400",
+            key: googleKey,
+          });
+
+          if (result.lat && result.lng) {
+            fallbackParams.set("location", `${result.lat},${result.lng}`);
+          } else {
+            fallbackParams.set("location", address);
+          }
+
+          fallbackParams.set("source", "outdoor");
+          fallbackParams.set("pitch", "10");
+          fallbackParams.set("fov", "80");
+          result.street_view_url = `https://maps.googleapis.com/maps/api/streetview?${fallbackParams.toString()}`;
+        }
       }
     }
 
