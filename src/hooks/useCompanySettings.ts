@@ -144,7 +144,7 @@ const DEFAULTS: CompanySettings = {
   missed_call_sms_after_hours: "Hi! Thanks for calling — we're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here.",
   missed_call_sms_after_hours_template_key: "",
   telephony_handoff_enabled: "false",
-  telephony_handoff_url: "https://ultraphone.lovable.app",
+  telephony_handoff_url: "https://codex-ultron.onrender.com",
 };
 
 export function useCompanySettings() {

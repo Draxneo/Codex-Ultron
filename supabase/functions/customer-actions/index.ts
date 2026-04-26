@@ -31,11 +31,11 @@ const customerTool = {
   },
 };
 
-async function parseCustomerSMS(text: string, lovableApiKey: string, model: string) {
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+async function parseCustomerSMS(text: string, openaiApiKey: string, model: string) {
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${lovableApiKey}`,
+      Authorization: `Bearer ${openaiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -265,7 +265,7 @@ serve(async (req) => {
   }
 
   try {
-            const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+            const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = getSupabaseAdmin();
@@ -275,13 +275,13 @@ serve(async (req) => {
 
     // ========== PARSE CUSTOMER MODE ==========
     if (mode === "parse_customer") {
-      if (!lovableApiKey) {
-        return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured." }), {
+      if (!openaiApiKey) {
+        return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured." }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const requestedModel = body.model || await getTaskModel(sb, "customer_parsing");
-      const parsed = await parseCustomerSMS(body.text, lovableApiKey, requestedModel);
+      const parsed = await parseCustomerSMS(body.text, openaiApiKey, requestedModel);
 
       let existingMatches: any[] = [];
       const addressSearch = `${parsed.street}`.trim();

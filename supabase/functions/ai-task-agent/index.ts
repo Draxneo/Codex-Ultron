@@ -1253,7 +1253,7 @@ async function executeToolCall(
   sb: any,
   supabaseUrl: string,
   supabaseKey: string,
-  lovableApiKey: string | undefined,
+  openaiApiKey: string | undefined,
   req: Request
 ): Promise<any> {
   let result: any = { status: "skipped" };
@@ -1489,9 +1489,9 @@ async function executeToolCall(
       const attUrl = att.url || att.storage_path;
       if (!attUrl) throw new Error("Attachment has no accessible URL");
       const visionModel = await getTaskModel(sb, "vision_extraction");
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: visionModel,
           messages: [
@@ -2697,7 +2697,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-            const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+            const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     const hcpApiKey = Deno.env.get("HCP_API_KEY");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -2715,7 +2715,7 @@ serve(async (req) => {
     // Safety net: block any non-gateway models that somehow got into the config
     if (requestedModel.startsWith("claude") || requestedModel.includes("anthropic")) {
       console.warn(`Blocked non-gateway model "${requestedModel}" in ai_model_config[${taskKey}] — falling back to Lovable AI`);
-      requestedModel = "google/gemini-3-flash-preview";
+      requestedModel = "gpt-5-mini";
     }
 
     // ===== COST GUARD: Force Flash unless intent explicitly justifies Pro =====
@@ -2728,8 +2728,8 @@ serve(async (req) => {
       (requestedModel.includes("gemini-2.5-pro") || requestedModel.includes("gpt-5") && !requestedModel.includes("mini") && !requestedModel.includes("nano"))
       && !explicitlyWantsPro
     ) {
-      console.log(`[cost-guard] Downgraded ${requestedModel} → google/gemini-3-flash-preview for mode "${callerMode || "chat"}" (no deep_reasoning flag)`);
-      requestedModel = "google/gemini-3-flash-preview";
+      console.log(`[cost-guard] Downgraded ${requestedModel} → gpt-5-mini for mode "${callerMode || "chat"}" (no deep_reasoning flag)`);
+      requestedModel = "gpt-5-mini";
     }
 
     // CRM tools (create_customer, create_job) are now inline in executeToolCall()
@@ -2737,8 +2737,8 @@ serve(async (req) => {
     // ========== EXISTING BRIEFING & CHAT MODES ==========
 
     // Validate keys
-    if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured." }), {
+    if (!openaiApiKey) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -2956,7 +2956,7 @@ serve(async (req) => {
     // RAG: embed user query and retrieve relevant knowledge chunks (hybrid search)
     // Features: source-aware routing, multi-query decomposition, per-customer context, feedback-aware ranking
     let ragContext = "";
-    if (mode === "chat" && latestUserText && lovableApiKey) {
+    if (mode === "chat" && latestUserText && openaiApiKey) {
       try {
         // Detect intent for source-aware filtering
         const lowerText = latestUserText.toLowerCase();
@@ -3343,10 +3343,10 @@ TOOL ROUTING RULES (follow strictly)
       aiRequestBody.tools = chatTools;
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
+        Authorization: `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(aiRequestBody),
@@ -3414,7 +3414,7 @@ TOOL ROUTING RULES (follow strictly)
           allToolActions.push({ status: "error", error: "Malformed tool arguments" });
           continue;
         }
-        const toolResult = await executeToolCall(toolCall.function.name, toolArgs, sb, supabaseUrl, supabaseKey, lovableApiKey, req);
+        const toolResult = await executeToolCall(toolCall.function.name, toolArgs, sb, supabaseUrl, supabaseKey, openaiApiKey, req);
         toolResults.push(toolResult);
         allToolActions.push(toolResult);
       }
@@ -3436,9 +3436,9 @@ TOOL ROUTING RULES (follow strictly)
 
       let followUpResp: Response | null = null;
       for (let retryAttempt = 0; retryAttempt < 3; retryAttempt++) {
-        followUpResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        followUpResp = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(followUpBody),
         });
         if (followUpResp.status === 429 && retryAttempt < 2) {

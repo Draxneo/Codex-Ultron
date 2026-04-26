@@ -11,7 +11,7 @@ serve(async (req) => {
     const { job_id, target_margin = 65, employee_id } = await req.json();
     if (!job_id) throw new Error("job_id is required");
 
-            const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+            const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
     const sb = getSupabaseAdmin();
 
     // 1. Fetch job info
@@ -99,9 +99,9 @@ DESCRIPTION RULES (for unmatched items only):
 - "importance": One sentence explaining why this matters to a homeowner.
 - "consequences": What happens if they skip it.`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: quoteModel,
         messages: [{ role: "user", content: quotePrompt }],

@@ -1,4 +1,4 @@
-project_id = "rjubzymeivdsjjhvdlci"
+project_id = "tqkqqjvddfrcxrxfvzvz"
 
 [functions.recording-proxy]
 verify_jwt = false
@@ -178,4 +178,3 @@ verify_jwt = false
 
 [functions.jarvis-context-builder]
 verify_jwt = false
-

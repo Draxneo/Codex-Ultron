@@ -1,7 +1,7 @@
 /**
- * Per-model pricing for Lovable AI Gateway calls.
+ * Per-model pricing for OpenAI/JARVIS gateway calls.
  * Rates are in **dollars per 1M tokens** (input / output) and reflect the
- * underlying provider list pricing (Lovable adds a small margin on top).
+ * configured provider pricing.
  *
  * estimateCostCents() returns a *cents* value (rounded up to at least 1
  * if any tokens were used) so the api_usage_log dashboard reflects real spend
@@ -11,16 +11,11 @@
 type Rate = { in: number; out: number }; // USD per 1M tokens
 
 const PRICING: Record<string, Rate> = {
-  // Google Gemini
-  "google/gemini-3-flash-preview":   { in: 0.30, out: 2.50 },
-  "google/gemini-3.1-flash-image-preview": { in: 0.30, out: 2.50 },
-  "google/gemini-3-pro-image-preview": { in: 2.00, out: 12.00 },
-  "google/gemini-3.1-pro-preview":   { in: 2.00, out: 12.00 },
-  "google/gemini-2.5-pro":           { in: 1.25, out: 10.00 },
-  "google/gemini-2.5-flash":         { in: 0.30, out: 2.50 },
-  "google/gemini-2.5-flash-lite":    { in: 0.10, out: 0.40 },
-  "google/gemini-2.5-flash-image":   { in: 0.30, out: 2.50 },
   // OpenAI
+  "gpt-5":      { in: 1.25, out: 10.00 },
+  "gpt-5.2":    { in: 1.25, out: 10.00 },
+  "gpt-5-mini": { in: 0.25, out: 2.00 },
+  "gpt-5-nano": { in: 0.05, out: 0.40 },
   "openai/gpt-5":      { in: 1.25, out: 10.00 },
   "openai/gpt-5.2":    { in: 1.25, out: 10.00 },
   "openai/gpt-5-mini": { in: 0.25, out: 2.00 },
@@ -57,7 +52,6 @@ export function estimateCostCents(opts: {
   const usd = (inT * rate.in + outT * rate.out) / 1_000_000;
   const cents = usd * 100;
   if (cents <= 0) return 0;
-  // Store with 4-decimal precision so a 2k-token gemini-flash call (~0.06¢)
-  // doesn't get rounded up to 1¢ (16× overcharge). DB column is numeric.
+  // Store with 4-decimal precision so small AI calls do not get rounded up.
   return Math.round(cents * 10000) / 10000;
 }

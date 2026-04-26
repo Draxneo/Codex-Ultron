@@ -1,8 +1,8 @@
 # Organize Plus — HVAC Operations Platform
 
-An HVAC operations platform that runs as a **communication and enrichment overlay on top of Housecall Pro (HCP)** — not a replacement. HCP is the source of truth for jobs, customers, estimates, and invoices. The local database is an overlay/cache that adds AI, telephony, dispatch intelligence, sales presentations, technician tools, and customer-facing portals on top of it.
+An HVAC operations platform for Carnes and Sons. UltraOffice2.0 is the active source of truth for new development while HCP is phased out as an operating dependency.
 
-Powered by **JARVIS** (the Lovable AI gateway orchestrator) for the dispatcher copilot, CSR intake, parts sourcing, and multimodal chat. Unified Twilio + Deepgram telephony/SMS pipeline. Capacitor mobile shell for technicians. Electron desktop shell for the dispatch desk.
+Powered by **JARVIS** for the dispatcher copilot, CSR intake, parts sourcing, and multimodal chat. Unified Twilio + Deepgram telephony/SMS pipeline. Capacitor mobile shell for technicians. Electron desktop shell for the dispatch desk.
 
 ---
 
@@ -30,7 +30,7 @@ Every outbound action must route through its single canonical pipeline:
 | Outbound SMS / MMS | `send-sms` (status → `sms-status-callback`, audit → `twilio-sms-inspect`) |
 | Outbound voice | `voice-webhook` → `voice-ivr-handler` → `voice-status-callback` |
 | Job / estimate creation | `create-hcp-job` → HCP webhook → `finalize-job` |
-| AI inference | Lovable AI gateway via `LOVABLE_API_KEY` (no direct OpenAI/Gemini keys) |
+| AI inference | OpenAI/JARVIS gateway via `OPENAI_API_KEY` |
 | Email send | SendGrid via `send-email` (signed, DKIM, list-unsubscribe) |
 | Push notifications | `send-push` (FCM HTTP v1) |
 | Company name / phone / address | `loadCompanyInfo()` from `_shared/companyInfo.ts` |

@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
-const DEFAULT_URL = "https://ultraphone.lovable.app";
+const DEFAULT_URL = "https://codex-ultron.onrender.com";
 
 export function TelephonyHandoffCard() {
   const { settings, updateSettings } = useCompanySettings();

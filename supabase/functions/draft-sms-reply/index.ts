@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
     const { data: item, error: itemErr } = await supabase
       .from("action_items").select("*").eq("id", action_item_id).single();
@@ -49,11 +49,11 @@ Rules:
 - Confirm what you can confirm, ask for what you need
 - Do NOT promise specific times unless they were given in the dispatcher's intent`;
 
-    const model = await getTaskModel(supabase, "sms_auto_reply").catch(() => "google/gemini-2.5-flash");
+    const model = await getTaskModel(supabase, "sms_auto_reply").catch(() => "gpt-5-mini");
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
     });
     if (!aiResp.ok) {

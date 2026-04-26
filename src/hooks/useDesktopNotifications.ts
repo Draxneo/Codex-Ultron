@@ -6,7 +6,7 @@ import { useCapacitor } from "@/hooks/useCapacitor";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsOnCall } from "@/hooks/useIsOnCall";
-import { isLovableDevPreview } from "@/lib/devPreview";
+import { isHostedBuilderPreview } from "@/lib/devPreview";
 
 export function useDesktopNotifications() {
   const { isNative } = useCapacitor();
@@ -22,8 +22,8 @@ export function useDesktopNotifications() {
   }, [isNative]);
 
   const notify = useCallback((title: string, body: string, tag?: string, opts?: { icon?: string; variant?: 'default' | 'destructive' | 'call' }) => {
-    // Silence all toasts/native notifications on the Lovable dev preview tab.
-    if (isLovableDevPreview()) {
+    // Silence all toasts/native notifications on the hosted builder preview tab.
+    if (isHostedBuilderPreview()) {
       if (typeof window !== "undefined" && !(window as any).__notifyDevMuteLogged) {
         (window as any).__notifyDevMuteLogged = true;
         console.info("[DevPreview] Desktop notifications muted on dev preview tab");

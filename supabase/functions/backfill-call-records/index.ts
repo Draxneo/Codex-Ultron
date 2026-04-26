@@ -1,20 +1,15 @@
 import { resolveContact } from "../_shared/resolveContact.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
-
-
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not set");
-    const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
-    if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY not set");
+    const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+    const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+    if (!accountSid || !authToken) throw new Error("Twilio credentials are not configured");
 
     const supabase = getSupabaseAdmin();
 
@@ -35,9 +30,9 @@ Deno.serve(async (req) => {
 
     console.log(`Processing ${calls.length} call records`);
 
+    const twilioBaseUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}`;
     const headers = {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "X-Connection-Api-Key": TWILIO_API_KEY,
+      Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
     };
 
     let statusFixed = 0;
@@ -50,7 +45,7 @@ Deno.serve(async (req) => {
         const updates: Record<string, any> = {};
 
         // 1. Fetch call details from Twilio
-        const callResp = await fetch(`${GATEWAY_URL}/Calls/${call.twilio_sid}.json`, { headers });
+        const callResp = await fetch(`${twilioBaseUrl}/Calls/${call.twilio_sid}.json`, { headers });
         if (callResp.ok) {
           const twilioCall = await callResp.json();
           const twilioDuration = parseInt(twilioCall.duration || "0", 10);
@@ -76,7 +71,7 @@ Deno.serve(async (req) => {
 
         // 2. Fetch recordings
         if (!call.recording_url) {
-          const recResp = await fetch(`${GATEWAY_URL}/Calls/${call.twilio_sid}/Recordings.json`, { headers });
+          const recResp = await fetch(`${twilioBaseUrl}/Calls/${call.twilio_sid}/Recordings.json`, { headers });
           if (recResp.ok) {
             const recData = await recResp.json();
             const recordings = recData.recordings || [];

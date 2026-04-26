@@ -508,16 +508,16 @@ async function pushContextNote(
     let noteBody = "";
     if (rawContext.length > 1) {
       try {
-        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-        if (LOVABLE_API_KEY) {
-          const aiRes = await fetch("https://ai.lovable.dev/api/v1/chat/completions", {
+        const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+        if (OPENAI_API_KEY) {
+          const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Authorization": `Bearer ${OPENAI_API_KEY}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash-lite",
+              model: "gpt-5-mini",
               messages: [
                 { role: "system", content: "You are writing a concise private job note for an HVAC company. Summarize communications into 3-6 bullet points: what customer needs, equipment/issue details, urgency, scheduling preferences. Brief and actionable. Plain text bullets only." },
                 { role: "user", content: `Customer: ${meta.customer_name || "Unknown"}\nPhone: ${meta.customer_phone || "N/A"}\n\n${rawContext.join("\n\n")}` },

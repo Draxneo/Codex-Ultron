@@ -4,17 +4,27 @@
  */
 
 const DEFAULTS: Record<string, string> = {
-  copilot_chat: "google/gemini-3-flash-preview",
-  daily_briefing: "google/gemini-3-flash-preview",
-  email_classification: "google/gemini-2.5-flash",
-  vision_extraction: "google/gemini-2.5-flash",
-  sms_auto_reply: "google/gemini-2.5-flash",
-  customer_parsing: "google/gemini-3-flash-preview",
-  tech_form: "google/gemini-3-flash-preview",
-  portal_chat: "google/gemini-3-flash-preview",
-  follow_up: "google/gemini-2.5-flash-lite",
-  call_todo_extraction: "google/gemini-2.5-flash-lite",
+  copilot_chat: "gpt-5-mini",
+  daily_briefing: "gpt-5-mini",
+  email_classification: "gpt-5-mini",
+  vision_extraction: "gpt-5-mini",
+  sms_auto_reply: "gpt-5-mini",
+  customer_parsing: "gpt-5-mini",
+  tech_form: "gpt-5-mini",
+  portal_chat: "gpt-5-mini",
+  follow_up: "gpt-5-mini",
+  call_todo_extraction: "gpt-5-mini",
 };
+
+export function normalizeOpenAIModel(model?: string | null): string {
+  const value = (model || "").trim();
+  if (!value) return "gpt-5-mini";
+  if (value.startsWith("openai/")) return value.slice("openai/".length);
+  if (value.startsWith("google/") || value.startsWith("gemini") || value.startsWith("anthropic/")) {
+    return "gpt-5-mini";
+  }
+  return value;
+}
 
 /**
  * Look up the model for `taskKey` from ai_model_config table.
@@ -28,9 +38,9 @@ export async function getTaskModel(sb: any, taskKey: string): Promise<string> {
       .select("model")
       .eq("task_key", taskKey)
       .maybeSingle();
-    if (data?.model) return data.model;
+    if (data?.model) return normalizeOpenAIModel(data.model);
   } catch (e) {
     console.error(`getTaskModel(${taskKey}) error:`, e);
   }
-  return DEFAULTS[taskKey] || "google/gemini-3-flash-preview";
+  return DEFAULTS[taskKey] || "gpt-5-mini";
 }

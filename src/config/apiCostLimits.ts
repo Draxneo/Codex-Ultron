@@ -36,11 +36,11 @@ export const API_COST_LIMITS: ApiServiceLimit[] = [
   },
   {
     service: "lovable_ai",
-    label: "Lovable AI (JARVIS)",
+    label: "JARVIS AI (JARVIS)",
     dailyCostUsd: 25.0,
     dailyCalls: 500,
     expectedDailyCalls: "~50–300 (chat + classification + extraction)",
-    costPerCall: "Varies by model — gemini-2.5-flash ~$0.001, gpt-5 ~$0.05",
+    costPerCall: "Varies by model — gpt-5-mini ~$0.001, gpt-5 ~$0.05",
     notes: "ai-task-agent is the orchestrator. >$25/day means runaway tool loops.",
     expectedCallsPerJob: 8,
     baselineCalls: 30,

@@ -3,7 +3,7 @@
  *
  * Input: { attachment_id: string, image_url: string }
  *
- * Uses Lovable AI Gateway with Gemini Flash + tool calling to categorize
+ * Uses OpenAI/JARVIS gateway with Gemini Flash + tool calling to categorize
  * the photo into one of: supply_invoice, equipment_data_plate, site_photo,
  * document, other.
  *
@@ -22,8 +22,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -47,14 +47,14 @@ Categorize each image into ONE of:
 
 Be CONSERVATIVE on supply_invoice — only return it when you are very confident the image shows pricing/cost data we should hide from the customer.`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           {

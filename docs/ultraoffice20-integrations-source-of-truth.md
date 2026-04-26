@@ -13,7 +13,6 @@ Render deploys from GitHub. Local commits pushed to `main` are expected to trigg
 
 ## Supabase
 
-- Old Lovable project ref: `rjubzymeivdsjjhvdlci`
 - UltraOffice2.0 staging project ref: `tqkqqjvddfrcxrxfvzvz`
 - Core imported staging data: 29,942 rows
 - Intentionally skipped noisy table: `api_usage_log`
@@ -58,4 +57,4 @@ These areas existed in the old app but should not be treated as finished foundat
 - workflow automations
 - payment flow
 
-Use old code only as reference when helpful.
+Do not use old hosted apps, old Supabase projects, or old local projects as runtime dependencies.

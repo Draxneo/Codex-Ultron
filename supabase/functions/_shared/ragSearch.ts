@@ -1,7 +1,7 @@
 /**
  * Shared RAG search helper — queries knowledge_chunks via match_knowledge RPC.
  * Any edge function can import this to get targeted, similarity-ranked context.
- * Uses LOVABLE_API_KEY for embeddings (same as ai-task-agent pattern).
+ * Uses OPENAI_API_KEY for embeddings (same as ai-task-agent pattern).
  */
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -15,17 +15,17 @@ export async function ragSearch(
   if (!query || query.trim().length < 5) return "";
 
   try {
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) {
-      console.warn("ragSearch: LOVABLE_API_KEY not set, skipping RAG");
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiKey) {
+      console.warn("ragSearch: OPENAI_API_KEY not set, skipping RAG");
       return "";
     }
 
-    // 1. Generate embedding via Lovable AI gateway (same as ai-task-agent)
-    const embResp = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+    // 1. Generate embedding via OpenAI/JARVIS gateway (same as ai-task-agent)
+    const embResp = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableKey}`,
+        Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

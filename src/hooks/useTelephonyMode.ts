@@ -21,7 +21,7 @@ import { isElectron, sendToMain } from "@/lib/electron";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { supabase } from "@/integrations/supabase/client";
 
-const DEFAULT_WEB_URL = "https://ultraphone.lovable.app";
+const DEFAULT_WEB_URL = "https://codex-ultron.onrender.com";
 const DEFAULT_APP_URL = "ultraphone://";
 const TELEPHONY_ROUTES = {
   calls: "/calls",

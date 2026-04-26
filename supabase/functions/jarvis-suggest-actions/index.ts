@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_KEY =
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     // Resolve user from JWT for learned preferences
@@ -123,16 +123,16 @@ Deno.serve(async (req) => {
 
     // 3) Ask the LLM for 3-4 short next-step buttons
     let aiSuggestions: Suggestion[] = [];
-    if (LOVABLE_API_KEY && contextBlob.trim().length > 0) {
+    if (OPENAI_API_KEY && contextBlob.trim().length > 0) {
       try {
-        const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: "gpt-5-mini",
             messages: [
               {
                 role: "system",

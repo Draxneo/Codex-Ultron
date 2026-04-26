@@ -31,8 +31,8 @@ function chunkText(text: string, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP
   return chunks;
 }
 
-async function embedTexts(texts: string[], _lovableKey: string): Promise<number[][]> {
-  // Lovable AI gateway does NOT support embedding models — use OpenAI directly
+async function embedTexts(texts: string[], _openaiKey: string): Promise<number[][]> {
+  // OpenAI/JARVIS gateway does NOT support embedding models — use OpenAI directly
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (!openaiKey) throw new Error("OPENAI_API_KEY not configured for embeddings");
   const resp = await fetch("https://api.openai.com/v1/embeddings", {
@@ -54,8 +54,8 @@ serve(async (req) => {
   try {
     const { source = "all", mode = "full" } = await req.json().catch(() => ({}));
 
-            const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) throw new Error("LOVABLE_API_KEY not configured");
+            const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiApiKey) throw new Error("OPENAI_API_KEY not configured");
 
     const sb = getSupabaseAdmin();
 
@@ -203,7 +203,7 @@ serve(async (req) => {
         const texts = batch.map(c => c.chunk_text);
 
         try {
-          const embeddings = await embedTexts(texts, lovableApiKey);
+          const embeddings = await embedTexts(texts, openaiApiKey);
 
           const insertRows = batch.map((c, idx) => ({
             source_table: c.source_table,

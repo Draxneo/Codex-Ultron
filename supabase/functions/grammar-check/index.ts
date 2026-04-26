@@ -15,8 +15,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
       // Fallback: just capitalize
       let t = text.trim();
       if (t.length > 0 && /[a-z]/.test(t[0])) t = t[0].toUpperCase() + t.slice(1);
@@ -32,14 +32,14 @@ Deno.serve(async (req) => {
     const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
     try {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "gpt-5-mini",
           messages: [
             {
               role: "system",

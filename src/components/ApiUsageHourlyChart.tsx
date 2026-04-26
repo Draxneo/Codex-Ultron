@@ -13,7 +13,7 @@ const SERVICE_LABELS: Record<string, string> = {
   twilio_sms: "Twilio SMS",
   twilio_voice: "Twilio Voice",
   deepgram: "Deepgram",
-  lovable_ai: "Lovable AI",
+  lovable_ai: "JARVIS AI",
   sendgrid: "SendGrid",
   firecrawl: "Firecrawl",
 };

@@ -552,8 +552,8 @@ Deno.serve(async (req) => {
     // ── Observer mode: structured extraction + call correlation + auto-customer creation ──
     // FIX #2: Extraction always runs for non-employee inbound SMS, regardless of auto-draft setting
     if (!isEmployee && !testModeOn) {
-      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-      if (lovableApiKey) {
+      const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+      if (openaiApiKey) {
         try {
           // ── 1. Gather context: SMS thread + recent call_log for this phone ──
           const { data: recentThread } = await supabase.from("sms_log")
@@ -629,10 +629,10 @@ IMPORTANT RULES:
 - Extract scheduling preferences from both SMS and call context
 - For addresses in Texas, default state to "TX" if not specified`;
 
-          const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${lovableApiKey}`,
+              Authorization: `Bearer ${openaiApiKey}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({

@@ -28,10 +28,10 @@ function getSecondaryDisplay() {
 }
 
 const DEV_SERVER_URL = process.env.ELECTRON_DEV_URL || 'http://localhost:8080';
-const LIVE_APP_URL = process.env.ELECTRON_APP_URL || 'https://csultramode.lovable.app';
+const LIVE_APP_URL = process.env.ELECTRON_APP_URL || 'https://codex-ultron.onrender.com';
 const IS_DEV = !require('fs').existsSync(path.join(__dirname, '..', 'dist', 'index.html'))
   || process.env.ELECTRON_DEV === '1';
-const DEFAULT_ULTRAPHONE_URL = 'https://ultraphone.lovable.app';
+const DEFAULT_ULTRAPHONE_URL = 'https://codex-ultron.onrender.com';
 
 function getDefaultCallTargets() {
   return {

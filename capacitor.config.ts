@@ -5,10 +5,9 @@ const config: CapacitorConfig = {
   appName: "Organize Plus",
   webDir: "dist",
   server: {
-    // Load the live sandbox build so native devices always use the latest code
-    url: "https://csultramode.lovable.app?forceHideBadge=true",
+    // Load the live UltraOffice2.0 build so native devices always use the latest code.
+    url: "https://codex-ultron.onrender.com",
     cleartext: false,
-    // Disable caching so Lovable publishes always show immediately
     androidScheme: "https",
   },
   android: {

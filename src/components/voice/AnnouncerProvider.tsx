@@ -16,7 +16,7 @@ import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
 import { useAnnouncerSettings } from "@/hooks/useAnnouncerSettings";
 import { isOnCall as isOnCallNow } from "@/lib/callStateBus";
-import { isLovableDevPreview } from "@/lib/devPreview";
+import { isHostedBuilderPreview } from "@/lib/devPreview";
 
 // Statuses where the user is engaged on a call — suppress voice alerts so
 // JARVIS doesn't talk over the live conversation. Incoming-call announcements
@@ -256,10 +256,10 @@ function AnnouncerProviderInner({ children }: { children: ReactNode }) {
 }
 
 export function AnnouncerProvider({ children }: { children: ReactNode }) {
-  // Silence event-driven announcements on the Lovable dev preview tab so it
+  // Silence event-driven announcements on the hosted builder preview tab so it
   // doesn't race the Electron app / dispatcher's prod tab. Manual "Test" in
   // Admin still works since that's not gated through this provider.
-  if (isLovableDevPreview()) {
+  if (isHostedBuilderPreview()) {
     if (typeof window !== "undefined" && !(window as any).__announcerDevMuteLogged) {
       (window as any).__announcerDevMuteLogged = true;
       console.info("[DevPreview] Announcer muted on dev preview tab");

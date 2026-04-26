@@ -11,8 +11,8 @@ serve(async (req) => {
     const { file_path, file_name } = await req.json();
     if (!file_path) throw new Error("file_path is required");
 
-            const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) throw new Error("LOVABLE_API_KEY not configured");
+            const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiKey) throw new Error("OPENAI_API_KEY not configured");
 
     const sb = getSupabaseAdmin();
 
@@ -31,10 +31,10 @@ serve(async (req) => {
       const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
       
       // Use AI to summarize/extract (send as description since binary)
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${lovableKey}`,
+          Authorization: `Bearer ${openaiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

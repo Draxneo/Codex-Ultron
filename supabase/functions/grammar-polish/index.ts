@@ -17,9 +17,9 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not set, returning original text");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY not set, returning original text");
       return new Response(JSON.stringify({ polished: text }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -39,14 +39,14 @@ Return ONLY the corrected text — no explanations, quotes, or markdown.`;
       ? "\nThis is an SMS message. Keep it concise."
       : "";
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt + contextNote },
           { role: "user", content: text },
@@ -74,8 +74,8 @@ Return ONLY the corrected text — no explanations, quotes, or markdown.`;
       tokens_used: tokens,
       input_tokens: inT,
       output_tokens: outT,
-      estimated_cost_cents: estimateCostCents({ model: "google/gemini-2.5-flash-lite", inputTokens: inT, outputTokens: outT }),
-      metadata: { model: "google/gemini-2.5-flash-lite" },
+      estimated_cost_cents: estimateCostCents({ model: "gpt-5-mini", inputTokens: inT, outputTokens: outT }),
+      metadata: { model: "gpt-5-mini" },
     });
 
     return new Response(JSON.stringify({ polished }), {
