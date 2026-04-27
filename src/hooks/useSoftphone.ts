@@ -478,6 +478,19 @@ export function useSoftphone(enabled: boolean = true) {
     const writeTerminal = (status: "canceled" | "no-answer" | "completed") => {
       const sids = [call.parameters?.CallSid, call.parameters?.ParentCallSid].filter(Boolean) as string[];
       if (!sids.length) return;
+      const phone = call.parameters?.From || call.parameters?.To || "";
+      void supabase.functions.invoke("phone-call-terminal", {
+        body: {
+          status,
+          sids,
+          callSid: call.parameters?.CallSid || null,
+          parentCallSid: call.parameters?.ParentCallSid || null,
+          direction: call.direction,
+          phone,
+        },
+      }).catch(() => {
+        // Phone cleanup is best-effort; never disturb the user's call UI.
+      });
       supabase
         .from("call_log")
         .update({ status, ended_at: new Date().toISOString() })

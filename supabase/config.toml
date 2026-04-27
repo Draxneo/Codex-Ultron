@@ -121,6 +121,9 @@ verify_jwt = false
 [functions.phone-debug-log]
 verify_jwt = false
 
+[functions.phone-call-terminal]
+verify_jwt = false
+
 [functions.voice-ivr-handler]
 verify_jwt = false
 
