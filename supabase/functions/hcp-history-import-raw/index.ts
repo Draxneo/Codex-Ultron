@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const HCP_BASE = "https://api.housecallpro.com";
 
-type ProbeResource =
+type HcpResource =
   | "customers"
   | "jobs"
   | "estimates"
@@ -23,7 +23,7 @@ type RawChild = {
   raw_json: unknown;
 };
 
-const RESOURCE_CONFIG: Record<ProbeResource, { path: string; arrayKey: string; sourceType: string }> = {
+const RESOURCE_CONFIG: Record<HcpResource, { path: string; arrayKey: string; sourceType: string }> = {
   customers: { path: "/customers", arrayKey: "customers", sourceType: "customer" },
   jobs: { path: "/jobs", arrayKey: "jobs", sourceType: "job" },
   estimates: { path: "/estimates", arrayKey: "estimates", sourceType: "estimate" },
@@ -84,6 +84,7 @@ function childSourceType(parentSourceType: string, key: string): string {
   if (normalized.includes("attachment")) return `${parentSourceType}_attachment`;
   if (normalized.includes("line_item") || normalized === "items") return `${parentSourceType}_line_item`;
   if (normalized.includes("payment")) return `${parentSourceType}_payment`;
+  if (normalized.includes("refund")) return `${parentSourceType}_refund`;
   if (normalized.includes("discount")) return `${parentSourceType}_discount`;
   if (normalized.includes("tax")) return `${parentSourceType}_tax`;
   if (normalized.includes("option")) return `${parentSourceType}_option`;
@@ -130,10 +131,10 @@ function collectNestedChildren(
   return children;
 }
 
-async function fetchHcp(path: string, apiKey: string, pageSize: number) {
+async function fetchHcp(path: string, apiKey: string, page: number, pageSize: number) {
   const url = new URL(`${HCP_BASE}${path}`);
-  if (!url.searchParams.has("page")) url.searchParams.set("page", "1");
-  if (!url.searchParams.has("page_size")) url.searchParams.set("page_size", String(pageSize));
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("page_size", String(pageSize));
   if (path === "/jobs" || path === "/estimates" || path === "/customers") {
     url.searchParams.append("expand[]", "attachments");
   }
@@ -148,21 +149,21 @@ async function fetchHcp(path: string, apiKey: string, pageSize: number) {
   }
 
   const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`HCP ${response.status} for ${url.pathname}: ${text.slice(0, 500)}`);
-  }
-
+  if (!response.ok) throw new Error(`HCP ${response.status} for ${url.pathname}: ${text.slice(0, 500)}`);
   return { retry: false, retryAfter: 0, url: url.toString(), payload: JSON.parse(text) };
 }
 
-async function upsertRawObject(supabase: any, row: Record<string, unknown>) {
-  const rawHash = await sha256(row.raw_json);
-  const payload = {
+async function upsertRawObjects(supabase: any, rows: Record<string, unknown>[]) {
+  if (!rows.length) return;
+  const uniqueRows = Array.from(
+    new Map(rows.map((row) => [`${row.source_type}:${row.source_key}`, row])).values(),
+  );
+  const payload = await Promise.all(uniqueRows.map(async (row) => ({
     ...row,
-    raw_hash: rawHash,
+    raw_hash: await sha256(row.raw_json),
     fetched_at: new Date().toISOString(),
     archive_status: "raw",
-  };
+  })));
   const { error } = await supabase
     .from("hcp_raw_objects")
     .upsert(payload, { onConflict: "source_type,source_key" });
@@ -180,96 +181,93 @@ Deno.serve(async (req) => {
     if (!apiKey) return jsonResponse({ error: "HCP_API_KEY not configured" }, 500);
 
     const body = await req.json().catch(() => ({}));
-    const requested = body.resources as ProbeResource[] | undefined;
-    const resources = (requested?.length ? requested : ["customers", "jobs", "estimates", "invoices"]) as ProbeResource[];
-    const pageSize = Math.min(Math.max(Number(body.page_size || 3), 1), 10);
-    const persist = body.persist !== false;
+    const resource = String(body.resource || "") as HcpResource;
+    const config = RESOURCE_CONFIG[resource];
+    if (!config) return jsonResponse({ error: "Unsupported resource", supported: Object.keys(RESOURCE_CONFIG) }, 400);
+
+    const startPage = Math.max(Number(body.start_page || 1), 1);
+    const maxPages = Math.min(Math.max(Number(body.max_pages || 1), 1), 20);
+    const pageSize = Math.min(Math.max(Number(body.page_size || 50), 1), 200);
+    const dryRun = body.dry_run === true;
 
     const { data: run, error: runErr } = await supabase
       .from("hcp_import_runs")
       .insert({
-        phase: "probe",
-        resource: resources.join(","),
-        mode: "probe",
+        phase: "raw_archive",
+        resource,
+        mode: dryRun ? "dry_run" : "chunk",
         status: "running",
-        page: 1,
+        page: startPage,
         page_size: pageSize,
-        params: { resources, page_size: pageSize, persist },
+        params: { resource, start_page: startPage, max_pages: maxPages, page_size: pageSize, dry_run: dryRun },
       })
       .select("id")
       .single();
     if (runErr) throw runErr;
     runId = run.id;
 
-    const report: Record<string, unknown> = {};
+    const report: Array<Record<string, unknown>> = [];
     let fetchedCount = 0;
     let nestedCount = 0;
+    let lastPage = startPage - 1;
+    let stoppedBecause = "max_pages";
 
-    for (const resource of resources) {
-      const config = RESOURCE_CONFIG[resource];
-      if (!config) {
-        report[resource] = { ok: false, error: "Unsupported resource" };
-        continue;
+    for (let page = startPage; page < startPage + maxPages; page++) {
+      lastPage = page;
+      const result = await fetchHcp(config.path, apiKey, page, pageSize);
+      if (result.retry) {
+        stoppedBecause = "rate_limited";
+        report.push({ page, ok: false, retry: true, retry_after: result.retryAfter, url: result.url });
+        break;
       }
 
-      try {
-        const result = await fetchHcp(config.path, apiKey, pageSize);
-        if (result.retry) {
-          report[resource] = { ok: false, retry: true, retry_after: result.retryAfter, url: result.url };
-          continue;
-        }
+      const items = listItems(result.payload, config.arrayKey);
+      const nestedSummary: Record<string, number> = {};
+      const rows: Record<string, unknown>[] = [];
 
-        const items = listItems(result.payload, config.arrayKey);
-        const nestedSummary: Record<string, number> = {};
+      for (const [index, item] of items.entries()) {
+        const hcpId = getHcpId(item);
+        const key = sourceKey(config.sourceType, item, undefined, undefined, index);
+        const children = collectNestedChildren(item, config.sourceType, hcpId, key);
+        for (const child of children) nestedSummary[child.source_type] = (nestedSummary[child.source_type] || 0) + 1;
 
-        for (const [index, item] of items.entries()) {
-          const hcpId = getHcpId(item);
-          const key = sourceKey(config.sourceType, item, undefined, undefined, index);
-          const children = collectNestedChildren(item, config.sourceType, hcpId, key);
-          for (const child of children) nestedSummary[child.source_type] = (nestedSummary[child.source_type] || 0) + 1;
-
-          if (persist) {
-            await upsertRawObject(supabase, {
-              import_run_id: runId,
-              source_type: config.sourceType,
-              hcp_id: hcpId,
-              source_key: key,
-              source_url: result.url,
-              raw_json: item,
-              metadata: { probe: true, resource, index },
-            });
-
-            for (const child of children) {
-              await upsertRawObject(supabase, {
-                import_run_id: runId,
-                source_url: result.url,
-                metadata: { probe: true, resource },
-                ...child,
-              });
-            }
-          }
-
-          fetchedCount++;
-          nestedCount += children.length;
-        }
-
-        report[resource] = {
-          ok: true,
-          url: result.url,
-          top_level_count: items.length,
-          nested_count: Object.values(nestedSummary).reduce((sum, value) => sum + value, 0),
-          nested_summary: nestedSummary,
-          sample_keys: items[0] ? Object.keys(items[0]).sort() : [],
-        };
-      } catch (err: any) {
-        report[resource] = { ok: false, error: err.message };
-        await supabase.from("hcp_import_errors").insert({
+        rows.push({
           import_run_id: runId,
-          resource,
-          phase: "probe",
-          message: err.message,
-          detail: { resource },
+          source_type: config.sourceType,
+          hcp_id: hcpId,
+          source_key: key,
+          source_url: result.url,
+          raw_json: item,
+          metadata: { resource, page, index, raw_archive: true },
         });
+
+        for (const child of children) {
+          rows.push({
+            import_run_id: runId,
+            source_url: result.url,
+            metadata: { resource, page, raw_archive: true },
+            ...child,
+          });
+        }
+
+        fetchedCount++;
+        nestedCount += children.length;
+      }
+
+      if (!dryRun) await upsertRawObjects(supabase, rows);
+
+      report.push({
+        page,
+        ok: true,
+        url: result.url,
+        top_level_count: items.length,
+        nested_count: Object.values(nestedSummary).reduce((sum, value) => sum + value, 0),
+        nested_summary: nestedSummary,
+      });
+
+      if (items.length < pageSize) {
+        stoppedBecause = "empty_or_last_page";
+        break;
       }
     }
 
@@ -279,24 +277,37 @@ Deno.serve(async (req) => {
         status: "completed",
         completed_at: new Date().toISOString(),
         fetched_count: fetchedCount,
-        archived_count: persist ? fetchedCount + nestedCount : 0,
-        metadata: { report },
+        archived_count: dryRun ? 0 : fetchedCount + nestedCount,
+        page: lastPage,
+        metadata: { report, stopped_because: stoppedBecause },
       })
       .eq("id", runId);
 
-    return jsonResponse({ ok: true, run_id: runId, persisted: persist, fetched_count: fetchedCount, nested_count: nestedCount, report });
+    return jsonResponse({
+      ok: true,
+      run_id: runId,
+      dry_run: dryRun,
+      resource,
+      start_page: startPage,
+      last_page: lastPage,
+      stopped_because: stoppedBecause,
+      fetched_count: fetchedCount,
+      nested_count: nestedCount,
+      report,
+    });
   } catch (err: any) {
     if (runId) {
       await supabase
         .from("hcp_import_runs")
-        .update({
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          last_error: err.message,
-          error_count: 1,
-        })
+        .update({ status: "failed", completed_at: new Date().toISOString(), last_error: err.message, error_count: 1 })
         .eq("id", runId);
+      await supabase.from("hcp_import_errors").insert({
+        import_run_id: runId,
+        phase: "raw_archive",
+        message: err.message,
+        detail: { stack: err.stack },
+      });
     }
-    return jsonResponse({ ok: false, error: err.message }, 500);
+    return jsonResponse({ ok: false, run_id: runId, error: err.message }, 500);
   }
 });
