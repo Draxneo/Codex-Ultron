@@ -99,6 +99,23 @@ async function loadKnownProperties(supabase: any, customerId: string | null) {
   return properties;
 }
 
+function streetSignature(raw: string | null | undefined): { num: string; word: string } {
+  const s = (raw || "").trim();
+  const num = (s.match(/\d+/) || [""])[0];
+  const word = (s.replace(/^\d+\s*/, "").match(/[A-Za-z]+/) || [""])[0].toLowerCase();
+  return { num, word };
+}
+
+function matchKnownProperty(address: string | null | undefined, properties: any[]) {
+  if (!address || !properties?.length) return null;
+  const wanted = streetSignature(address);
+  if (!wanted.num || !wanted.word) return null;
+  return properties.find((p: any) => {
+    const sig = streetSignature(p.street || p.address);
+    return sig.num === wanted.num && !!sig.word && wanted.word.startsWith(sig.word.slice(0, 4));
+  }) || null;
+}
+
 /** Server-side lightweight stage detection (mirrors client useWorkflowStage logic) */
 function detectServerStage(job: any): { label: string; owner: string; hint: string } {
   const jt = job.job_type || "service";
@@ -464,7 +481,7 @@ Deno.serve(async (req) => {
       const todayStr = todayCT.toISOString().slice(0, 10);
       const { data: est } = await supabase
         .from("estimates")
-        .select("id, hcp_id, customer_name, customer_phone, scheduled_date, status, assigned_to")
+        .select("id, hcp_id, customer_id, customer_name, customer_phone, scheduled_date, status, assigned_to")
         .gte("scheduled_date", todayStr)
         .not("status", "in", "(canceled,lost,won,converted)")
         .order("scheduled_date", { ascending: true })
@@ -695,6 +712,7 @@ IMPORTANT RULES:
 - If our last outbound message asked for contact info or scheduling details, and this SMS provides that, classify as BOOKING intent
 - If the customer has an active job or upcoming estimate, treat replies as updates/follow-ups unless they clearly ask for a separate new visit
 - If the customer has multiple properties and the message does not identify which property, do not assume their primary address
+- If the customer has multiple properties and the message names an address that is not on file, require dispatcher/property review before booking
 - Infer service_type from call context if not explicit in SMS
 - Extract scheduling preferences from both SMS and call context
 - For addresses in Texas, default state to "TX" if not specified`;
@@ -887,6 +905,38 @@ IMPORTANT RULES:
             if (extracted.email) noteParts.push(`Email: ${extracted.email}`);
             const noteContent = noteParts.join("\n");
 
+            // Local app is the source of truth. HCP note push below is only a bridge
+            // while legacy records are still present.
+            let noteCustomerId = resolvedCustomerId || null;
+            if (!noteCustomerId && hasActiveJob) {
+              const { data: jobCustomer } = await supabase
+                .from("jobs")
+                .select("customer_id")
+                .eq("id", customerJob.id)
+                .maybeSingle();
+              noteCustomerId = (jobCustomer as any)?.customer_id || null;
+            }
+            if (!noteCustomerId && hasUpcomingEstimate) {
+              noteCustomerId = (upcomingEstimate as any)?.customer_id || null;
+            }
+            if (noteCustomerId) {
+              await supabase.from("customer_notes").insert({
+                customer_id: noteCustomerId,
+                scope: hasActiveJob ? "job" : "estimate",
+                entity_id: targetRecord.id,
+                author_name: "JARVIS",
+                body: noteContent,
+              });
+            }
+            if (hasActiveJob) {
+              await supabase.from("activity_log").insert({
+                job_id: customerJob.id,
+                action: "sms_follow_up_note",
+                performed_by: "JARVIS",
+                details: noteContent,
+              });
+            }
+
             // Push to HCP (best-effort)
             try {
               const noteBody: any = { note: noteContent, source: "SMS Inbound" };
@@ -902,7 +952,7 @@ IMPORTANT RULES:
             // Create a low-key follow_up card for dispatcher visibility
             await supabase.from("action_items").insert({
               title: `${customerName} texted about ${ref}`,
-              description: extracted.summary || `Follow-up SMS on existing ${target} — note added to HCP`,
+              description: extracted.summary || `Follow-up SMS on existing ${target} — note added locally`,
               category: "follow_up",
               priority: "normal",
               source: "sms",
@@ -916,6 +966,7 @@ IMPORTANT RULES:
                 phone: from,
                 suppressed_booking: true,
                 suppressed_reason: hasActiveJob ? "active_job_in_progress" : "upcoming_estimate",
+                local_note_added: !!noteCustomerId,
                 active_job_id: hasActiveJob ? customerJob.id : null,
                 upcoming_estimate_id: hasUpcomingEstimate ? upcomingEstimate.id : null,
                 sms_extraction: extracted,
@@ -973,10 +1024,26 @@ IMPORTANT RULES:
               // FIX #4: Include MMS media URLs in metadata
               ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
             };
-            const needsPropertySelection = knownProperties.length > 1 && !extracted.address;
+            const matchedProperty = knownProperties.length > 0
+              ? matchKnownProperty(extracted.address || null, knownProperties)
+              : null;
+            if (matchedProperty) {
+              (bookingMetadata as any).address = matchedProperty.address;
+              (bookingMetadata as any).address_id = matchedProperty.id;
+              (bookingMetadata as any).address_match = {
+                outcome: matchedProperty.is_primary ? "matched_primary" : "matched_secondary",
+                label: matchedProperty.label,
+                address: matchedProperty.address,
+              };
+            }
+            const needsPropertySelection = knownProperties.length > 1 && (!extracted.address || !matchedProperty);
             if (needsPropertySelection) {
               (bookingMetadata as any).requires_property_selection = true;
               (bookingMetadata as any).property_options = knownProperties;
+              (bookingMetadata as any).property_review_reason = extracted.address
+                ? "customer_mentioned_address_not_on_file"
+                : "customer_has_multiple_properties";
+              if (extracted.address) (bookingMetadata as any).mentioned_address = extracted.address;
             }
 
             if (existingBooking) {

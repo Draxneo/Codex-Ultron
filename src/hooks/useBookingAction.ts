@@ -96,7 +96,7 @@ export function useBookingAction() {
           customer_id: resolvedCustomerId,
           customer_name: m.customer_name || "Unknown",
           customer_phone: phone || null,
-          customer_email: m.customer_email || null,
+          customer_email: m.customer_email || m.email || null,
           description: m.description || description || "Service call",
           job_type: m.job_type || "service",
           address: m.address || null,

@@ -55,6 +55,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const [actionId, setActionId] = useState<string | null>(null);
   const [trainPhone, setTrainPhone] = useState<{ phone: string; name?: string } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
 
@@ -120,9 +121,22 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
     try {
       // HCP-first booking via shared helper
       if (status === "accepted" && item.category === "new_appointment" && item.metadata) {
+        const selectedProperty = propertySelections[item.id];
+        const metadata = {
+          ...item.metadata,
+          ...(selectedProperty ? {
+            address: selectedProperty.address,
+            address_id: selectedProperty.id || null,
+            requires_property_selection: false,
+            selected_property_label: selectedProperty.label || null,
+          } : {}),
+        };
+        if ((metadata as any).requires_property_selection && !(metadata as any).address_id) {
+          throw new Error("Choose the service property before booking.");
+        }
         const result = await book({
           action_item_id: item.id,
-          metadata: item.metadata,
+          metadata,
           description: item.description,
           customer_phone: item.customer_phone,
         });
@@ -244,6 +258,14 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           const editableApprovalText = editableApprovalField
             ? replyDrafts[item.id] ?? itemMetadata.tool_args?.[editableApprovalField] ?? ""
             : "";
+          const propertyOptions = Array.isArray(itemMetadata.property_options)
+            ? itemMetadata.property_options
+            : [];
+          const needsPropertySelection =
+            item.category === "new_appointment" &&
+            itemMetadata.requires_property_selection &&
+            propertyOptions.length > 0;
+          const selectedProperty = propertySelections[item.id];
 
           return (
             <div key={item.id} className={`rounded-lg border p-3 space-y-2 ${priorityClass}`}>
@@ -277,6 +299,40 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 <div className="rounded bg-muted/50 px-2 py-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground mb-0.5">Suggested</p>
                   <p className="text-xs">{item.suggested_action}</p>
+                </div>
+              )}
+
+              {needsPropertySelection && (
+                <div className="rounded border border-orange-500/30 bg-orange-500/5 p-2 space-y-2">
+                  <p className="text-[10px] font-medium text-orange-700">
+                    Choose service property before booking
+                  </p>
+                  {itemMetadata.mentioned_address && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Customer mentioned: {itemMetadata.mentioned_address}
+                    </p>
+                  )}
+                  <div className="grid gap-1.5">
+                    {propertyOptions.map((property: any, index: number) => {
+                      const active = selectedProperty?.address === property.address;
+                      return (
+                        <Button
+                          key={`${property.id || index}-${property.address}`}
+                          size="sm"
+                          variant={active ? "default" : "outline"}
+                          className="h-auto justify-start gap-2 whitespace-normal py-2 text-left"
+                          onClick={() => setPropertySelections((prev) => ({ ...prev, [item.id]: property }))}
+                          disabled={actionId === item.id}
+                        >
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium">{property.label || "Property"}</span>
+                            <span className="block text-[11px] opacity-80">{property.address}</span>
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
