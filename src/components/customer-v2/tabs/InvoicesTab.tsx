@@ -37,7 +37,7 @@ export function InvoicesTab({ customerId }: { customerId: string }) {
           </TableHeader>
           <TableBody>
             {invoices.map((i: any) => (
-              <TableRow key={i.id} className="cursor-pointer" onClick={() => navigate(`/jobs/${i.job_id}`)}>
+              <TableRow key={i.id} className="cursor-pointer" onClick={() => navigate(`/records/invoice/${i.id}`)}>
                 <TableCell className="font-medium">#{i.invoice_number || i.id.slice(0, 8)}</TableCell>
                 <TableCell><Badge variant={statusColor(i.status) as any} className="text-[10px] capitalize">{i.status}</Badge></TableCell>
                 <TableCell>{format(new Date(i.created_at), "MMM d, yyyy")}</TableCell>

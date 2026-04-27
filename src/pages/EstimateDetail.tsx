@@ -119,6 +119,11 @@ function EstimateActionBar({
           <span className="text-xs font-semibold uppercase tracking-wide">Build Quote</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">Options & pricing</span>
         </button>
+        <button type="button" className={actionClass} onClick={() => navigate(`/records/estimate/${estimateId}`)}>
+          <FileText className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Document</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Clean view</span>
+        </button>
         <button
           type="button"
           className={customerPhone ? actionClass : disabledActionClass}

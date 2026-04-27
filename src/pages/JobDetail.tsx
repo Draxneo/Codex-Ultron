@@ -6,7 +6,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft, Plus, Send, Printer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Plus, Send, Printer } from "lucide-react";
 import { JobV2Header } from "@/components/job-v2/JobV2Header";
 import { JobV2ActionBar } from "@/components/job-v2/JobV2ActionBar";
 import { JobV2CustomerCard } from "@/components/job-v2/JobV2CustomerCard";
@@ -96,13 +96,17 @@ export default function JobDetail() {
   return (
     <div className="min-h-screen bg-muted/30">
       <AppHeader />
-      <div className="px-6 py-3 flex items-center bg-background border-b">
+      <div className="px-6 py-3 flex items-center justify-between bg-background border-b">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
+        <Button size="sm" variant="outline" className="gap-2" onClick={() => navigate(`/records/job/${id}`)}>
+          <FileText className="h-4 w-4" />
+          Document view
+        </Button>
       </div>
 
       <JobV2Header job={job} customerName={customerName} customerId={job.customer_id} />

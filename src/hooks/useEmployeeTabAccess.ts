@@ -17,7 +17,7 @@ import { getRoleDefaults } from "@/lib/roleAccessDefaults";
 
 /** Map a pathname to its access-control key. Returns undefined for unknown routes. */
 export function routeToTabKey(pathname: string, search?: string): string | undefined {
-  if (pathname === "/" || pathname.startsWith("/jobs") || pathname === "/tech" || pathname.startsWith("/tech/jobs") || pathname.startsWith("/estimates") || pathname.startsWith("/form/")) return "jobs";
+  if (pathname === "/" || pathname.startsWith("/jobs") || pathname.startsWith("/records/") || pathname === "/tech" || pathname.startsWith("/tech/jobs") || pathname.startsWith("/estimates") || pathname.startsWith("/form/")) return "jobs";
   if (pathname.startsWith("/tech/customers")) return "jobs";
   // /inbox sections map via search param
   if (pathname.startsWith("/inbox")) {

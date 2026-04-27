@@ -34,7 +34,7 @@ export function EstimatesTab({ customerId }: { customerId: string }) {
           </TableHeader>
           <TableBody>
             {estimates.map((e: any) => (
-              <TableRow key={e.id} className="cursor-pointer" onClick={() => navigate(`/estimates/${e.id}`)}>
+              <TableRow key={e.id} className="cursor-pointer" onClick={() => navigate(`/records/estimate/${e.id}`)}>
                 <TableCell className="font-medium">#{e.estimate_number}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px]">{e.work_status || "draft"}</Badge></TableCell>
                 <TableCell>{e.scheduled_date ? format(new Date(e.scheduled_date), "MMM d, yyyy") : "—"}</TableCell>

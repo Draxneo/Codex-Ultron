@@ -35,7 +35,7 @@ export function JobsTab({ customerId }: { customerId: string }) {
           </TableHeader>
           <TableBody>
             {jobs.map((j: any) => (
-              <TableRow key={j.id} className="cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>
+              <TableRow key={j.id} className="cursor-pointer" onClick={() => navigate(`/records/job/${j.id}`)}>
                 <TableCell className="font-medium">#{j.job_number}</TableCell>
                 <TableCell className="capitalize">{j.job_type || "—"}</TableCell>
                 <TableCell><JobStatusBadge status={j.status} /></TableCell>

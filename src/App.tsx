@@ -37,6 +37,7 @@ import TechJobDetail from "./pages/TechJobDetail";
 import TechCustomerDetail from "./pages/TechCustomerDetail";
 import Jobs from "./pages/Jobs";
 import JobDetail from "./pages/JobDetail";
+import RecordDocument from "./pages/RecordDocument";
 
 
 import CopilotPage from "./pages/CopilotPage";
@@ -477,6 +478,7 @@ function AppRouter() {
         <Route path="/jobs/follow-up" element={<Navigate to="/jobs/backlog" replace />} />
         <Route path="/jobs/queue" element={<Navigate to="/jobs/backlog" replace />} />
         <Route path="/jobs/:id" element={<ProtectedRoute><JobDetail /></ProtectedRoute>} />
+        <Route path="/records/:type/:id" element={<ProtectedRoute><RecordDocument /></ProtectedRoute>} />
         <Route path="/parts" element={<Navigate to="/catalog" replace />} />
         <Route path="/vendors" element={<Navigate to="/catalog" replace />} />
         <Route path="/vendors/:id" element={<Navigate to="/catalog" replace />} />
