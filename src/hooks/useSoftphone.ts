@@ -12,6 +12,13 @@ import {
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import {
+  initialCallLifecycleState,
+  reduceCallLifecycle,
+  type ActiveCallRecord,
+  type CallLifecycleEvent,
+  type CallLifecycleState,
+} from "@/lib/softphoneCallStateMachine";
+import {
   clearStoredDialRequest,
   getStoredDialRequest,
   isElectronMain,
@@ -116,6 +123,7 @@ export function useSoftphone(enabled: boolean = true) {
 
   const localAnsweredRef = useRef(false);
   const incomingCallSidRef = useRef<string | null>(null);
+  const lifecycleRef = useRef<CallLifecycleState>(initialCallLifecycleState);
   // statusRef mirrors state.status so event listeners (registered once on the
   // Twilio Device) can read the latest status without capturing a stale closure.
   // Fixes the "second incoming call while on-call" decision being made against
@@ -124,6 +132,64 @@ export function useSoftphone(enabled: boolean = true) {
   useEffect(() => {
     statusRef.current = state.status;
   }, [state.status]);
+
+  const dispatchLifecycle = useCallback((event: CallLifecycleEvent) => {
+    const previous = lifecycleRef.current;
+    const transition = reduceCallLifecycle(previous, event);
+    lifecycleRef.current = transition.state;
+    callDebug("state.transition", {
+      event: event.type,
+      previousState: previous.appState,
+      nextState: transition.state.appState,
+      effects: transition.effects,
+      activeCallSid: transition.state.activeCall?.activeCallSid || null,
+      parentCallSid: transition.state.activeCall?.parentCallSid || null,
+      childCallSid: transition.state.activeCall?.childCallSid || null,
+      direction: transition.state.activeCall?.direction || null,
+      platform: "electron",
+    });
+    return transition;
+  }, []);
+
+  const buildCallRecord = useCallback((call: Call, direction: "inbound" | "outbound", phone?: string | null): Partial<ActiveCallRecord> => ({
+    twilioCallSid: call.parameters?.CallSid || null,
+    parentCallSid: call.parameters?.ParentCallSid || null,
+    childCallSid: direction === "inbound" ? (call.parameters?.CallSid || null) : null,
+    activeCallSid: call.parameters?.CallSid || call.parameters?.ParentCallSid || null,
+    direction,
+    customerNumber: phone || call.parameters?.From || call.parameters?.To || null,
+    agentIdentity: currentEmployeeNameRef.current,
+  }), []);
+
+  const markPendingEndedByAgent = useCallback((call: Call | null) => {
+    const sids = [call?.parameters?.ParentCallSid, call?.parameters?.CallSid].filter(Boolean) as string[];
+    if (!sids.length) return;
+
+    (async () => {
+      const { data: rows, error } = await supabase
+        .from("call_log")
+        .select("id, extracted_data")
+        .in("twilio_sid", sids)
+        .limit(1);
+      if (error || !rows?.[0]) {
+        if (error) console.error("[Softphone] pendingEndedBy lookup failed:", error);
+        return;
+      }
+
+      const extracted = ((rows[0] as any).extracted_data || {}) as Record<string, unknown>;
+      const { error: updateError } = await supabase
+        .from("call_log")
+        .update({
+          extracted_data: {
+            ...extracted,
+            pending_ended_by: "agent",
+            pending_ended_by_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", rows[0].id);
+      if (updateError) console.error("[Softphone] pendingEndedBy update failed:", updateError);
+    })();
+  }, []);
 
   // Safety timeout — reset stuck connecting/ringing states
   const clearSafetyTimer = useCallback(() => {
@@ -150,6 +216,7 @@ export function useSoftphone(enabled: boolean = true) {
   // Helper to fully reset call state
   const resetCallState = useCallback(() => {
     clearSafetyTimer();
+    dispatchLifecycle({ type: "RESET_TO_READY" });
     sendToMain('call-status-change', 'ready');
     setState((s) => ({
       ...s,
@@ -161,7 +228,7 @@ export function useSoftphone(enabled: boolean = true) {
       error: null,
       status: deviceRef.current ? "ready" : "offline",
     }));
-  }, [clearSafetyTimer]);
+  }, [clearSafetyTimer, dispatchLifecycle]);
 
   // Build employee-only contact map (small table, ~10 rows) AND resolve the
   // current user's employee name once for answered_by attribution.
@@ -430,6 +497,7 @@ export function useSoftphone(enabled: boolean = true) {
       resetCallState();
     };
     call.on("disconnect", () => {
+      dispatchLifecycle({ type: "REMOTE_ENDED", status: "completed" });
       const sids = [call.parameters?.CallSid, call.parameters?.ParentCallSid].filter(Boolean);
       callDebug("call.disconnect", {
         sids,
@@ -449,18 +517,21 @@ export function useSoftphone(enabled: boolean = true) {
       onEnd();
     });
     call.on("cancel", () => {
+      dispatchLifecycle({ type: "REMOTE_ENDED", status: "canceled" });
       callDebug("call.cancel", { sid: call.parameters?.CallSid });
       writeTerminal("canceled");
       markCallEnd();
       onEnd();
     });
     call.on("reject", () => {
+      dispatchLifecycle({ type: "REMOTE_ENDED", status: "no-answer" });
       callDebug("call.reject", { sid: call.parameters?.CallSid });
       writeTerminal("no-answer");
       markCallEnd();
       onEnd();
     });
     call.on("error", (err) => {
+      dispatchLifecycle({ type: "CALL_FAILED", error: err?.message || "Call error" });
       callDebug("call.error", {
         sid: call.parameters?.CallSid,
         code: (err as any)?.code,
@@ -504,9 +575,11 @@ export function useSoftphone(enabled: boolean = true) {
         callDebug("call.warning-cleared", { sid: call.parameters?.CallSid, warningName });
       });
       (call as any).on?.("reconnecting", (err: any) => {
+        dispatchLifecycle({ type: "RECONNECTING" });
         callDebug("call.reconnecting", { sid: call.parameters?.CallSid, message: err?.message, code: err?.code });
       });
       (call as any).on?.("reconnected", () => {
+        dispatchLifecycle({ type: "RECONNECTED" });
         callDebug("call.reconnected", { sid: call.parameters?.CallSid });
       });
       (call as any).on?.("accept", () => {
@@ -519,7 +592,7 @@ export function useSoftphone(enabled: boolean = true) {
     } catch (e) {
       console.warn("[CallDebug] failed to wire extended call listeners", e);
     }
-  }, [stopTimer, clearSafetyTimer, resetCallState]);
+  }, [stopTimer, clearSafetyTimer, resetCallState, dispatchLifecycle]);
 
   // Initialize device
   // Pre-request microphone permission so Android WebView grants it before Twilio needs it
@@ -563,6 +636,7 @@ export function useSoftphone(enabled: boolean = true) {
     initializingRef.current = true;
 
     try {
+      dispatchLifecycle({ type: "DEVICE_REGISTERING" });
       setState((s) => ({ ...s, status: "registering", error: null }));
 
       // Pre-warm audio context while we have user-gesture context (mic permission tap)
@@ -601,6 +675,7 @@ export function useSoftphone(enabled: boolean = true) {
       deviceRef.current = device;
 
       device.on("registered", () => {
+        dispatchLifecycle({ type: "DEVICE_READY" });
         callDebug("device.registered");
         scheduleTokenRefresh(device);
         setState((s) => ({ ...s, status: "ready", error: null }));
@@ -654,11 +729,16 @@ export function useSoftphone(enabled: boolean = true) {
           }, 1500);
           return;
         }
+        dispatchLifecycle({ type: "DEVICE_ERROR", error: msg });
         setState((s) => ({ ...s, status: "error", error: msg }));
       });
 
       device.on("incoming", async (call: Call) => {
         const from = call.parameters?.From || "Unknown";
+        const inviteTransition = dispatchLifecycle({
+          type: "INBOUND_INVITE",
+          call: buildCallRecord(call, "inbound", from),
+        });
 
         // ── Auto-reject 2nd calls while on a live call ──
         // Server-side routing should prevent this from happening, but if a 2nd
@@ -668,6 +748,7 @@ export function useSoftphone(enabled: boolean = true) {
         // the listener was registered).
         const currentStatus = statusRef.current;
         if (
+          inviteTransition.effects.includes("reject_duplicate_inbound") ||
           currentStatus === "on-call" ||
           currentStatus === "connecting" ||
           currentStatus === "ringing" ||
@@ -751,6 +832,12 @@ export function useSoftphone(enabled: boolean = true) {
 
         // Wire accept event on incoming call — drives on-call state transition
         call.on("accept", () => {
+          dispatchLifecycle({
+            type: "REMOTE_ANSWERED",
+            twilioCallSid: call.parameters?.CallSid || null,
+            parentCallSid: call.parameters?.ParentCallSid || null,
+            childCallSid: call.parameters?.CallSid || null,
+          });
           localAnsweredRef.current = true;
           clearSafetyTimer();
           sendToMain('call-status-change', 'on-call');
@@ -808,7 +895,7 @@ export function useSoftphone(enabled: boolean = true) {
     } finally {
       initializingRef.current = false;
     }
-  }, [clearTokenRefreshTimer, ensureMicPermission, refreshDeviceToken, resolveCallerName, safeRegisterDevice, scheduleTokenRefresh, startSafetyTimer, telephony.isHandoff, telephony.url, wireCallEndHandlers]);
+  }, [buildCallRecord, clearTokenRefreshTimer, dispatchLifecycle, ensureMicPermission, refreshDeviceToken, resolveCallerName, safeRegisterDevice, scheduleTokenRefresh, startSafetyTimer, telephony, wireCallEndHandlers]);
 
   // On Electron pop-out: listen for dial-number IPC from the main window
   // (dial ref isn't available yet — we use dialRef to avoid circular dependency)
@@ -1092,6 +1179,19 @@ export function useSoftphone(enabled: boolean = true) {
       }
 
       try {
+        const dialTransition = dispatchLifecycle({
+          type: "OUTBOUND_DIAL",
+          call: {
+            direction: "outbound",
+            customerNumber: number,
+            agentIdentity: currentEmployeeNameRef.current,
+          },
+        });
+        if (dialTransition.effects.includes("block_outbound_while_active")) {
+          setState((s) => ({ ...s, error: "A call is already active" }));
+          return;
+        }
+
         // Clear any stale error from a previous failed dial so the UI doesn't
         // show "Device not ready" or similar after the user retries.
         setState((s) => ({
@@ -1116,6 +1216,12 @@ export function useSoftphone(enabled: boolean = true) {
         if (pendingCustomerId) setPendingCustomerId(null);
 
         call.on("accept", () => {
+          dispatchLifecycle({
+            type: "REMOTE_ANSWERED",
+            twilioCallSid: call.parameters?.CallSid || null,
+            parentCallSid: call.parameters?.ParentCallSid || null,
+            childCallSid: null,
+          });
           clearSafetyTimer();
           setState((s) => ({ ...s, status: "on-call", activeCall: call }));
           startTimer();
@@ -1147,15 +1253,22 @@ export function useSoftphone(enabled: boolean = true) {
 
         wireCallEndHandlers(call);
 
+        dispatchLifecycle({
+          type: "OUTBOUND_RINGING",
+          twilioCallSid: call.parameters?.CallSid || null,
+          parentCallSid: call.parameters?.ParentCallSid || null,
+          childCallSid: null,
+        });
         setState((s) => ({ ...s, activeCall: call, status: "ringing" }));
       } catch (err: any) {
+        dispatchLifecycle({ type: "CALL_FAILED", error: err?.message || "Dial failed" });
         clearSafetyTimer();
         // Pending context is preserved so the user can retry. Surface a clean
         // error string in the UI.
         setState((s) => ({ ...s, status: "ready", error: err?.message || "Dial failed" }));
       }
     },
-    [initialize, startTimer, resolveCallerName, startSafetyTimer, clearSafetyTimer, wireCallEndHandlers, isElectronMainWindow, pendingJobId, pendingCustomerId, recoverIfNeeded]
+    [initialize, startTimer, resolveCallerName, startSafetyTimer, clearSafetyTimer, wireCallEndHandlers, isElectronMainWindow, pendingJobId, pendingCustomerId, recoverIfNeeded, dispatchLifecycle]
   );
 
   // Keep dialRef in sync so IPC listener can call it without stale closure
@@ -1213,17 +1326,21 @@ export function useSoftphone(enabled: boolean = true) {
   // Accept incoming call — just call accept(), let the "accept" event drive state
   const acceptCall = useCallback(() => {
     if (state.incomingCall) {
+      const transition = dispatchLifecycle({ type: "LOCAL_ACCEPT" });
+      if (transition.effects.includes("ignore_accept_without_incoming")) return;
       setState((s) => ({ ...s, status: "connecting" }));
       state.incomingCall.accept();
       clearSafetyTimer();
       // State transition (activeCall, status: "on-call") is handled by the
       // call.on("accept") listener wired in the incoming handler above.
     }
-  }, [state.incomingCall, clearSafetyTimer]);
+  }, [state.incomingCall, clearSafetyTimer, dispatchLifecycle]);
 
   // Reject incoming call
   const rejectCall = useCallback(() => {
     if (state.incomingCall) {
+      dispatchLifecycle({ type: "LOCAL_REJECT" });
+      markPendingEndedByAgent(state.incomingCall);
       state.incomingCall.reject();
       clearSafetyTimer();
       sendToMain('call-status-change', 'ready');
@@ -1241,10 +1358,12 @@ export function useSoftphone(enabled: boolean = true) {
       }
       setState((s) => ({ ...s, incomingCall: null, status: "ready" }));
     }
-  }, [state.incomingCall, clearSafetyTimer]);
+  }, [state.incomingCall, clearSafetyTimer, dispatchLifecycle, markPendingEndedByAgent]);
 
   // Hang up
   const hangUp = useCallback(() => {
+    dispatchLifecycle({ type: "LOCAL_HANGUP" });
+    markPendingEndedByAgent(state.activeCall || state.incomingCall);
     if (state.activeCall) {
       state.activeCall.disconnect();
     }
@@ -1263,7 +1382,7 @@ export function useSoftphone(enabled: boolean = true) {
       callDuration: 0,
       status: deviceRef.current ? "ready" : "offline",
     }));
-  }, [state.activeCall, state.incomingCall, stopTimer, clearSafetyTimer]);
+  }, [state.activeCall, state.incomingCall, stopTimer, clearSafetyTimer, dispatchLifecycle, markPendingEndedByAgent]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {

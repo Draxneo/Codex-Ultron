@@ -18,7 +18,12 @@ const TERMINAL_STATUSES = new Set([
   "busy",
   "failed",
   "canceled",
+  "cancelled",
   "voicemail",
+  "missed",
+  "missed-while-busy",
+  "suspected-bot",
+  "unknown",
 ]);
 
 type CallRow = {
@@ -34,6 +39,7 @@ type CallRow = {
   phone_number?: string;
   contact_name?: string;
   contact_type?: string;
+  extracted_data?: Record<string, unknown> | null;
 };
 
 async function transcribeRecording(
@@ -131,13 +137,16 @@ async function findCallRow(
   callSid: string,
   parentCallSid: string,
 ): Promise<CallRow | null> {
-  for (const sid of [callSid, parentCallSid]) {
+  // Parent call is the durable conversation row. Child leg callbacks should
+  // reconcile back to the parent whenever possible so one conversation does
+  // not split into competing call_log records.
+  for (const sid of [parentCallSid, callSid]) {
     if (!sid) continue;
 
     const { data, error } = await supabase
       .from("call_log")
       .select(
-        "id, status, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, contact_name, contact_type",
+        "id, status, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, contact_name, contact_type, extracted_data",
       )
       .eq("twilio_sid", sid)
       .maybeSingle();
@@ -177,7 +186,28 @@ function resolveEffectiveStatus({
       existingStatus === "completed",
   );
 
+  if (existingStatus === "cancelled") return "canceled";
   if (existingStatus === "voicemail") return "voicemail";
+
+  if (
+    existingStatus &&
+    TERMINAL_STATUSES.has(existingStatus) &&
+    existingStatus !== "no-answer" &&
+    existingStatus !== "busy" &&
+    existingStatus !== "failed" &&
+    existingStatus !== "canceled"
+  ) {
+    return existingStatus;
+  }
+
+  if (
+    existingStatus &&
+    TERMINAL_STATUSES.has(existingStatus) &&
+    !hasAnswerEvidence &&
+    (normalized === "initiated" || normalized === "ringing" || normalized === "answered" || normalized === "in-progress")
+  ) {
+    return existingStatus;
+  }
 
   if (normalized === "answered" || normalized === "in-progress") {
     return "in-progress";
@@ -264,6 +294,21 @@ Deno.serve(async (req) => {
     });
 
     const updates: Record<string, unknown> = {};
+    const callbackIsChildLeg = Boolean(parentCallSid && callSid && existingRow.twilio_sid === parentCallSid);
+
+    if (callbackIsChildLeg) {
+      const extracted = (existingRow.extracted_data || {}) as Record<string, unknown>;
+      const existingChildren = Array.isArray((extracted as any).child_call_sids)
+        ? ((extracted as any).child_call_sids as string[])
+        : [];
+      if (!existingChildren.includes(callSid)) {
+        updates.extracted_data = {
+          ...extracted,
+          child_call_sids: [...existingChildren, callSid],
+          latest_child_call_sid: callSid,
+        };
+      }
+    }
 
     if (effectiveStatus && effectiveStatus !== existingRow.status) {
       updates.status = effectiveStatus;
@@ -288,6 +333,21 @@ Deno.serve(async (req) => {
       !existingRow.ended_at
     ) {
       updates.ended_at = new Date().toISOString();
+    }
+
+    if (effectiveStatus && TERMINAL_STATUSES.has(effectiveStatus)) {
+      const baseExtracted = {
+        ...((existingRow.extracted_data || {}) as Record<string, unknown>),
+        ...(((updates.extracted_data as Record<string, unknown>) || {})),
+      };
+      const pendingEndedBy = typeof (baseExtracted as any).pending_ended_by === "string"
+        ? String((baseExtracted as any).pending_ended_by)
+        : null;
+      updates.extracted_data = {
+        ...baseExtracted,
+        ended_by: pendingEndedBy === "agent" ? "agent" : (baseExtracted as any).ended_by || "unknown",
+        terminal_reason: effectiveStatus,
+      };
     }
 
     if (effectiveStatus === "completed") {
