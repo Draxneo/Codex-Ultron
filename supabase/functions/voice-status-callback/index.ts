@@ -514,6 +514,18 @@ Deno.serve(async (req) => {
           existingRow.phone_number || "Unknown";
         const phone = existingRow.phone_number || "";
 
+        const { data: existingAction } = await supabase
+          .from("action_items")
+          .select("id")
+          .eq("category", "missed_call")
+          .contains("metadata", { call_id: existingRow.id })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingAction?.id) {
+          console.log(`Missed call action already exists for ${callerDisplay}; skipping duplicate`);
+        } else {
+
         const { data: sessions } = await supabase
           .from("copilot_sessions")
           .select("id, user_id")
@@ -554,6 +566,7 @@ Deno.serve(async (req) => {
           },
         });
         console.log(`Missed call action_item created for ${callerDisplay}`);
+        }
       } catch (mcErr) {
         console.error("Missed call action card error:", mcErr);
       }
@@ -663,7 +676,7 @@ Deno.serve(async (req) => {
                 contactType: freshCall?.contact_type || "unknown",
                 supabase,
                 skipEmployeeFilter: allowEmployeeTestSms,
-                sourceFunction: "voice-status-callback",
+                sourceFunction: "voice-status-missed-call",
                 templateKey: resolvedTemplate.templateKey,
               });
               console.log(
@@ -765,7 +778,7 @@ Deno.serve(async (req) => {
               .eq("direction", "outbound")
               .eq("phone_number", callRow.phone_number)
               .gte("created_at", todayStart.toISOString())
-              .like("body", "%post-call%");
+              .eq("source_function", "voice-status-post-call");
 
             // For unknown callers, also check if ANY outbound SMS was sent in the last 60 min
             // (e.g. CSR already sent an intake link during the call)
@@ -789,16 +802,14 @@ Deno.serve(async (req) => {
             }
 
             if ((count || 0) === 0 && !skipIntake) {
-              // Tag the SMS body so we can dedup (invisible to customer, stripped by carrier)
-              const taggedBody = resolvedTemplate.body + "\n\n[post-call]";
               await sendIvrSms({
                 to: callRow.phone_number,
-                body: taggedBody,
+                body: resolvedTemplate.body,
                 contactName: callRow.contact_name,
                 contactType: callRow.contact_type,
                 supabase,
                 skipEmployeeFilter: allowEmployeeTestSms,
-                sourceFunction: "voice-status-callback",
+                sourceFunction: "voice-status-post-call",
                 templateKey: resolvedTemplate.templateKey,
               });
               console.log(
