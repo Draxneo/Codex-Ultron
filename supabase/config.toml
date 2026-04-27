@@ -40,6 +40,9 @@ verify_jwt = false
 [functions.hcp-history-normalize]
 verify_jwt = false
 
+[functions.hcp-attachment-archive]
+verify_jwt = false
+
 [functions.extract-document-text]
 verify_jwt = false
 
