@@ -2270,7 +2270,7 @@ async function executeToolCall(
           .replace(/\b(circle)\b/g, "cir")
           .replace(/\b(terrace)\b/g, "ter")
           .replace(/\b(parkway)\b/g, "pkwy")
-          .replace(/[^ -]+/g, " ")
+          .replace(/[^\x00-\x7F]+/g, " ")
           .replace(/[^a-z0-9\s]/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -2871,10 +2871,10 @@ serve(async (req) => {
 
     // Safety net: block stale provider-prefixed models that bypassed normalization.
     if (
-      requestedModel.startsWith("claude") ||
-      requestedModel.includes("anthropic") ||
-      requestedModel.startsWith("google/") ||
-      requestedModel.startsWith("gemini")
+      requestedModel.toLowerCase().startsWith("claude") ||
+      requestedModel.toLowerCase().includes("anthropic") ||
+      requestedModel.toLowerCase().startsWith("google/") ||
+      requestedModel.toLowerCase().startsWith("gemini")
     ) {
       console.warn(`Blocked non-OpenAI model "${requestedModel}" in ai_model_config[${taskKey}] - using gpt-5-mini.`);
       requestedModel = "gpt-5-mini";
@@ -3539,7 +3539,7 @@ TOOL ROUTING RULES (follow strictly)
 
     const useStream = mode === "chat" && body.stream;
 
-    // --- LOVABLE AI PATH (all models route through Lovable AI gateway) ---
+    // --- OpenAI path ---
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
     const aiRequestBody: any = {
       model: requestedModel,
@@ -3593,7 +3593,7 @@ TOOL ROUTING RULES (follow strictly)
     const mainOutputTokens = mainUsage?.completion_tokens || 0;
     const mainCostCents = estimateCostCents({ model: requestedModel, inputTokens: mainInputTokens, outputTokens: mainOutputTokens });
     logApiUsage(sb, {
-      service: "lovable_ai",
+      service: "openai_ai",
       function_name: "ai-task-agent",
       endpoint: "chat/completions",
       tokens_used: mainTokens,
@@ -3651,7 +3651,7 @@ TOOL ROUTING RULES (follow strictly)
         });
         if (followUpResp.status === 429 && retryAttempt < 2) {
           const waitMs = (retryAttempt + 1) * 2000;
-          console.warn(`Lovable AI 429 rate limit, retrying in ${waitMs}ms (attempt ${retryAttempt + 1}/3)`);
+          console.warn(`OpenAI 429 rate limit, retrying in ${waitMs}ms (attempt ${retryAttempt + 1}/3)`);
           await new Promise(r => setTimeout(r, waitMs));
           continue;
         }
@@ -3674,7 +3674,7 @@ TOOL ROUTING RULES (follow strictly)
         const fuIn = fuUsage.prompt_tokens || 0;
         const fuOut = fuUsage.completion_tokens || 0;
         logApiUsage(sb, {
-          service: "lovable_ai",
+          service: "openai_ai",
           function_name: "ai-task-agent",
           endpoint: "chat/completions",
           tokens_used: fuIn + fuOut,

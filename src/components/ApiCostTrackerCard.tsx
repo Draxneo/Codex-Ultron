@@ -10,7 +10,8 @@ const SERVICE_LABELS: Record<string, string> = {
   twilio_sms: "Twilio SMS",
   twilio_voice: "Twilio Voice",
   deepgram: "Deepgram",
-  lovable_ai: "JARVIS AI",
+  openai_ai: "OpenAI / JARVIS",
+  lovable_ai: "OpenAI / JARVIS (legacy)",
   sendgrid: "SendGrid",
   firecrawl: "Firecrawl",
 };
@@ -21,7 +22,8 @@ const SERVICE_LABELS: Record<string, string> = {
 const DEFAULT_ALERT_CENTS = 2000; // $20/day
 const COST_ALERT_CENTS: Record<string, number> = {
   google_maps: 2000,    // $20/day
-  lovable_ai: 2000,     // $20/day
+  openai_ai: 2000,      // $20/day
+  lovable_ai: 2000,     // legacy rows from before provider rename
   twilio_sms: 2000,     // $20/day — high SMS volume is normal
   deepgram: 2000,       // $20/day
   firecrawl: 2000,      // $20/day

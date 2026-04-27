@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
     // Telemetry: surface grammar-check timeouts so we can detect regressions
     if (isAiGenerated && grammarTimedOut) {
       logApiUsage(supabase, {
-        service: "lovable_ai",
+        service: "openai_ai",
         function_name: "send-sms",
         endpoint: "grammar-check-timeout",
         estimated_cost_cents: 0,

@@ -68,7 +68,7 @@ Return ONLY the corrected text — no explanations, quotes, or markdown.`;
     const tokens = inT + outT;
     const sb = getSupabaseAdmin();
     logApiUsage(sb, {
-      service: "lovable_ai",
+      service: "openai_ai",
       function_name: "grammar-polish",
       endpoint: "chat/completions",
       tokens_used: tokens,

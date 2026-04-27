@@ -4,7 +4,7 @@
  */
 
 interface ApiUsageEntry {
-  service: string;        // google_maps, twilio_sms, twilio_voice, deepgram, lovable_ai, sendgrid, firecrawl
+  service: string;        // google_maps, twilio_sms, twilio_voice, deepgram, openai_ai, sendgrid, firecrawl
   function_name: string;  // edge function name e.g. "calculate-route-cache"
   endpoint?: string;      // specific API endpoint e.g. "directions", "geocode"
   tokens_used?: number;   // total tokens (input + output) — kept for back-compat

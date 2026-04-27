@@ -13,7 +13,8 @@ const SERVICE_LABELS: Record<string, string> = {
   twilio_sms: "Twilio SMS",
   twilio_voice: "Twilio Voice",
   deepgram: "Deepgram",
-  lovable_ai: "JARVIS AI",
+  openai_ai: "OpenAI / JARVIS",
+  lovable_ai: "OpenAI / JARVIS (legacy)",
   sendgrid: "SendGrid",
   firecrawl: "Firecrawl",
 };
@@ -23,7 +24,8 @@ const SERVICE_COLORS: Record<string, string> = {
   twilio_sms: "#F22F46",
   twilio_voice: "#E91E63",
   deepgram: "#13EF93",
-  lovable_ai: "#8B5CF6",
+  openai_ai: "#8B5CF6",
+  lovable_ai: "#A78BFA",
   sendgrid: "#1A82E2",
   firecrawl: "#F97316",
 };

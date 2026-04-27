@@ -35,8 +35,8 @@ export const API_COST_LIMITS: ApiServiceLimit[] = [
     baselineCalls: 5,           // 1 ETA per active tech
   },
   {
-    service: "lovable_ai",
-    label: "JARVIS AI (JARVIS)",
+    service: "openai_ai",
+    label: "OpenAI / JARVIS",
     dailyCostUsd: 25.0,
     dailyCalls: 500,
     expectedDailyCalls: "~50–300 (chat + classification + extraction)",
