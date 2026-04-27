@@ -1,10 +1,10 @@
 /**
- * create-hcp-job — HCP-first job/estimate creation.
+ * create-hcp-job - legacy HCP bridge for transition/backfill/emergency sync.
  * 
- * Creates the job/estimate directly in Housecall Pro without inserting locally.
- * The HCP webhook will handle local record creation when HCP fires the event.
+ * UltraOffice2.0 owns new operational records. This function remains only for
+ * guarded HCP transition flows that still need to create or compare an HCP record.
  * 
- * This is the single gateway for all "Book It" actions (JARVIS, CSR intake, etc.)
+ * Do not use this as the default booking path for new jobs/estimates.
  */
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";

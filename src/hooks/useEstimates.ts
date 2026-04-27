@@ -289,7 +289,7 @@ export function useCreateEstimate() {
       if (error) throw error;
       const created = data as unknown as Estimate;
 
-      // Push to HCP via finalize-job (ONE source of truth)
+      // Run shared local finalization side effects such as chat channels and activity.
       try {
         await supabase.functions.invoke("finalize-job", {
           body: { estimate_id: created.id, created_by: "UI" },

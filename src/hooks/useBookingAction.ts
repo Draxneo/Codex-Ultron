@@ -97,10 +97,7 @@ export function useBookingAction() {
           description: m.description || description || "Service call",
           job_type: m.job_type || "service",
           address: m.address || null,
-          // Use full employee name — HCP employee record is "Jonathan Carnes", and
-          // create-hcp-job's .eq("name", assigned_to) lookup needs an exact match to
-          // resolve the hcp_employee_id and dispatch the job. Just "Jonathan" silently
-          // resolves to no match and the job ends up unassigned in HCP.
+          // Use full employee name so local assignment and tech routing match the roster.
           assigned_to: m.assigned_to || "Jonathan Carnes",
           scheduled_date: m.scheduled_date || null,
           scheduled_time: m.scheduled_time || null,

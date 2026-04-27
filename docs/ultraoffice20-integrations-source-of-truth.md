@@ -67,13 +67,13 @@ All other production Twilio numbers should remain pointed at the old system unti
 
 ## Housecall Pro
 
-HCP data is still important during the transition, especially for:
+UltraOffice2.0 is the operating source of truth. HCP is transition-only and should be used only for:
 
 - historical jobs/customers/estimates/invoices
 - attachments/photos that may require nested API retrieval
-- validating job and estimate numbers against HCP
+- emergency comparison during the cutover window
 
-The long-term goal is to stop relying on HCP as the operational source of truth.
+New customers, jobs, estimates, invoices, notes, and payments should not be pushed back to HCP by default.
 
 ## Rebuild From Scratch
 

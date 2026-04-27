@@ -1003,7 +1003,7 @@ const suggestScheduleOptimizationTool = { type: "function", function: { name: "s
 // Customer CRM (formerly customer-actions)
 const searchCustomerTool = { type: "function", function: { name: "search_customer", description: "Search the CRM for an existing customer by name, phone, or email. ALWAYS use this BEFORE create_customer to avoid duplicates. Returns matching customers with their full details including address.", parameters: { type: "object", properties: { name: { type: "string", description: "Full or partial name to search (e.g. 'Marcus Scott' or 'Scott')" }, phone: { type: "string", description: "Phone number to search" }, email: { type: "string", description: "Email to search" } }, additionalProperties: false } } };
 const createCustomerTool = { type: "function", function: { name: "create_customer", description: "Create a new customer record. ALWAYS search_customer first with BOTH name AND address to check for duplicates — address is the #1 dedup key since customers don't change addresses. ALWAYS verify_address first, then use the returned street/city/state/zip fields (NOT the full standardized string) for the address, city, state, zip parameters. If search_customer finds a match at the same address, USE the existing record — do NOT create a new one.", parameters: { type: "object", properties: { first_name: { type: "string" }, last_name: { type: "string" }, phone: { type: "string" }, email: { type: "string" }, address: { type: "string", description: "Street only (e.g. '292 Cimarron Dr'). Use the 'street' field from verify_address." }, city: { type: "string" }, state: { type: "string" }, zip: { type: "string" }, notes: { type: "string" } }, required: ["first_name", "last_name"], additionalProperties: false } } };
-const updateCustomerTool = { type: "function", function: { name: "update_customer", description: "Update an existing customer's contact info or address. Updates LOCAL record AND pushes change to HCP (source of truth). Use this when a customer provides a new phone, email, or address. By default, when changing 'phone' (main number), the OLD phone value is automatically preserved as 'mobile_phone' so nothing is lost — set preserve_old_phone=false to overwrite without preserving. ALWAYS confirm with dispatcher before calling (Rule 6 — Verify Before Write).", parameters: { type: "object", properties: { customer_id: { type: "string", description: "UUID of the customer to update (from search_customer)." }, first_name: { type: "string" }, last_name: { type: "string" }, phone: { type: "string", description: "New main/home phone number." }, mobile_phone: { type: "string", description: "New mobile/cell phone number." }, email: { type: "string" }, address: { type: "string", description: "Street only." }, city: { type: "string" }, state: { type: "string" }, zip: { type: "string" }, notes: { type: "string", description: "Replaces existing notes — pass appended text if you want to keep prior notes." }, preserve_old_phone: { type: "boolean", description: "When changing phone, also save the OLD phone value as mobile_phone. Default true." } }, required: ["customer_id"], additionalProperties: false } } };
+const updateCustomerTool = { type: "function", function: { name: "update_customer", description: "Update an existing UltraOffice customer record. Use this when a customer provides a new phone, email, address, or note. By default, when changing 'phone' (main number), the OLD phone value is automatically preserved as 'mobile_phone' so nothing is lost — set preserve_old_phone=false to overwrite without preserving. ALWAYS confirm with dispatcher before calling (Verify Before Write).", parameters: { type: "object", properties: { customer_id: { type: "string", description: "UUID of the customer to update (from search_customer)." }, first_name: { type: "string" }, last_name: { type: "string" }, phone: { type: "string", description: "New main/home phone number." }, mobile_phone: { type: "string", description: "New mobile/cell phone number." }, email: { type: "string" }, address: { type: "string", description: "Street only." }, city: { type: "string" }, state: { type: "string" }, zip: { type: "string" }, notes: { type: "string", description: "Replaces existing notes — pass appended text if you want to keep prior notes." }, preserve_old_phone: { type: "boolean", description: "When changing phone, also save the OLD phone value as mobile_phone. Default true." } }, required: ["customer_id"], additionalProperties: false } } };
 
 // Vendor VRM tools
 // create_job tool is built dynamically at runtime with employee names — see buildCreateJobTool()
@@ -1871,51 +1871,10 @@ async function executeToolCall(
         data = newCust;
       }
 
-      // ── Push customer to HCP ──
-      let hcpSyncMsg = "";
-      const HCP_API_KEY = Deno.env.get("HCP_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
-      if (HCP_API_KEY) {
-        try {
-          const hcpBody: any = {
-            first_name: args.first_name || "",
-            last_name: args.last_name || "",
-          };
-          if (args.phone) hcpBody.mobile_number = args.phone;
-          if (args.email) hcpBody.email = args.email;
-          if (args.address) {
-            hcpBody.addresses = [{
-              street: args.address || "",
-              city: args.city || "",
-              state: args.state || "",
-              zip: args.zip || "",
-              country: "US",
-            }];
-          }
-          const hcpRes = await fetch("https://api.housecallpro.com/customers", {
-            method: "POST",
-            headers: { "Authorization": `Token ${HCP_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify(hcpBody),
-          });
-          if (hcpRes.ok) {
-            const hcpCust = await hcpRes.json();
-            if (hcpCust?.id) {
-              await sb.from("customers").update({ hcp_customer_id: hcpCust.id }).eq("id", data.id);
-              hcpSyncMsg = ` | Synced to HCP (${hcpCust.id})`;
-            }
-          } else {
-            const errText = await hcpRes.text();
-            console.error(`HCP customer create failed [${hcpRes.status}]: ${errText}`);
-            hcpSyncMsg = " | HCP sync failed (customer created locally only)";
-          }
-        } catch (hcpErr) {
-          console.error("HCP customer sync error:", hcpErr);
-          hcpSyncMsg = " | HCP sync failed (customer created locally only)";
-        }
-      }
-      result = { status: "success", customer_id: data.id, message: `Created customer: ${args.first_name} ${args.last_name} (${data.id})${hcpSyncMsg}` };
+      result = { status: "success", customer_id: data.id, message: `Created customer in UltraOffice: ${args.first_name} ${args.last_name} (${data.id})` };
 
     } else if (toolName === "update_customer") {
-      // Update customer locally + push to HCP. Default behavior preserves old phone as mobile_phone.
+      // Update the UltraOffice customer record. Default behavior preserves old phone as mobile_phone.
       const custId = args.customer_id;
       if (!custId) throw new Error("update_customer requires customer_id");
 
@@ -1942,50 +1901,14 @@ async function executeToolCall(
       const { error: updateErr } = await sb.from("customers").update(updates).eq("id", custId);
       if (updateErr) throw updateErr;
 
-      // Push to HCP if linked
-      let hcpSyncMsg = "";
-      const HCP_API_KEY = Deno.env.get("HCP_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
-      if (HCP_API_KEY && existing.hcp_customer_id) {
-        try {
-          const hcpBody: any = {};
-          if (updates.first_name !== undefined) hcpBody.first_name = updates.first_name;
-          if (updates.last_name !== undefined) hcpBody.last_name = updates.last_name;
-          if (updates.email !== undefined) hcpBody.email = updates.email;
-          // HCP fields: mobile_number, home_number, work_number. Map our 'phone' → home_number, 'mobile_phone' → mobile_number.
-          if (updates.phone !== undefined) hcpBody.home_number = updates.phone;
-          if (updates.mobile_phone !== undefined) hcpBody.mobile_number = updates.mobile_phone;
-          if (updates.notes !== undefined) hcpBody.notes = updates.notes;
-
-          if (Object.keys(hcpBody).length > 0) {
-            const hcpRes = await fetch(`https://api.housecallpro.com/customers/${existing.hcp_customer_id}`, {
-              method: "PUT",
-              headers: { "Authorization": `Token ${HCP_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify(hcpBody),
-            });
-            if (hcpRes.ok) {
-              hcpSyncMsg = ` | Synced to HCP (${existing.hcp_customer_id})`;
-            } else {
-              const errText = await hcpRes.text();
-              console.error(`HCP customer update failed [${hcpRes.status}]: ${errText}`);
-              hcpSyncMsg = ` | ⚠️ HCP sync failed: ${hcpRes.status}`;
-            }
-          }
-        } catch (hcpErr: any) {
-          console.error("HCP customer update error:", hcpErr);
-          hcpSyncMsg = ` | ⚠️ HCP sync error: ${hcpErr.message}`;
-        }
-      } else if (!existing.hcp_customer_id) {
-        hcpSyncMsg = " | (no HCP link — local only)";
-      }
-
       const changedFields = Object.keys(updates).filter(k => k !== "updated_at");
       await sb.from("activity_log").insert({
         action: "customer_updated",
-        details: `Updated ${existing.first_name} ${existing.last_name} (${custId}): ${changedFields.join(", ")}${hcpSyncMsg}`,
+        details: `Updated ${existing.first_name} ${existing.last_name} (${custId}): ${changedFields.join(", ")}`,
         performed_by: "JARVIS",
       });
 
-      result = { status: "success", customer_id: custId, updated_fields: changedFields, message: `Updated ${existing.first_name} ${existing.last_name}: ${changedFields.join(", ")}${hcpSyncMsg}` };
+      result = { status: "success", customer_id: custId, updated_fields: changedFields, message: `Updated ${existing.first_name} ${existing.last_name}: ${changedFields.join(", ")}` };
 
     } else if (toolName === "create_job") {
       // ── Resolve assigned_to: fuzzy match employee name → exact DB name ──

@@ -1,185 +1,117 @@
-# Organize Plus — HVAC Operations Platform
+# UltraOffice2.0
 
-An HVAC operations platform for Carnes and Sons. UltraOffice2.0 is the active source of truth for new development while HCP is phased out as an operating dependency.
+UltraOffice2.0 is the Carnes and Sons HVAC operations platform. It is being rebuilt to become the company-owned source of truth for daily work: customers, jobs, estimates, invoices, calls, SMS/MMS, technician forms, carts, payments, agreements, attachments, and JARVIS action items.
 
-Powered by **JARVIS** for the dispatcher copilot, CSR intake, parts sourcing, and multimodal chat. Unified Twilio + Deepgram telephony/SMS pipeline. Capacitor mobile shell for technicians. Electron desktop shell for the dispatch desk.
+Housecall Pro is no longer the operating center of the app. HCP is kept only for transition support: historical import, attachment backfill, emergency comparison, and temporary bridges that are explicitly guarded.
 
----
+## Product Direction
 
-## ⚠️ Engineering Principles (read before writing any code)
+- **UltraOffice owns new work.** New customers, jobs, estimates, invoices, notes, photos, carts, and payments should be written to UltraOffice data first.
+- **HCP is transition-only.** HCP import/sync functions may remain until historical data is complete, but they should not be treated as the default path for new operations.
+- **Attention First.** The old workflow builder is retired. "What's next" comes from action items, communications, invoices, photos, call/SMS history, cart/payment state, and AI-readable job/estimate context.
+- **Human in the loop.** JARVIS can understand, draft, and propose, but customer-facing messages and important business actions require human approval unless a specific exception is documented.
+- **One source of truth per concern.** Shared utilities and canonical pipelines must be used instead of feature-by-feature one-off logic.
 
-These are non-negotiable. They exist because we burned ourselves repeatedly when we ignored them.
+## Core Workflows
 
-### 1. Build universal shared utilities first — never one-off
-If logic is needed in **2+ places**, it MUST live in a shared location. No copy-paste, no "I'll refactor later."
-
-| Logic type | Where it lives |
+| Area | Source of truth / pipeline |
 |---|---|
-| Pure functions / formatters / parsers | `src/lib/` |
-| React state, effects, queries, mutations | `src/hooks/` |
-| Edge function helpers (Twilio, HCP, AI, auth, signatures, company info) | `supabase/functions/_shared/` |
-| Reusable UI primitives | `src/components/ui/` (shadcn) or `src/components/shared/` |
+| Calls and IVR | `voice-webhook`, `voice-ivr-handler`, `voice-status-callback`, IVR canvas config |
+| SMS/MMS | `send-sms`, `sms-webhook`, `sms-status-callback`, shared media renderer |
+| Customers | UltraOffice database, `resolveContact` / `verifyContact` for lookup |
+| Jobs and estimates | UltraOffice database and shared job/estimate detail model |
+| Invoices and payments | UltraOffice invoice/cart data, Stripe checkout where applicable |
+| Tech work | Tech app forms, photos, JARVIS tech assistant, job status actions |
+| JARVIS | Human-approved action cards and shared context builders |
+| HCP history | Import/archive functions only, not default new-work writes |
 
-Before creating a new file, **search for an existing helper first**. Most things you need are already built.
+## Engineering Rules
 
-### 2. Centralized pipelines are non-negotiable
-Every outbound action must route through its single canonical pipeline:
+1. Search for an existing helper before creating new logic.
+2. Put reusable pure logic in `src/lib/`.
+3. Put reusable React data/state logic in `src/hooks/`.
+4. Put shared Edge Function helpers in `supabase/functions/_shared/`.
+5. Keep route pages thin; do not hide business rules inside page components.
+6. Do not hardcode company identity, secrets, phone numbers, or API keys.
+7. Do not put server secrets in frontend env files.
+8. Do not call Twilio, Stripe, OpenAI, HCP, or Google directly from random UI code when a canonical function/helper exists.
 
-| Concern | Pipeline |
-|---|---|
-| Outbound SMS / MMS | `send-sms` (status → `sms-status-callback`, audit → `twilio-sms-inspect`) |
-| Outbound voice | `voice-webhook` → `voice-ivr-handler` → `voice-status-callback` |
-| Job / estimate creation | `create-hcp-job` → HCP webhook → `finalize-job` |
-| AI inference | OpenAI/JARVIS gateway via `OPENAI_API_KEY` |
-| Email send | SendGrid via `send-email` (signed, DKIM, list-unsubscribe) |
-| Push notifications | `send-push` (FCM HTTP v1) |
-| Company name / phone / address | `loadCompanyInfo()` from `_shared/companyInfo.ts` |
+## Environment Contract
 
-If you find yourself calling Twilio/HCP/AI directly, stop — use the pipeline.
+Frontend env files (`.env`, `.env.local`) are public-only:
 
-### 3. HCP-first, never local-first
-Jobs and estimates are **never** inserted locally. Flow:
-1. POST to HCP via `create-hcp-job`
-2. HCP webhook fires
-3. `hcp-webhook` creates the local row and calls `finalize-job` with `skip_hcp: true` for side effects (chat channel, line items, activity log).
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PROJECT_ID`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- optional `VITE_GOOGLE_MAPS_API_KEY`
 
-### 4. No hardcoded company identifiers
-Company name, phone, email, address, TACLA — always read from `company_settings` via `loadCompanyInfo()`. No string literals.
+Server secrets belong in Supabase secrets, Render environment variables, or `.env.tools.local` for local tooling only.
 
-### 5. Identity resolution order
-Universal contact resolver order: **Employee → Customer → Vendor → Lead.** Use `resolveContact()` / `verifyContact()` from `_shared`, never roll your own.
+Run:
 
-### 6. Security
-- Roles live in `user_roles` ONLY — never on `profiles` or `users`. Use `has_role(_user_id, _role)` (`SECURITY DEFINER`) inside RLS policies.
-- All cross-table reads in DB functions use `SECURITY DEFINER` + explicit `search_path = public`.
-- Twilio webhooks (voice + SMS) validate `X-Twilio-Signature` via `_shared/twilioSignature.ts`.
-- Storage buckets (`mms-media`, `agent-documents`, `tech-photos`, etc.) have explicit RLS — never make a bucket public without reviewing policies.
+```sh
+npm run env:audit
+```
 
-### 7. AI is observer-only on inbound
-JARVIS extracts intent and proposes actions, but **never** sends customer-facing messages without HITL (human-in-the-loop) approval. Approval flows live in the dispatcher action cards.
-
-### 8. Attention First
-The old workflow builder is retired. "What's next" should come from attention data, action items, communications, invoices, photos, and AI-readable job/estimate state.
-
-### 9. Never edit auto-generated files
-- `src/integrations/supabase/client.ts`
-- `src/integrations/supabase/types.ts`
-- `.env`
-- `supabase/migrations/*` (always create new migrations via the migration tool)
-
----
-
-## Core Architecture
+## Current Stack
 
 | Layer | Stack |
 |---|---|
-| Frontend | Vite 5 · React 18 · TypeScript 5 · Tailwind v3 · shadcn/ui · React Query · React Router · React Flow · Framer Motion · Vaul |
-| Backend | Lovable Cloud (Supabase) — Postgres + Edge Functions (Deno) + Storage + Realtime + pgvector |
-| Mobile | Capacitor (Android) — hybrid shell that loads the published web URL. UI ships via Publish; no APK rebuild required. |
-| Desktop | Electron shell pinned to a specific secondary monitor for the dispatch station. |
-| AI | Lovable AI gateway (Gemini 2.5 / GPT-5 family) — single key, no per-provider config. |
-| Integrations | Housecall Pro, Twilio (Voice + SMS + MMS), Deepgram, SendGrid, Stripe, Google Ads / LSA, Google Maps, Mapbox, Firecrawl, FCM |
-
----
-
-## Key Subsystems
-
-| Subsystem | Entry point |
-|---|---|
-| **JARVIS Orchestrator** (hub-and-spoke AI) | `supabase/functions/ai-task-agent` |
-| **Centralized SMS Pipeline** | `send-sms`, `sms-status-callback`, `twilio-sms-inspect` |
-| **Unified Telephony** (IVR, recording, callbacks, inspector) | `voice-webhook`, `voice-ivr-handler`, `voice-status-callback`, `twilio-call-inspect` |
-| **HCP Sync Engine** (webhook-driven smart upsert) | `hcp-webhook`, `sync-hcp-jobs` |
-| **Job Finalization Pipeline** | `finalize-job` |
-| **CSR Intake** (popup with live Deepgram transcription + extraction) | `/csr-intake`, `csr-extract` |
-| **Dispatch Board** | `/jobs/board` |
-| **Attention / What's Next** | `/copilot`, `useAttentionData`, `action_items` |
-| **Tech Mobile Shell** (no swipe, bottom-tab nav, native keyboard support) | `/tech`, `MobileShell` |
-| **Visual Pricebook** (Vaul drawer) | tech form line item picker |
-| **Quick Quote** (deterministic, non-AI) | `/quick-quote` |
-| **Sales Presentations** (customer-facing) | `/presentation/:token`, admin at `/sales-presentations` |
-| **Customer Portal** (passwordless 6-digit PIN) | `/portal` |
-| **Mission Control HUD** | `/mission-control` |
-| **Vendor VRM** | `/vendors` |
-| **Email Suite** (rich composer, signatures, unified Outbox) | `/inbox`, `/email` |
-| **Workflow Sequence Builder** (drag-drop drip campaigns) | `/sequence-builder` |
-| **Comfort Club** (memberships) | `/membership` |
-| **CPS Energy Rebate Automation** | trigger on HCP install webhook |
-
----
+| Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, React Query, React Router |
+| Backend | Supabase Postgres, Edge Functions, Storage, Realtime |
+| Voice/SMS | Twilio Programmable Voice, Twilio Voice SDK, Twilio SMS/MMS |
+| AI | OpenAI-backed JARVIS functions |
+| Transcription | Deepgram |
+| Payments | Stripe |
+| Routing/property helpers | Google Maps, Firecrawl, cached API usage |
+| Mobile | Capacitor Android shell |
+| Desktop | Electron dispatch shell |
+| Deploy | Render, GitHub `main` |
 
 ## Repository Layout
 
-```
+```text
 src/
-  components/         UI components — extend shared primitives, don't duplicate
-    ui/               shadcn primitives
-    shared/           our cross-feature reusable components
-  hooks/              Reusable React logic — put queries/mutations/effects HERE
-  lib/                Pure utilities — formatters, parsers, validators
-  pages/              Route-level shells only (thin)
-  data/               Static dictionaries (e.g., wordList for autocorrect)
+  components/         reusable UI components
+  hooks/              reusable React logic
+  lib/                pure utilities
+  pages/              route shells
   integrations/
-    supabase/         AUTO-GENERATED — never edit
+    supabase/         generated Supabase client/types
 
 supabase/
   functions/
-    _shared/          Shared edge utilities — REUSE BEFORE WRITING NEW
-                      (companyInfo, twilioSignature, sendIvrSms, hcpClient,
-                       apiUsageLog, resolveContact, verifyContact, ...)
-    <function>/       One concern per function
-  migrations/         SQL migrations only — never edit by hand, use migration tool
+    _shared/          shared Edge Function utilities
+    <function>/       one concern per function
+  migrations/         SQL migrations
 
-docs/                 HCP API reference (split by resource)
-.lovable/
-  memory/             Living project rules and architecture notes
-  plan.md             Most recent audit / planning scratchpad
+docs/                 operating decisions, cleanup plans, HCP history/import references
+scripts/              local maintenance/audit scripts
 ```
 
-**Rule of thumb:** If you create a new file in `src/components/` and it isn't a route shell, ask whether the logic belongs in `src/hooks/` or `src/lib/` first.
+## Useful Docs
 
----
+- `docs/ultraoffice-core-scope.md`
+- `docs/ultraoffice20-operating-decisions.md`
+- `docs/ultraoffice20-integrations-source-of-truth.md`
+- `docs/ultraoffice20-master-cleanup-list.md`
+- `docs/ui-jarvis-function-inventory.md`
+- `docs/phone-system-rebuild.md`
+- `docs/sms-sending-policy.md`
+- `docs/hcp-full-history-migration-plan.md`
 
 ## Local Development
 
 ```sh
 npm i
-npm run dev   # Vite, strictPort: true on :8080
+npm run env:audit
+npm run dev
 ```
 
-- `.env`, `src/integrations/supabase/client.ts`, `src/integrations/supabase/types.ts` are **auto-generated** by Lovable Cloud — never edit them by hand.
-- Edge functions deploy automatically on save.
-- Database changes go through the migration tool (which writes to `supabase/migrations/`); never hand-edit migration files.
+Before shipping:
 
----
-
-## Deployment
-
-- **Web:** Lovable → Share → Publish.
-- **Custom domain:** Project Settings → Domains.
-- **Android APK:** Hybrid Capacitor build. UI updates ship via Publish — no native rebuild for content/UI changes. Native rebuild is only required when Capacitor plugins or permissions change.
-- **Desktop:** Electron shell, pinned to DISPLAY1 secondary monitor for dispatch station.
-
----
-
-## Where to Learn More
-
-- **`docs/hcp-api.md`** — Complete Housecall Pro API reference (jobs, customers, estimates, invoices, leads, employees, webhooks)
-- **`docs/hcp-api-integration.md`** — Our HCP field mappings, job-type detection, sync strategy
-- **`.lovable/memory/index.md`** — Living project rules: the 6 core rules, JARVIS policies, branding constraints, security hardening
-- **`.lovable/memory/architecture/*`** — Per-subsystem architecture notes (HCP-first job creation, webhook sync engine, job finalization pipeline, JARVIS orchestrator, electron shell, llm gateway enforcement, centralized SMS pipeline)
-- **`.lovable/memory/features/*`** — Per-feature notes (dispatch board, attention system, sales presentations, voice IVR, customer portal, ...)
-- **`.lovable/plan.md`** — Most recent audit / planning notes
-
----
-
-## The 6 Core Rules (cheat sheet)
-
-1. **Attention First** - build toward AI-tracked outstanding items, not rigid workflow steps.
-2. **One Source of Truth** — HCP for jobs/customers, `company_settings` for identity, `user_roles` for permissions.
-3. **Centralized Pipelines** — `send-sms`, `voice-webhook`, `create-hcp-job`, Lovable AI gateway.
-4. **HCP-First** — never insert jobs/estimates locally; wait for the webhook.
-5. **HITL on Inbound** — AI proposes, humans approve before any customer-facing send.
-6. **Verify Before You Write** — use `verifyContact` / `resolveContact` for all phone/email lookups.
-
-If your change violates one of these, stop and reconsider the design.
+```sh
+npm run env:audit
+npx tsc --noEmit
+npm run build
+```
