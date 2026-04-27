@@ -63,6 +63,14 @@ export function normalizeMediaAttachments(input: unknown): NormalizedMediaAttach
     .map((item): NormalizedMediaAttachment | null => {
       if (typeof item === "string") {
         if (!item) return null;
+        const trimmed = item.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+          try {
+            return normalizeMediaAttachments(JSON.parse(trimmed))[0] ?? null;
+          } catch {
+            // Fall through and treat it as a plain URL/path.
+          }
+        }
         const fileName = nameFromUrl(item);
         const fileType = guessContentType(item, fileName);
         return {
