@@ -28,17 +28,22 @@ function buildQueueTwiml({
   holdMusicUrl,
   waitSeconds,
   redirectUrl,
+  reason,
 }: {
   holdMusicUrl: string | null | undefined;
   waitSeconds: number;
   redirectUrl: string;
+  reason?: "busy" | "no_answer";
 }): string {
   const safeWait = Math.max(5, waitSeconds);
+  const fallbackPrompt = reason === "no_answer"
+    ? "One moment while we try the next available team member."
+    : "All team members are helping other callers. Please stay on the line while we hold your place in queue.";
   const holdPrompt = holdMusicUrl
     ? `<Play loop="${Math.max(1, Math.ceil(safeWait / 5))}">${
       escapeXml(holdMusicUrl)
     }</Play>`
-    : `<Say voice="Polly.Joanna">All team members are helping other callers. Please stay on the line while we hold your place in queue.</Say><Pause length="${safeWait}"/>`;
+    : `<Say voice="Polly.Joanna">${escapeXml(fallbackPrompt)}</Say><Pause length="${safeWait}"/>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -241,7 +246,7 @@ Deno.serve(async (req) => {
       const shouldOverflow = overflowEnabled && overflowNumber &&
         ((isBusy && overflowOnBusy) || (isNoAnswer && overflowOnNoAnswer));
 
-      if (!queueRetry && shouldOverflow) {
+      if (!queueRetry && !shouldOverflow && (isBusy || isNoAnswer)) {
         console.log(
           `⏳ QUEUE BEFORE OVERFLOW: ${dialCallStatus} → holding caller for ${queueWaitSeconds}s before retry`,
         );
@@ -268,6 +273,7 @@ Deno.serve(async (req) => {
             holdMusicUrl: ivrCfg?.hold_music_audio_url,
             waitSeconds: queueWaitSeconds,
             redirectUrl: queueRedirectUrl,
+            reason: isBusy ? "busy" : "no_answer",
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "text/xml" },
