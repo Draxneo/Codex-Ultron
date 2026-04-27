@@ -113,7 +113,16 @@ export function AudioUploadField({ label, audioUrl, textValue, onTextChange, onA
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${bucketPath}/${safeName}`;
-      const { error } = await supabase.storage.from("ivr-greetings").upload(path, file, { upsert: true });
+      const extension = safeName.split(".").pop()?.toLowerCase();
+      const contentType =
+        extension === "mp3" ? "audio/mpeg" :
+        extension === "wav" ? "audio/wav" :
+        file.type || "application/octet-stream";
+      const { error } = await supabase.storage.from("ivr-greetings").upload(path, file, {
+        upsert: true,
+        contentType,
+        cacheControl: "300",
+      });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from("ivr-greetings").getPublicUrl(path);
       onAudioChange(publicUrl);
