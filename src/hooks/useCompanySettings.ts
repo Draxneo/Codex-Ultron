@@ -86,10 +86,6 @@ export interface CompanySettings {
   ai_sms_auto_draft: string;
   /** Max daily JARVIS SMS alerts before auto-capping (default 50) */
   jarvis_max_daily_alerts: string;
-  /** Telephony handoff: when "true" all phone/SMS UI in this app defers to Ultraphone */
-  telephony_handoff_enabled: string;
-  /** Telephony handoff: base URL of the Ultraphone (Office Connect) app */
-  telephony_handoff_url: string;
   /** Universal missed-call SMS — master toggle ("true"/"false") */
   missed_call_sms_enabled: string;
   /** Missed-call template used during business hours */
@@ -144,8 +140,6 @@ const DEFAULTS: CompanySettings = {
   missed_call_sms_during_hours_template_key: "",
   missed_call_sms_after_hours: "Hi! Thanks for calling. We're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here.",
   missed_call_sms_after_hours_template_key: "",
-  telephony_handoff_enabled: "false",
-  telephony_handoff_url: "https://codex-ultron.onrender.com",
 };
 
 export function useCompanySettings() {

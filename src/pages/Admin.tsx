@@ -33,7 +33,6 @@ import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QuickLinksGrid } from "@/components/QuickLinksGrid";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useCapacitor } from "@/hooks/useCapacitor";
 
 // Config components (absorbed from SettingsPage)
@@ -361,8 +360,6 @@ function TeamSection() {
   const deleteEmployee = useDeleteEmployee();
   const inviteUser = useInviteUser();
   const navigate = useNavigate();
-  const telephony = useTelephonyMode();
-  const handoffActive = telephony.isHandoff;
   const [deletingEmployee, setDeletingEmployee] = useState<any>(null);
 
   // Fetch app roles (user_roles) to show supervisor badges
@@ -511,8 +508,7 @@ function TeamSection() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (handoffActive) void telephony.openSms(emp.phone);
-                          else navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
+                          navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
                         }}
                         className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
                         title={`SMS ${emp.name}`}

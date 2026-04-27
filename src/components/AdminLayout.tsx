@@ -10,7 +10,6 @@ import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 const TAB_KEY_MAP: Record<string, string> = {
   "/": "jobs",
@@ -24,8 +23,6 @@ function useAdminTabs(): MobileTab[] {
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: missedCalls } = useVoicemails();
   const allowedTabs = useEmployeeTabAccess();
-  const telephony = useTelephonyMode();
-  const hidePhoneTabs = telephony.isHandoff;
 
   const allTabs: MobileTab[] = [
     {
@@ -34,22 +31,20 @@ function useAdminTabs(): MobileTab[] {
       label: "Dispatch",
       match: (p: string) => p === "/" || p.startsWith("/jobs"),
     },
-    ...(hidePhoneTabs ? [] : [
-      {
-        path: "/inbox?section=calls",
-        icon: Phone,
-        label: "Phone",
-        match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
-        badge: () => missedCalls,
-      } as MobileTab,
-      {
-        path: "/inbox?section=sms",
-        icon: MessageSquare,
-        label: "SMS",
-        match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
-        badge: () => unreadSms,
-      } as MobileTab,
-    ]),
+    {
+      path: "/inbox?section=calls",
+      icon: Phone,
+      label: "Phone",
+      match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
+      badge: () => missedCalls,
+    },
+    {
+      path: "/inbox?section=sms",
+      icon: MessageSquare,
+      label: "SMS",
+      match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
+      badge: () => unreadSms,
+    },
     {
       path: "/customers",
       icon: Users,

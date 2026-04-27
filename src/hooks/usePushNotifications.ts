@@ -70,13 +70,6 @@ export function usePushNotifications() {
           console.log("[Push] Notification tapped:", data);
 
           const type = data?.type;
-          if (telephony.isHandoff && (type === "sms" || type === "call")) {
-            if (type === "sms" && data?.phone) void telephony.openSms(String(data.phone));
-            else if (type === "call" && data?.phone) void telephony.openCall(String(data.phone));
-            else if (type === "sms") void telephony.openMessages();
-            else void telephony.openCallHistory();
-            return;
-          }
           if (type === "sms") {
             navigate(telephony.routes.sms);
           } else if (type === "call") {

@@ -12,7 +12,6 @@ import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useBacklogJobs } from "@/hooks/useJobs";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 /** Tab key used for filtering via employee_tab_access */
 const TAB_KEY_MAP: Record<string, string> = {
@@ -33,8 +32,6 @@ function useTechTabs(): MobileTab[] {
   const allowedTabs = useEmployeeTabAccess();
   const { role } = useEffectiveAuth();
   const { data: buckets } = useBacklogJobs();
-  const telephony = useTelephonyMode();
-  const hidePhoneTabs = telephony.isHandoff;
 
   const isSupervisor = role === "supervisor";
 
@@ -56,22 +53,20 @@ function useTechTabs(): MobileTab[] {
       match: (p: string) => p.startsWith("/jobs/backlog"),
       badge: () => backlogCount,
     } as MobileTab] : []),
-    ...(hidePhoneTabs ? [] : [
-      {
-        path: "/inbox?section=calls",
-        icon: Phone,
-        label: "Phone",
-        match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
-        badge: () => missedCalls,
-      } as MobileTab,
-      {
-        path: "/inbox?section=sms",
-        icon: MessageSquare,
-        label: "SMS",
-        match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
-        badge: () => unreadSms,
-      } as MobileTab,
-    ]),
+    {
+      path: "/inbox?section=calls",
+      icon: Phone,
+      label: "Phone",
+      match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
+      badge: () => missedCalls,
+    },
+    {
+      path: "/inbox?section=sms",
+      icon: MessageSquare,
+      label: "SMS",
+      match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
+      badge: () => unreadSms,
+    },
     ...(allowedTabs?.has("inbox") ? [{
       path: "/inbox",
       icon: Inbox,

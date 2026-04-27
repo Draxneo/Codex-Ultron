@@ -36,7 +36,6 @@ import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { ClickToCall } from "@/components/ClickToCall";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 const CANONICAL_ROLES: RoleKey[] = ["admin", "office", "supervisor", "tech", "installer"];
 
@@ -49,8 +48,6 @@ function RosterTab() {
   const deleteEmployee = useDeleteEmployee();
   const inviteUser = useInviteUser();
   const navigate = useNavigate();
-  const telephony = useTelephonyMode();
-  const handoffActive = telephony.isHandoff;
   const { toast } = useToast();
 
   const [appRolesMap, setAppRolesMap] = useState<Record<string, string>>({});
@@ -184,8 +181,7 @@ function RosterTab() {
                               </ClickToCall>
                               <button
                                 onClick={() => {
-                                  if (handoffActive) void telephony.openSms(emp.phone);
-                                  else navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
+                                  navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
                                 }}
                                 className="hover:text-primary"
                                 title={`SMS ${emp.name}`}

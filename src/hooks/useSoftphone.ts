@@ -792,7 +792,7 @@ export function useSoftphone(enabled: boolean = true) {
           // Wake the screen / pop the phone window / OS beep (Electron only)
           const launchTargets = telephony.getSurfaceLaunchTargets("calls");
           notifyIncomingCallWake({
-            shouldLaunchUltraphone: telephony.isHandoff,
+            shouldLaunchUltraphone: false,
             appUrl: launchTargets.appUrl,
             webUrl: launchTargets.webUrl,
           });

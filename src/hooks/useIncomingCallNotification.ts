@@ -9,7 +9,6 @@
 
 import { useEffect, useRef } from "react";
 import { useCapacitor } from "./useCapacitor";
-import { useTelephonyMode } from "./useTelephonyMode";
 
 const CALL_NOTIFICATION_ID = 9999;
 
@@ -27,28 +26,18 @@ export function useIncomingCallNotification(
   callerNumber?: string
 ) {
   const { isNative } = useCapacitor();
-  const telephony = useTelephonyMode();
   const notifiedRef = useRef(false);
-
-  // Telephony handoff: local in-app ringing is disabled everywhere.
-  const handoffSilenced = telephony.isHandoff;
 
   // On mount: clear any lingering notification from a previous session
   useEffect(() => {
     if (!isNative) return;
-    if (!isRinging || handoffSilenced) {
+    if (!isRinging) {
       cancelCallNotification();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isNative) return;
-    if (handoffSilenced) {
-      // Clear anything that may still be on screen, then bail.
-      cancelCallNotification();
-      notifiedRef.current = false;
-      return;
-    }
 
     if (isRinging && !notifiedRef.current) {
       notifiedRef.current = true;
@@ -87,5 +76,5 @@ export function useIncomingCallNotification(
       notifiedRef.current = false;
       cancelCallNotification();
     }
-  }, [isRinging, callerName, callerNumber, isNative, handoffSilenced]);
+  }, [isRinging, callerName, callerNumber, isNative]);
 }

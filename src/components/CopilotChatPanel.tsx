@@ -19,7 +19,6 @@ import { useWakeWord } from "@/hooks/useWakeWord";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { toE164 } from "@/lib/formatters";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { cn } from "@/lib/utils";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
@@ -327,8 +326,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
   const { consumePendingQuery, consumePendingCallSession, activeCallPreview, consumePendingSmsSession, consumePendingVoicemailSession, consumePendingContext, peekPendingContext, pendingVersion, startCallSession } = useCopilotPanel();
   const softphone = useSoftphoneContext();
   const navigate = useNavigate();
-  const telephony = useTelephonyMode();
-  const handoffActive = telephony.isHandoff;
   const {
     sessions,
     activeSessionId,
@@ -1077,10 +1074,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
                       return;
                     }
                     if (action.type === "view_voicemail") {
-                      if (handoffActive) {
-                        void telephony.openVoicemail();
-                        return;
-                      }
                       navigate("/calls?tab=voicemail");
                       return;
                     }

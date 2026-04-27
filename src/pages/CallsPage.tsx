@@ -12,8 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getCompanySetting } from "@/lib/companySettings";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
-import { TelephonyHandoffRedirect } from "@/components/TelephonyHandoffRedirect";
 
 const DIAL_KEYS: { key: string; sub?: string }[][] = [
   [{ key: "1", sub: "" }, { key: "2", sub: "ABC" }, { key: "3", sub: "DEF" }],
@@ -202,17 +200,6 @@ export default function CallsPage({ embedded = false, defaultTab = "calls" }: { 
   const isMobile = useIsMobile();
   const softphone = useSoftphoneContext();
   const [hideBots, setHideBots] = useState(true);
-  const telephony = useTelephonyMode();
-  const handoffActive = telephony.isHandoff;
-
-  if (handoffActive) {
-    return (
-      <div className="h-full bg-background flex flex-col overflow-hidden">
-        {!embedded && !isMobile && <AppHeader />}
-        <TelephonyHandoffRedirect surface={defaultTab === "voicemail" ? "voicemail" : "calls"} />
-      </div>
-    );
-  }
 
   return (
     <div className="h-full bg-background flex flex-col overflow-hidden">

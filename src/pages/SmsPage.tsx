@@ -3,24 +3,12 @@ import { Phone } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { SmsPanel } from "@/components/SmsPanel";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
-import { TelephonyHandoffRedirect } from "@/components/TelephonyHandoffRedirect";
 
 export default function SmsPage({ embedded = false }: { embedded?: boolean }) {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
   const initialPhone = searchParams.get("phone");
   const initialDraft = searchParams.get("draft");
-  const telephony = useTelephonyMode();
-
-  if (telephony.isHandoff) {
-    return (
-      <div className="h-full bg-background flex flex-col overflow-hidden">
-        {!embedded && !isMobile && <AppHeader />}
-        <TelephonyHandoffRedirect surface="sms" />
-      </div>
-    );
-  }
 
   return (
     <div className="h-full bg-background flex flex-col overflow-hidden">

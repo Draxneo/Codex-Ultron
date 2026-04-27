@@ -24,8 +24,6 @@ interface ClickToCallProps {
 
 /**
  * Renders a phone number that dials via the softphone on click.
- * When telephony handoff is ON, every platform launches Ultraphone instead of
- * the in-app softphone.
  *
  * IMPORTANT — Deterministic context:
  * When called from a job, estimate, or customer page, ALWAYS pass jobId or customerId.
@@ -55,9 +53,7 @@ export function ClickToCall({
     // Universal Twilio normalization — every path gets E.164 (or raw if non-US)
     const e164 = toE164(phone) || phone;
 
-    // ALWAYS use the in-app popup dialer (SoftphoneStrip), even when telephony
-    // handoff is enabled. The user explicitly wants click-to-call to open the
-    // universal popup instead of launching Ultraphone.
+    // ALWAYS use the in-app popup dialer (SoftphoneStrip).
     softphone.setDialNumber(e164);
     softphone.setPendingJobId(jobId || null);
     softphone.setPendingCustomerId?.(customerId || null);

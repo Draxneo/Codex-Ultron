@@ -28,7 +28,6 @@ import { SectionReorderToolbar } from "@/components/layout/SectionReorderToolbar
 import { GoodBetterBestPicker } from "@/components/tiers/GoodBetterBestPicker";
 import { TierPresetManager } from "@/components/tiers/TierPresetManager";
 import { useAuth } from "@/hooks/useAuth";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useCapacitor } from "@/hooks/useCapacitor";
 
 const QUICK_QUOTE_SECTION_IDS = ["filters", "tiers", "results", "presentation"] as const;
@@ -375,11 +374,7 @@ export default function QuickQuote() {
       const firstName = (customerName || "").split(" ")[0] || "there";
       const sysLabel = `${m.brand} ${m.tonnage ? `${m.tonnage}T ` : ""}${m.system_type || "system"}`.trim();
       const body = `Hi ${firstName}, here's your ${sysLabel} quote with three easy approval options — tap to review & approve: ${url}`;
-      if (telephony.isHandoff) {
-        await telephony.openSms(customerPhone, { draft: body });
-      } else {
-        navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
-      }
+      navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
       toast({ title: "Quote ready to send", description: "Approval link drafted in SMS." });
     } catch (e: any) {
       toast({ title: "Failed to prepare SMS", description: e?.message || String(e), variant: "destructive" });
@@ -432,16 +427,10 @@ export default function QuickQuote() {
 
   const presentationUrl = presentationToken ? `${PUBLISHED_DOMAIN}/presentation/${presentationToken}` : null;
 
-  const telephony = useTelephonyMode();
-
   const handleTextToCustomer = () => {
     if (!presentationUrl || !customerPhone) return;
     const firstName = customerName.split(" ")[0] || "there";
     const body = `Hi ${firstName}, here's your system replacement quote from CS Ultra — take a look when you're ready: ${presentationUrl}`;
-    if (telephony.isHandoff) {
-      void telephony.openSms(customerPhone, { draft: body });
-      return;
-    }
     navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
   };
 

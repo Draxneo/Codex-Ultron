@@ -197,7 +197,7 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
     nodes.push({
       id: "direct-ring", type: "ivrNode",
       position: { x: X_GAP * 3, y: Y_START + 60 },
-      data: { nodeType: "department", label: "Direct Routing", subtitle: "All assigned Ultraphone clients ring", actionType: "forward_client", onSelect } satisfies IvrNodeData,
+      data: { nodeType: "department", label: "Direct Routing", subtitle: "All assigned app clients ring", actionType: "forward_client", onSelect } satisfies IvrNodeData,
     });
     edges.push({ id: "e-greeting-direct", source: "greeting", target: "direct-ring", animated: true, style: { stroke: "hsl(var(--primary))" } });
 

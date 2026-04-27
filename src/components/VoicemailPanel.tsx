@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "0:00";
@@ -24,8 +23,6 @@ export function VoicemailPanel() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const navigate = useNavigate();
   const { startVoicemailSession } = useCopilotPanel();
-  const telephony = useTelephonyMode();
-  const handoffActive = telephony.isHandoff;
 
   const handleAskJarvis = (vm: Voicemail) => {
     if (!vm.is_read) markAsRead(vm.id);
@@ -140,8 +137,7 @@ export function VoicemailPanel() {
                   className="h-8 w-8"
                   title="Send SMS"
                   onClick={() => {
-                    if (handoffActive) void telephony.openSms(vm.phone_number);
-                    else navigate(`${telephony.routes.sms}?phone=${encodeURIComponent(vm.phone_number)}`);
+                    navigate(`/sms?phone=${encodeURIComponent(vm.phone_number)}`);
                   }}
                 >
                   <MessageSquare className="h-3.5 w-3.5 text-primary" />

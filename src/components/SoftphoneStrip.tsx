@@ -44,7 +44,6 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
   const [dialInput, setDialInput] = useState("");
   const [showDialpad, setShowDialpad] = useState(false);
 
-  // Telephony handoff: hide the entire strip on web/desktop when calls live in Ultraphone.
   const telephony = useTelephonyMode();
 
   // Consume pending dial number from ClickToCall
@@ -107,7 +106,7 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
       sendToMain("screen-pop", {
         phone,
         contactName,
-        shouldLaunchUltraphone: telephony.isHandoff,
+        shouldLaunchUltraphone: false,
         appUrl: launchTargets.appUrl,
         webUrl: launchTargets.webUrl,
       });
@@ -279,10 +278,6 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
         : isConnecting
           ? "bg-accent animate-pulse"
           : "bg-muted-foreground/40";
-
-  if (telephony.isHandoff) {
-    return null;
-  }
 
   // On Electron main window, show a minimal strip — no Twilio Device here
   if (isElectronMain()) {

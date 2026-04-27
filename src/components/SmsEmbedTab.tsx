@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "react-router-dom";
 import { formatDateTimeUS, normalizeLast10 } from "@/lib/formatters";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 
 type SmsMediaItem = { url: string; content_type: string };
@@ -140,26 +139,12 @@ export function JobSmsTab({ jobId }: { jobId: string }) {
 }
 
 function SmsMessageList({ messages }: { messages: SmsRow[] }) {
-  const telephony = useTelephonyMode();
-
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-end px-4 py-2">
-        {telephony.isHandoff ? (
-          <button
-            type="button"
-            onClick={() => {
-              void telephony.openMessages();
-            }}
-            className="text-xs text-primary flex items-center gap-1 hover:underline"
-          >
-            Open SMS <ExternalLink className="h-3 w-3" />
-          </button>
-        ) : (
-          <Link to={telephony.routes.sms} className="text-xs text-primary flex items-center gap-1 hover:underline">
-            Open SMS <ExternalLink className="h-3 w-3" />
-          </Link>
-        )}
+        <Link to="/sms" className="text-xs text-primary flex items-center gap-1 hover:underline">
+          Open SMS <ExternalLink className="h-3 w-3" />
+        </Link>
       </div>
       <ScrollArea className="max-h-[400px]">
         <div className="space-y-1 px-4 pb-4">

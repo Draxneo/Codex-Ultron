@@ -290,7 +290,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
             <Users className="h-3 w-3" /> Assigned Team Members
           </Label>
           <p className="text-[10px] text-muted-foreground">
-            Choose which team members this department routes to. If none are selected, all available Ultraphone clients can ring.
+            Choose which team members this department routes to. If none are selected, all available app clients can ring.
           </p>
           <div className="space-y-1.5 max-h-40 overflow-y-auto">
             {profiles.map((p) => {

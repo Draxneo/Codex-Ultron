@@ -39,7 +39,6 @@ import { TechFormSections } from "@/components/TechFormSections";
 import { TechFormSnapAndTalk } from "@/components/TechFormSnapAndTalk";
 import { PropertyCard } from "@/components/PropertyCard";
 import { OnMyWayButton } from "@/components/OnMyWayButton";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useOfflineFormSync } from "@/hooks/useOfflineFormSync";
 import { useKeepAwake } from "@/hooks/useKeepAwake";
 import { SignaturePad } from "@/components/SignaturePad";
@@ -66,7 +65,6 @@ interface UploadedPhoto {
 }
 
 export default function TechFormPublic() {
-  const telephony = useTelephonyMode();
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -1023,10 +1021,6 @@ export default function TechFormPublic() {
               variant="outline"
               className="flex-1 h-9 gap-1 text-xs text-[hsl(var(--primary))] border-primary/30 hover:bg-primary/10"
               onClick={() => {
-                if (telephony.isHandoff) {
-                  void telephony.openSms(job.customer_phone);
-                  return;
-                }
                 navigate(`/inbox?section=sms&phone=${encodeURIComponent(job.customer_phone)}`);
               }}
             >

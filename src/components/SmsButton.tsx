@@ -2,7 +2,6 @@ import { MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toE164 } from "@/lib/formatters";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 interface SmsButtonProps {
   phone: string;
@@ -15,12 +14,9 @@ interface SmsButtonProps {
  * Always normalizes the number to Twilio E.164 before navigating so
  * downstream lookups & sends use the canonical format.
  *
- * When Telephony Handoff is ON, the click opens Ultraphone instead of the
- * in-app SMS panel.
  */
 export function SmsButton({ phone, className, iconClassName = "h-3.5 w-3.5" }: SmsButtonProps) {
   const navigate = useNavigate();
-  const telephony = useTelephonyMode();
 
   return (
     <button
@@ -28,10 +24,6 @@ export function SmsButton({ phone, className, iconClassName = "h-3.5 w-3.5" }: S
         e.stopPropagation();
         e.preventDefault();
         const normalized = toE164(phone) || phone;
-        if (telephony.isHandoff) {
-          void telephony.openSms(normalized);
-          return;
-        }
         navigate(`/inbox?section=sms&phone=${encodeURIComponent(normalized)}`);
       }}
       className={cn(

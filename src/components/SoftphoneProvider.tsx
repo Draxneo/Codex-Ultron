@@ -1,11 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useSoftphone } from "@/hooks/useSoftphone";
 import { useNativeSoftphone } from "@/hooks/useNativeSoftphone";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useMediaPauseOnCall } from "@/hooks/useMediaPauseOnCall";
 import { useAuth } from "@/hooks/useAuth";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useKeepAwake } from "@/hooks/useKeepAwake";
 import { useCallForegroundService } from "@/hooks/useCallForegroundService";
 import { setOnCall } from "@/lib/callStateBus";
@@ -116,7 +115,6 @@ function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
 export function SoftphoneProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { user } = useAuth();
-  const telephony = useTelephonyMode();
 
   const publicPrefixes = [
     "/login",
@@ -136,54 +134,16 @@ export function SoftphoneProvider({ children }: { children: ReactNode }) {
     location.pathname === prefix || location.pathname.startsWith(prefix)
   );
 
-  // Telephony handoff: when ON we keep the softphone fully inert everywhere.
-  const handoffActive = telephony.isHandoff;
-
-  const openUltraphoneControls = useCallback(() => {
-    void telephony.openCallHistory();
-  }, [telephony]);
-
-  const handoffSoftphoneValue = useMemo<SoftphoneContextType>(() => ({
-    ...disabledSoftphoneValue,
-    initialize: async () => {
-      void telephony.openHome();
-    },
-    recoverIfNeeded: async () => {
-      void telephony.openCallHistory();
-    },
-    dial: async (phone?: string) => {
-      if (typeof phone === "string" && phone.trim()) {
-        await telephony.openCall(phone.trim());
-        return;
-      }
-      void telephony.openHome();
-    },
-    hangUp: openUltraphoneControls,
-    toggleMute: openUltraphoneControls,
-    acceptCall: openUltraphoneControls,
-    rejectCall: openUltraphoneControls,
-    sendDigit: openUltraphoneControls,
-    acceptWaitingCall: openUltraphoneControls,
-    dismissWaitingCall: openUltraphoneControls,
-    setDialNumber: (number: string) => {
-      void telephony.openCall(number);
-    },
-  }), [openUltraphoneControls, telephony]);
-
   useEffect(() => {
     sendToMain("telephony-policy-updated", {
-      isHandoff: telephony.isHandoff,
-      softphoneEnabled: !isPublicRoute && Boolean(user) && !telephony.isHandoff,
-      callTargets: telephony.getSurfaceLaunchTargets("calls"),
+      isHandoff: false,
+      softphoneEnabled: !isPublicRoute && Boolean(user),
+      callTargets: null,
     });
-  }, [isPublicRoute, telephony.isHandoff, telephony.getSurfaceLaunchTargets, user]);
+  }, [isPublicRoute, user]);
 
   if (isPublicRoute || !user) {
     return <SoftphoneContext.Provider value={disabledSoftphoneValue}>{children}</SoftphoneContext.Provider>;
-  }
-
-  if (handoffActive) {
-    return <SoftphoneContext.Provider value={handoffSoftphoneValue}>{children}</SoftphoneContext.Provider>;
   }
 
   return <ActiveSoftphoneProvider>{children}</ActiveSoftphoneProvider>;
