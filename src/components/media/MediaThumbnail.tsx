@@ -1,4 +1,5 @@
-import { FileText, Play, File, Music, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+import { FileText, Play, File, Music, FileSpreadsheet, ImageOff } from "lucide-react";
 import { getFileCategory, type FileCategory } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,8 @@ export function MediaThumbnail({
 }: MediaThumbnailProps) {
   const cat = catOverride ?? getFileCategory(fileName, fileType);
   const Comp = onClick ? "button" : "div";
+  const [imageFailed, setImageFailed] = useState(false);
+  const shouldPreviewImage = (cat === "image" || cat === "gif") && !imageFailed;
 
   return (
     <Comp
@@ -44,13 +47,14 @@ export function MediaThumbnail({
         className
       )}
     >
-      {(cat === "image" || cat === "gif") && (
+      {shouldPreviewImage && (
         <>
           <img
             src={url}
             alt={fileName || "Image"}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={() => setImageFailed(true)}
           />
           {cat === "gif" && (
             <span className="absolute top-1 right-1 text-[9px] uppercase tracking-wide bg-background/90 text-foreground rounded px-1 py-0.5 font-bold">
@@ -58,6 +62,15 @@ export function MediaThumbnail({
             </span>
           )}
         </>
+      )}
+      {(cat === "image" || cat === "gif") && imageFailed && (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2">
+          <ImageOff className="h-8 w-8 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2">
+            {fileName || "Image unavailable"}
+          </span>
+          <span className="text-[9px] text-muted-foreground/80">Open to retry</span>
+        </div>
       )}
       {cat === "video" && (
         <div className="w-full h-full flex flex-col items-center justify-center gap-1">

@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Camera } from "lucide-react";
 import { MediaGallery, type MediaGalleryItem } from "@/components/media";
 import { toast } from "sonner";
+import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 
 type PhotoItem = MediaGalleryItem & {
   source: "attachment" | "tech_form";
@@ -25,7 +26,7 @@ export function JobPhotosGrid({ jobId }: { jobId: string }) {
       return (data || []).map<PhotoItem>((p) => ({
         id: p.id,
         fileName: p.file_name,
-        url: p.file_path.startsWith("http") ? p.file_path : supabase.storage.from("job-photos").getPublicUrl(p.file_path).data.publicUrl,
+        url: resolveStorageMediaUrl(p.file_path, "job-photos"),
         fileType: p.file_type || "image/jpeg",
         source: "attachment" as const,
         photo_type: null,
@@ -54,7 +55,7 @@ export function JobPhotosGrid({ jobId }: { jobId: string }) {
         return {
           id: p.id,
           fileName,
-          url: supabase.storage.from("tech-form-photos").getPublicUrl(p.file_path).data.publicUrl,
+          url: resolveStorageMediaUrl(p.file_path, "tech-form-photos"),
           fileType: "image/jpeg",
           source: "tech_form" as const,
           photo_type: p.photo_type,

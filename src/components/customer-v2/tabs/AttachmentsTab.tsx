@@ -17,6 +17,7 @@ type Photo = {
   file_name: string;
   job_id: string | null;
   created_at: string | null;
+  file_type?: string | null;
   source: "attachment" | "tech_form";
   photo_type: string | null;
   job_number: string | null;
@@ -194,6 +195,7 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
                     id: p.id,
                     url: p.url,
                     fileName: p.file_name,
+                    fileType: p.file_type,
                     badge: p.source === "tech_form" ? "Tech" : undefined,
                     caption: `${p.file_name} · ${formatDate(p.created_at, "")}${
                       p.photo_type ? ` · ${p.photo_type.replace(/_/g, " ")}` : ""

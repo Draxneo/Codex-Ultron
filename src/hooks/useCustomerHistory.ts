@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 
 type HistoryJob = {
   id: string;
@@ -126,7 +127,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
         const j = jobMap[p.job_id];
         return {
           ...p,
-          url: supabase.storage.from("job-photos").getPublicUrl(p.file_path).data.publicUrl,
+          url: resolveStorageMediaUrl(p.file_path, "job-photos"),
           source: "attachment" as const,
           photo_type: null as string | null,
           job_number: j?.job_number || j?.hcp_job_number || null,
@@ -163,7 +164,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
             file_type: "image/jpeg",
             job_id: jobId,
             created_at: p.created_at,
-            url: supabase.storage.from("tech-form-photos").getPublicUrl(p.file_path).data.publicUrl,
+            url: resolveStorageMediaUrl(p.file_path, "tech-form-photos"),
             source: "tech_form" as const,
             photo_type: p.photo_type,
             job_number: j?.job_number || j?.hcp_job_number || null,
