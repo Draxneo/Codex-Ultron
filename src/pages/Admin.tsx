@@ -866,6 +866,98 @@ const JARVIS_SKILLS = [
   "Uses the IVR canvas as the source for IVR-triggered SMS wording.",
 ];
 
+const HCP_ARCHIVE_SOURCES = ["customer", "estimate", "job"] as const;
+const HCP_ARCHIVE_STATUSES = ["archived", "metadata", "failed", "missing", "too_large"] as const;
+
+function HcpArchiveHealthCard() {
+  const { data: counts = [], isLoading, refetch } = useQuery({
+    queryKey: ["hcp-attachment-archive-health"],
+    queryFn: async () => {
+      const requests = HCP_ARCHIVE_SOURCES.flatMap((source) =>
+        HCP_ARCHIVE_STATUSES.map(async (status) => {
+          const { count, error } = await supabase
+            .from("hcp_attachments" as any)
+            .select("id", { count: "exact", head: true })
+            .eq("source_type", source)
+            .eq("archive_status", status);
+          if (error) throw error;
+          return { source, status, count: count ?? 0 };
+        })
+      );
+      return Promise.all(requests);
+    },
+    refetchInterval: 60_000,
+  });
+
+  const countFor = (source: string, status: string) =>
+    counts.find((row) => row.source === source && row.status === status)?.count ?? 0;
+  const totalArchived = counts.filter((row) => row.status === "archived").reduce((sum, row) => sum + row.count, 0);
+  const needsAttention = counts
+    .filter((row) => ["metadata", "failed"].includes(row.status))
+    .reduce((sum, row) => sum + row.count, 0);
+  const tooLarge = counts.filter((row) => row.status === "too_large").reduce((sum, row) => sum + row.count, 0);
+  const missing = counts.filter((row) => row.status === "missing").reduce((sum, row) => sum + row.count, 0);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="text-base">HCP Attachment Archive</CardTitle>
+            <CardDescription>
+              Shows whether old Housecall Pro photos and files are copied into UltraOffice storage.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isLoading} className="gap-2">
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} /> Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border bg-emerald-500/5 p-3">
+            <p className="text-2xl font-bold text-emerald-700">{totalArchived.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">archived files</p>
+          </div>
+          <div className="rounded-lg border bg-amber-500/5 p-3">
+            <p className="text-2xl font-bold text-amber-700">{needsAttention.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">left to process</p>
+          </div>
+          <div className="rounded-lg border bg-orange-500/5 p-3">
+            <p className="text-2xl font-bold text-orange-700">{tooLarge.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">too large for normal upload</p>
+          </div>
+          <div className="rounded-lg border bg-muted/60 p-3">
+            <p className="text-2xl font-bold">{missing.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">missing from HCP</p>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border">
+          <div className="grid grid-cols-6 bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground">
+            <span>Source</span>
+            <span className="text-right">Archived</span>
+            <span className="text-right">Waiting</span>
+            <span className="text-right">Failed</span>
+            <span className="text-right">Too large</span>
+            <span className="text-right">Missing</span>
+          </div>
+          {HCP_ARCHIVE_SOURCES.map((source) => (
+            <div key={source} className="grid grid-cols-6 border-t px-3 py-2 text-sm">
+              <span className="capitalize font-medium">{source}</span>
+              <span className="text-right">{countFor(source, "archived").toLocaleString()}</span>
+              <span className="text-right">{countFor(source, "metadata").toLocaleString()}</span>
+              <span className="text-right">{countFor(source, "failed").toLocaleString()}</span>
+              <span className="text-right">{countFor(source, "too_large").toLocaleString()}</span>
+              <span className="text-right">{countFor(source, "missing").toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function DevFunctionInventory() {
   const statusClass = (status: DevFunction["status"]) => {
     if (status === "Keep") return "bg-emerald-500/10 text-emerald-700 border-emerald-200";
@@ -968,6 +1060,7 @@ function DevOpsCenter() {
           <Card>
             <CardHeader><CardTitle className="text-base">Operations Tools</CardTitle><CardDescription>Admin helpers we still need while the app becomes the company source of truth.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
+              <HcpArchiveHealthCard />
               <CompanyDocumentsCard />
               <div className="border-t pt-4"><h4 className="text-xs font-semibold mb-2">Permit Authorities</h4><PermitAuthoritiesSection /></div>
               <div className="border-t pt-4"><h4 className="text-xs font-semibold mb-2">Scout & Test Automation</h4><PermitScoutPanel /></div>
