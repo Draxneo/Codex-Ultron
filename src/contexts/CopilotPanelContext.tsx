@@ -7,11 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
  * without redoing search_customer / lookup history.
  */
 export interface JarvisContextPayload {
-  trigger: "call" | "sms" | "email" | "voicemail";
+  trigger: "call" | "sms" | "voicemail";
   built_at: string;
   contact: any;
   artifact: any;
-  recent_history: { jobs: any[]; calls: any[]; sms: any[]; emails: any[] };
+  recent_history: { jobs: any[]; calls: any[]; sms: any[] };
   suggested_actions: string[];
 }
 
@@ -30,8 +30,6 @@ interface CopilotPanelState {
   activeCallPreview: { phone: string; contactName?: string } | null;
   startSmsSession: (phone: string, contactName?: string) => void;
   consumePendingSmsSession: () => { phone: string; contactName?: string } | null;
-  startEmailSession: (subject: string, senderEmail: string, senderName?: string, bodySummary?: string) => void;
-  consumePendingEmailSession: () => { subject: string; senderEmail: string; senderName?: string } | null;
   startVoicemailSession: (voicemailId: string, phone: string, contactName?: string) => void;
   consumePendingVoicemailSession: () => { voicemailId: string; phone: string; contactName?: string } | null;
   /** Bumps on every start*Session / sendQuery so effects can re-fire */
@@ -51,8 +49,6 @@ const CopilotPanelContext = createContext<CopilotPanelState>({
   activeCallPreview: null,
   startSmsSession: () => {},
   consumePendingSmsSession: () => null,
-  startEmailSession: () => {},
-  consumePendingEmailSession: () => null,
   startVoicemailSession: () => {},
   consumePendingVoicemailSession: () => null,
   pendingVersion: 0,
@@ -70,7 +66,6 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
   const pendingContextRef = useRef<JarvisContextPayload | null>(null);
   const pendingCallRef = useRef<{ phone: string; contactName?: string; callSid?: string } | null>(null);
   const pendingSmsRef = useRef<{ phone: string; contactName?: string } | null>(null);
-  const pendingEmailRef = useRef<{ subject: string; senderEmail: string; senderName?: string } | null>(null);
   const pendingVoicemailRef = useRef<{ voicemailId: string; phone: string; contactName?: string } | null>(null);
 
   const toggle = useCallback(() => setOpen((p) => !p), []);
@@ -140,19 +135,6 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
     return s;
   }, []);
 
-  const startEmailSession = useCallback((subject: string, senderEmail: string, senderName?: string, bodySummary?: string) => {
-    pendingEmailRef.current = { subject, senderEmail, senderName };
-    pendingQueryRef.current = `Viewing email "${subject}" from ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}. Use the attached JARVIS context — summarize what they want and propose the next action.`;
-    setPendingVersion((v) => v + 1);
-    setOpen(true);
-    void fetchContext({ trigger: "email", subject, sender_email: senderEmail, sender_name: senderName, body_summary: bodySummary });
-  }, [fetchContext]);
-
-  const consumePendingEmailSession = useCallback(() => {
-    const e = pendingEmailRef.current;
-    pendingEmailRef.current = null;
-    return e;
-  }, []);
 
   const startVoicemailSession = useCallback((voicemailId: string, phone: string, contactName?: string) => {
     pendingVoicemailRef.current = { voicemailId, phone, contactName };
@@ -187,7 +169,6 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
       consumePendingContext, peekPendingContext,
       startCallSession, consumePendingCallSession, activeCallPreview,
       startSmsSession, consumePendingSmsSession,
-      startEmailSession, consumePendingEmailSession,
       startVoicemailSession, consumePendingVoicemailSession,
       pendingVersion,
     }}>

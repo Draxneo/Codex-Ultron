@@ -10,7 +10,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   "/brochure": "Brochure admin",
   "/agent-training": "JARVIS settings",
   "/admin": "Admin",
-  "/locations": "Vendors",
+  "/locations": "Catalog & Pricebook",
   "/copilot": "JARVIS",
   "/quick-quote": "Quick Quote",
   "/catalog": "Catalog & Pricebook",

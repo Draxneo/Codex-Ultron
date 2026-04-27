@@ -14,7 +14,6 @@ import { useAgentTools, useToggleAgentTool, useAddAgentTool, useUpdateAgentTool,
 /** Functional categories — replaces old agent-based grouping */
 const CATEGORY_MAP: Record<string, { label: string; emoji: string; order: number }> = {
   communications: { label: "Communications", emoji: "💬", order: 1 },
-  email: { label: "Email", emoji: "📧", order: 2 },
   sales: { label: "Sales & Documents", emoji: "📄", order: 3 },
   scheduling: { label: "Scheduling", emoji: "📅", order: 4 },
   customer: { label: "Customer & Jobs", emoji: "👤", order: 5 },
@@ -28,7 +27,6 @@ const CATEGORY_MAP: Record<string, { label: string; emoji: string; order: number
 /** Map function_name → category */
 function getCategoryKey(fn: string): string {
   if (["send_sms_to_customer", "send_sms_to_employee", "send_tech_form_link", "search_sms_history", "search_call_history", "read_chat_messages", "send_chat_message"].includes(fn)) return "communications";
-  if (["search_emails", "read_email_thread", "extract_email_attachment", "send_brochure_email"].includes(fn)) return "email";
   if (["create_quote", "convert_estimate_to_job", "generate_letterhead_document"].includes(fn)) return "sales";
   if (["get_travel_times", "check_scheduling_fit", "suggest_schedule_optimization"].includes(fn)) return "scheduling";
   if (["create_customer", "create_job", "update_job_field", "verify_address", "suggest_actions"].includes(fn)) return "customer";
@@ -43,7 +41,7 @@ function getCategoryKey(fn: string): string {
 const EXTERNAL_TOOLS = new Set(["invoke_invoicing", "invoke_repair_quote", "invoke_carrier_enterprise"]);
 
 /** Customer-facing tools — disabled by default, shown with amber warning */
-const CUSTOMER_FACING_TOOLS = new Set(["send_sms_to_customer", "send_brochure_email"]);
+const CUSTOMER_FACING_TOOLS = new Set(["send_sms_to_customer"]);
 
 /* Plain-English descriptions keyed by function_name */
 const FRIENDLY_DESCRIPTIONS: Record<string, string> = {
@@ -57,10 +55,6 @@ const FRIENDLY_DESCRIPTIONS: Record<string, string> = {
   search_call_history: "Searches past phone calls by number, name, or status.",
   search_sms_history: "Searches past text messages by number, name, or keywords.",
   send_tech_form_link: "Texts the tech a link to their pre-install checklist or completion form.",
-  search_emails: "Searches company emails by keyword across subject, body, sender, and recipient.",
-  read_email_thread: "Opens and reads a full email conversation for complete context.",
-  extract_email_attachment: "Pulls text and data from email attachments like PDFs.",
-  send_brochure_email: "Emails a manufacturer equipment brochure (PDF) to a customer. Currently disabled — routed through dispatcher.",
   create_quote: "Builds a Good/Better/Best equipment quote based on home requirements.",
   create_invoice: "Creates a customer invoice with line items and tax.",
   generate_payment_link: "Creates a Stripe payment link for online payment.",

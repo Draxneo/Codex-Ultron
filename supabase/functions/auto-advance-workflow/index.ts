@@ -524,8 +524,8 @@ async function autoCompleteStep(
     }
 
     case "submit_rebate": {
-      // Call the generate-cps-rebate edge function which gathers all data,
-      // builds the HTML rebate form, and emails it via send-rebate-email.
+      // Call the generate-cps-rebate edge function which gathers all data
+      // and returns the HTML rebate form for standalone submission.
       try {
         const supabaseUrl3 = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey3 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -543,8 +543,8 @@ async function autoCompleteStep(
         return {
           completed: true,
           detail: result.rebate?.qualifies
-            ? `CPS rebate form emailed to ${result.emailed_to} — Est. $${result.rebate.rebateAmount} (${result.rebate.tier})`
-            : `CPS rebate form emailed to ${result.emailed_to} — verify AHRI data`,
+            ? `CPS rebate form generated � Est. ${result.rebate.rebateAmount} (${result.rebate.tier})`
+            : "CPS rebate form generated � verify AHRI data",
         };
       } catch (e: any) {
         await supabase.from("jobs").update({ rebate_submitted_at: new Date().toISOString() }).eq("id", jobId);
@@ -575,52 +575,8 @@ async function autoCompleteStep(
     }
 
     case "send_maint_report": {
-      if (!job.customer_email) {
-        await supabase.from("jobs").update({ maint_report_sent_at: new Date().toISOString() }).eq("id", jobId);
-        return { completed: true, detail: "No customer email — maintenance report timestamp stamped, manual report needed" };
-      }
-      try {
-        const { data: techFormsMaint } = await supabase.from("tech_forms")
-          .select("id, form_data, equipment_serial, equipment_model, created_at")
-          .eq("job_id", jobId)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        const { data: techFormResponses } = techFormsMaint?.[0]?.id
-          ? await supabase.from("tech_form_responses")
-              .select("field_label, response_value")
-              .eq("tech_form_id", techFormsMaint[0].id)
-              .limit(50)
-          : { data: [] };
-        const formSummary = (techFormResponses || [])
-          .filter((r: any) => r.response_value && r.field_label)
-          .map((r: any) => `${r.field_label}: ${r.response_value}`)
-          .join("\n");
-        const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const resp = await fetch(`${supabaseUrl2}/functions/v1/email-agent`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${supabaseKey2}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "send_maintenance_report",
-            job_id: jobId,
-            customer_email: job.customer_email,
-            customer_name: job.customer_name,
-            form_summary: formSummary || "No checklist data available.",
-            equipment_serial: techFormsMaint?.[0]?.equipment_serial || null,
-            equipment_model: techFormsMaint?.[0]?.equipment_model || null,
-          }),
-        });
-        const data = await resp.json();
-        if (data.error) {
-          await supabase.from("jobs").update({ maint_report_sent_at: new Date().toISOString() }).eq("id", jobId);
-          return { completed: true, detail: `Maintenance report stamped — email-agent error: ${data.error}` };
-        }
-        await supabase.from("jobs").update({ maint_report_sent_at: new Date().toISOString() }).eq("id", jobId);
-        return { completed: true, detail: `Maintenance report emailed to ${job.customer_email}` };
-      } catch (e: any) {
-        await supabase.from("jobs").update({ maint_report_sent_at: new Date().toISOString() }).eq("id", jobId);
-        return { completed: true, detail: `Maintenance report stamped (error: ${e.message})` };
-      }
+      await supabase.from("jobs").update({ maint_report_sent_at: new Date().toISOString() }).eq("id", jobId);
+      return { completed: true, detail: "Maintenance report marked ready for standalone email client" };
     }
 
     case "schedule_next_visit": {

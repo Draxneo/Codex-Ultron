@@ -22,7 +22,6 @@ const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/": { label: "Schedule", roles: null },
   "/inbox": { label: "Inbox", roles: null },
   "/customers": { label: "Customers", roles: null },
-  "/vendors": { label: "Vendors", roles: null },
   "/copilot": { label: "JARVIS", roles: null },
   "/pay": { label: "Pay", roles: null },
   "/admin": { label: "Admin", roles: null },

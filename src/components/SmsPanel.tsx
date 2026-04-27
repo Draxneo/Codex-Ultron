@@ -36,7 +36,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(resolveConversationKey(initialPhone));
   const [newMessageMode, setNewMessageMode] = useState(false);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"customers" | "team" | "vendors">("customers");
+  const [activeTab, setActiveTab] = useState<"customers" | "team" | "external">("customers");
 
   const { startSmsSession } = useCopilotPanel();
 
@@ -56,13 +56,13 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
 
   const team = filtered.filter((c) => c.contactType === "employee");
   // Marketing/ad-agency contacts are grouped under Vendors (they're external B2B)
-  const vendors = filtered.filter((c) => c.contactType === "vendor" || c.contactType === "marketing");
+  const external = filtered.filter((c) => c.contactType === "vendor" || c.contactType === "marketing");
   // Customers tab = anything that isn't team or vendor/marketing
   const customers = filtered.filter((c) => !["employee", "vendor", "marketing"].includes(c.contactType));
 
   const sumUnread = (list: typeof conversations) => list.reduce((s, c) => s + (c.unreadCount || 0), 0);
   const teamUnread = sumUnread(team);
-  const vendorsUnread = sumUnread(vendors);
+  const externalUnread = sumUnread(external);
   const customersUnread = sumUnread(customers);
 
   const selectConversation = (phone: string) => {
@@ -72,7 +72,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
     // Auto-switch tab so the selected convo lives under the visible tab
     if (convo) {
       if (convo.contactType === "employee") setActiveTab("team");
-      else if (convo.contactType === "vendor" || convo.contactType === "marketing") setActiveTab("vendors");
+      else if (convo.contactType === "vendor" || convo.contactType === "marketing") setActiveTab("external");
       else setActiveTab("customers");
     }
     startSmsSession(phone, convo?.contactName || undefined);
@@ -149,10 +149,10 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
             onTabChange={setActiveTab}
             customers={customers}
             team={team}
-            vendors={vendors}
+            external={external}
             customersUnread={customersUnread}
             teamUnread={teamUnread}
-            vendorsUnread={vendorsUnread}
+            externalUnread={externalUnread}
             selectedPhone={selectedPhone}
             onSelect={selectConversation}
             empty={filtered.length === 0}
@@ -185,10 +185,10 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
           onTabChange={setActiveTab}
           customers={customers}
           team={team}
-          vendors={vendors}
+          external={external}
           customersUnread={customersUnread}
           teamUnread={teamUnread}
-          vendorsUnread={vendorsUnread}
+          externalUnread={externalUnread}
           selectedPhone={selectedPhone}
           onSelect={selectConversation}
           empty={filtered.length === 0}
@@ -251,14 +251,14 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
 type SmsConvo = ReturnType<typeof useSmsLogScoped>["conversations"][number];
 
 interface SmsTabbedListProps {
-  activeTab: "customers" | "team" | "vendors";
-  onTabChange: (t: "customers" | "team" | "vendors") => void;
+  activeTab: "customers" | "team" | "external";
+  onTabChange: (t: "customers" | "team" | "external") => void;
   customers: SmsConvo[];
   team: SmsConvo[];
-  vendors: SmsConvo[];
+  external: SmsConvo[];
   customersUnread: number;
   teamUnread: number;
-  vendorsUnread: number;
+  externalUnread: number;
   selectedPhone: string | null;
   onSelect: (phone: string) => void;
   empty: boolean;
@@ -270,24 +270,24 @@ function SmsTabbedList({
   onTabChange,
   customers,
   team,
-  vendors,
+  external,
   customersUnread,
   teamUnread,
-  vendorsUnread,
+  externalUnread,
   selectedPhone,
   onSelect,
   empty,
   density,
 }: SmsTabbedListProps) {
   const list =
-    activeTab === "customers" ? customers : activeTab === "team" ? team : vendors;
+    activeTab === "customers" ? customers : activeTab === "team" ? team : external;
   const itemSpacing = density === "compact" ? "space-y-0.5" : "space-y-1";
   const padding = density === "compact" ? "p-2" : "px-1";
 
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(v) => onTabChange(v as "customers" | "team" | "vendors")}
+      onValueChange={(v) => onTabChange(v as "customers" | "team" | "external")}
       className="flex-1 flex flex-col min-h-0"
     >
       <TabsList className="grid grid-cols-3 mx-2 mt-1 h-8">
@@ -306,11 +306,11 @@ function SmsTabbedList({
           unread={teamUnread}
         />
         <TabBadgeTrigger
-          value="vendors"
+          value="external"
           icon={<Building2 className="h-3 w-3" />}
-          label="Vendors"
-          count={vendors.length}
-          unread={vendorsUnread}
+          label="External"
+          count={external.length}
+          unread={externalUnread}
         />
       </TabsList>
 

@@ -7,8 +7,8 @@
 export type RoleKey = "admin" | "office" | "supervisor" | "tech" | "installer";
 
 export const ROLE_DEFAULTS: Record<RoleKey, string[]> = {
-  admin:      ["jobs", "phone", "sms", "inbox", "customers", "vendors", "copilot", "pay", "admin"],
-  office:     ["jobs", "phone", "sms", "inbox", "customers", "vendors", "copilot", "pay"],
+  admin:      ["jobs", "phone", "sms", "inbox", "customers", "copilot", "pay", "admin"],
+  office:     ["jobs", "phone", "sms", "inbox", "customers", "copilot", "pay"],
   supervisor: ["jobs", "phone", "sms", "customers", "copilot", "pay"],
   tech:       ["jobs", "phone", "sms", "pay"],
   installer:  ["jobs", "pay"],

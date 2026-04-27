@@ -1,7 +1,6 @@
-import { sendViaSendGrid, getSendGridConfig } from "../_shared/sendgridHelper.ts";
-import { wrapInLayout } from "../_shared/emailLayout.ts";
 import { loadCompanyInfo } from "../_shared/companyInfo.ts";
-import { formatDateFriendly, formatTimeWindow } from "../_shared/formatters.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { formatDateFriendly, formatTimeWindow } from "../_shared/formatters.ts";
+import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 
@@ -23,68 +22,7 @@ function buildReminderSms(job: any, dateLabel: string): string {
   return `Hi ${firstName}, this is a friendly reminder that your ${typeLabel} appointment is ${dateLabel}${friendlyDate ? ` (${friendlyDate})` : ""}${timeWindow}. Reply C to confirm or R to reschedule.`;
 }
 
-/** Try to send an email reminder alongside SMS. Fails silently. */
-async function trySendEmailReminder(
-  supabase: any,
-  job: any,
-  jobId: string,
-  company: { name: string; phone: string },
-) {
-  try {
-    let email = job.customer_email;
-    if (!email && job.customer_id) {
-      const { data: cust } = await supabase
-        .from("customers")
-        .select("email")
-        .eq("id", job.customer_id)
-        .single();
-      email = cust?.email;
-    }
-    if (!email) return;
-
-    const { data: tpl } = await supabase
-      .from("email_templates")
-      .select("*")
-      .eq("slug", "appointment-reminder")
-      .eq("is_active", true)
-      .single();
-    if (!tpl) return;
-
-    const firstName = job.customer_name?.split(" ")[0] || "there";
-    const typeLabel = (job.job_type || "service").replace("_", " ");
-    const dateStr = formatDateFriendly(job.scheduled_date) || "your scheduled date";
-    const timeWindow = formatTimeWindow(job.arrival_start, job.arrival_end) || "TBD";
-
-    const replacements: Record<string, string> = {
-      "{{customer_name}}": firstName,
-      "{{appointment_date}}": dateStr,
-      "{{time_window}}": timeWindow,
-      "{{job_type}}": typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1),
-      "{{company_name}}": company.name,
-    };
-
-    let subject = tpl.subject_template;
-    let body = tpl.body_html;
-    for (const [k, v] of Object.entries(replacements)) {
-      subject = subject.replaceAll(k, v);
-      body = body.replaceAll(k, v);
-    }
-
-    const wrappedHtml = wrapInLayout(body, { previewText: subject, companyName: company.name, companyPhone: company.phone });
-    const { apiKey, domain } = getSendGridConfig();
-    await sendViaSendGrid(apiKey, {
-      to: [email],
-      from: { email: `service@${domain}`, name: company.name },
-      subject,
-      html: wrappedHtml,
-    });
-    console.log(`Email reminder sent to ${email} for job ${jobId}`);
-  } catch (err) {
-    console.error(`Email reminder failed for job ${jobId}:`, err);
-  }
-}
-
-/** Send SMS + email for a single job, update job_reminders */
+/** Send SMS for a single job, update job_reminders */
 async function sendReminderForJob(
   supabase: any,
   jobId: string,
@@ -113,7 +51,6 @@ async function sendReminderForJob(
   const wasBlocked = smsData?.queued === true || smsData?.blocked === true;
 
   if (!wasBlocked) {
-    await trySendEmailReminder(supabase, job, jobId, company);
     await supabase.from("jobs").update({
       confirmation_sent_at: new Date().toISOString(),
     } as any).eq("id", jobId);
@@ -170,7 +107,6 @@ Deno.serve(async (req) => {
       const wasBlocked = smsData?.queued === true || smsData?.blocked === true;
 
       if (!wasBlocked) {
-        await trySendEmailReminder(supabase, job, manualJobId, company);
         await supabase.from("jobs").update({
           confirmation_sent_at: new Date().toISOString(),
         } as any).eq("id", manualJobId);

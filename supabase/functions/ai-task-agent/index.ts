@@ -197,17 +197,6 @@ async function getSmsTemplatesContext(sb: any) {
   return `\n\nSMS TEMPLATES (${data.length} active):\n${lines.join("\n\n")}`;
 }
 
-async function getEmailTemplatesContext(sb: any) {
-  const { data } = await sb
-    .from("email_templates")
-    .select("name, slug, category, subject_template, description")
-    .eq("is_active", true)
-    .order("category");
-  if (!data || data.length === 0) return "";
-  const lines = data.map((t: any) => `- [${t.category}] ${t.name} (slug: ${t.slug}) — Subject: "${t.subject_template}"${t.description ? "\n  " + t.description : ""}`);
-  return `\n\nEMAIL TEMPLATES (${data.length} active — layouts stored in email_templates table, editable from Agent Training → Output):\n${lines.join("\n")}`;
-}
-
 async function getPartsCatalogContext(sb: any) {
   const { data: parts } = await sb.from("parts_catalog").select("id, name, category").order("name");
   const { data: nums } = await sb.from("part_supply_house_numbers").select("part_id, part_number, unit_cost, supply_houses(name)");
@@ -485,44 +474,6 @@ async function getCustomerInvoicesContext(sb: any) {
     `- ${inv.invoice_number || "N/A"} | ${inv.jobs?.customer_name || "?"} | $${inv.total || 0} | ${inv.status}${inv.paid_at ? " (paid " + formatDateUS(inv.paid_at) + ")" : ""}`
   );
   return `\n\nCUSTOMER INVOICES (last ${lines.length}):\n${lines.join("\n")}`;
-}
-
-// ==================== Email Context ====================
-
-async function getEmailContext(sb: any) {
-  const { data } = await sb.from("emails")
-    .select("id, from_address, from_name, to_address, subject, snippet, body_text, is_read, is_outbound, is_starred, thread_id, attachments, received_at, category, linked_job_id")
-    .eq("is_trash", false)
-    .eq("is_archived", false)
-    .order("received_at", { ascending: false })
-    .limit(100);
-  if (!data || data.length === 0) return "";
-
-  const unread = data.filter((e: any) => !e.is_read && !e.is_outbound);
-  const starred = data.filter((e: any) => e.is_starred);
-  const withAttachments = data.filter((e: any) => e.attachments && Array.isArray(e.attachments) && e.attachments.length > 0);
-  const permits = data.filter((e: any) => e.category === "inspect_permit");
-
-  const lines = data.slice(0, 50).map((e: any) => {
-    const dir = e.is_outbound ? "→" : "←";
-    const flags = [e.is_read ? "" : "UNREAD", e.is_starred ? "★" : ""].filter(Boolean).join(" ");
-    const att = e.attachments?.length ? ` [${e.attachments.length} attachment(s)]` : "";
-    const cat = e.category ? ` [${e.category}]` : "";
-    const jobLink = e.linked_job_id ? ` [linked-job:${e.linked_job_id}]` : "";
-    return `- ${dir} ${e.from_name || e.from_address} → ${e.to_address} | "${e.subject || "(no subject)"}" | ${e.snippet?.slice(0, 80) || ""}${att}${cat}${jobLink} ${flags} (${e.received_at ? formatDateUS(e.received_at) : "?"})`;
-  });
-
-  // If there are permit/inspection emails, add extra detail with full body for context
-  let permitDetail = "";
-  if (permits.length > 0) {
-    const permitLines = permits.slice(0, 10).map((e: any) => {
-      const bodyPreview = (e.body_text || e.snippet || "").substring(0, 1500);
-      return `\n  🏛️ PERMIT EMAIL: "${e.subject}" from ${e.from_address}\n  Full Body: ${bodyPreview}`;
-    });
-    permitDetail = `\n\nPERMIT/INSPECTION EMAILS (${permits.length} total):${permitLines.join("\n")}`;
-  }
-
-  return `\n\nEMAIL INBOX (${data.length} recent, ${unread.length} unread, ${starred.length} starred, ${withAttachments.length} with attachments, ${permits.length} inspection/permit):\n${lines.join("\n")}${permitDetail}`;
 }
 
 // ==================== Chat Context ====================
@@ -988,21 +939,6 @@ async function getOutboundDraftsContext(sb: any) {
   return `\n\nOUTBOUND DRAFTS PENDING APPROVAL (${lines.length}):\n${lines.join("\n")}`;
 }
 
-// ==================== Email Actions Context ====================
-
-async function getEmailActionsContext(sb: any) {
-  const { data } = await sb.from("email_actions")
-    .select("id, action_type, title, status, details, created_at, emails(subject, from_address)")
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (!data || data.length === 0) return "";
-  const lines = data.map((a: any) =>
-    `- [${a.action_type}] "${a.title}" — email: "${a.emails?.subject || "?"}" from ${a.emails?.from_address || "?"}${a.details ? " — " + JSON.stringify(a.details).slice(0, 80) : ""} (${formatDateUS(a.created_at)})`
-  );
-  return `\n\nPENDING EMAIL ACTIONS (${lines.length}):\n${lines.join("\n")}`;
-}
-
 // (Todos context removed — JARVIS no longer manages a To-Do list.)
 async function getTodosContext(_sb: any) { return ""; }
 
@@ -1053,12 +989,6 @@ const searchCallHistoryTool = { type: "function", function: { name: "search_call
 const readChatMessagesTool = { type: "function", function: { name: "read_chat_messages", description: "Read recent team chat messages, optionally by channel.", parameters: { type: "object", properties: { channel_name: { type: "string" }, limit: { type: "number" } }, additionalProperties: false } } };
 const sendChatMessageTool = { type: "function", function: { name: "send_chat_message", description: "Send a message to a team chat channel as Copilot.", parameters: { type: "object", properties: { channel_name: { type: "string" }, message: { type: "string" } }, required: ["channel_name", "message"], additionalProperties: false } } };
 
-// Email (formerly email-agent)
-const searchEmailsTool = { type: "function", function: { name: "search_emails", description: "Search emails by subject, sender, recipient, or body text.", parameters: { type: "object", properties: { query: { type: "string" }, unread_only: { type: "boolean" }, limit: { type: "number" } }, required: ["query"], additionalProperties: false } } };
-const readEmailThreadTool = { type: "function", function: { name: "read_email_thread", description: "Read a full email thread by thread_id or single email by email_id.", parameters: { type: "object", properties: { thread_id: { type: "string" }, email_id: { type: "string" } }, additionalProperties: false } } };
-const extractEmailAttachmentTool = { type: "function", function: { name: "extract_email_attachment", description: "Use AI vision to extract data from an email attachment.", parameters: { type: "object", properties: { email_id: { type: "string" }, attachment_index: { type: "number" }, extraction_prompt: { type: "string" } }, required: ["email_id"], additionalProperties: false } } };
-const sendBrochureEmailTool = { type: "function", function: { name: "send_brochure_email", description: "Send manufacturer brochure PDFs to a customer via email.", parameters: { type: "object", properties: { customer_email: { type: "string" }, customer_name: { type: "string" }, brochure_names: { type: "array", items: { type: "string" } }, estimate_id: { type: "string" } }, required: ["customer_email", "customer_name"], additionalProperties: false } } };
-
 // Sales docs (formerly sales-docs-agent)
 const createQuoteTool = { type: "function", function: { name: "create_quote", description: "Create a database-backed equipment quote and return render-ready :::equipment-card blocks using exact matchup values only. Use this whenever the user asks for a system quote, estimate, pricing, or equipment options.", parameters: { type: "object", properties: { customer_name: { type: "string" }, tonnage: { type: "number" }, system_type: { type: "string" }, brand: { type: "string" }, address: { type: "string" }, application: { type: "string" }, job_id: { type: "string" }, estimate_id: { type: "string" }, notes: { type: "string" } }, required: ["customer_name", "tonnage", "system_type"], additionalProperties: false } } };
 const generateInstallQuoteTool = { type: "function", function: { name: "generate_install_quote", description: "Generate the FULL long-form HVAC install quote (specifications, models/serials, CPS rebate amounts, install includes, warranty registration, contact block) for a brand+tonnage+system_type. Returns the complete description text plus cash and financed prices. Use whenever the user asks for an 'install quote', 'system quote', or pastes something like 'Carrier 3 ton heat pump'. Returns a clear error if no matchup exists.", parameters: { type: "object", properties: { brand: { type: "string" }, tonnage: { type: "number" }, system_type: { type: "string", description: "heat_pump | gas | electric | dual_fuel" }, location: { type: "string", description: "Attic or Closet — picks Multiposition with orientation fallback" } }, required: ["brand", "tonnage", "system_type"], additionalProperties: false } } };
@@ -1076,8 +1006,6 @@ const createCustomerTool = { type: "function", function: { name: "create_custome
 const updateCustomerTool = { type: "function", function: { name: "update_customer", description: "Update an existing customer's contact info or address. Updates LOCAL record AND pushes change to HCP (source of truth). Use this when a customer provides a new phone, email, or address. By default, when changing 'phone' (main number), the OLD phone value is automatically preserved as 'mobile_phone' so nothing is lost — set preserve_old_phone=false to overwrite without preserving. ALWAYS confirm with dispatcher before calling (Rule 6 — Verify Before Write).", parameters: { type: "object", properties: { customer_id: { type: "string", description: "UUID of the customer to update (from search_customer)." }, first_name: { type: "string" }, last_name: { type: "string" }, phone: { type: "string", description: "New main/home phone number." }, mobile_phone: { type: "string", description: "New mobile/cell phone number." }, email: { type: "string" }, address: { type: "string", description: "Street only." }, city: { type: "string" }, state: { type: "string" }, zip: { type: "string" }, notes: { type: "string", description: "Replaces existing notes — pass appended text if you want to keep prior notes." }, preserve_old_phone: { type: "boolean", description: "When changing phone, also save the OLD phone value as mobile_phone. Default true." } }, required: ["customer_id"], additionalProperties: false } } };
 
 // Vendor VRM tools
-const searchVendorTool = { type: "function", function: { name: "search_vendor", description: "Search the Vendor VRM (supply_houses table) by name. Use before create_vendor to avoid duplicates.", parameters: { type: "object", properties: { name: { type: "string", description: "Vendor/company name to search" } }, required: ["name"], additionalProperties: false } } };
-const createVendorTool = { type: "function", function: { name: "create_vendor", description: "Create a new vendor in the VRM (supply_houses table). ALWAYS search_vendor first. Optionally add a primary contact.", parameters: { type: "object", properties: { name: { type: "string", description: "Vendor/company name" }, contact_email: { type: "string" }, contact_phone: { type: "string" }, website_url: { type: "string" }, notes: { type: "string" }, contact_name: { type: "string", description: "Primary contact person name" }, contact_title: { type: "string", description: "Contact's role/title (e.g. 'Marketing Rep')" }, contact_person_email: { type: "string", description: "Contact person's direct email" }, contact_person_phone: { type: "string", description: "Contact person's direct phone" } }, required: ["name"], additionalProperties: false } } };
 // create_job tool is built dynamically at runtime with employee names — see buildCreateJobTool()
 function buildCreateJobTool(employeeNames: string[]) {
   const empHint = employeeNames.length > 0 ? ` Active team members: ${employeeNames.join(", ")}.` : "";
@@ -1102,7 +1030,7 @@ const suggestActionsTool = {
   type: "function",
   function: {
     name: "suggest_actions",
-    description: "When you detect actionable intent (booking, customer creation) from a call transcript, SMS thread, email, or dispatcher request, call this tool to present structured action buttons. DO NOT book jobs or create customers directly — always use this tool to surface action buttons for the dispatcher to click. Each action becomes a clickable button in the chat UI. For yes/no questions, use confirm/confirm_no types with a payload that will be sent as the user's reply when clicked.",
+    description: "When you detect actionable intent (booking, customer creation) from a call transcript, SMS thread, or dispatcher request, call this tool to present structured action buttons. DO NOT book jobs or create customers directly — always use this tool to surface action buttons for the dispatcher to click. Each action becomes a clickable button in the chat UI. For yes/no questions, use confirm/confirm_no types with a payload that will be sent as the user's reply when clicked.",
     parameters: {
       type: "object",
       properties: {
@@ -1111,7 +1039,7 @@ const suggestActionsTool = {
           items: {
             type: "object",
             properties: {
-              type: { type: "string", enum: ["book_job", "book_estimate", "book_maintenance", "create_customer", "linked_property_proposal", "select_property", "call_back", "send_text", "reply_sms", "reply_email", "send_invoice_reminder", "view_job", "view_voicemail", "confirm", "confirm_no"], description: "Type of action button. Use 'linked_property_proposal' when a known customer is calling about a NEW property NOT on file. Use 'select_property' when a known customer has 2+ properties on file (primary + rentals) and dispatcher needs to pick which one — pass property_options[] sourced from contact.known_addresses." },
+              type: { type: "string", enum: ["book_job", "book_estimate", "book_maintenance", "create_customer", "linked_property_proposal", "select_property", "call_back", "send_text", "reply_sms", "send_invoice_reminder", "view_job", "view_voicemail", "confirm", "confirm_no"], description: "Type of action button. Use 'linked_property_proposal' when a known customer is calling about a NEW property NOT on file. Use 'select_property' when a known customer has 2+ properties on file (primary + rentals) and dispatcher needs to pick which one — pass property_options[] sourced from contact.known_addresses." },
               job_type: { type: "string", enum: ["service", "install", "estimate", "maintenance", "phone_call"], description: "For booking actions, the job type" },
               customer_name: { type: "string" },
               customer_id: { type: "string", description: "UUID if an existing customer was matched" },
@@ -1121,7 +1049,6 @@ const suggestActionsTool = {
               email: { type: "string" },
               payload: { type: "string", description: "For confirm/confirm_no: the text to send as a user message when clicked" },
               label: { type: "string", description: "Custom button label" },
-              subject: { type: "string", description: "For reply_email: email subject line" },
               job_id: { type: "string", description: "For view_job/send_invoice_reminder: the job UUID" },
               parent_customer_id: { type: "string", description: "For linked_property_proposal / select_property: UUID of the caller (parent contact)." },
               proposed_label: { type: "string", description: "For linked_property_proposal: short property name/label." },
@@ -1264,8 +1191,6 @@ const JARVIS_HITL_MUTATING_TOOLS = new Set([
   "generate_install_quote",
   "convert_estimate_to_job",
   "generate_letterhead_document",
-  "send_brochure_email",
-  "create_vendor",
   "invoke_repair_quote",
   "invoke_supplyhouse",
   "invoke_carrier_enterprise",
@@ -1291,8 +1216,6 @@ const JARVIS_HITL_TOOL_LABELS: Record<string, string> = {
   generate_install_quote: "Generate install quote",
   convert_estimate_to_job: "Convert estimate to job",
   generate_letterhead_document: "Generate document",
-  send_brochure_email: "Send brochure email",
-  create_vendor: "Create vendor",
   invoke_repair_quote: "Generate repair quote",
   invoke_supplyhouse: "Use SupplyHouse account",
   invoke_carrier_enterprise: "Use Carrier Enterprise account",
@@ -1343,7 +1266,7 @@ async function queueJarvisToolApproval(sb: any, toolName: string, args: any) {
     title: `Review JARVIS action: ${label}`,
     description,
     category: "jarvis_action_approval",
-    priority: toolName === "send_brochure_email" || toolName === "invoke_invoicing" ? "high" : "normal",
+    priority: toolName === "invoke_invoicing" ? "high" : "normal",
     status: "pending",
     source: "jarvis",
     customer_phone: args.customer_phone || args.phone || null,
@@ -1569,104 +1492,6 @@ async function executeToolCall(
       if (error) throw error;
       result = { status: "success", channel: args.channel_name, message: args.message };
 
-    // ═══════ Email (formerly email-agent) ═══════
-    } else if (toolName === "search_emails") {
-      const q = (args.query || "").toLowerCase();
-      let query = sb.from("emails")
-        .select("id, from_address, from_name, to_address, subject, snippet, is_read, is_outbound, thread_id, attachments, received_at")
-        .eq("is_trash", false)
-        .or(`subject.ilike.%${q}%,from_address.ilike.%${q}%,from_name.ilike.%${q}%,to_address.ilike.%${q}%,body_text.ilike.%${q}%`)
-        .order("received_at", { ascending: false }).limit(args.limit || 10);
-      if (args.unread_only) query = query.eq("is_read", false);
-      const { data: emails, error } = await query;
-      if (error) throw error;
-      result = { status: "success", count: (emails || []).length, emails: (emails || []).map((e: any) => ({
-        id: e.id, from: e.from_name || e.from_address, to: e.to_address, subject: e.subject,
-        snippet: e.snippet?.slice(0, 150), is_read: e.is_read,
-        direction: e.is_outbound ? "outbound" : "inbound", thread_id: e.thread_id,
-        attachments: e.attachments?.length || 0, date: e.received_at ? formatDateUS(e.received_at) : "?",
-      })) };
-
-    } else if (toolName === "read_email_thread") {
-      let emails: any[] = [];
-      if (args.thread_id) {
-        const { data, error } = await sb.from("emails")
-          .select("id, from_address, from_name, to_address, subject, body_text, body_html, attachments, received_at, is_outbound")
-          .eq("thread_id", args.thread_id).order("received_at");
-        if (error) throw error;
-        emails = data || [];
-      } else if (args.email_id) {
-        const { data, error } = await sb.from("emails")
-          .select("id, from_address, from_name, to_address, subject, body_text, body_html, attachments, received_at, is_outbound, thread_id")
-          .eq("id", args.email_id).single();
-        if (error) throw error;
-        if (data) {
-          await sb.from("emails").update({ is_read: true }).eq("id", data.id);
-          if (data.thread_id) {
-            const { data: t } = await sb.from("emails")
-              .select("id, from_address, from_name, to_address, subject, body_text, body_html, attachments, received_at, is_outbound")
-              .eq("thread_id", data.thread_id).order("received_at");
-            emails = t || [data];
-          } else emails = [data];
-        }
-      }
-      result = { status: "success", count: emails.length, messages: emails.map((e: any) => ({
-        id: e.id, from: e.from_name || e.from_address, to: e.to_address, subject: e.subject,
-        body: (e.body_text || "").slice(0, 3000),
-        attachments: (e.attachments || []).map((a: any, i: number) => ({
-          index: i, filename: a.filename || a.name || `attachment-${i}`,
-          content_type: a.content_type || a.type || "unknown", url: a.url || null,
-        })),
-        date: e.received_at, direction: e.is_outbound ? "outbound" : "inbound",
-      })) };
-
-    } else if (toolName === "extract_email_attachment") {
-      const { data: email, error } = await sb.from("emails")
-        .select("attachments, subject, from_address").eq("id", args.email_id).single();
-      if (error || !email) throw new Error("Email not found");
-      const attachments = email.attachments || [];
-      const idx = args.attachment_index || 0;
-      if (idx >= attachments.length) throw new Error(`Index ${idx} out of range (${attachments.length} attachments)`);
-      const att = attachments[idx];
-      const attUrl = att.url || att.storage_path;
-      if (!attUrl) throw new Error("Attachment has no accessible URL");
-      const visionModel = await getTaskModel(sb, "vision_extraction");
-      const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: visionModel,
-          messages: [
-            { role: "system", content: "You are a document data extractor for an HVAC company." },
-            { role: "user", content: [
-              { type: "text", text: `${args.extraction_prompt || "Extract all relevant information from this document."}\n\nFrom email: "${email.subject}" from ${email.from_address}.` },
-              { type: "image_url", image_url: { url: attUrl } },
-            ]},
-          ],
-        }),
-      });
-      if (!aiResp.ok) throw new Error(`AI extraction failed: ${aiResp.status}`);
-      const aiData = await aiResp.json();
-      const extractedContent = aiData.choices?.[0]?.message?.content || "No content extracted";
-      const updatedAttachments = (email.attachments || []).map((a: any, i: number) => ({
-        ...a, extracted_text: i === idx ? extractedContent : (a.extracted_text || null),
-      }));
-      await sb.from("emails").update({ attachments: updatedAttachments }).eq("id", args.email_id);
-      result = { status: "success", email_subject: email.subject, attachment_name: att.filename || att.name || `attachment-${idx}`, extracted_content: extractedContent };
-
-    } else if (toolName === "send_brochure_email") {
-      const { data: allBrochures } = await sb.from("manufacturer_brochures").select("id, name").eq("is_active", true);
-      const brochuresToSend = args.brochure_names?.length > 0
-        ? (allBrochures || []).filter((b: any) => args.brochure_names.some((n: string) => b.name.toLowerCase().includes(n.toLowerCase())))
-        : allBrochures || [];
-      if (brochuresToSend.length === 0) throw new Error("No matching brochures found");
-      const resp = await invokeSpecialist("send-brochure-email", {
-        to: args.customer_email, customerName: args.customer_name,
-        brochureIds: brochuresToSend.map((b: any) => b.id), estimateId: args.estimate_id || null,
-      });
-      result = { status: "success", sent: resp.sent, to: args.customer_email, brochures: brochuresToSend.map((b: any) => b.name) };
-
-    // ═══════ Sales docs (formerly sales-docs-agent) ═══════
     } else if (toolName === "create_quote") {
       const { data: quote, error: quoteErr } = await sb.from("quotes").insert({
         customer_name: args.customer_name, address: args.address || null,
@@ -1937,49 +1762,6 @@ async function executeToolCall(
       }
 
     // ═══════ Search Vendor VRM ═══════
-    } else if (toolName === "search_vendor") {
-      const { data: vendors } = await sb.from("supply_houses").select("id, name, contact_email, contact_phone, website_url, notes, is_active").ilike("name", `%${args.name}%`).limit(10);
-      if (!vendors?.length) {
-        result = { status: "no_match", message: "No vendors found matching that name." };
-      } else {
-        // Also fetch contacts for matched vendors
-        const vendorIds = vendors.map((v: any) => v.id);
-        const { data: contacts } = await sb.from("vendor_contacts").select("*").in("supply_house_id", vendorIds);
-        result = { status: "found", count: vendors.length, vendors: vendors.map((v: any) => ({ ...v, contacts: (contacts || []).filter((c: any) => c.supply_house_id === v.id) })) };
-      }
-
-    // ═══════ Create Vendor VRM ═══════
-    } else if (toolName === "create_vendor") {
-      // Dedup check
-      const { data: existing } = await sb.from("supply_houses").select("id, name").ilike("name", `%${args.name}%`).limit(1);
-      if (existing?.length) {
-        result = { status: "duplicate", message: `Vendor "${existing[0].name}" already exists (id: ${existing[0].id}). Use that instead.`, vendor: existing[0] };
-      } else {
-        const { data: newVendor, error: vErr } = await sb.from("supply_houses").insert({
-          name: args.name,
-          contact_email: args.contact_email || null,
-          contact_phone: args.contact_phone || null,
-          website_url: args.website_url || null,
-          notes: args.notes || null,
-        }).select().single();
-        if (vErr) { result = { status: "error", message: vErr.message }; }
-        else {
-          // Add primary contact if provided
-          if (args.contact_name && newVendor) {
-            await sb.from("vendor_contacts").insert({
-              supply_house_id: newVendor.id,
-              name: args.contact_name,
-              title: args.contact_title || null,
-              email: args.contact_person_email || null,
-              phone: args.contact_person_phone || null,
-              is_primary: true,
-            });
-          }
-          result = { status: "created", vendor: newVendor };
-        }
-      }
-
-    // ═══════ Customer CRM (formerly customer-actions) ═══════
     } else if (toolName === "create_customer") {
       // ── Dedup Step 1: Address+zip (PRIMARY — addresses don't change) ──
       let existingCustomer: any = null;
@@ -2981,7 +2763,7 @@ serve(async (req) => {
     const pageContext = (body.page_context || "").toLowerCase();
 
     // Determine which context categories to load based on page
-    type ContextCategory = "schedule" | "crm" | "comms" | "email" | "chat" | "parts" | "equipment" | "estimates" | "invoices" | "agreements" | "misc" | "workflow";
+    type ContextCategory = "schedule" | "crm" | "comms" | "chat" | "parts" | "equipment" | "estimates" | "invoices" | "agreements" | "misc" | "workflow";
 
     function getNeededCategories(ctx: string, isBriefing: boolean): Set<ContextCategory> {
       // Briefing mode: broad view, but skip equipment matchups (huge token sink, ~15-20k tokens)
@@ -2993,7 +2775,6 @@ serve(async (req) => {
       if (ctx.includes("customer")) { cats.add("crm"); cats.add("invoices"); cats.add("agreements"); }
       if (ctx.includes("job") || ctx.includes("workflow")) { cats.add("invoices"); cats.add("workflow"); }
       if (ctx.includes("sms") || ctx.includes("call")) { cats.add("comms"); }
-      if (ctx.includes("email")) cats.add("email");
       if (ctx.includes("chat") || ctx.includes("team")) cats.add("chat");
       if (ctx.includes("part") || ctx.includes("catalog")) cats.add("parts");
       if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure")) { cats.add("estimates"); cats.add("equipment"); }
@@ -3031,10 +2812,6 @@ serve(async (req) => {
       addLoader("smsHistory", getSmsHistoryContext(sb));
       addLoader("callLog", getCallLogContext(sb));
       addLoader("voicemails", getVoicemailsContext(sb));
-    }
-    if (needed.has("email")) {
-      addLoader("email", getEmailContext(sb));
-      addLoader("emailActions", getEmailActionsContext(sb));
     }
     if (needed.has("chat")) {
       addLoader("chat", getChatContext(sb));
@@ -3146,11 +2923,8 @@ serve(async (req) => {
       contextMap[conditionalLabels[i]] = conditionalResults[i];
     }
 
-    // Load SMS + email templates separately (lightweight, always useful)
-    const [smsTemplates, emailTemplates] = await Promise.all([
-      getSmsTemplatesContext(sb),
-      getEmailTemplatesContext(sb),
-    ]);
+    // Load SMS templates separately (lightweight, always useful)
+    const smsTemplates = await getSmsTemplatesContext(sb);
 
     // Build schedule summary from jobs already fetched
     const scheduleSummaryCtx = await getScheduleSummaryContext(sb, taskCtx.allJobs);
@@ -3313,7 +3087,7 @@ Use the actual UUIDs from the data above. This makes entities clickable in the U
 `;
 
     const runtimeData = `${companySettingsCtx}${brandProfilesCtx}${presentationSectionsCtx}${scheduleSummaryCtx}${trainingContext}
-${employeeList}${agentToolsSection}${smsTemplates}${emailTemplates}${ctx("activityLog")}${ctx("todos")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("email")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("emailActions")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
+${employeeList}${agentToolsSection}${smsTemplates}${ctx("activityLog")}${ctx("todos")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
 ${customerLookupCtx}${ragContext}
 ${navigationLinksInstruction}
 CURRENT TASK DATA:
@@ -3386,11 +3160,6 @@ TOOL ROUTING RULES (follow strictly)
       search_call_history: searchCallHistoryTool,
       read_chat_messages: readChatMessagesTool,
       send_chat_message: sendChatMessageTool,
-      // Email
-      search_emails: searchEmailsTool,
-      read_email_thread: readEmailThreadTool,
-      extract_email_attachment: extractEmailAttachmentTool,
-      send_brochure_email: sendBrochureEmailTool,
       // Sales docs
       create_quote: createQuoteTool,
       generate_install_quote: generateInstallQuoteTool,
@@ -3405,9 +3174,6 @@ TOOL ROUTING RULES (follow strictly)
       create_customer: createCustomerTool,
       update_customer: updateCustomerTool,
       create_job: createJobTool,
-      // Vendor VRM
-      search_vendor: searchVendorTool,
-      create_vendor: createVendorTool,
       // Specialists
       invoke_repair_quote: invokeRepairQuoteTool,
       invoke_supplyhouse: invokeSupplyhouseTool,
@@ -3444,7 +3210,7 @@ TOOL ROUTING RULES (follow strictly)
     function getRouteTools(ctx: string): Set<string> {
       const t = new Set<string>(ALWAYS_ON_TOOLS);
       if (ctx.includes("customer") || ctx.includes("crm")) {
-        ["create_customer", "update_customer", "create_job", "search_emails",
+        ["create_customer", "update_customer", "create_job",
          "search_sms_history", "search_call_history"].forEach(x => t.add(x));
       }
       if (ctx.includes("job") || ctx.includes("workflow") || ctx.includes("dispatch") || ctx.includes("mission") || ctx.includes("dashboard")) {
@@ -3457,20 +3223,15 @@ TOOL ROUTING RULES (follow strictly)
         ["search_sms_history", "search_call_history", "send_sms_to_employee",
          "get_live_transcript", "create_job", "create_customer"].forEach(x => t.add(x));
       }
-      if (ctx.includes("email")) {
-        ["search_emails", "read_email_thread", "extract_email_attachment",
-         "send_brochure_email"].forEach(x => t.add(x));
-      }
       if (ctx.includes("chat") || ctx.includes("team")) {
         ["read_chat_messages", "send_chat_message"].forEach(x => t.add(x));
       }
-      if (ctx.includes("part") || ctx.includes("catalog") || ctx.includes("supply") || ctx.includes("vendor")) {
-        ["invoke_supplyhouse", "invoke_carrier_enterprise", "search_vendor",
-         "create_vendor", "scrape_url"].forEach(x => t.add(x));
+      if (ctx.includes("part") || ctx.includes("catalog") || ctx.includes("supply")) {
+        ["invoke_supplyhouse", "invoke_carrier_enterprise", "scrape_url"].forEach(x => t.add(x));
       }
       if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure") || ctx.includes("sales")) {
         ["create_quote", "generate_install_quote", "invoke_repair_quote", "convert_estimate_to_job",
-         "generate_letterhead_document", "send_brochure_email"].forEach(x => t.add(x));
+         "generate_letterhead_document"].forEach(x => t.add(x));
       }
       if (ctx.includes("invoice") || ctx.includes("payment")) {
         ["invoke_invoicing", "create_quote"].forEach(x => t.add(x));
@@ -3479,7 +3240,7 @@ TOOL ROUTING RULES (follow strictly)
       // copilot stays useful for ad-hoc actions without exposing all 40 tools.
       if (!ctx || ctx.includes("copilot") || ctx.includes("jarvis")) {
         ["create_customer", "update_customer", "create_job", "update_job_field",
-         "search_emails", "search_sms_history", "search_call_history",
+         "search_sms_history", "search_call_history",
          "send_sms_to_employee", "get_travel_times"].forEach(x => t.add(x));
       }
       return t;
@@ -3518,7 +3279,7 @@ TOOL ROUTING RULES (follow strictly)
       const dataAuthority = `\n\nDATA AUTHORITY REMINDER: The SCHEDULE SUMMARY, LINE ITEMS, and EQUIPMENT sections above are freshly loaded from the database RIGHT NOW. If any prior assistant messages in this conversation contradict this fresh data, the FRESH DATA wins. Always answer from the data above, never from your own prior messages.`;
 
       // ── JARVIS click-context payload ────────────────────────────────────
-      // Sent ONCE on the first message of a triggered session (call/sms/email/voicemail
+      // Sent ONCE on the first message of a triggered session (call/sms/voicemail
       // panel-open). Contains pre-resolved contact + recent history so the agent
       // does NOT need to call search_customer or lookup_recent_jobs again.
       const jc = body.jarvis_context;

@@ -23,22 +23,19 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (pathname.startsWith("/inbox")) {
     if (search?.includes("sms")) return "sms";
     if (search?.includes("calls")) return "phone";
-    return "inbox"; // email / default inbox
+    return "inbox";
   }
   if (pathname.startsWith("/calls")) return "phone";
   if (pathname.startsWith("/sms")) return "sms";
-  if (pathname.startsWith("/email")) return "inbox";
   if (pathname.startsWith("/customers")) return "customers";
   if (pathname.startsWith("/agreements") || pathname.startsWith("/leads")) return "customers";
-  if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "vendors";
+  if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "jobs";
   if (pathname.startsWith("/copilot")) return "copilot";
   if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
   if (pathname.startsWith("/pay")) return "pay";
   if (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/agent-training") ||
-    pathname.startsWith("/agent-pipeline") ||
-    pathname.startsWith("/agent-network") ||
     pathname.startsWith("/ivr-builder") ||
     pathname.startsWith("/system-log")
   ) return "admin";
@@ -49,7 +46,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
 /** All recognised access keys in display order */
 export const ALL_ACCESS_KEYS = [
   "jobs", "phone", "sms", "inbox",
-  "customers", "vendors", "copilot", "pay", "admin",
+  "customers", "copilot", "pay", "admin",
 ] as const;
 
 const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = {
@@ -58,7 +55,6 @@ const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = 
   sms: "/inbox?section=sms",
   inbox: "/inbox",
   customers: "/customers",
-  vendors: "/vendors",
   copilot: "/copilot",
   pay: "/pay",
   admin: "/admin",

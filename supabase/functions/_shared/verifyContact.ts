@@ -30,7 +30,7 @@ export function getServiceAreaTier(miles: number): "priority" | "normal" | "exte
 
 /**
  * Geocode an address via Google Maps to verify it and get standardized result.
- * Shared across summarize-call, email-inbound-webhook, and any future intake.
+ * Shared across summarize-call and any future intake.
  * 
  * Geocode and verify an address via Google Maps API.
  * Returns standardized address, coordinates, and confidence score.

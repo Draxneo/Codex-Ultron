@@ -21,7 +21,7 @@ export function SmsConversationList({ conversations, selectedPhone, onSelect, on
   const [teamOpen, setTeamOpen] = useState(true);
   const [marketingOpen, setMarketingOpen] = useState(true);
   const [customersOpen, setCustomersOpen] = useState(true);
-  const [vendorsOpen, setVendorsOpen] = useState(true);
+  const [externalOpen, setExternalOpen] = useState(true);
 
   const filtered = conversations.filter((c) => {
     if (!search) return true;
@@ -34,7 +34,7 @@ export function SmsConversationList({ conversations, selectedPhone, onSelect, on
 
   const team = filtered.filter((c) => c.contactType === "employee");
   const marketing = filtered.filter((c) => c.contactType === "marketing");
-  const vendors = filtered.filter((c) => c.contactType === "vendor");
+  const external = filtered.filter((c) => c.contactType === "vendor");
   const customers = filtered.filter((c) => !["employee", "marketing", "vendor"].includes(c.contactType));
 
   return (
@@ -84,13 +84,13 @@ export function SmsConversationList({ conversations, selectedPhone, onSelect, on
           </Collapsible>
         )}
 
-        {vendors.length > 0 && (
-          <Collapsible open={vendorsOpen} onOpenChange={setVendorsOpen}>
+        {external.length > 0 && (
+          <Collapsible open={externalOpen} onOpenChange={setExternalOpen}>
             <CollapsibleTrigger className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
-              <Building2 className="h-3 w-3" /> Vendors ({vendors.length})
+              <Building2 className="h-3 w-3" /> External ({external.length})
             </CollapsibleTrigger>
             <CollapsibleContent>
-              {vendors.map((c) => (
+              {external.map((c) => (
                 <ConversationRow key={c.phoneNumber} convo={c} active={selectedPhone === c.phoneNumber} onClick={() => onSelect(c.phoneNumber)} />
               ))}
             </CollapsibleContent>

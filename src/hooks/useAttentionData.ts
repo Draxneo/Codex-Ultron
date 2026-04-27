@@ -20,7 +20,7 @@ import { ACTION_ITEM_STATUS } from "@/lib/actionItemLifecycle";
 import {
   AlertTriangle, CalendarX, MessageSquare, CreditCard, FileText, Shield,
   Receipt, FileCheck, Camera, ThumbsUp, CalendarCheck, ClipboardCheck, FileQuestion,
-  Mail, MessageCircle, Bot, MailWarning, Inbox, MapPin, Eye, User, Crown,
+  MessageCircle, Bot, Inbox, MapPin, Eye, User, Crown,
 } from "lucide-react";
 
 const GO_LIVE = '2026-03-24';
@@ -346,7 +346,6 @@ export function useAttentionData() {
     { label: "Tech Proposals",    count: counts?.techProposals || 0,    icon: ClipboardCheck, color: "text-violet-600",   bg: "bg-violet-600/10",   route: "/copilot",                  severity: "critical" },
     
     { label: "Unmatched",         count: counts?.unmatchedInvoices || 0, icon: FileQuestion,   color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "warning" },
-    { label: "Emails in Queue",   count: counts?.pendingEmails || 0,    icon: Mail,           color: "text-blue-500",     bg: "bg-blue-500/10",     route: "/email?folder=outbox",      severity: "warning" },
     { label: "SMS in Queue",      count: counts?.pendingSms || 0,       icon: MessageCircle,  color: "text-green-500",    bg: "bg-green-500/10",    route: "/copilot",                  severity: "warning" },
     { label: "Customer Decisions",count: counts?.customerResponses || 0,icon: ThumbsUp,       color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/estimates",                severity: "info" },
     { label: "Comfort Club",      count: activeAgreementsCount,            icon: Crown,          color: "text-teal-600",     bg: "bg-teal-600/10",     route: "/agreements",               severity: "info",   alwaysShow: true },
@@ -360,11 +359,8 @@ export function useAttentionData() {
   const hudItems = [
     // Communication-first: these are the app's primary value as HCP overlay
     { key: "unread_sms",       icon: MessageCircle, label: "Unread SMS",          count: counts?.unreadSms || 0,        color: "text-complete",     bgClass: "from-complete/10 to-card",   borderClass: "border-complete/30", route: "/sms" },
-    { key: "unread_emails",    icon: Mail,          label: "Unread Emails",       count: counts?.unreadEmails || 0,     color: "text-primary",      bgClass: "from-primary/10 to-card",    borderClass: "border-primary/30",  route: "/email" },
-    { key: "email_attention",  icon: MailWarning,   label: "Email Attention",     count: counts?.emailAttention || 0,   color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/email" },
     { key: "ai_handoff",       icon: Bot,           label: "AI Needs Handoff",    count: counts?.aiHandoff || 0,        color: "text-today",        bgClass: "from-today/10 to-card",      borderClass: "border-today/30",    route: "/copilot" },
     { key: "sms_outbox",       icon: MessageCircle, label: "SMS in Queue",        count: counts?.pendingSms || 0,       color: "text-green-500",    bgClass: "from-green-500/10 to-card",  borderClass: "border-green-500/30", route: "/copilot" },
-    { key: "email_outbox",     icon: Mail,          label: "Emails in Queue",     count: counts?.pendingEmails || 0,    color: "text-blue-500",     bgClass: "from-blue-500/10 to-card",   borderClass: "border-blue-500/30", route: "/email?folder=outbox" },
     // Operational items — secondary in HCP overlay mode
     { key: "overdue",          icon: AlertTriangle, label: "Past Due",            count: counts?.overdue || 0,          color: "text-overdue",      bgClass: "from-overdue/10 to-card",    borderClass: "border-overdue/30",  route: "/?attention=overdue" },
     { key: "ready_schedule",   icon: CalendarX,     label: "Ready to Schedule",   count: counts?.readyToSchedule || 0,  color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/jobs/backlog" },

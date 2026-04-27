@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { ClickToCall } from "@/components/ClickToCall";
 import { Link } from "react-router-dom";
@@ -499,7 +498,6 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
             <Paperclip className="h-4 w-4" />
           </Button>
           <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
-          <SmsTemplatePicker onSelect={(t) => setBody((prev) => (prev ? prev + "\n" + t : t))} />
           <DictateButton
             onTranscript={(text) => {
               const el = bodyInputRef.current;

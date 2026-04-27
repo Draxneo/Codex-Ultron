@@ -5,7 +5,7 @@ import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { ActionButtons } from "@/components/copilot/ActionButtons";
 import { InlineBookingWizard } from "@/components/copilot/InlineBookingWizard";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
-import { Bot, Loader2, Send, Plus, Mic, MicOff, ChevronDown, Phone as PhoneIcon, PhoneCall, PhoneOff, FileText, Download, Mail, Eye, X, MessageSquare, Briefcase } from "lucide-react";
+import { Bot, Loader2, Send, Plus, Mic, MicOff, ChevronDown, Phone as PhoneIcon, PhoneCall, PhoneOff, FileText, Download, Eye, X, MessageSquare, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -147,16 +147,12 @@ async function buildLetterheadDoc(bodyText: string, settings: any): Promise<jsPD
   return doc;
 }
 
-/** Letterhead download + email buttons */
+/** Letterhead preview/download helpers */
 function LetterheadBlock({ bodyText }: { bodyText: string }) {
   const { settings } = useCompanySettings();
   const [generating, setGenerating] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [emailing, setEmailing] = useState(false);
-  const [showEmailInput, setShowEmailInput] = useState(false);
-  const [emailTo, setEmailTo] = useState("");
-  const [emailSubject, setEmailSubject] = useState("Document from " + (settings.company_name || "Our Company"));
 
   const handleDownload = async () => {
     setGenerating(true);
@@ -168,39 +164,6 @@ function LetterheadBlock({ bodyText }: { bodyText: string }) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setGenerating(false);
-    }
-  };
-
-  const handleEmail = async () => {
-    if (!emailTo.trim()) {
-      toast({ title: "Enter a recipient email", variant: "destructive" });
-      return;
-    }
-    setEmailing(true);
-    try {
-      const doc = await buildLetterheadDoc(bodyText, settings);
-      const pdfBase64 = doc.output("datauristring").split(",")[1];
-      const { error } = await supabase.functions.invoke("email-send", {
-        body: {
-          to: emailTo.trim(),
-          subject: emailSubject,
-          body_text: bodyText,
-          body_html: `<p>Please see the attached document.</p>`,
-          attachment: {
-            filename: "Company_Letter.pdf",
-            content: pdfBase64,
-            content_type: "application/pdf",
-          },
-        },
-      });
-      if (error) throw error;
-      toast({ title: "Email Sent", description: `Document emailed to ${emailTo.trim()}` });
-      setShowEmailInput(false);
-      setEmailTo("");
-    } catch (e: any) {
-      toast({ title: "Email Failed", description: e.message, variant: "destructive" });
-    } finally {
-      setEmailing(false);
     }
   };
 
@@ -237,31 +200,7 @@ function LetterheadBlock({ bodyText }: { bodyText: string }) {
           {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Download PDF
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setShowEmailInput(!showEmailInput)} className="gap-1.5">
-          <Mail className="h-3.5 w-3.5" />
-          Email PDF
-        </Button>
       </div>
-      {showEmailInput && (
-        <div className="space-y-2 pt-1">
-          <Input
-            placeholder="Recipient email"
-            value={emailTo}
-            onChange={(e) => setEmailTo(e.target.value)}
-            className="text-sm h-8"
-          />
-          <Input
-            placeholder="Subject"
-            value={emailSubject}
-            onChange={(e) => setEmailSubject(e.target.value)}
-            className="text-sm h-8"
-          />
-          <Button size="sm" onClick={handleEmail} disabled={emailing} className="gap-1.5">
-            {emailing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            Send
-          </Button>
-        </div>
-      )}
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
         <DialogContent className="max-w-5xl">
           <DialogTitle>Letterhead Preview</DialogTitle>
@@ -385,7 +324,7 @@ interface CopilotChatPanelProps {
 }
 
 export default function CopilotChatPanel({ pageContext, compact = false, employeeId, routeKey }: CopilotChatPanelProps) {
-  const { consumePendingQuery, consumePendingCallSession, activeCallPreview, consumePendingSmsSession, consumePendingEmailSession, consumePendingVoicemailSession, consumePendingContext, peekPendingContext, pendingVersion, startCallSession } = useCopilotPanel();
+  const { consumePendingQuery, consumePendingCallSession, activeCallPreview, consumePendingSmsSession, consumePendingVoicemailSession, consumePendingContext, peekPendingContext, pendingVersion, startCallSession } = useCopilotPanel();
   const softphone = useSoftphoneContext();
   const navigate = useNavigate();
   const telephony = useTelephonyMode();
@@ -537,27 +476,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       return;
     }
 
-    const emailInfo = consumePendingEmailSession();
-    if (emailInfo) {
-      lastProcessedVersion.current = pendingVersion;
-      pendingSessionCreation.current = true;
-      pendingQueryConsumed.current = false;
-      autoSendText.current = "";
-      lastAutoSentForSession.current = null;
-      setInput("");
-      clearMessages();
-
-      void (async () => {
-        try {
-          const label = emailInfo.senderName ? `Email — ${emailInfo.senderName}` : `Email — ${emailInfo.senderEmail}`;
-          await createSession(label);
-        } finally {
-          pendingSessionCreation.current = false;
-        }
-      })();
-      return;
-    }
-
     const vmInfo = consumePendingVoicemailSession();
     if (vmInfo) {
       lastProcessedVersion.current = pendingVersion;
@@ -586,7 +504,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
     pendingVersion,
     consumePendingCallSession,
     consumePendingSmsSession,
-    consumePendingEmailSession,
     consumePendingVoicemailSession,
     createCallSession,
     createSession,
@@ -636,9 +553,9 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       "/": "Jobs", "/customers": "Customers", "/parts": "Parts",
       "/agreements": "Agreements", "/payments": "Payments",
       "/settings": "Settings", "/admin": "Admin",
-      "/email": "Email", "/sms": "SMS", "/calls": "Calls", "/chat": "Team Chat",
+      "/sms": "SMS", "/calls": "Calls", "/chat": "Team Chat",
       "/agent-training": "Agent Training", "/brochure": "Brochures",
-      "/locations": "Vendors", "/copilot": "JARVIS",
+      "/locations": "Catalog", "/copilot": "JARVIS",
     };
 
     let label = SHORT_LABELS[routeKey];
@@ -806,17 +723,12 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
     if (routeKey.startsWith("/customers/")) return [
       "Summarize this customer's history",
       "Any open jobs for this customer?",
-      "Draft an email to this customer",
+      "Draft a text to this customer",
     ];
     if (routeKey.startsWith("/estimates/")) return [
       "Summarize this estimate",
       "Compare the tiers on this estimate",
       "What equipment is quoted?",
-    ];
-    if (routeKey === "/email") return [
-      "📧 Unread emails summary",
-      "📋 Summarize today's jobs",
-      "🔔 What needs follow-up?",
     ];
     if (routeKey === "/sms") return [
       "💬 Unread SMS summary",
@@ -845,7 +757,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
     if (routeKey === "/" || routeKey === "/dashboard") return [
       "📋 Summarize today's jobs",
       "📞 Missed calls summary",
-      "📧 Unread emails summary",
       "💬 Unread SMS summary",
       "🗨️ Unread team chats summary",
       "🔔 What needs follow-up?",
@@ -1159,10 +1070,6 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
                     }
                     if ((action.type === "send_text" || action.type === "reply_sms") && action.phone) {
                       navigate(`/inbox?section=sms&phone=${encodeURIComponent(action.phone)}`);
-                      return;
-                    }
-                    if (action.type === "reply_email" && action.email) {
-                      navigate(`/email?compose=true&to=${encodeURIComponent(action.email)}${action.subject ? `&subject=${encodeURIComponent(action.subject)}` : ""}`);
                       return;
                     }
                     if (action.type === "view_job" && action.job_id) {

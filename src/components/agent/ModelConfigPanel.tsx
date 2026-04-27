@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import {
-  MessageSquare, Sun, Mail, Eye, MessageCircle, Users, Wrench, Globe, Clock, Timer, AlertTriangle,
+  MessageSquare, Sun, Eye, MessageCircle, Users, Wrench, Globe, Clock, Timer, AlertTriangle,
   Send, FileText, DollarSign, CalendarClock, PenTool,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -18,9 +18,7 @@ const TASK_META: Record<string, { icon: typeof MessageSquare; group: "conversati
   daily_briefing: { icon: Sun, group: "conversational", description: "Morning briefing summary and attention cards." },
   portal_chat: { icon: Globe, group: "conversational", description: "Customer portal chatbot — answers customer questions about their jobs and agreements." },
   tech_form: { icon: Wrench, group: "conversational", description: "Field assistant chat embedded in tech forms — helps techs with diagnostics and notes." },
-  communications: { icon: Send, group: "processing", description: "Drafts and sends outbound communications — emails, SMS sequences, and notifications." },
-  email_agent: { icon: Mail, group: "processing", description: "Composes email replies and handles outbound email routines." },
-  email_classification: { icon: Mail, group: "processing", description: "Classifies inbound emails (customer, supply house, vendor, solicitor) and routes to correct inbox." },
+  communications: { icon: Send, group: "processing", description: "Drafts and sends outbound SMS sequences and notifications." },
   vision_extraction: { icon: Eye, group: "processing", description: "Reads data plates, supply tickets, invoices, and documents from photos using vision/OCR." },
   sms_auto_reply: { icon: MessageCircle, group: "processing", description: "Generates auto-reply SMS to customer texts using job context." },
   customer_parsing: { icon: Users, group: "processing", description: "Parses raw SMS text into structured customer data (name, address, phone)." },

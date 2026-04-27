@@ -6,7 +6,6 @@
 const DEFAULTS: Record<string, string> = {
   copilot_chat: "gpt-5-mini",
   daily_briefing: "gpt-5-mini",
-  email_classification: "gpt-5-mini",
   vision_extraction: "gpt-5-mini",
   sms_auto_reply: "gpt-5-mini",
   customer_parsing: "gpt-5-mini",

@@ -39,9 +39,6 @@ import Jobs from "./pages/Jobs";
 import JobDetail from "./pages/JobDetail";
 
 
-import Vendors from "./pages/Vendors";
-import VendorDetail from "./pages/VendorDetail";
-
 import CopilotPage from "./pages/CopilotPage";
 import { ActionItemCards } from "./components/copilot/ActionItemCards";
 import { BookingIntentAlert } from "./components/BookingIntentAlert";
@@ -62,11 +59,7 @@ import CallsPage from "./pages/CallsPage";
 import InboxPage from "./pages/InboxPage";
 import Admin from "./pages/Admin";
 import SystemLog from "./pages/SystemLog";
-import PortalLogin from "./pages/PortalLogin";
-import PortalDashboard from "./pages/PortalDashboard";
 import ReferralPublic from "./pages/ReferralPublic";
-import CustomerPresentation from "./pages/CustomerPresentation";
-import AgreementPresentation from "./pages/AgreementPresentation";
 import CertificateView from "./pages/CertificateView";
 import InvoicePublic from "./pages/InvoicePublic";
 import CustomerCart from "./pages/CustomerCart";
@@ -94,8 +87,6 @@ import NotFound from "./pages/NotFound";
 
 import IvrBuilder from "./pages/IvrBuilder";
 import CallRoutingSettings from "./pages/CallRoutingSettings";
-import AgentPipeline from "./pages/AgentPipeline";
-import AgentNetwork from "./pages/AgentNetwork";
 import Leads from "./pages/Leads";
 import RepairCatalog from "./pages/RepairCatalog";
 import Catalog from "./pages/Catalog";
@@ -147,10 +138,7 @@ function NotificationListeners() {
     "/reset-password",
     "/form/",
     "/photos/",
-    "/portal/",
     "/refer/",
-    "/presentation/",
-    "/agreement/",
     "/certificate/",
     "/invoice/",
     "/intake/",
@@ -465,11 +453,7 @@ function AppRouter() {
         <Route path="/form/:token" element={<TechFormPublic />} />
         
         <Route path="/photos/:jobId" element={<JobPhotos />} />
-        <Route path="/portal/login" element={<PortalLogin />} />
-        <Route path="/portal/dashboard" element={<PortalDashboard />} />
         <Route path="/refer/:code" element={<ReferralPublic />} />
-        <Route path="/presentation/:token" element={<CustomerPresentation />} />
-        <Route path="/agreement/:token" element={<AgreementPresentation />} />
         <Route path="/certificate/:token" element={<CertificateView />} />
         <Route path="/invoice/:token" element={<InvoicePublic />} />
         <Route path="/intake/:token" element={<CustomerIntakePublic />} />
@@ -495,9 +479,9 @@ function AppRouter() {
         <Route path="/jobs/queue" element={<Navigate to="/jobs/backlog" replace />} />
         <Route path="/jobs/:id" element={<ProtectedRoute><JobDetail /></ProtectedRoute>} />
         <Route path="/parts" element={<Navigate to="/catalog" replace />} />
-        <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
-        <Route path="/vendors/:id" element={<ProtectedRoute><VendorDetail /></ProtectedRoute>} />
-        <Route path="/locations" element={<Navigate to="/vendors" replace />} />
+        <Route path="/vendors" element={<Navigate to="/catalog" replace />} />
+        <Route path="/vendors/:id" element={<Navigate to="/catalog" replace />} />
+        <Route path="/locations" element={<Navigate to="/catalog" replace />} />
         <Route path="/estimates/:id" element={<ProtectedRoute><EstimateDetail /></ProtectedRoute>} />
         <Route path="/settings" element={<Navigate to="/admin?section=company" replace />} />
         <Route path="/agent-training" element={<ProtectedRoute><AgentTraining /></ProtectedRoute>} />
@@ -510,18 +494,18 @@ function AppRouter() {
         <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         <Route path="/admin/hub" element={<Navigate to="/admin" replace />} />
         <Route path="/admin/email-health" element={<Navigate to="/admin" replace />} />
-        <Route path="/admin/vendor-email-mapping" element={<Navigate to="/vendors" replace />} />
+        <Route path="/admin/vendor-email-mapping" element={<Navigate to="/admin" replace />} />
         <Route path="/system-log" element={<ProtectedRoute><SystemLog /></ProtectedRoute>} />
         
-        <Route path="/portal/preview" element={<Navigate to="/admin?section=tools" replace />} />
+        <Route path="/portal/preview" element={<Navigate to="/admin" replace />} />
         
         <Route path="/ivr-builder" element={<ProtectedRoute><IvrBuilder /></ProtectedRoute>} />
         <Route path="/admin/call-routing" element={<ProtectedRoute><CallRoutingSettings /></ProtectedRoute>} />
-        <Route path="/sequence-builder" element={<Navigate to="/agent-training?section=output" replace />} />
+        <Route path="/sequence-builder" element={<Navigate to="/copilot" replace />} />
         <Route path="/customer-journey" element={<Navigate to="/copilot" replace />} />
         <Route path="/payment-flow" element={<Navigate to="/payments" replace />} />
-        <Route path="/agent-pipeline" element={<ProtectedRoute><AgentPipeline /></ProtectedRoute>} />
-        <Route path="/agent-network" element={<ProtectedRoute><AgentNetwork /></ProtectedRoute>} />
+        <Route path="/agent-pipeline" element={<Navigate to="/copilot" replace />} />
+        <Route path="/agent-network" element={<Navigate to="/copilot" replace />} />
         <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
         <Route path="/repair-catalog" element={<Navigate to="/catalog" replace />} />
         <Route path="/shopping-cart" element={<Navigate to="/catalog" replace />} />
@@ -552,8 +536,8 @@ function SmsLogGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const location = useLocation();
   const publicPrefixes = [
-    "/login", "/reset-password", "/form/", "/photos/", "/portal/",
-    "/refer/", "/presentation/", "/agreement/", "/certificate/",
+    "/login", "/reset-password", "/form/", "/photos/",
+    "/refer/", "/certificate/",
     "/invoice/", "/intake/", "/cart/", "/q/",
   ];
   const isPublicRoute = publicPrefixes.some((p) =>

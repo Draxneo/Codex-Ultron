@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { CopilotTraining } from "@/components/CopilotTraining";
 import { RagAnalytics } from "@/components/agent/RagAnalytics";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -133,7 +132,6 @@ export function KnowledgeBase() {
 
       <RagAnalytics />
 
-      <CopilotTraining />
     </div>
   );
 }

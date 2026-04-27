@@ -5,7 +5,7 @@
  * Supervisor adds: Backlog tab for unscheduled jobs
  */
 
-import { Briefcase, Phone, MessageSquare, DollarSign, CalendarOff, Users, Warehouse, Bot, Settings, Inbox } from "lucide-react";
+import { Briefcase, Phone, MessageSquare, DollarSign, CalendarOff, Users, Bot, Settings, Inbox } from "lucide-react";
 import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
@@ -22,7 +22,6 @@ const TAB_KEY_MAP: Record<string, string> = {
   "/inbox?section=sms": "sms",
   "/inbox": "inbox",
   "/customers": "customers",
-  "/vendors": "vendors",
   "/copilot": "copilot",
   "/pay": "pay",
   "/admin": "admin",
@@ -84,12 +83,6 @@ function useTechTabs(): MobileTab[] {
       icon: Users,
       label: "CRM",
       match: (p: string) => p.startsWith("/customers"),
-    } as MobileTab] : []),
-    ...(allowedTabs?.has("vendors") ? [{
-      path: "/vendors",
-      icon: Warehouse,
-      label: "Vendors",
-      match: (p: string) => p.startsWith("/vendors"),
     } as MobileTab] : []),
     ...(allowedTabs?.has("copilot") ? [{
       path: "/copilot",

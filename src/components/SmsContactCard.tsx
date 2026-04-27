@@ -7,7 +7,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { ClickToCall } from "@/components/ClickToCall";
 import { Link } from "react-router-dom";
@@ -276,7 +275,6 @@ export function SmsContactCard({ conversation, isExpanded, onToggle, sending, on
             )}
             <div className="flex items-center gap-1">
               <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
-              <SmsTemplatePicker onSelect={(t) => setBody((prev) => (prev ? prev + "\n" + t : t))} />
               <DictateButton
                 size="xs"
                 onTranscript={(text) => {

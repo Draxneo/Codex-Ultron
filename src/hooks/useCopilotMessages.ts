@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type SuggestedAction = {
-  type: "book_job" | "book_estimate" | "book_maintenance" | "create_customer" | "call_back" | "send_text" | "reply_sms" | "reply_email" | "send_invoice_reminder" | "view_job" | "view_voicemail" | "confirm" | "confirm_no";
+  type: "book_job" | "book_estimate" | "book_maintenance" | "create_customer" | "call_back" | "send_text" | "reply_sms" | "send_invoice_reminder" | "view_job" | "view_voicemail" | "confirm" | "confirm_no";
   job_type?: string;
   customer_name?: string;
   customer_id?: string;

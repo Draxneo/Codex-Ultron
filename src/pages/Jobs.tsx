@@ -1,6 +1,6 @@
 import { useState, useMemo, lazy, Suspense, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Plus, Rows3, CalendarOff, CalendarRange, ListChecks, Palette, ArrowLeft, AlertTriangle, Mail, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Plus, Rows3, CalendarOff, CalendarRange, ListChecks, Palette, ArrowLeft, AlertTriangle } from "lucide-react";
 import { DispatchBoard } from "@/components/job/DispatchBoard";
 import { WeekCalendarBoard } from "@/components/job/WeekCalendarBoard";
 import { DayCalendarBoard } from "@/components/job/DayCalendarBoard";
@@ -778,18 +778,11 @@ const Jobs = () => {
               ))}
             </div>
 
-            {/* Board header with Inbox link */}
+            {/* Board header */}
             <div className="flex items-center px-4 py-1 border-b shrink-0 bg-card gap-1">
               <div className="flex items-center gap-1.5 text-xs h-8 px-3 rounded-md font-medium bg-primary text-primary-foreground">
                 <CalendarDays className="h-3.5 w-3.5" /> Board
               </div>
-              <Link
-                to="/email"
-                className="flex items-center gap-1.5 text-xs h-8 px-3 rounded-md font-medium text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <Mail className="h-3.5 w-3.5" /> Email
-                <ExternalLink className="h-3 w-3 ml-0.5 opacity-50" />
-              </Link>
             </div>
 
             {/* Dispatch Board */}

@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CalendarDays, Inbox, Users, Warehouse, Zap, Bot, DollarSign, Settings } from "lucide-react";
+import { GripVertical, CalendarDays, Inbox, Users, Zap, Bot, DollarSign, Settings } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavOrder } from "@/hooks/useNavOrder";
@@ -23,7 +23,6 @@ const NAV_META: Record<string, { icon: any; label: string }> = {
   "/": { icon: CalendarDays, label: "Schedule" },
   "/inbox": { icon: Inbox, label: "Inbox" },
   "/customers": { icon: Users, label: "Customers" },
-  "/vendors": { icon: Warehouse, label: "Vendors" },
   "/copilot": { icon: Bot, label: "JARVIS" },
   "/pay": { icon: DollarSign, label: "Pay" },
   "/admin": { icon: Settings, label: "Admin" },

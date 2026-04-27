@@ -123,22 +123,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        if (step.type === "send_email" && lead.email) {
-          // Email sending via email-send function
-          await fetch(`${supabaseUrl}/functions/v1/email-send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${supabaseKey}`,
-              "x-source-function": "run-lead-drip",
-            },
-            body: JSON.stringify({
-              to: lead.email,
-              subject: (step.config?.subject || "").replace(/\{\{first_name\}\}/g, lead.first_name || ""),
-              body: (step.config?.body || "").replace(/\{\{first_name\}\}/g, lead.first_name || ""),
-            }),
-          });
-
+        if (step.type === "send_email") {
+          // In-app email sending is retired. Advance past legacy email steps.
           currentIndex++;
           continue;
         }

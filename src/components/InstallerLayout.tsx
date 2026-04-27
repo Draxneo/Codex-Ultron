@@ -5,7 +5,7 @@
  * Filtered by employee_tab_access checkmarks.
  */
 
-import { Wrench, Phone, MessageSquare, Users, Warehouse, Bot, DollarSign, Settings, Inbox } from "lucide-react";
+import { Wrench, Phone, MessageSquare, Users, Bot, DollarSign, Settings, Inbox } from "lucide-react";
 import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
@@ -17,7 +17,6 @@ const TAB_KEY_MAP: Record<string, string> = {
   "/inbox?section=sms": "sms",
   "/inbox": "inbox",
   "/customers": "customers",
-  "/vendors": "vendors",
   "/copilot": "copilot",
   "/pay": "pay",
   "/admin": "admin",
@@ -60,12 +59,6 @@ function useInstallerTabs(): MobileTab[] {
       icon: Users,
       label: "CRM",
       match: (p: string) => p.startsWith("/customers"),
-    } as MobileTab] : []),
-    ...(allowedTabs?.has("vendors") ? [{
-      path: "/vendors",
-      icon: Warehouse,
-      label: "Vendors",
-      match: (p: string) => p.startsWith("/vendors"),
     } as MobileTab] : []),
     ...(allowedTabs?.has("copilot") ? [{
       path: "/copilot",

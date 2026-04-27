@@ -2,8 +2,8 @@
  * generate-cps-rebate — Server-side CPS Energy rebate form generator.
  *
  * Gathers job, equipment (AHRI + customer_equipment), and company data,
- * builds the same HTML rebate form the frontend renders, and emails it
- * as an inline HTML email via send-rebate-email.
+ * builds the same HTML rebate form the frontend renders, and returns it
+ * for standalone email/submission outside UltraOffice.
  *
  * Called by the autopilot chain (submit_rebate action) or manually.
  */
@@ -45,9 +45,7 @@ Deno.serve(async (req) => {
     const { job_id } = await req.json();
     if (!job_id) throw new Error("job_id required");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-            const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin();
 
     // ── Gather all data in parallel ──
     const [jobRes, settingsRes, ahriRes, equipRes] = await Promise.all([
@@ -307,25 +305,6 @@ Deno.serve(async (req) => {
       </div>
     `;
 
-    // ── Send via send-rebate-email (as inline HTML, no attachment) ──
-    const subject = `CPS Rebate Form — ${customerName} — Job# ${job.hcp_job_number || job.job_number || job_id}`;
-
-    const resp = await fetch(`${supabaseUrl}/functions/v1/send-rebate-email`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: job.customer_email || companyEmail,
-        cc: job.customer_email ? companyEmail : undefined,
-        subject,
-        customerName,
-        htmlBody: formHtml,
-      }),
-    });
-
-    const emailResult = await resp.json();
 
     // Stamp the job
     await supabase
@@ -338,15 +317,15 @@ Deno.serve(async (req) => {
       job_id,
       action: "rebate_generated",
       performed_by: "Autopilot",
-      details: `CPS rebate form generated and emailed. ${rebateInfo?.qualifies ? `Est. rebate: $${rebateInfo.rebateAmount} (${rebateInfo.tier}, ${rebateInfo.tons}T)` : "AHRI data incomplete — verify manually."}. Brand: ${brand}, AHRI: ${ahriNumber || "N/A"}.`,
+      details: `CPS rebate form generated. ${rebateInfo?.qualifies ? `Est. rebate: $${rebateInfo.rebateAmount} (${rebateInfo.tier}, ${rebateInfo.tons}T)` : "AHRI data incomplete — verify manually."}. Brand: ${brand}, AHRI: ${ahriNumber || "N/A"}.`,
     });
 
     return new Response(
       JSON.stringify({
         ok: true,
         rebate: rebateInfo,
-        emailed_to: job.customer_email || companyEmail,
-        email_status: emailResult.success ? "sent" : emailResult.error || "unknown",
+        html: formHtml,
+
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

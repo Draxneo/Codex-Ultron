@@ -81,8 +81,6 @@ export function usePushNotifications() {
             navigate(telephony.routes.sms);
           } else if (type === "call") {
             navigate(telephony.routes.phone);
-          } else if (type === "email") {
-            navigate("/email");
           } else if (type === "chat") {
             navigate("/chat");
           }

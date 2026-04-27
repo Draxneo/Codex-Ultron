@@ -7,14 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Printer, DollarSign, FileText, AlertTriangle, Mail, Loader2 } from "lucide-react";
+import { Printer, DollarSign, FileText, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
-import { toast } from "@/hooks/use-toast";
-import html2canvas from "html2canvas";
 
 // CPS SEER2 tier structure
 const TIERS = [
@@ -221,7 +218,6 @@ export default function CpsRebateForm({ job, equipment, company }: Props) {
     window.print();
   };
 
-  const [emailing, setEmailing] = useState(false);
 
   const buildPrintHtml = (): string => {
     const rebateLabel = rebateType === "early_replacement" ? "Early Replacement" : "Replace on Burnout";
@@ -372,70 +368,6 @@ export default function CpsRebateForm({ job, equipment, company }: Props) {
     `;
   };
 
-  const generatePngBase64 = async (): Promise<string> => {
-    // Build a standalone HTML string with all inline styles — no Tailwind, no CSS variables
-    const container = document.createElement("div");
-    container.style.cssText = "position:fixed;left:-9999px;top:0;width:1200px;z-index:-1;";
-    container.innerHTML = buildPrintHtml();
-    document.body.appendChild(container);
-
-    // Let browser lay out the HTML
-    await new Promise((r) => setTimeout(r, 100));
-
-    try {
-      const canvas = await html2canvas(container, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        windowWidth: 1200,
-      });
-
-      let dataUrl = canvas.toDataURL("image/png");
-      const base64 = dataUrl.split(",")[1];
-      const sizeBytes = base64.length * 0.75;
-      if (sizeBytes > 4 * 1024 * 1024) {
-        dataUrl = canvas.toDataURL("image/jpeg", 0.98);
-        return dataUrl.split(",")[1];
-      }
-      return base64;
-    } finally {
-      container.remove();
-    }
-  };
-
-  const handleEmail = async () => {
-    if (!email) {
-      toast({ title: "No email", description: "Customer email is required to send.", variant: "destructive" });
-      return;
-    }
-    setEmailing(true);
-    try {
-      const imageBase64 = await generatePngBase64();
-      const subject = `CPS Rebate Form Job# ${job.jobNumber || "N/A"} ${job.customerName || ""}`.trim();
-
-      const { data, error } = await supabase.functions.invoke("send-rebate-email", {
-        body: {
-          to: settings?.company_email || "",
-          subject,
-          imageBase64,
-          customerName: job.customerName || "",
-        },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      toast({ title: "Email Sent", description: `Rebate form sent to ${email}` });
-
-      // Completion timestamps are tracked directly on the job
-    } catch (err: any) {
-      console.error("Email error:", err);
-      toast({ title: "Email Failed", description: err.message || "Failed to send email", variant: "destructive" });
-    } finally {
-      setEmailing(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -484,10 +416,6 @@ export default function CpsRebateForm({ job, equipment, company }: Props) {
             <FileText className="h-5 w-5" /> CPS Energy HVAC Rebate Application
           </h3>
           <div className="flex gap-2">
-            <Button onClick={handleEmail} variant="outline" size="sm" disabled={emailing}>
-              {emailing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Mail className="h-4 w-4 mr-1.5" />}
-              {emailing ? "Sending..." : "Email"}
-            </Button>
             <Button onClick={handlePrint} variant="outline" size="sm">
               <Printer className="h-4 w-4 mr-1.5" /> Print
             </Button>

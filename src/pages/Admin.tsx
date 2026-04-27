@@ -9,7 +9,7 @@ import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
   Package, CreditCard, Brain, ChevronRight, ChevronLeft, Gift, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
-  Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, Store, MapPin, RefreshCw, ScanSearch, Activity,
+  Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
   BookOpen,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
@@ -158,11 +158,8 @@ interface ToolCardDef {
 const TOOL_CARDS: ToolCardDef[] = [
   { key: "jarvis", title: "JARVIS", description: "Proactive dashboard — what needs attention, AI activity, and quick actions.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/copilot" },
   { key: "shopping-cart", title: "Catalog & Pricebook", description: "Browse and manage equipment matchups, repairs, parts, and AHRI lookups — your master pricebook.", icon: Package, borderColor: "border-l-orange-500", iconColor: "text-orange-500", iconBg: "bg-orange-500/10", to: "/catalog" },
-  { key: "agent-training", title: "JARVIS Training", description: "Configure JARVIS instructions, tools, knowledge base, and output templates.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/agent-training" },
   { key: "phone-system", title: "IVR Builder", description: "Canonical IVR editor for greetings, departments, queues, and routing.", icon: Phone, borderColor: "border-l-cyan-500", iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", to: "/ivr-builder", hasCanvas: true },
   { key: "payments", title: "Payments Dashboard", description: "Track invoices, payment plans, and revenue.", icon: CreditCard, borderColor: "border-l-sky-500", iconColor: "text-sky-500", iconBg: "bg-sky-500/10", to: "/payments" },
-  { key: "locations", title: "Supply Houses & Vendors", description: "Manage vendors, ordering portals, brand mappings, and locations.", icon: Store, borderColor: "border-l-teal-500", iconColor: "text-teal-500", iconBg: "bg-teal-500/10", to: "/vendors" },
-  { key: "agent-network", title: "AI Agent Network", description: "Visual map of specialist AI agents, their tools, and handoff connections.", icon: Brain, borderColor: "border-l-purple-500", iconColor: "text-purple-500", iconBg: "bg-purple-500/10", to: "/agent-network", hasCanvas: true },
   { key: "lsa-leads", title: "LSA Leads", description: "View and manage Google LSA leads.", icon: MapPin, borderColor: "border-l-blue-500", iconColor: "text-blue-500", iconBg: "bg-blue-500/10", to: "/leads?source=google_lsa" },
   { key: "system-log", title: "System Log (Mission Control)", description: "Errors, cron health, retry queue, and on-call pages — full operational telemetry.", icon: Activity, borderColor: "border-l-rose-500", iconColor: "text-rose-500", iconBg: "bg-rose-500/10", to: "/system-log" },
 ];
@@ -827,20 +824,182 @@ function PermitAuthoritiesSection() {
 
 
 // ─── Sidebar sections for admin ───
+type DevFunction = {
+  name: string;
+  plainEnglish: string;
+  trigger: string;
+  owner: string;
+  status: "Keep" | "Watch" | "Retire";
+};
+
+const DEV_FUNCTIONS: DevFunction[] = [
+  { name: "voice-webhook / voice-ivr-handler", plainEnglish: "Answers incoming calls, reads the IVR canvas, routes callers, and falls back to voicemail or answering service.", trigger: "Twilio incoming voice webhook", owner: "Phone", status: "Keep" },
+  { name: "twilio-token / twilio-voice-twiml", plainEnglish: "Gives the browser and Android app safe temporary phone access without exposing Twilio secrets.", trigger: "Softphone startup and outbound calls", owner: "Phone", status: "Keep" },
+  { name: "voice-status-callback / reconcile-stuck-calls", plainEnglish: "Records call progress, cleans up stuck calls, and keeps the phone dashboard honest.", trigger: "Twilio call events and scheduled cleanup", owner: "Phone", status: "Keep" },
+  { name: "sms-webhook / sms-status-callback / send-sms", plainEnglish: "Receives inbound texts, sends approved messages, and tracks delivery status.", trigger: "Twilio SMS webhooks and app actions", owner: "SMS", status: "Keep" },
+  { name: "ai-task-agent / jarvis-suggest-actions", plainEnglish: "Finds what needs attention and suggests actions, but should keep a person in the loop before acting.", trigger: "JARVIS dashboard and background checks", owner: "JARVIS", status: "Keep" },
+  { name: "draft-sms-reply / summarize-call / transcribe-audio", plainEnglish: "Turns calls and messages into useful notes and SMS drafts for review.", trigger: "Inbound SMS, recordings, and Deepgram/OpenAI processing", owner: "JARVIS", status: "Keep" },
+  { name: "cart-checkout / cart-send-receipt / estimate-checkout", plainEnglish: "Runs customer proposal carts, repair approvals, checkout, receipts, and estimate payment links.", trigger: "Customer cart and Stripe checkout", owner: "Payments", status: "Keep" },
+  { name: "stripe-webhook / stripe-checkout", plainEnglish: "Confirms payments and updates invoices after Stripe finishes the money movement.", trigger: "Stripe checkout and webhook events", owner: "Payments", status: "Keep" },
+  { name: "lookup-property / fetch-weather-forecast / calculate-travel-times", plainEnglish: "Adds property, weather, and travel context with API guardrails and caching.", trigger: "Job screens, scheduling, and prefetch jobs", owner: "Field Ops", status: "Keep" },
+  { name: "reconcile-equipment / seed-repair-catalog / repair-quote-agent", plainEnglish: "Keeps equipment, repairs, and repair quote options usable for technicians and customer carts.", trigger: "Catalog repair flow and admin maintenance", owner: "Catalog", status: "Keep" },
+  { name: "phone-debug-log / twilio-call-inspect / twilio-sms-inspect", plainEnglish: "Shows what Twilio saw so phone and SMS bugs are diagnosable instead of guesswork.", trigger: "Phone/SMS debugging and admin checks", owner: "Dev / Ops", status: "Keep" },
+  { name: "apiUsageLog / systemTrace / retry-queue-processor", plainEnglish: "Tracks API cost, errors, retries, heartbeats, and cleanup in one operations view.", trigger: "Every important function and scheduled cleanup", owner: "Dev / Ops", status: "Keep" },
+  { name: "hcp-* migration functions", plainEnglish: "Temporary import and archive helpers while we finish leaving Housecall Pro behind.", trigger: "Manual migration tools only", owner: "Migration", status: "Watch" },
+  { name: "auto-advance-workflow / run-lead-drip", plainEnglish: "Old workflow and drip ideas that should stay out of the main flow unless we deliberately rebuild them.", trigger: "Legacy background jobs", owner: "Legacy", status: "Retire" },
+];
+
+const DEV_APIS = [
+  { name: "Twilio", use: "Calls, SMS, MMS, IVR, voicemail, call status, and softphone tokens.", guardrail: "All phone events should land in System Log and call history." },
+  { name: "Stripe", use: "Checkout, invoices, carts, customer payment links, and receipts.", guardrail: "Webhook confirms payment before app marks it paid." },
+  { name: "OpenAI", use: "JARVIS intent, summaries, SMS drafts, customer notes, and quote assistance.", guardrail: "Human approval before customer-facing actions." },
+  { name: "Deepgram", use: "Call transcription and voice notes from technicians.", guardrail: "Store transcript and source recording link together." },
+  { name: "Google Maps", use: "Address validation, travel ETA, route cache, and street-view/property context.", guardrail: "Cache aggressively and monitor call counts." },
+  { name: "Firecrawl", use: "Property and web research where structured APIs do not cover the job.", guardrail: "Use only when cached data is missing or stale." },
+  { name: "Supabase", use: "Database, auth, storage, edge functions, logs, and app source of truth.", guardrail: "No legacy Lovable URLs or old project references." },
+];
+
+const JARVIS_SKILLS = [
+  "Understands inbound SMS and call transcripts without assuming the customer wants a brand-new job.",
+  "Checks whether a customer has multiple properties before picking an address.",
+  "Suggests the next action on jobs, estimates, carts, invoices, and missed calls.",
+  "Drafts customer SMS, notes, quotes, and follow-ups for human approval.",
+  "Helps technicians build repair or replacement options that become customer cart choices.",
+  "Uses the IVR canvas as the source for IVR-triggered SMS wording.",
+];
+
+function DevFunctionInventory() {
+  const statusClass = (status: DevFunction["status"]) => {
+    if (status === "Keep") return "bg-emerald-500/10 text-emerald-700 border-emerald-200";
+    if (status === "Watch") return "bg-amber-500/10 text-amber-700 border-amber-200";
+    return "bg-rose-500/10 text-rose-700 border-rose-200";
+  };
+
+  return (
+    <div className="space-y-3">
+      {DEV_FUNCTIONS.map((fn) => (
+        <Card key={fn.name} className="border-l-4 border-l-primary/50">
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-sm">{fn.name}</h3>
+                  <Badge variant="outline" className={cn("text-[10px]", statusClass(fn.status))}>{fn.status}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{fn.owner}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{fn.plainEnglish}</p>
+              </div>
+              <p className="text-xs text-muted-foreground md:max-w-[260px]">
+                <span className="font-semibold text-foreground">Runs when: </span>{fn.trigger}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function DevOpsCenter() {
+  return (
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-primary/20">
+        <CardHeader className="bg-primary text-primary-foreground">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Activity className="h-5 w-5" /> Dev / Ops Control Room
+              </CardTitle>
+              <CardDescription className="text-primary-foreground/80">
+                One place for active functions, webhooks, JARVIS skills, and the heartbeat/debug trail.
+              </CardDescription>
+            </div>
+            <Button asChild variant="secondary" className="gap-2">
+              <Link to="/system-log"><Activity className="h-4 w-4" /> Open System Log</Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
+          <div className="rounded-lg border bg-card p-3"><p className="text-2xl font-bold">{DEV_FUNCTIONS.filter(f => f.status === "Keep").length}</p><p className="text-xs text-muted-foreground">kept function groups</p></div>
+          <div className="rounded-lg border bg-card p-3"><p className="text-2xl font-bold">{DEV_APIS.length}</p><p className="text-xs text-muted-foreground">active outside services</p></div>
+          <div className="rounded-lg border bg-card p-3"><p className="text-2xl font-bold">{JARVIS_SKILLS.length}</p><p className="text-xs text-muted-foreground">JARVIS responsibilities</p></div>
+          <div className="rounded-lg border bg-card p-3"><p className="text-2xl font-bold">1</p><p className="text-xs text-muted-foreground">debug heartbeat home</p></div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="functions" className="space-y-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="functions">Functions</TabsTrigger>
+          <TabsTrigger value="apis">APIs & Webhooks</TabsTrigger>
+          <TabsTrigger value="jarvis">JARVIS</TabsTrigger>
+          <TabsTrigger value="operations">Operations</TabsTrigger>
+        </TabsList>
+        <TabsContent value="functions">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Function Inventory</CardTitle><CardDescription>Plain-English map of what we are keeping, watching, and retiring.</CardDescription></CardHeader>
+            <CardContent><DevFunctionInventory /></CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="apis" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Active APIs</CardTitle><CardDescription>Services this app is allowed to use, with the safety rule for each one.</CardDescription></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {DEV_APIS.map((api) => (
+                <div key={api.name} className="rounded-lg border p-3">
+                  <h3 className="font-semibold text-sm">{api.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{api.use}</p>
+                  <p className="mt-2 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Guardrail: </span>{api.guardrail}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <WebhooksIntegrationsSection />
+        </TabsContent>
+        <TabsContent value="jarvis" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">JARVIS Responsibilities</CardTitle><CardDescription>What the assistant is supposed to help with, without drifting into hidden automation.</CardDescription></CardHeader>
+            <CardContent className="grid gap-2 md:grid-cols-2">
+              {JARVIS_SKILLS.map((skill) => <div key={skill} className="rounded-lg border bg-muted/30 p-3 text-sm">{skill}</div>)}
+            </CardContent>
+          </Card>
+          <HumanInTheLoopCard />
+          <IntakeSimulator />
+          <CopilotPermissionsCard />
+        </TabsContent>
+        <TabsContent value="operations">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Operations Tools</CardTitle><CardDescription>Admin helpers we still need while the app becomes the company source of truth.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <CompanyDocumentsCard />
+              <div className="border-t pt-4"><h4 className="text-xs font-semibold mb-2">Permit Authorities</h4><PermitAuthoritiesSection /></div>
+              <div className="border-t pt-4"><h4 className="text-xs font-semibold mb-2">Scout & Test Automation</h4><PermitScoutPanel /></div>
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-semibold mb-2">Dispatch Utilities</h4>
+                <div className="flex flex-wrap gap-2"><DispatchRecalcButton /><ComfortClubRescanButton /><HcpCustomerSyncButton /></div>
+              </div>
+              <div className="border-t pt-4"><h4 className="text-xs font-semibold mb-2">HCP Migration Tools</h4><HcpHistoryImport /><HcpPhotoArchive /></div>
+              <DuplicateManager />
+              <MetaAudiencesCard />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 const ADMIN_SECTIONS = [
   { key: "employees", label: "Employees", icon: Users },
   { key: "company", label: "Company Settings", icon: Settings2 },
-  { key: "webhooks", label: "Webhooks & Integrations", icon: Webhook },
   { key: "voice", label: "Voice & Phone", icon: Phone },
   { key: "payments", label: "Payments & Invoicing", icon: CreditCard },
-  { key: "jarvis", label: "JARVIS Controls", icon: Brain },
-  { key: "marketing", label: "Marketing", icon: BarChart3 },
-  { key: "operations", label: "Operations", icon: Building2 },
+  { key: "dev", label: "Dev / Ops", icon: Activity },
   { key: "tools", label: "Tools", icon: Package },
   { key: "reports", label: "Dashboard & Reports", icon: BarChart3 },
 ];
 
 const SECTION_KEYS = new Set(ADMIN_SECTIONS.map((section) => section.key));
+const RETIRED_ADMIN_SECTIONS = new Set(["webhooks", "jarvis", "marketing", "operations"]);
 const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   config: "company",
   settings: "company",
@@ -850,14 +1009,15 @@ const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   reports: "reports",
   payments: "payments",
   voice: "voice",
-  jarvis: "jarvis",
-  marketing: "marketing",
-  operations: "operations",
-  webhooks: "webhooks",
+  jarvis: "dev",
+  marketing: "dev",
+  operations: "dev",
+  webhooks: "dev",
 };
 
 function resolveAdminSection(section: string | null, legacyTab: string | null) {
   if (section && SECTION_KEYS.has(section)) return section;
+  if (section && RETIRED_ADMIN_SECTIONS.has(section)) return "dev";
   if (legacyTab) return LEGACY_TAB_TO_SECTION[legacyTab] ?? null;
   return null;
 }
@@ -875,6 +1035,8 @@ function AdminSectionContent({ section }: { section: string }) {
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
+    case "dev":
+      return <DevOpsCenter />;
     case "jarvis":
       return <div className="space-y-4"><HumanInTheLoopCard /><IntakeSimulator /><CopilotPermissionsCard /></div>;
     case "marketing":
@@ -916,7 +1078,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">AI & Automation</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["jarvis", "agent-training", "agent-network"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["jarvis"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>
@@ -927,7 +1089,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Sales & Pricing</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["shopping-cart", "sales-presentations"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["shopping-cart"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>
@@ -949,7 +1111,7 @@ function AdminSectionContent({ section }: { section: string }) {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financials & Reporting</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["payments", "locations", "lsa-leads"].includes(c.key)).map(card => (
+              {TOOL_CARDS.filter(c => ["payments", "lsa-leads"].includes(c.key)).map(card => (
                 <ToolCard key={card.key} card={card} />
               ))}
             </div>

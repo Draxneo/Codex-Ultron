@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 
 export interface SequenceStep {
   id: string;
-  type: "trigger" | "delay" | "send_sms" | "send_email" | "ai_check" | "branch" | "end";
+  type: "trigger" | "delay" | "send_sms" | "ai_check" | "branch" | "end";
   label: string;
   config: Record<string, any>;
   position?: { x: number; y: number };

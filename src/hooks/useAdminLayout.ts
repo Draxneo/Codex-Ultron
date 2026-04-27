@@ -11,7 +11,7 @@ export interface AdminCategory {
 }
 
 const DEFAULT_LAYOUT: { name: string; cardKeys: string[] }[] = [
-  { name: "Tools", cardKeys: ["jarvis", "shopping-cart", "sales-presentations", "agent-training", "payments", "phone-system", "agent-network", "locations", "lsa-leads", "system-log"] },
+  { name: "Tools", cardKeys: ["jarvis", "shopping-cart", "payments", "phone-system", "lsa-leads", "system-log"] },
 ];
 
 export function useAdminLayout() {

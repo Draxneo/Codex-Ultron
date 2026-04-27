@@ -13,7 +13,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
   const { conversations, loading, markAsRead } = useCallLog();
   const [expandedPhone, setExpandedPhone] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"customers" | "team" | "vendors">("customers");
+  const [activeTab, setActiveTab] = useState<"customers" | "team" | "external">("customers");
 
   const filtered = conversations.filter((c) => {
     // Suspected-bot filter: a caller whose LAST inbound attempt was classified
@@ -30,7 +30,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
 
   const team = filtered.filter((c) => c.contactType === "employee");
   // Marketing/ad-agency contacts are grouped under Vendors (external B2B) — same as SMS panel
-  const vendors = filtered.filter(
+  const external = filtered.filter(
     (c) => c.contactType === "vendor" || c.contactType === "marketing"
   );
   const customers = filtered.filter(
@@ -40,7 +40,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
   const sumUnread = (list: CallConversation[]) =>
     list.reduce((s, c) => s + (c.unreadCount || 0), 0);
   const teamUnread = sumUnread(team);
-  const vendorsUnread = sumUnread(vendors);
+  const externalUnread = sumUnread(external);
   const customersUnread = sumUnread(customers);
 
   if (loading) {
@@ -85,7 +85,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
   };
 
   const activeList =
-    activeTab === "customers" ? customers : activeTab === "team" ? team : vendors;
+    activeTab === "customers" ? customers : activeTab === "team" ? team : external;
 
   return (
     <div className="h-full flex flex-col">
@@ -104,7 +104,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
         {/* Tabs */}
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as "customers" | "team" | "vendors")}
+          onValueChange={(v) => setActiveTab(v as "customers" | "team" | "external")}
         >
           <TabsList className="grid grid-cols-3 h-8 w-full">
             <CallTabTrigger
@@ -122,11 +122,11 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
               unread={teamUnread}
             />
             <CallTabTrigger
-              value="vendors"
+              value="external"
               icon={<Building2 className="h-3 w-3" />}
-              label="Vendors"
-              count={vendors.length}
-              unread={vendorsUnread}
+              label="External"
+              count={external.length}
+              unread={externalUnread}
             />
           </TabsList>
         </Tabs>

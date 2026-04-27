@@ -8,12 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Search, Phone, Mail, Facebook, Globe, User, CheckCircle2, XCircle, MessageCircle, ArrowLeft, MapPin, Play, Zap, RefreshCw, Undo2, FileText, Database } from "lucide-react";
+import { Search, Phone, Mail, Facebook, Globe, User, CheckCircle2, XCircle, MessageCircle, ArrowLeft, MapPin, RefreshCw, Undo2, Database } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
-import { useMessageSequences } from "@/hooks/useMessageSequences";
 
 const SOURCE_ICONS: Record<string, React.ElementType> = {
   facebook: Facebook,
@@ -38,7 +37,6 @@ export default function Leads() {
   const [sourceFilter, setSourceFilter] = useState(searchParams.get("source") || "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const queryClient = useQueryClient();
-  const { data: sequences } = useMessageSequences();
 
   // Sync URL param
   useEffect(() => {
@@ -131,23 +129,6 @@ export default function Leads() {
     },
   });
 
-  const enrollDrip = useMutation({
-    mutationFn: async ({ leadId, sequenceId }: { leadId: string; sequenceId: string }) => {
-      // Start at step 0, fire immediately (drip runner will process next cycle)
-      const { error } = await supabase.from("leads").update({
-        drip_sequence_id: sequenceId,
-        drip_step_index: 0,
-        drip_next_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", leadId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast.success("Lead enrolled in drip sequence");
-    },
-  });
-
   const filtered = (leads || []).filter((l: any) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -158,8 +139,6 @@ export default function Leads() {
       (l.email || "").toLowerCase().includes(s)
     );
   });
-
-  const defaultSeq = sequences?.find((s) => s.name?.toLowerCase().includes("nurture"));
 
   const [syncing, setSyncing] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);

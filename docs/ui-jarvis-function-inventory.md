@@ -36,9 +36,9 @@ Purpose: one cleanup map for buttons, JARVIS actions, and Supabase Edge Function
 
 | Surface | Main calls | Data touched | Execution style |
 |---|---|---|---|
-| Daily briefing | `ai-task-agent` mode `briefing` | Reads jobs, customers, SMS, calls, emails, activity, training/knowledge | Auto read-only |
+| Daily briefing | `ai-task-agent` mode `briefing` | Reads jobs, customers, SMS, calls, activity, training/knowledge | Auto read-only |
 | Chat and quick questions | `ai-task-agent` mode `chat` | Reads broad context, writes chat session/messages | User-initiated; mutating actions should queue approval |
-| Context builder | `jarvis-context-builder`, then `ai-task-agent` | Calls/SMS/email/customer/job context | Auto read-only |
+| Context builder | `jarvis-context-builder`, then `ai-task-agent` | Calls/SMS/customer/job context | Auto read-only |
 | Suggested next steps | `jarvis-suggest-actions` | Reads customer/job context, logs button clicks | User click required |
 | Action review queue | Direct Supabase plus sometimes `ai-task-agent` approved action replay | `action_items`, `activity_log` | Human-in-the-loop |
 | Pending SMS | `send-sms` through `useSendSms` | `outbound_drafts`, `sms_log`, `action_items` | Human-in-the-loop send |
@@ -48,10 +48,7 @@ Purpose: one cleanup map for buttons, JARVIS actions, and Supabase Edge Function
 
 | Issue | Why it matters | Recommendation |
 |---|---|---|
-| `email-send` is still called but not local | Current code can depend on a remote-only function | Restore/migrate locally before deleting remote. |
-| `email-agent` is called by `auto-advance-workflow` but not local | Remote-only hidden dependency | Replace with current email/send helper or remove workflow path. |
-| `send-brochure-email` is called by `ai-task-agent` but not local | JARVIS brochure tool depends on hidden function | Restore/migrate locally or retire the tool. |
-| `send-rebate-email` is called by local UI/functions but not local | CPS rebate flow depends on hidden function | Restore/migrate locally before deleting remote. |
+| In-app email tools were retired | User moved to a standalone email client | Keep CRM email address fields, but do not send/read email inside UltraOffice. |
 | `create_job` can double-gate approvals | User may approve JARVIS action, then approve appointment again | Collapse to one approval flow. |
 | `create_todo` / `complete_todo` are deprecated no-ops | Old workflow/todo system still appears in tool list | Remove from always-on tools and registry. |
 | Tool registry lists stale tools | Admin page can imply actions that do not exist | Reconcile registry to real `ai-task-agent` tools. |
@@ -64,12 +61,12 @@ These functions are deployed in Supabase but are not present in the local `supab
 
 | Function | Current references | Recommendation | Risk |
 |---|---|---|---|
-| `email-send` | UI and functions call it directly | Keep for now; restore/migrate locally | High |
-| `email-agent` | `auto-advance-workflow` calls it | Keep for now; replace or migrate | High |
-| `send-brochure-email` | `ai-task-agent` calls it | Keep for now; restore/migrate or remove tool | High |
-| `send-rebate-email` | UI/functions call it | Keep for now; restore/migrate locally | High |
-| `email-inbound-webhook` | Config/docs only, likely external webhook | Check email provider before deleting | Medium |
-| `sendgrid-event-webhook` | No local runtime refs found | Check SendGrid dashboard before deleting | Medium |
+| `email-send` | Retired; refs removed from current app/functions | Delete remote | Low |
+| `email-agent` | Retired; maintenance report step now marks ready for standalone email client | Delete remote | Low |
+| `send-brochure-email` | Retired; JARVIS email brochure tool removed | Delete remote | Low |
+| `send-rebate-email` | Retired; CPS rebate generation now returns HTML for standalone submission | Delete remote | Low |
+| `email-inbound-webhook` | Retired with in-app email | Delete remote after provider webhook check | Low |
+| `sendgrid-event-webhook` | Retired with in-app email | Delete remote after provider webhook check | Low |
 | `auto-follow-up-text` | Old migration removes cron usage | Delete candidate after final check | Low |
 | `communications-agent` | Comments say folded into `ai-task-agent` | Delete candidate | Low |
 | `follow-up-check-in` | No local refs found | Delete candidate | Low |
@@ -113,9 +110,8 @@ No active cron job was found calling the old remote-only follow-up/review/financ
 
 ## Safe Cleanup Order
 
-1. Restore or replace the four remote-only functions still called by current code: `email-send`, `email-agent`, `send-brochure-email`, `send-rebate-email`.
-2. Deploy important local-only functions that current UI calls, especially cart and JARVIS context functions.
+1. Deploy the email-retirement function updates.
+2. Delete retired email remote functions after confirming no external provider webhook still points at them.
 3. Reconcile JARVIS tool registry with actual `ai-task-agent` tools.
 4. Remove deprecated todo/workflow tools from JARVIS.
-5. Confirm external provider webhooks for email/SendGrid are not pointing at `email-inbound-webhook` or `sendgrid-event-webhook`.
-6. Delete low-risk remote-only legacy functions.
+5. Delete low-risk remote-only legacy functions.

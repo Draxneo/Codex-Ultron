@@ -1,4 +1,4 @@
-import { Phone, ClipboardList, Wrench, UserPlus, PhoneCall, MessageSquare, Mail, Bell, Check, X, Building2, Home } from "lucide-react";
+import { Phone, ClipboardList, Wrench, UserPlus, PhoneCall, MessageSquare, Bell, Check, X, Building2, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +9,7 @@ export type PropertyOption = {
 };
 
 export type SuggestedAction = {
-  type: "book_job" | "book_estimate" | "book_maintenance" | "create_customer" | "linked_property_proposal" | "select_property" | "call_back" | "send_text" | "reply_sms" | "reply_email" | "send_invoice_reminder" | "view_job" | "view_voicemail" | "confirm" | "confirm_no";
+  type: "book_job" | "book_estimate" | "book_maintenance" | "create_customer" | "linked_property_proposal" | "select_property" | "call_back" | "send_text" | "reply_sms" | "send_invoice_reminder" | "view_job" | "view_voicemail" | "confirm" | "confirm_no";
   job_type?: string;
   customer_name?: string;
   customer_id?: string;
@@ -17,7 +17,6 @@ export type SuggestedAction = {
   address?: string;
   description?: string;
   email?: string;
-  subject?: string;
   job_id?: string;
   payload?: string;
   label?: string;
@@ -40,7 +39,6 @@ const ACTION_CONFIG: Record<string, { icon: React.ElementType; label: string; em
   call_back: { icon: PhoneCall, label: "Call Back", emoji: "📲", color: "border-blue-500/30 text-blue-700 hover:bg-blue-500/10 dark:text-blue-400" },
   send_text: { icon: MessageSquare, label: "Send Text", emoji: "💬", color: "border-teal-500/30 text-teal-700 hover:bg-teal-500/10 dark:text-teal-400" },
   reply_sms: { icon: MessageSquare, label: "Reply via SMS", emoji: "💬", color: "border-teal-500/30 text-teal-700 hover:bg-teal-500/10 dark:text-teal-400" },
-  reply_email: { icon: Mail, label: "Reply Email", emoji: "✉️", color: "border-indigo-500/30 text-indigo-700 hover:bg-indigo-500/10 dark:text-indigo-400" },
   send_invoice_reminder: { icon: Bell, label: "Send Reminder", emoji: "🔔", color: "border-orange-500/30 text-orange-700 hover:bg-orange-500/10 dark:text-orange-400" },
   view_job: { icon: ClipboardList, label: "View Job", emoji: "📂", color: "border-sky-500/30 text-sky-700 hover:bg-sky-500/10 dark:text-sky-400" },
   view_voicemail: { icon: Phone, label: "View Voicemail", emoji: "📩", color: "border-rose-500/30 text-rose-700 hover:bg-rose-500/10 dark:text-rose-400" },

@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import {
-  ArrowRight, MessageSquare, Mail, Eye, FileText, BarChart3,
+  ArrowRight, MessageSquare, Eye, FileText, BarChart3,
   Send, Users, Zap, ClipboardList, Phone, UserPlus, Briefcase, ClipboardPaste,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export function ContextualActions() {
     actions.push(
       { label: "Morning Briefing", icon: Zap, action: () => sendQuery("Give me this morning's briefing — what's stuck, what's next, and what did AI handle today.") },
       { label: "Stuck Jobs Summary", icon: ClipboardList, action: () => sendQuery("Show me all stuck jobs — any that have been in the same status for 3+ days.") },
-      { label: "Unread Summary", icon: MessageSquare, action: () => sendQuery("Summarize all unread SMS, emails, and voicemails. Show who's waiting for a response.") },
+      { label: "Unread Summary", icon: MessageSquare, action: () => sendQuery("Summarize all unread SMS and voicemails. Show who's waiting for a response.") },
     );
   } else if (path.startsWith("/jobs/") && path.split("/").length === 3) {
     actions.push(
@@ -55,17 +55,12 @@ export function ContextualActions() {
     actions.push(
       { label: "Send Portal Invite", icon: Send, action: () => sendQuery("Draft a portal invite SMS for this customer.") },
       { label: "View History", icon: ClipboardList, action: () => sendQuery("Show me all jobs, estimates, and communication history for this customer.") },
-      { label: "Draft Email", icon: Mail, action: () => sendQuery("Draft a professional follow-up email to this customer.") },
+      { label: "Draft Text", icon: MessageSquare, action: () => sendQuery("Draft a professional follow-up text to this customer.") },
     );
   } else if (path.startsWith("/estimates/") && path.split("/").length === 3) {
     actions.push(
       { label: "Send Presentation", icon: Eye, action: () => sendQuery("Help me send the sales presentation for this estimate.") },
       { label: "Compare Tiers", icon: BarChart3, action: () => sendQuery("Show me a comparison of the equipment tiers available for this estimate.") },
-    );
-  } else if (path === "/email") {
-    actions.push(
-      { label: "Unread Summary", icon: Mail, action: () => sendQuery("Summarize all unread emails — group by customer vs vendor vs spam.") },
-      { label: "Draft Reply", icon: Send, action: () => sendQuery("Help me draft a reply to the email I'm reading.") },
     );
   } else if (path === "/sms") {
     actions.push(

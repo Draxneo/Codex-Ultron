@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 
 // Default nav order by route path
 const DEFAULT_ORDER = [
-  "/", "/inbox", "/customers", "/vendors", "/copilot", "/pay", "/admin", "/quick-quote",
+  "/", "/inbox", "/customers", "/copilot", "/pay", "/admin", "/quick-quote",
 ];
 
 export function useNavOrder() {

@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { BookOpen, FileText, Wrench, Brain, BookMarked, Info, Terminal, MailCheck, MessageSquare, ArrowLeft } from "lucide-react";
+import { BookOpen, FileText, Wrench, Brain, BookMarked, Info, Terminal, MessageSquare, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { KnowledgeBase } from "@/components/agent/KnowledgeBase";
 import { InstructionsManager } from "@/components/agent/InstructionsManager";
@@ -14,7 +14,6 @@ import { LearningsLog } from "@/components/agent/LearningsLog";
 import { SmsRulesPanel } from "@/components/agent/SmsRulesPanel";
 
 import { SystemPromptViewer } from "@/components/agent/SystemPromptViewer";
-import { OutputTemplates } from "@/components/agent/OutputTemplates";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const sections = [
@@ -22,7 +21,6 @@ const sections = [
   { id: "knowledge", label: "Knowledge", icon: BookOpen, tooltip: "Classification rules, routing logic, and reference data JARVIS uses to understand inbound emails and calls." },
   { id: "instructions", label: "Instructions", icon: FileText, tooltip: "Behavioral rules for how JARVIS briefs the team, formats action items, summarizes jobs, and handles internal requests." },
   { id: "tools", label: "Tools", icon: Wrench, tooltip: "Internal tools JARVIS can call — scheduling, lookups, job management, team notifications. Customer-facing tools are disabled." },
-  { id: "output", label: "Output", icon: MailCheck, tooltip: "Templates for tech dispatch notifications, briefing cards, and action item formatting — internal communications only." },
   { id: "sms-analysis", label: "SMS Analysis", icon: MessageSquare, tooltip: "How JARVIS analyzes inbound customer SMS threads to extract intent and surface dispatcher action cards. JARVIS never sends replies." },
   { id: "learnings", label: "Learnings", icon: BookMarked, tooltip: "Corrections and lessons JARVIS has recorded. An audit trail of improvement." },
   { id: "model", label: "Model", icon: Brain, tooltip: "Select which AI model powers JARVIS." },
@@ -35,7 +33,6 @@ const sectionDescriptions: Record<Section, string> = {
   knowledge: "Classification rules, routing logic, and reference data JARVIS uses to understand inbound emails and calls.",
   instructions: "Behavioral rules for how JARVIS briefs the team, formats action items, summarizes jobs, and handles internal requests. These override default behavior.",
   tools: "Internal tools JARVIS can call — scheduling, lookups, job management, team notifications. Customer-facing tools are disabled by default.",
-  output: "Templates for tech dispatch notifications, briefing cards, and action item formatting — internal communications only.",
   "sms-analysis": "Rules for how JARVIS analyzes inbound customer SMS threads to extract intent and surface suggestions to the dispatcher. JARVIS reads conversations but never replies directly — all outbound messages are sent by the dispatcher.",
   learnings: "Corrections and lessons JARVIS has recorded when you teach it something new. Each entry shows what triggered it and what was learned.",
   model: "Select which AI model powers JARVIS. More powerful models are slower and cost more but handle complex reasoning better.",
@@ -118,7 +115,6 @@ const AgentTraining = () => {
           {active === "instructions" && <InstructionsManager />}
           {active === "tools" && <ToolsRegistry />}
           
-          {active === "output" && <OutputTemplates />}
           {active === "sms-analysis" && <SmsRulesPanel />}
           {active === "learnings" && <LearningsLog />}
           {active === "model" && <ModelConfigPanel />}
