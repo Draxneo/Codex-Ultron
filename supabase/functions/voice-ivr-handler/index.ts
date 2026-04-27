@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
     let sigValid = false;
+    let signatureAcceptedBy = "twilio_signature";
     try {
       sigValid = await validateTwilioSignature(req, formData);
     } catch (sigErr) {
@@ -136,6 +137,7 @@ Deno.serve(async (req) => {
       const postedAccountSid = params.get("AccountSid") || "";
       const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
       if (postedAccountSid && expectedAccountSid && postedAccountSid === expectedAccountSid) {
+        signatureAcceptedBy = "account_sid_fallback";
         console.warn(
           "Voice IVR handler signature mismatch, but AccountSid matched; allowing call to avoid looping live callers",
         );
@@ -152,6 +154,28 @@ Deno.serve(async (req) => {
 
             const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+
+    await logSystemTrace({
+      sourceType: "voice",
+      sourceName: "voice-ivr-handler",
+      eventKind: "ivr_handler_received",
+      summary: digit ? `IVR digit ${digit} received` : "IVR handler received call without a digit",
+      reason: digit ? "digit_received" : "no_digit",
+      severity: signatureAcceptedBy === "account_sid_fallback" ? "warning" : "info",
+      traceGroup: callSid,
+      entityType: "call",
+      entityId: callSid,
+      callSid,
+      metadata: {
+        digit,
+        attempt: attemptParam || null,
+        queue_retry: queueRetry,
+        contact_type: contactType,
+        contact_name: contactName || null,
+        signature_accepted_by: signatureAcceptedBy,
+        from_last4: from ? from.replace(/\D/g, "").slice(-4) : null,
+      },
+    });
 
     // ── Bot detection: no digit pressed after all IVR attempts ──
     if (!digit && parseInt(attemptParam) >= 3 && contactType !== "employee") {

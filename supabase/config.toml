@@ -118,6 +118,9 @@ verify_jwt = false
 [functions.twilio-voice-twiml]
 verify_jwt = false
 
+[functions.phone-debug-log]
+verify_jwt = false
+
 [functions.voice-ivr-handler]
 verify_jwt = false
 

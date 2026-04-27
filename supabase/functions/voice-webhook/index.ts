@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
     let sigValid = false;
+    let signatureAcceptedBy = "twilio_signature";
     try {
       sigValid = await validateTwilioSignature(req, formData);
     } catch (sigErr) {
@@ -145,6 +146,7 @@ Deno.serve(async (req) => {
         params.get("AccountSid") || params.get("account_sid") || "";
       const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
       if (postedAccountSid && expectedAccountSid && postedAccountSid === expectedAccountSid) {
+        signatureAcceptedBy = "account_sid_fallback";
         console.warn(
           "Voice webhook Twilio signature mismatch, but AccountSid matched; allowing call to avoid dropping live callers",
         );
@@ -356,12 +358,14 @@ Deno.serve(async (req) => {
       entityId: callSid,
       callSid,
       metadata: {
-        from,
-        to,
+        from_last4: from ? from.replace(/\D/g, "").slice(-4) : null,
+        to_last4: to ? to.replace(/\D/g, "").slice(-4) : null,
         direction,
+        queue_retry: queueRetry,
         stir_status: stirStatus,
         contact_name: contactName,
         contact_type: contactType,
+        signature_accepted_by: signatureAcceptedBy,
       },
     });
 

@@ -285,6 +285,25 @@ Deno.serve(async (req) => {
       console.warn(
         `No call_log row found for callback CallSid=${callSid} ParentCallSid=${parentCallSid}`,
       );
+      await logSystemTrace({
+        sourceType: "voice",
+        sourceName: "voice-status-callback",
+        eventKind: "callback_missing_call_row",
+        summary: "Twilio callback arrived before a call row could be found",
+        reason: callStatus || recordingStatus || "missing_call_row",
+        severity: "warning",
+        traceGroup: parentCallSid || callSid,
+        entityType: "call",
+        entityId: parentCallSid || callSid,
+        callSid,
+        parentCallSid: parentCallSid || null,
+        metadata: {
+          raw_status: callStatus,
+          recording_status: recordingStatus,
+          duration_seconds: callDuration ? parseInt(callDuration, 10) : null,
+          has_recording_url: Boolean(recordingUrl),
+        },
+      });
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

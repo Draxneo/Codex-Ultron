@@ -3,6 +3,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Device, Call } from "@twilio/voice-sdk";
 import { supabase } from "@/integrations/supabase/client";
 import { warmAudioContext } from "@/lib/softphoneAudio";
+import { logPhoneDebug } from "@/lib/phoneDebug";
 import { normalizeLast10 } from "@/lib/formatters";
 import {
   addContactLookup,
@@ -65,6 +66,7 @@ function callDebug(tag: string, data: Record<string, any> = {}) {
   console.log(`[CallDebug ${ts}] ${tag}`, enriched);
   CALL_DEBUG_BUFFER.push({ ts, tag, data: enriched });
   if (CALL_DEBUG_BUFFER.length > CALL_DEBUG_MAX) CALL_DEBUG_BUFFER.shift();
+  logPhoneDebug(tag, enriched);
 }
 function markCallStart() { _callStartedAt = Date.now(); callDebug("call.start.marked"); }
 function markCallEnd() { _callStartedAt = null; }

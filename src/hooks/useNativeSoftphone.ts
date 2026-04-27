@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logPhoneDebug } from "@/lib/phoneDebug";
 import { normalizeLast10 } from "@/lib/formatters";
 import { toE164 } from "@/lib/formatters";
 import {
@@ -109,6 +110,17 @@ export function useNativeSoftphone(enabled: boolean = true) {
     const transition = reduceCallLifecycle(previous, event);
     lifecycleRef.current = transition.state;
     console.log("[NativeSoftphone state.transition]", {
+      event: event.type,
+      previousState: previous.appState,
+      nextState: transition.state.appState,
+      effects: transition.effects,
+      activeCallSid: transition.state.activeCall?.activeCallSid || null,
+      parentCallSid: transition.state.activeCall?.parentCallSid || null,
+      childCallSid: transition.state.activeCall?.childCallSid || null,
+      direction: transition.state.activeCall?.direction || null,
+      platform: "android",
+    });
+    logPhoneDebug("native.state.transition", {
       event: event.type,
       previousState: previous.appState,
       nextState: transition.state.appState,
