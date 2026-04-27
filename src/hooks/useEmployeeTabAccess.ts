@@ -32,7 +32,9 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "jobs";
   if (pathname.startsWith("/copilot")) return "copilot";
   if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
+  if (pathname.startsWith("/payments")) return "pay";
   if (pathname.startsWith("/pay")) return "pay";
+  if (pathname.startsWith("/admin") && search?.includes("section=employees") && search?.includes("employeeTab=pay")) return "pay";
   if (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/agent-training") ||
@@ -56,7 +58,7 @@ const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = 
   inbox: "/inbox",
   customers: "/customers",
   copilot: "/copilot",
-  pay: "/pay",
+  pay: "/admin?section=employees&employeeTab=pay",
   admin: "/admin",
 };
 

@@ -68,6 +68,7 @@ import { ApiCostsOverviewCard } from "@/components/ApiCostsOverviewCard";
 import { ApiUsageHourlyChart } from "@/components/ApiUsageHourlyChart";
 import { ClickToCall } from "@/components/ClickToCall";
 import HcpCustomerSyncButton from "@/components/HcpCustomerSyncButton";
+import { PaysheetPanel } from "@/components/PaysheetPanel";
 
 // ─── Webhook URLs ───
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hcp-webhook`;
@@ -1158,11 +1159,12 @@ export default function Admin() {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSection = resolveAdminSection(searchParams.get("section"), searchParams.get("tab"));
+  const isEmployeePaySection = activeSection === "employees" && searchParams.get("employeeTab") === "pay";
   const { role, loading } = useAuth();
   const allowedTabs = useEmployeeTabAccess();
 
   if (loading) return null;
-  if (allowedTabs && !allowedTabs.has("admin")) {
+  if (allowedTabs && !allowedTabs.has("admin") && !(isEmployeePaySection && allowedTabs.has("pay"))) {
     return <Navigate to="/" replace />;
   }
 
@@ -1199,7 +1201,11 @@ export default function Admin() {
             {sectionMeta?.label || "Admin"}
           </h1>
         </div>
-        <AdminSectionContent section={activeSection} />
+        {isEmployeePaySection && allowedTabs && !allowedTabs.has("admin") ? (
+          <PaysheetPanel />
+        ) : (
+          <AdminSectionContent section={activeSection} />
+        )}
       </main>
     </div>
   );
