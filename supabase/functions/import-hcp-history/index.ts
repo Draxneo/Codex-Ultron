@@ -115,6 +115,10 @@ function mapHcpJob(hcpJob: any) {
     hcp_id: hcpJob.id,
     hcp_job_number: hcpJob.invoice_number || null,
     job_number: hcpJob.invoice_number || null,
+    hcp_original_estimate_option_id: hcpJob.original_estimate_id || null,
+    hcp_original_estimate_option_ids: Array.isArray(hcpJob.original_estimate_uuids)
+      ? hcpJob.original_estimate_uuids.filter(Boolean)
+      : (hcpJob.original_estimate_id ? [hcpJob.original_estimate_id] : []),
     customer_name: customerName,
     customer_phone: customerPhone,
     customer_email: customerEmail,
@@ -129,6 +133,7 @@ function mapHcpJob(hcpJob: any) {
     created_at: hcpJob.created_at || new Date().toISOString(),
     arrival_start: hcpJob.schedule?.scheduled_start || null,
     arrival_end: hcpJob.schedule?.scheduled_end || null,
+    raw_hcp_json: hcpJob,
   };
 
   if (note) result.hcp_note = note;

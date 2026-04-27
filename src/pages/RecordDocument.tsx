@@ -74,6 +74,7 @@ type RecordDocumentData = {
   notes: Array<{ id: string; body: string; author: string | null; createdAt: string | null }>;
   attachments: Array<{ id: string; fileName: string; fileType: string | null }>;
   related: RelatedLink[];
+  detailSourceLabel?: string | null;
 };
 
 function isRecordType(type: string | undefined): type is RecordType {
@@ -176,6 +177,15 @@ function normalizeInvoiceItems(items: any[] | null | undefined): DocumentLineIte
   }));
 }
 
+function pickPrimaryInvoice(invoices: any[] | null | undefined, primaryInvoiceId?: string | null) {
+  const rows = invoices || [];
+  if (primaryInvoiceId) {
+    const explicit = rows.find((invoice) => invoice.id === primaryInvoiceId);
+    if (explicit) return explicit;
+  }
+  return [...rows].sort((a, b) => numberValue(b.subtotal || b.total) - numberValue(a.subtotal || a.total))[0] || null;
+}
+
 function isOnlyEstimateShell(items: DocumentLineItem[]) {
   return items.length > 0 && items.every((item) => item.itemType === "estimate_option" || item.detailUnavailable);
 }
@@ -249,7 +259,7 @@ async function fetchJobDocument(id: string): Promise<RecordDocumentData> {
     supabase.from("job_line_items").select("*").eq("job_id", id).order("created_at", { ascending: true }),
     supabase
       .from("customer_invoices")
-      .select("id, invoice_number, status, total, created_at")
+      .select("id, invoice_number, status, total, subtotal, created_at, customer_invoice_items(id, description, quantity, unit_price, total)")
       .eq("job_id", id)
       .order("created_at", { ascending: false }),
     job.estimate_id
@@ -262,19 +272,23 @@ async function fetchJobDocument(id: string): Promise<RecordDocumentData> {
   if (lineItemsRes.error) throw lineItemsRes.error;
   if (invoicesRes.error) throw invoicesRes.error;
 
-  const lineItems = normalizeJobItems(lineItemsRes.data as any[]);
-  const subtotal = numberValue(job.revenue) || sumItems(lineItems);
+  const jobLineItems = normalizeJobItems(lineItemsRes.data as any[]);
+  const primaryInvoice = pickPrimaryInvoice(invoicesRes.data as any[], (job as any).primary_invoice_id);
+  const invoiceLineItems = normalizeInvoiceItems((primaryInvoice as any)?.customer_invoice_items || []);
+  const lineItems = jobLineItems.length > 0 ? jobLineItems : invoiceLineItems;
+  const subtotal = numberValue((primaryInvoice as any)?.subtotal) || numberValue(job.revenue) || sumItems(lineItems);
+  const total = numberValue((primaryInvoice as any)?.total) || subtotal;
   const related = [
     ...((invoicesRes.data || []) as any[]).map((invoice) => ({
       label: `Invoice #${invoice.invoice_number || invoice.id.slice(0, 8)}`,
       href: `/records/invoice/${invoice.id}`,
-      meta: `${invoice.status || "invoice"} - ${formatCurrency(numberValue(invoice.total))}`,
+      meta: `${invoice.id === (primaryInvoice as any)?.id ? "detail truth" : invoice.status || "invoice"} - ${formatCurrency(numberValue(invoice.total))}`,
     })),
     estimateRes.data
       ? {
-          label: `Estimate #${(estimateRes.data as any).estimate_number || (estimateRes.data as any).id.slice(0, 8)}`,
+          label: `Converted from Estimate #${(estimateRes.data as any).estimate_number || (estimateRes.data as any).id.slice(0, 8)}`,
           href: `/records/estimate/${(estimateRes.data as any).id}`,
-          meta: (estimateRes.data as any).work_status || "estimate",
+          meta: "breadcrumb only",
         }
       : null,
   ].filter(Boolean) as RelatedLink[];
@@ -303,10 +317,11 @@ async function fetchJobDocument(id: string): Promise<RecordDocumentData> {
     lineItems,
     subtotal,
     taxAmount: 0,
-    total: subtotal,
+    total,
     notes,
     attachments,
     related,
+    detailSourceLabel: jobLineItems.length > 0 ? "Job line items" : primaryInvoice ? `Invoice #${(primaryInvoice as any).invoice_number || "detail"}` : null,
   };
 }
 
@@ -316,7 +331,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
   if (!estimate) throw new Error("Estimate not found");
 
   const customer = await fetchCustomer(estimate.customer_id);
-  const [lineItemsRes, convertedJobRes, inferredJobsRes, notes, attachments] = await Promise.all([
+  const [lineItemsRes, convertedJobRes, inferredJobsRes, explicitConvertedJobRes, explicitConvertedInvoiceRes, notes, attachments] = await Promise.all([
     supabase
       .from("estimate_line_items" as any)
       .select("*")
@@ -324,9 +339,23 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
       .order("sort_order", { ascending: true }),
     supabase
       .from("jobs")
-      .select("id, job_number, status")
+      .select("id, job_number, status, primary_invoice_id")
       .eq("estimate_id", id)
       .maybeSingle(),
+    (estimate as any).converted_job_id
+      ? supabase
+          .from("jobs")
+          .select("id, job_number, status, primary_invoice_id")
+          .eq("id", (estimate as any).converted_job_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null } as any),
+    (estimate as any).converted_invoice_id
+      ? supabase
+          .from("customer_invoices")
+          .select("id, invoice_number, status, total, subtotal, customer_invoice_items(id, description, quantity, unit_price, total)")
+          .eq("id", (estimate as any).converted_invoice_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null } as any),
     estimate.customer_id || estimate.hcp_customer_id
       ? supabase
           .from("jobs")
@@ -346,6 +375,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
   if (lineItemsRes.error) throw lineItemsRes.error;
   let lineItems = normalizeEstimateItems(lineItemsRes.data as any[]);
   const convertedJob =
+    explicitConvertedJobRes.data ||
     convertedJobRes.data ||
     ((inferredJobsRes.data || []) as any[]).find((job) => {
       const jobAddress = String(job.address || "").toLowerCase();
@@ -354,38 +384,53 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
     }) ||
     null;
 
-  if (convertedJob && isOnlyEstimateShell(lineItems)) {
+  let truthInvoice = explicitConvertedInvoiceRes.data || null;
+  if (!truthInvoice && convertedJob && isOnlyEstimateShell(lineItems)) {
     const { data: invoiceRows } = await supabase
       .from("customer_invoices")
-      .select("id, invoice_number, total, customer_invoice_items(id, description, quantity, unit_price, total)")
+      .select("id, invoice_number, status, total, subtotal, customer_invoice_items(id, description, quantity, unit_price, total)")
       .eq("job_id", convertedJob.id)
-      .order("total", { ascending: false })
+      .order("subtotal", { ascending: false })
       .limit(1);
 
-    const invoiceItems = ((invoiceRows?.[0] as any)?.customer_invoice_items || []) as any[];
+    truthInvoice = invoiceRows?.[0] || null;
+  }
+
+  if (truthInvoice && isOnlyEstimateShell(lineItems)) {
+    const invoiceItems = ((truthInvoice as any)?.customer_invoice_items || []) as any[];
     if (invoiceItems.length > 0) {
       lineItems = normalizeInvoiceItemsAsEstimate(invoiceItems, lineItems[0]);
     }
   }
 
   const subtotal = numberValue((estimate as any).total_amount) || sumItems(lineItems);
-  const related = convertedJob
-    ? [
-        {
-          label: `Job #${(convertedJob as any).job_number || (convertedJob as any).id.slice(0, 8)}`,
+  const related = [
+    convertedJob
+      ? {
+          label: `Converted to Job #${(convertedJob as any).job_number || (convertedJob as any).id.slice(0, 8)}`,
           href: `/records/job/${(convertedJob as any).id}`,
-          meta: (convertedJob as any).status || "job",
-        },
-      ]
-    : [];
+          meta: "work record",
+        }
+      : null,
+    truthInvoice
+      ? {
+          label: `Invoice #${(truthInvoice as any).invoice_number || (truthInvoice as any).id.slice(0, 8)}`,
+          href: `/records/invoice/${(truthInvoice as any).id}`,
+          meta: `detail truth - ${formatCurrency(numberValue((truthInvoice as any).total))}`,
+        }
+      : null,
+  ].filter(Boolean) as RelatedLink[];
+  const isLegacyBreadcrumb = (estimate as any).historical_role === "legacy_hcp_conversion_breadcrumb" || !!convertedJob;
 
   return {
     type: "estimate",
     id,
-    title: "Estimate",
+    title: isLegacyBreadcrumb ? "Historical Estimate" : "Estimate",
     number: estimate.estimate_number || id.slice(0, 8),
     status: estimate.work_status || estimate.status,
-    description: estimate.description,
+    description: isLegacyBreadcrumb
+      ? `This HCP estimate is kept as conversion history only. Job #${(convertedJob as any)?.job_number || "unknown"} is the work record, and Invoice #${(truthInvoice as any)?.invoice_number || "unknown"} is the detail source.`
+      : estimate.description,
     createdAt: estimate.created_at,
     scheduledDate: estimate.scheduled_date,
     arrivalStart: estimate.arrival_start,
@@ -398,7 +443,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
       email: customer?.email || estimate.customer_email,
       address: addressFrom(estimate, customer),
     },
-    sourcePage: `/estimates/${id}`,
+    sourcePage: convertedJob ? `/jobs/${(convertedJob as any).id}` : `/estimates/${id}`,
     hcpUrl: estimate.hcp_id ? `https://pro.housecallpro.com/app/estimates/${estimate.hcp_id}` : null,
     lineItems,
     subtotal,
@@ -407,6 +452,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
     notes,
     attachments,
     related,
+    detailSourceLabel: isLegacyBreadcrumb ? "Historical breadcrumb. Detail lives on job/invoice." : null,
   };
 }
 
@@ -466,6 +512,7 @@ async function fetchInvoiceDocument(id: string): Promise<RecordDocumentData> {
           },
         ]
       : [],
+    detailSourceLabel: "Invoice line items",
   };
 }
 
@@ -560,6 +607,9 @@ export default function RecordDocument() {
               <Badge className="border-0 bg-white/15 text-primary-foreground hover:bg-white/15">
                 {data.status || "open"}
               </Badge>
+              {data.detailSourceLabel && (
+                <p className="mt-2 max-w-xs text-sm text-primary-foreground/75">{data.detailSourceLabel}</p>
+              )}
               {data.hcpUrl && (
                 <a
                   href={data.hcpUrl}
