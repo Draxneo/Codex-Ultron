@@ -85,6 +85,45 @@ async function sha256(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function readResponseBytes(response: Response, maxBytes: number) {
+  const contentLength = Number(response.headers.get("content-length") || "0");
+  if (contentLength > maxBytes) {
+    throw new Error(`File exceeds archive limit (${contentLength} bytes > ${maxBytes} bytes)`);
+  }
+
+  if (!response.body) {
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength > maxBytes) {
+      throw new Error(`File exceeds archive limit (${bytes.byteLength} bytes > ${maxBytes} bytes)`);
+    }
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error(`File exceeds archive limit (${total} bytes > ${maxBytes} bytes)`);
+    }
+    chunks.push(value);
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
+
 function candidateUrlFromRaw(raw: Record<string, unknown>) {
   for (const key of ["url", "file_url", "attachment_url", "image_url", "original_url"]) {
     const value = raw?.[key];
@@ -188,6 +227,7 @@ Deno.serve(async (req) => {
     const sourceType = typeof body.source_type === "string" ? body.source_type : null;
     const retryFailed = body.retry_failed === true;
     const dryRun = body.dry_run === true;
+    const maxBytes = Math.min(Math.max(Number(body.max_bytes || 45 * 1024 * 1024), 1024), 45 * 1024 * 1024);
 
     const apiKey = Deno.env.get("HCP_API_KEY") || Deno.env.get("HOUSECALL_PRO_API_KEY");
     if (!apiKey) return jsonResponse({ error: "HCP_API_KEY not configured" }, 500);
@@ -228,7 +268,7 @@ Deno.serve(async (req) => {
 
         const { response, url } = await downloadWithRefresh(row, apiKey);
         const contentType = response.headers.get("content-type") || row.file_type || "application/octet-stream";
-        const bytes = await response.arrayBuffer();
+        const bytes = await readResponseBytes(response, maxBytes);
         const checksum = await sha256(bytes);
         const bucket = bucketFor(row);
         const storagePath = storagePathFor(row, contentType);
@@ -297,10 +337,11 @@ Deno.serve(async (req) => {
         });
 
         if (!dryRun) {
+          const status = message.startsWith("File exceeds archive limit") ? "too_large" : "failed";
           await supabase
             .from("hcp_attachments")
             .update({
-              archive_status: "failed",
+              archive_status: status,
               retry_count: (row.retry_count || 0) + 1,
               last_error: message.slice(0, 1000),
             })
