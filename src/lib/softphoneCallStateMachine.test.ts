@@ -121,6 +121,82 @@ describe("softphone call state machine", () => {
     expect(ending.effects).toContain("disconnect_active_call");
   });
 
+  it("preserves agent-ended evidence when the completed webhook arrives after local hangup", () => {
+    const onCall = reduceCallLifecycle(
+      reduceCallLifecycle(
+        reduceCallLifecycle(initialCallLifecycleState, { type: "DEVICE_READY" }).state,
+        { type: "OUTBOUND_DIAL", call: { localCallId: "local-1", twilioCallSid: "CA-parent" } },
+      ).state,
+      { type: "REMOTE_ANSWERED", twilioCallSid: "CA-parent" },
+    ).state;
+
+    const ending = reduceCallLifecycle(onCall, { type: "LOCAL_HANGUP" }).state;
+    const ended = reduceCallLifecycle(ending, {
+      type: "REMOTE_ENDED",
+      status: "completed",
+      at: "2026-04-27T10:06:00.000Z",
+    });
+
+    expect(ended.state.appState).toBe("ended");
+    expect(ended.state.lastEndedCall?.endedBy).toBe("agent");
+    expect(ended.state.lastEndedCall?.terminalReason).toBe("completed");
+    expect(ended.effects).toContain("cleanup_call_listeners");
+  });
+
+  it("records customer or Twilio ended calls as unknown unless explicit evidence exists", () => {
+    const onCall = reduceCallLifecycle(
+      reduceCallLifecycle(
+        reduceCallLifecycle(initialCallLifecycleState, { type: "DEVICE_READY" }).state,
+        { type: "INBOUND_INVITE", call: { localCallId: "local-1", twilioCallSid: "CA-child" } },
+      ).state,
+      { type: "REMOTE_ANSWERED", twilioCallSid: "CA-child" },
+    ).state;
+
+    const ended = reduceCallLifecycle(onCall, {
+      type: "REMOTE_ENDED",
+      status: "completed",
+    });
+
+    expect(ended.state.appState).toBe("ended");
+    expect(ended.state.lastEndedCall?.endedBy).toBe("unknown");
+  });
+
+  it("tracks outbound busy as a terminal ended call, not an active ringing call", () => {
+    const ringing = reduceCallLifecycle(
+      reduceCallLifecycle(initialCallLifecycleState, { type: "DEVICE_READY" }).state,
+      { type: "OUTBOUND_DIAL", call: { localCallId: "local-1", twilioCallSid: "CA-parent" } },
+    ).state;
+
+    const busy = reduceCallLifecycle(ringing, {
+      type: "REMOTE_ENDED",
+      status: "busy",
+      endedBy: "twilio",
+    });
+
+    expect(busy.state.appState).toBe("ended");
+    expect(busy.state.activeCall).toBeNull();
+    expect(busy.state.lastEndedCall?.terminalReason).toBe("busy");
+    expect(busy.state.lastEndedCall?.endedBy).toBe("twilio");
+  });
+
+  it("keeps reconnecting terminal if the call closes before it reconnects", () => {
+    const onCall = reduceCallLifecycle(
+      reduceCallLifecycle(
+        reduceCallLifecycle(initialCallLifecycleState, { type: "DEVICE_READY" }).state,
+        { type: "OUTBOUND_DIAL", call: { localCallId: "local-1", twilioCallSid: "CA-parent" } },
+      ).state,
+      { type: "REMOTE_ANSWERED", twilioCallSid: "CA-parent" },
+    ).state;
+
+    const reconnecting = reduceCallLifecycle(onCall, { type: "RECONNECTING" }).state;
+    const ended = reduceCallLifecycle(reconnecting, { type: "REMOTE_ENDED", status: "completed" }).state;
+    const staleReconnected = reduceCallLifecycle(ended, { type: "RECONNECTED" });
+
+    expect(ended.appState).toBe("ended");
+    expect(staleReconnected.state.appState).toBe("ended");
+    expect(staleReconnected.effects).toContain("ignore_after_terminal");
+  });
+
   it("exposes user-facing labels from the same state value", () => {
     expect(toCallLabel("incoming_ringing")).toBe("Incoming call");
     expect(toCallLabel("outgoing_dialing")).toBe("Calling...");
