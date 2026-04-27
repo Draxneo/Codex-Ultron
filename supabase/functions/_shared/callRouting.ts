@@ -3,7 +3,7 @@
  *
  * Single source of truth for:
  *   1) Busy detection — is a target user already on a live call?
- *   2) IVR department routing — which Ultraphone Client(s) should ring for a given department?
+ *   2) IVR department routing — which in-app Twilio Client(s) should ring for a given department?
  *
  * Used by both `voice-webhook` (no-IVR direct dial) and `voice-ivr-handler`
  * (after the caller picks Sales/Service from the menu) so behavior is
@@ -117,7 +117,7 @@ export async function isUserBusy(
   }
 }
 
-/** Map an employee name → Ultraphone client identity (`user_<uuid_no_dashes>`). */
+/** Map an employee name to the in-app Twilio client identity (`user_<uuid_no_dashes>`). */
 function buildVoiceClientIdentity(profileId: string): string {
   return `uo2_user_${String(profileId).replace(/-/g, "")}`;
 }
@@ -150,7 +150,7 @@ async function resolveClientIdentityForEmployee(
       return buildVoiceClientIdentity(chosenEmployee.profile_id);
     }
 
-    // Ultraphone client identities are derived from profile ids.
+    // In-app Twilio client identities are derived from profile ids.
     // Fallback to profile-name matching for legacy rows that have not been linked yet.
     const { data: prof } = await supabase
       .from("profiles")

@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
+import { getTwilioCallerId, maskPhone, normalizeNorthAmericaOutbound } from "../_shared/phoneSafety.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -13,76 +14,70 @@ Deno.serve(async (req) => {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
     const sigValid = await validateTwilioSignature(req, formData);
-    let signatureAcceptedBy = "twilio_signature";
     if (!sigValid) {
-      const postedAccountSid = params.get("AccountSid") || "";
-      const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-      if (postedAccountSid && expectedAccountSid && postedAccountSid === expectedAccountSid) {
-        signatureAcceptedBy = "account_sid_fallback";
-        console.warn(
-          "twilio-voice-twiml signature mismatch, but AccountSid matched; allowing outbound call",
-        );
-      } else {
-        console.warn("Rejecting twilio-voice-twiml: invalid Twilio signature");
-        return new Response(
-          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
-        );
-      }
-    }
-
-    // Desktop JS SDK sends "To" while the native Android service may send lowercase "to"
-    const to = params.get("To") || params.get("to") || params.get("phone") || "";
-    const jobId = params.get("jobId") || null;
-    const explicitCustomerId = params.get("customerId") || null;
-    const explicitContactName = params.get("contactName") || null;
-    const rawCallerId = Deno.env.get("TWILIO_PHONE_NUMBER") || "";
-    // Normalize caller ID to E.164 — Twilio rejects non-E.164 in <Dial callerId>
-    const callerDigits = rawCallerId.replace(/\D/g, "");
-    const callerId = callerDigits.length === 10 ? `+1${callerDigits}` : callerDigits.length === 11 && callerDigits.startsWith("1") ? `+${callerDigits}` : rawCallerId.startsWith("+") ? rawCallerId : `+${callerDigits}`;
-    const callSid = params.get("CallSid") || "";
-
-    if (!to) {
+      console.warn("Rejecting twilio-voice-twiml: invalid Twilio signature");
       return new Response(
-        '<?xml version="1.0" encoding="UTF-8"?><Response><Say>No destination number provided.</Say></Response>',
-        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
       );
     }
 
-    // Log the outbound call
-            const supabase = getSupabaseAdmin();
+    // Desktop JS SDK sends "To" while the native Android service may send lowercase "to".
+    const rawTo = params.get("To") || params.get("to") || params.get("phone") || "";
+    const to = normalizeNorthAmericaOutbound(rawTo);
+    const jobId = params.get("jobId") || null;
+    const explicitCustomerId = params.get("customerId") || null;
+    const explicitContactName = params.get("contactName") || null;
+    const callerId = getTwilioCallerId();
+    const callSid = params.get("CallSid") || "";
+    const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+
+    if (!to) {
+      await logSystemTrace({
+        sourceType: "voice",
+        sourceName: "twilio-voice-twiml",
+        eventKind: "outbound_twiml_rejected",
+        summary: "Outbound softphone call rejected: invalid destination",
+        reason: "invalid_destination",
+        severity: "warning",
+        traceGroup: callSid || null,
+        entityType: "call",
+        entityId: callSid || null,
+        callSid: callSid || null,
+        metadata: { to_masked: maskPhone(rawTo), job_id: jobId, customer_id: explicitCustomerId },
+      });
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response><Say>The destination number is not allowed.</Say></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 },
+      );
+    }
+
     await logSystemTrace({
       sourceType: "voice",
       sourceName: "twilio-voice-twiml",
       eventKind: "outbound_twiml_requested",
-      summary: to ? "Outbound softphone call requested" : "Outbound TwiML requested without destination",
-      reason: to ? "dial_number" : "missing_destination",
-      severity: !to || signatureAcceptedBy === "account_sid_fallback" ? "warning" : "info",
+      summary: "Outbound softphone call requested",
+      reason: "dial_number",
+      severity: "info",
       traceGroup: callSid || null,
       entityType: "call",
       entityId: callSid || null,
       callSid: callSid || null,
       metadata: {
-        signature_accepted_by: signatureAcceptedBy,
-        to_last4: to ? to.replace(/\D/g, "").slice(-4) : null,
+        signature_accepted_by: "twilio_signature",
+        to_last4: to.replace(/\D/g, "").slice(-4),
         job_id: jobId,
         customer_id: explicitCustomerId,
         has_contact_name: Boolean(explicitContactName),
       },
     });
 
-    // Resolve contact via shared helper, but PREFER explicit context from the caller
-    // (job/estimate detail page) since that's deterministic — phone-only resolution
-    // can be wrong (shared phones, ported numbers, multiple records).
+    // Resolve contact via shared helper, but prefer explicit context from job/estimate pages.
     const resolved = await resolveContact(supabase, to);
     const contactName = explicitContactName || resolved.contactName;
     const contactType = explicitCustomerId ? "customer" : resolved.contactType;
 
-    // Upsert call log entry with full deterministic context.
-    // Use UPSERT on twilio_sid so racing browser-side updates (e.g. status flip
-    // to "in-progress" on accept) cannot lose the deterministic enrichment, and
-    // we never insert a duplicate row if the browser writes first.
     if (callSid) {
       const { error: upsertErr } = await supabase
         .from("call_log")
@@ -97,7 +92,7 @@ Deno.serve(async (req) => {
             ...(jobId ? { related_job_id: jobId } : {}),
             ...(explicitCustomerId ? { related_customer_id: explicitCustomerId } : {}),
           },
-          { onConflict: "twilio_sid", ignoreDuplicates: false }
+          { onConflict: "twilio_sid", ignoreDuplicates: false },
         );
       if (upsertErr) {
         console.error("twilio-voice-twiml: call_log upsert failed:", upsertErr);
@@ -105,10 +100,9 @@ Deno.serve(async (req) => {
     }
 
     if (jobId || explicitCustomerId) {
-      console.log(`TwiML: Linked outbound call → job=${jobId} customer=${explicitCustomerId} name=${contactName}`);
+      console.log(`TwiML: Linked outbound call -> job=${jobId} customer=${explicitCustomerId} name=${contactName}`);
     }
 
-    // Check if live transcription is enabled
     const { data: ltSetting } = await supabase
       .from("company_settings")
       .select("value")
@@ -116,9 +110,10 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const liveTranscribeEnabled = (ltSetting as any)?.value === "true";
 
-    console.log(`TwiML: Dialing ${to} with caller ID ${callerId} (raw: ${rawCallerId}), SID: ${callSid}, liveTranscribe: ${liveTranscribeEnabled}, rawParamsTo=${params.get("To")}, rawParamsLowerTo=${params.get("to")}`);
+    console.log(
+      `TwiML: Dialing ${maskPhone(to)} with company caller ID ${maskPhone(callerId)}, SID: ${callSid}, liveTranscribe: ${liveTranscribeEnabled}`,
+    );
 
-    // XML-escape any value interpolated into TwiML attributes/text
     const xmlEscape = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 
@@ -129,12 +124,6 @@ Deno.serve(async (req) => {
       ? `<Start><Stream url="wss://${supabaseUrl.replace("https://", "")}/functions/v1/live-transcribe" track="both_tracks" /></Start>`
       : "";
 
-    // Direct dial — no conference bridging.
-    // - timeLimit raised to 14400s (4h) for long install/diagnostic calls.
-    // - AMD (machineDetection) removed: it added 3-5s of silence before the
-    //   number rang, hurting UX. Voicemail is still recorded by Twilio.
-    // - recordingStatusCallbackEvent now also includes "failed" so we can
-    //   detect/log when a recording never materialized.
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
@@ -151,7 +140,7 @@ Deno.serve(async (req) => {
     console.error("twilio-voice-twiml error:", error);
     return new Response(
       '<?xml version="1.0" encoding="UTF-8"?><Response><Say>An error occurred.</Say></Response>',
-      { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+      { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 },
     );
   }
 });

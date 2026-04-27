@@ -12,6 +12,7 @@ import {
 } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
+import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
 
 type IvrRoutingOption = {
   label?: string | null;
@@ -134,20 +135,11 @@ Deno.serve(async (req) => {
       console.error("Voice IVR handler Twilio signature validation error:", sigErr);
     }
     if (!sigValid) {
-      const postedAccountSid = params.get("AccountSid") || "";
-      const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-      if (postedAccountSid && expectedAccountSid && postedAccountSid === expectedAccountSid) {
-        signatureAcceptedBy = "account_sid_fallback";
-        console.warn(
-          "Voice IVR handler signature mismatch, but AccountSid matched; allowing call to avoid looping live callers",
-        );
-      } else {
-        console.warn("Rejecting voice-ivr-handler: invalid Twilio signature");
-        return new Response(
-          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
-        );
-      }
+      console.warn("Rejecting voice-ivr-handler: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
     }
     const digit = params.get("Digits") || url.searchParams.get("Digit") || "";
     const attemptParam = url.searchParams.get("Attempt") || "";
@@ -161,7 +153,7 @@ Deno.serve(async (req) => {
       eventKind: "ivr_handler_received",
       summary: digit ? `IVR digit ${digit} received` : "IVR handler received call without a digit",
       reason: digit ? "digit_received" : "no_digit",
-      severity: signatureAcceptedBy === "account_sid_fallback" ? "warning" : "info",
+      severity: "info",
       traceGroup: callSid,
       entityType: "call",
       entityId: callSid,
@@ -233,7 +225,7 @@ Deno.serve(async (req) => {
     const queueWaitSeconds = (config as any).overflow_ring_seconds_before_handoff || dialTimeout;
 
     function overflowDialTwiml(reason: string): string {
-      const callerId = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
+      const callerId = getTwilioCallerId() || from;
       const overflowStatusCallback = `${supabaseUrl}/functions/v1/voice-status-callback`;
       console.log(`🎙️ OVERFLOW TwiML generated: reason=${reason}, callback=${overflowStatusCallback}, recording=record-from-answer-dual`);
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -516,7 +508,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(getTwilioCallerId() || from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(option.forward_to)}</Number>
   </Dial>
 </Response>`,
@@ -525,8 +517,7 @@ Deno.serve(async (req) => {
     }
 
     // forward_client — build list of Client identities to ring
-    const callerIdMode = config.after_hours_caller_id_mode || "company";
-    const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
+    const twilioNumber = getTwilioCallerId() || from;
 
     // ── Check if "Away from Desk" forwarding is active + within THIS department's hours ──
     const { data: fwdRows } = await supabase
@@ -557,7 +548,7 @@ Deno.serve(async (req) => {
         callSid,
         metadata: { digit, label: option.label, target: callFwdNumber },
       });
-      const dialCallerId = callerIdMode === "customer" ? from : twilioNumber;
+      const dialCallerId = twilioNumber;
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -585,8 +576,8 @@ Deno.serve(async (req) => {
     });
 
     if (oooMatch && oooMatch.ooo_forward_number && assignedIds.length === 0) {
-      const dialCallerId = callerIdMode === "customer" ? from : twilioNumber;
-      console.log(`Employee ${oooMatch.name} is OOO — forwarding to ${oooMatch.ooo_forward_number} (caller ID: ${callerIdMode})`);
+      const dialCallerId = twilioNumber;
+      console.log(`Employee ${oooMatch.name} is OOO — forwarding to ${oooMatch.ooo_forward_number} (company caller ID)`);
       await logSystemTrace({
         sourceType: "voice",
         sourceName: "voice-ivr-handler",
@@ -934,7 +925,7 @@ Deno.serve(async (req) => {
       `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(getTwilioCallerId() || from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     ${clientTags}
   </Dial>
 </Response>`,

@@ -2,12 +2,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/base64.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
+const tokenRequests = new Map<string, { count: number; resetAt: number }>();
+const TOKEN_RATE_LIMIT_WINDOW_MS = 60_000;
+const TOKEN_RATE_LIMIT_MAX = 30;
 
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const current = tokenRequests.get(key);
+  if (!current || current.resetAt <= now) {
+    tokenRequests.set(key, { count: 1, resetAt: now + TOKEN_RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  current.count += 1;
+  return current.count > TOKEN_RATE_LIMIT_MAX;
+}
 
-async function generateToken(identity: string, roomName?: string, pushCredentialSid?: string): Promise<string> {
+async function generateToken(identity: string, pushCredentialSid?: string): Promise<string> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-  const apiKey = Deno.env.get("TWILIO_API_KEY")!;
-  const apiSecret = Deno.env.get("TWILIO_API_SECRET")!;
+  const apiKey = Deno.env.get("TWILIO_API_KEY_SID") || Deno.env.get("TWILIO_API_KEY") || "";
+  const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET") || Deno.env.get("TWILIO_API_SECRET") || "";
   const twimlAppSid = Deno.env.get("TWILIO_TWIML_APP_SID")!;
 
   if (!accountSid || !apiKey || !apiSecret || !twimlAppSid) {
@@ -31,11 +44,6 @@ async function generateToken(identity: string, roomName?: string, pushCredential
     identity,
     voice: voiceGrant,
   };
-
-  // Add video grant for huddles/screen share
-  if (roomName) {
-    grants.video = { room: roomName };
-  }
 
   const payload = {
     jti: `${apiKey}-${now}`,
@@ -95,12 +103,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (isRateLimited(`${user.id}:${forwardedFor}`)) {
+      return new Response(JSON.stringify({ error: "Too many token requests" }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Parse optional parameters
-    let room: string | undefined;
     let platform: string | undefined;
     try {
       const body = await req.json();
-      room = body?.room;
       platform = body?.platform; // "android" or "ios" for native push credential
     } catch {
       // No body or not JSON — that's fine
@@ -115,8 +129,8 @@ Deno.serve(async (req) => {
     }
 
     const identity = `uo2_user_${user.id.replace(/-/g, "")}`;
-    console.log(`twilio-token: platform=${platform}, identity=${identity}, pushCredSid=${pushCredentialSid ? "set" : "NOT SET"}, room=${room || "none"}`);
-    const accessToken = await generateToken(identity, room, pushCredentialSid);
+    console.log(`twilio-token: platform=${platform}, identity=${identity}, pushCredSid=${pushCredentialSid ? "set" : "NOT SET"}`);
+    const accessToken = await generateToken(identity, pushCredentialSid);
 
     return new Response(JSON.stringify({ token: accessToken, identity }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

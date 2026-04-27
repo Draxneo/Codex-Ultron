@@ -63,7 +63,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 variant="outline"
                 className="gap-1.5"
                 onClick={() => {
-                  // Always open the in-app SMS thread, even with handoff enabled.
+                  // Always open the in-app SMS thread.
                   navigate(`/inbox?section=sms&phone=${encodeURIComponent(primaryPhone)}`);
                 }}
               >

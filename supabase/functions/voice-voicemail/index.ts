@@ -6,6 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { buildKeytermParams } from "../_shared/deepgramKeyterms.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
+import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
 
 function escapeXml(str: string): string {
   return str
@@ -334,7 +335,7 @@ Deno.serve(async (req) => {
           console.error("Failed to tag overflow on call_log:", e);
         }
 
-        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
+        const twilioNumber = getTwilioCallerId() || from;
         const overflowStatusCallback =
           `${supabaseUrl}/functions/v1/voice-status-callback`;
         console.log(

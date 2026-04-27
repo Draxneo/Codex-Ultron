@@ -10,6 +10,7 @@ import {
   isUserBusy,
 } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
+import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
 
 function escapeXml(str: string): string {
   return str
@@ -142,21 +143,11 @@ Deno.serve(async (req) => {
       console.error("Voice webhook Twilio signature validation error:", sigErr);
     }
     if (!sigValid) {
-      const postedAccountSid =
-        params.get("AccountSid") || params.get("account_sid") || "";
-      const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-      if (postedAccountSid && expectedAccountSid && postedAccountSid === expectedAccountSid) {
-        signatureAcceptedBy = "account_sid_fallback";
-        console.warn(
-          "Voice webhook Twilio signature mismatch, but AccountSid matched; allowing call to avoid dropping live callers",
-        );
-      } else {
-        console.warn("Rejecting voice webhook: invalid Twilio signature");
-        return new Response(
-          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
-        );
-      }
+      console.warn("Rejecting voice webhook: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
     }
 
     const getParam = (...keys: string[]) => {
@@ -463,7 +454,7 @@ Deno.serve(async (req) => {
             within_business_hours: true,
           },
         });
-        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || to;
+        const twilioNumber = getTwilioCallerId() || to;
         const statusCallbackUrlFwd =
           `${supabaseUrl}/functions/v1/voice-status-callback`;
         const voicemailUrlFwd =
@@ -578,7 +569,16 @@ Deno.serve(async (req) => {
             : "";
           return `<Client${callerNameParam}>${clientId}</Client>`;
         }).join("\n    ")
-        : `<Client>ultraphone</Client>`;
+        : "";
+      if (!clientTags) {
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Redirect method="POST">${escapeXml(voicemailUrl)}</Redirect>
+</Response>`,
+          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 },
+        );
+      }
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -586,7 +586,7 @@ Deno.serve(async (req) => {
   <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
-          escapeXml(from)
+          escapeXml(getTwilioCallerId() || to)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
         }" recordingStatusCallbackEvent="completed" statusCallback="${
@@ -686,9 +686,8 @@ Deno.serve(async (req) => {
       );
 
       if (oooWithNumber.length > 0) {
-        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
-        const callerIdMode = config.after_hours_caller_id_mode || "company";
-        const dialCallerId = callerIdMode === "customer" ? from : twilioNumber;
+        const twilioNumber = getTwilioCallerId() || to;
+        const dialCallerId = twilioNumber;
 
         console.log(
           `OOO active for ${
@@ -776,7 +775,7 @@ Deno.serve(async (req) => {
             },
           });
           return new Response(
-            overflowDialTwiml("all_busy", from),
+            overflowDialTwiml("all_busy", getTwilioCallerId() || to),
             {
               headers: { ...corsHeaders, "Content-Type": "text/xml" },
               status: 200,
@@ -884,7 +883,7 @@ Deno.serve(async (req) => {
             },
           });
           return new Response(
-            overflowDialTwiml(finalReason, from),
+            overflowDialTwiml(finalReason, getTwilioCallerId() || to),
             {
               headers: { ...corsHeaders, "Content-Type": "text/xml" },
               status: 200,
@@ -971,7 +970,7 @@ Deno.serve(async (req) => {
   <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
-          escapeXml(from)
+          escapeXml(getTwilioCallerId() || to)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
         }" recordingStatusCallbackEvent="completed" statusCallback="${
