@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -15,6 +15,44 @@ export interface RouteLeg {
   travel_minutes: number | null;
   distance_miles: number | null;
   calculated_at: string;
+}
+
+interface SchedulableRouteItem {
+  id: string;
+  scheduled_date: string | null;
+  assigned_to: string | null;
+  address: string | null;
+  status?: string | null;
+}
+
+interface EmployeeRouteOption {
+  id: string;
+  name: string | null;
+  is_active?: boolean | null;
+}
+
+function formatLocalDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addLocalDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function isTodayOrTomorrow(date: string | null) {
+  if (!date) return false;
+  const today = formatLocalDate(new Date());
+  const tomorrow = formatLocalDate(addLocalDays(new Date(), 1));
+  return date === today || date === tomorrow;
+}
+
+function normalizeName(name: string | null | undefined) {
+  return (name || "").trim().toLowerCase();
 }
 
 /**
@@ -131,6 +169,80 @@ export function useRouteTravelCacheForDate(date: string | null) {
     ...query,
     routeMap,
   };
+}
+
+/**
+ * Populate missing travel-time cache rows for visible dispatch work.
+ *
+ * Cost guard:
+ * - Only today + tomorrow.
+ * - Only assigned jobs/estimates with addresses.
+ * - Only employees whose visible jobs are missing route cache rows.
+ * - One attempted calculation per unique missing set per browser session.
+ */
+export function useEnsureRouteTravelCacheForDate(
+  date: string | null,
+  dayItems: SchedulableRouteItem[],
+  employees: EmployeeRouteOption[] | undefined,
+  routeMap: Map<string, { order: number; travelMin: number | null; fromLabel: string | null }>,
+  cacheLoading: boolean
+) {
+  const queryClient = useQueryClient();
+  const attemptedKeysRef = useRef<Set<string>>(new Set());
+
+  const workToCache = useMemo(() => {
+    if (!date || !isTodayOrTomorrow(date) || cacheLoading) return null;
+    if (!employees?.length || !dayItems.length) return null;
+
+    const employeeByName = new Map(
+      employees
+        .filter((employee) => employee.is_active !== false && employee.id && employee.name)
+        .map((employee) => [normalizeName(employee.name), employee])
+    );
+
+    const missingEmployeeIds = new Set<string>();
+    const missingItemIds: string[] = [];
+
+    for (const item of dayItems) {
+      if (item.scheduled_date !== date) continue;
+      if (!item.assigned_to || !item.address) continue;
+      if ((item.status || "").toLowerCase() === "canceled") continue;
+      if (routeMap.has(item.id)) continue;
+
+      const employee = employeeByName.get(normalizeName(item.assigned_to));
+      if (!employee?.id) continue;
+
+      missingEmployeeIds.add(employee.id);
+      missingItemIds.push(item.id);
+    }
+
+    if (missingEmployeeIds.size === 0) return null;
+
+    const employeeIds = Array.from(missingEmployeeIds).sort();
+    missingItemIds.sort();
+
+    return {
+      key: `${date}:${employeeIds.join(",")}:${missingItemIds.join(",")}`,
+      batch: employeeIds.map((employee_id) => ({ employee_id, date })),
+    };
+  }, [cacheLoading, date, dayItems, employees, routeMap]);
+
+  useEffect(() => {
+    if (!workToCache) return;
+    if (attemptedKeysRef.current.has(workToCache.key)) return;
+    attemptedKeysRef.current.add(workToCache.key);
+
+    void supabase.functions.invoke("calculate-route-cache", {
+      body: { batch: workToCache.batch },
+    }).then(({ error }) => {
+      if (error) {
+        console.warn("[travel-cache] route calculation failed", error);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["route_travel_cache_date", date] });
+      queryClient.invalidateQueries({ queryKey: ["route_travel_cache_week"] });
+    });
+  }, [date, queryClient, workToCache]);
 }
 
 function buildRouteMap(data: RouteLeg[] | undefined) {

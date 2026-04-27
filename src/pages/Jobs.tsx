@@ -80,7 +80,7 @@ interface BoardItem {
   status?: string | null;
 }
 
-import { useRouteTravelCacheForDate, useRouteTravelCacheForWeek } from "@/hooks/useRouteTravelCache";
+import { useEnsureRouteTravelCacheForDate, useRouteTravelCacheForDate, useRouteTravelCacheForWeek } from "@/hooks/useRouteTravelCache";
 
 /** Map job_type to matching employee roles */
 function getRolesForJobType(jobType: string): string[] {
@@ -262,7 +262,30 @@ const Jobs = () => {
 
   const loading = isLoading || estLoading;
   const currentDateStr = useMemo(() => format(currentDay, "yyyy-MM-dd"), [currentDay]);
-  const { routeMap: dispatchRouteOrders } = useRouteTravelCacheForDate(currentDateStr);
+  const currentTravelCache = useRouteTravelCacheForDate(currentDateStr);
+  const { routeMap: dispatchRouteOrders } = currentTravelCache;
+
+  const tomorrowDateStr = useMemo(() => format(addDays(new Date(), 1), "yyyy-MM-dd"), []);
+  const tomorrowItems = useMemo(
+    () => filteredItems.filter((item) => item.scheduled_date === tomorrowDateStr),
+    [filteredItems, tomorrowDateStr]
+  );
+  const tomorrowTravelCache = useRouteTravelCacheForDate(tomorrowDateStr);
+
+  useEnsureRouteTravelCacheForDate(
+    currentDateStr,
+    currentDayItems,
+    employees,
+    dispatchRouteOrders,
+    currentTravelCache.isLoading
+  );
+  useEnsureRouteTravelCacheForDate(
+    tomorrowDateStr,
+    tomorrowItems,
+    employees,
+    tomorrowTravelCache.routeMap,
+    tomorrowTravelCache.isLoading
+  );
 
   const weekStartStr = useMemo(() => format(startOfWeek(addDays(currentDay, -28), { weekStartsOn: 0 }), "yyyy-MM-dd"), [currentDay]);
   const weekEndStr = useMemo(() => format(endOfWeek(addDays(currentDay, 28), { weekStartsOn: 0 }), "yyyy-MM-dd"), [currentDay]);

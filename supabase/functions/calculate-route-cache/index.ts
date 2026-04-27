@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { geocodeToCoords, getDirections } from "../_shared/googleGeo.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getCentralToday } from "../_shared/formatters.ts";
 
 
 interface CustomerFallback {
@@ -60,19 +61,19 @@ serve(async (req) => {
       });
     }
 
-    // Guard: only allow today-1 through tomorrow+1 (3-day window) to prevent API waste
-    const now = new Date();
-    const cutoffMin = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
-    cutoffMin.setHours(0, 0, 0, 0);
-    const cutoffMax = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
-    cutoffMax.setHours(23, 59, 59, 999);
+    // Guard: only allow today + tomorrow. Never calculate historical routes,
+    // and never pre-fill future weeks. Google Maps usage should stay tied to
+    // the active dispatch board plus the next-day preview.
+    const today = getCentralToday();
+    const tomorrowDate = new Date(`${today}T12:00:00Z`);
+    tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+    const tomorrow = tomorrowDate.toISOString().slice(0, 10);
     const filteredTasks = tasks.filter(t => {
-      const d = new Date(t.date + "T00:00:00");
-      return d >= cutoffMin && d <= cutoffMax;
+      return t.date === today || t.date === tomorrow;
     });
 
     if (filteredTasks.length === 0) {
-      return new Response(JSON.stringify({ skipped: true, reason: "all dates are historical" }), {
+      return new Response(JSON.stringify({ skipped: true, reason: "travel cache is limited to today and tomorrow" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
