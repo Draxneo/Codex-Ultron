@@ -5,6 +5,7 @@ import { getApiCostWindowStart } from "@/config/apiCostFreshStart";
 
 const DAY_MS = 86_400_000;
 const API_USAGE_LIMIT = 50_000;
+const RETIRED_API_SERVICES = new Set(["sendgrid"]);
 
 export const apiUsageObservabilityQueryKey = ["api-usage-observability"] as const;
 
@@ -195,6 +196,7 @@ function buildHourlyFromRows(rows: ApiUsageDetailRow[]): ApiUsageHourlyResult {
 
   for (const row of rows) {
     const service = serviceName(row.service);
+    if (RETIRED_API_SERVICES.has(service)) continue;
     services.add(service);
     const date = new Date(row.created_at);
     const hour = String(date.getHours()).padStart(2, "0");
@@ -307,6 +309,7 @@ function buildViewModel(
     const createdAt = new Date(row.created_at);
     if (createdAt >= todayStart) {
       const service = serviceName(row.service);
+      if (RETIRED_API_SERVICES.has(service)) continue;
       const costCents = Number(row.estimated_cost_cents) || 0;
       const tokens = Number(row.tokens_used) || 0;
       todayRows.push(row);

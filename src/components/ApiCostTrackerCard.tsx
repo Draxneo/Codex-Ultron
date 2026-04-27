@@ -12,7 +12,6 @@ const SERVICE_LABELS: Record<string, string> = {
   deepgram: "Deepgram",
   openai_ai: "OpenAI / JARVIS",
   lovable_ai: "OpenAI / JARVIS (legacy)",
-  sendgrid: "SendGrid",
   firecrawl: "Firecrawl",
 };
 
@@ -27,15 +26,17 @@ const COST_ALERT_CENTS: Record<string, number> = {
   twilio_sms: 2000,     // $20/day — high SMS volume is normal
   deepgram: 2000,       // $20/day
   firecrawl: 2000,      // $20/day
-  sendgrid: 2000,       // $20/day
   twilio_voice: 2000,   // $20/day
 };
+
+const RETIRED_SERVICES = new Set(["sendgrid"]);
 
 export function ApiCostTrackerCard() {
   const { data, isLoading, refetch, isFetching } = useApiUsageMetrics();
 
   const todayCost = data?.todayCostCents ? (data.todayCostCents / 100).toFixed(2) : "0.00";
-  const alerts = (data?.byService || []).filter(
+  const activeServices = (data?.byService || []).filter(s => !RETIRED_SERVICES.has(s.service));
+  const alerts = activeServices.filter(
     s => s.total_cost_cents > (COST_ALERT_CENTS[s.service] ?? DEFAULT_ALERT_CENTS)
   );
 
@@ -101,7 +102,7 @@ export function ApiCostTrackerCard() {
         </div>
 
         {/* By Service table */}
-        {(data?.byService?.length || 0) > 0 ? (
+        {activeServices.length > 0 ? (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">By Service (Today)</p>
             <div className="rounded-lg border overflow-hidden">
@@ -115,7 +116,7 @@ export function ApiCostTrackerCard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data!.byService.map(s => {
+                  {activeServices.map(s => {
                     const isAlert = s.total_cost_cents > (COST_ALERT_CENTS[s.service] ?? DEFAULT_ALERT_CENTS);
                     return (
                       <tr key={s.service} className={isAlert ? "bg-destructive/5" : ""}>
@@ -182,3 +183,4 @@ export function ApiCostTrackerCard() {
     </Card>
   );
 }
+

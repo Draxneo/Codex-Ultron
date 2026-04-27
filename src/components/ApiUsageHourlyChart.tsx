@@ -15,7 +15,6 @@ const SERVICE_LABELS: Record<string, string> = {
   deepgram: "Deepgram",
   openai_ai: "OpenAI / JARVIS",
   lovable_ai: "OpenAI / JARVIS (legacy)",
-  sendgrid: "SendGrid",
   firecrawl: "Firecrawl",
 };
 
@@ -26,15 +25,16 @@ const SERVICE_COLORS: Record<string, string> = {
   deepgram: "#13EF93",
   openai_ai: "#8B5CF6",
   lovable_ai: "#A78BFA",
-  sendgrid: "#1A82E2",
   firecrawl: "#F97316",
 };
+
+const RETIRED_SERVICES = new Set(["sendgrid"]);
 
 export function ApiUsageHourlyChart() {
   const { data, isLoading } = useApiUsageHourly();
   const [filter, setFilter] = useState<string>("all");
 
-  const services = data?.services || [];
+  const services = (data?.services || []).filter(s => !RETIRED_SERVICES.has(s));
 
   const visibleServices = useMemo(() => {
     if (filter === "all") return services;

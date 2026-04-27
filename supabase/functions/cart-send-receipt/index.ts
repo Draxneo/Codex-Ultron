@@ -3,8 +3,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 /**
  * cart-send-receipt
- * Generates a branded HTML receipt + warranty card and emails it via SendGrid
- * to the customer. Also drops an SMS link if a phone is on file. Idempotent —
+ * Generates a branded HTML receipt + warranty card and sends an SMS link when
+ * a phone is on file. Idempotent —
  * once receipt_sent_at is stamped, additional calls are no-ops unless force=true.
  *
  * Designed to be invoked by stripe-webhook after a successful job_cart payment,
@@ -64,35 +64,6 @@ Deno.serve(async (req) => {
     };
 
     const job = (cart as any).jobs;
-    const customerEmail = await resolveCustomerEmail(supabase, job?.customer_id);
-
-    // Look up the customer's email from the customer record if available
-    async function resolveCustomerEmailLater() { /* placeholder, see helper below */ }
-
-    const html = renderReceiptHtml({ cart, items: items || [], job, company });
-
-    let emailSent = false;
-    if (customerEmail) {
-      const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY");
-      if (SENDGRID_API_KEY) {
-        const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${SENDGRID_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            personalizations: [{ to: [{ email: customerEmail }] }],
-            from: { email: company.email || "office@carnesandsons.com", name: company.name },
-            subject: `Your receipt from ${company.name} — Order #${job?.job_number || cart.id.slice(0, 8)}`,
-            content: [{ type: "text/html", value: html }],
-          }),
-        });
-        emailSent = sgRes.ok;
-        if (!sgRes.ok) console.warn("SendGrid receipt failed", await sgRes.text());
-      }
-    }
-
     // Optional SMS notification with link
     let smsSent = false;
     if (job?.customer_phone) {
@@ -121,10 +92,10 @@ Deno.serve(async (req) => {
     await supabase.from("activity_log").insert({
       job_id: cart.job_id,
       action: "cart_receipt_sent",
-      details: `Receipt sent. Email: ${emailSent ? "yes" : "no"}, SMS: ${smsSent ? "yes" : "no"}.`,
+      details: `Receipt sent by SMS: ${smsSent ? "yes" : "no"}.`,
     });
 
-    return new Response(JSON.stringify({ ok: true, emailSent, smsSent }), {
+    return new Response(JSON.stringify({ ok: true, smsSent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
@@ -134,12 +105,6 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-async function resolveCustomerEmail(supabase: any, customerId: string | null | undefined): Promise<string | null> {
-  if (!customerId) return null;
-  const { data } = await supabase.from("customers").select("email").eq("id", customerId).maybeSingle();
-  return (data?.email as string) || null;
-}
 
 function renderReceiptHtml({ cart, items, job, company }: any): string {
   const rows = items.map((i: any) => `
@@ -228,3 +193,5 @@ function escape(s: any): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+

@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
-  Package, CreditCard, Brain, ChevronRight, ChevronLeft, Gift, Phone, Mail,
+  Package, CreditCard, Brain, ChevronRight, ChevronLeft, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
   BookOpen,
@@ -31,8 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ReportsPanel } from "@/components/ReportsPanel";
-import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { QuickLinksGrid } from "@/components/QuickLinksGrid";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
@@ -55,7 +53,6 @@ import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard"
 
 import { PayRatesCard } from "@/components/PayRatesCard";
 import { LineItemTemplatesCard } from "@/components/LineItemTemplatesCard";
-import { ProfitWatchCard } from "@/components/ProfitWatchCard";
 import { TimeTrackerCard } from "@/components/TimeTrackerCard";
 import { MetaAudiencesCard } from "@/components/MetaAudiencesCard";
 import { PaymentPlanRulesCard } from "@/components/PaymentPlanRulesCard";
@@ -1136,22 +1133,19 @@ function AdminSectionContent({ section }: { section: string }) {
     case "reports":
       return (
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" /> Operations Monitoring
+              </CardTitle>
+              <CardDescription>
+                This page is staying focused on API usage, cost guardrails, and backend health until the business reporting sources are fully normalized.
+              </CardDescription>
+            </CardHeader>
+          </Card>
           <ApiCostsOverviewCard />
           <ApiUsageHourlyChart />
           <ApiCostTrackerCard />
-          <ReportsPanel />
-          <ProfitWatchCard />
-          <PaysheetPanel />
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Gift className="h-4 w-4 text-primary" /> Referrals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ReferralsPanel />
-            </CardContent>
-          </Card>
         </div>
       );
     default:

@@ -76,16 +76,6 @@ export const API_COST_LIMITS: ApiServiceLimit[] = [
     baselineCalls: 20,         // transcribes every inbound call
   },
   {
-    service: "sendgrid",
-    label: "SendGrid (email)",
-    dailyCostUsd: 2.0,
-    dailyCalls: 500,
-    expectedDailyCalls: "~20–200 (replies + automated)",
-    costPerCall: "$0.0008 per message",
-    expectedCallsPerJob: 3,
-    baselineCalls: 40,         // vendor + customer replies all day
-  },
-  {
     service: "firecrawl",
     label: "Firecrawl (scraping)",
     dailyCostUsd: 3.0,
@@ -138,3 +128,4 @@ export function getSeverity(
   if (currentCostUsd >= limit.dailyCostUsd * 0.8 || currentCalls >= limit.dailyCalls * 0.8) return "warning";
   return "ok";
 }
+
