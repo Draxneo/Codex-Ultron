@@ -64,6 +64,7 @@ import ReferralPublic from "./pages/ReferralPublic";
 import CertificateView from "./pages/CertificateView";
 import InvoicePublic from "./pages/InvoicePublic";
 import CustomerCart from "./pages/CustomerCart";
+import EstimatePresentationPublic from "./pages/EstimatePresentationPublic";
 
 /** Redirect /sms?phone=X to /inbox?section=sms&phone=X preserving query params */
 function SmsRedirectComponent() {
@@ -141,6 +142,7 @@ function NotificationListeners() {
     "/refer/",
     "/certificate/",
     "/invoice/",
+    "/presentation/",
     "/intake/",
     "/cart/",
     "/q/",
@@ -456,6 +458,7 @@ function AppRouter() {
         <Route path="/refer/:code" element={<ReferralPublic />} />
         <Route path="/certificate/:token" element={<CertificateView />} />
         <Route path="/invoice/:token" element={<InvoicePublic />} />
+        <Route path="/presentation/:token" element={<EstimatePresentationPublic />} />
         <Route path="/intake/:token" element={<CustomerIntakePublic />} />
         <Route path="/cart/:token" element={<CustomerCart />} />
         <Route path="/q/:token" element={<QuickQuoteCustomerView />} />
@@ -539,7 +542,7 @@ function SmsLogGate({ children }: { children: React.ReactNode }) {
   const publicPrefixes = [
     "/login", "/reset-password", "/form/", "/photos/",
     "/refer/", "/certificate/",
-    "/invoice/", "/intake/", "/cart/", "/q/",
+    "/invoice/", "/presentation/", "/intake/", "/cart/", "/q/",
   ];
   const isPublicRoute = publicPrefixes.some((p) =>
     location.pathname === p || location.pathname.startsWith(p)

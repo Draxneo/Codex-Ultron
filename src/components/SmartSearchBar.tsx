@@ -100,7 +100,7 @@ export function SmartSearchBar() {
     setOpen(false);
     setQuery("");
     if (item.type === "job") navigate(`/jobs/${item.id}`);
-    else if (item.type === "estimate") navigate(`/jobs/${item.id}`);
+    else if (item.type === "estimate") navigate(`/estimates/${item.id}`);
     else navigate(`/customers/${item.id}`);
   };
 

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { SmartSearchBar } from "@/components/SmartSearchBar";
 import { NewItemDropdown } from "@/components/NewItemDropdown";
 import { AdminToolsGrid } from "@/components/AdminToolsGrid";
+import { ViewAsTechTester } from "@/components/ViewAsTechTester";
 import { ApiCostAlertBanner } from "@/components/ApiCostAlertBanner";
 import { SystemStatusIndicator } from "@/components/SystemStatusIndicator";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
@@ -122,6 +123,7 @@ export function AppHeader() {
             <NewItemDropdown />
 
             <AdminToolsGrid />
+            <ViewAsTechTester />
             <SystemStatusIndicator />
             <ThemeToggleButton />
 

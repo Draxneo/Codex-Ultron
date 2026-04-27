@@ -278,11 +278,6 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
       });
     }
 
-    // Fire-and-forget sync to HCP
-    supabase.functions.invoke("sync-job-to-hcp", {
-      body: { [table === "estimates" ? "estimate_id" : "job_id"]: itemId },
-    }).catch((err) => console.warn("HCP sync failed:", err));
-
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
     queryClient.invalidateQueries({ queryKey: ["estimates"] });
     queryClient.invalidateQueries({ queryKey: ["activity_log"] });

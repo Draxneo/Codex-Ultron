@@ -364,10 +364,10 @@ serve(async (req) => {
         throw new Error(`Job create error: ${jobError.message}`);
       }
 
-      // Centralized post-creation: format, chat, line items, workflow, HCP, activity log
+      // Centralized post-creation: format, chat, line items, activity log.
       try {
         await sb.functions.invoke("finalize-job", {
-          body: { job_id: jobData.id, created_by: "customer-actions" },
+          body: { job_id: jobData.id, created_by: "customer-actions", skip_hcp: true },
         });
       } catch (e) {
         console.error("finalize-job failed after job create:", e);

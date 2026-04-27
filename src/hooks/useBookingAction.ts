@@ -4,11 +4,8 @@
  *  - ActionItemCards (JARVIS decision queue)
  *  - IntakeActionCards (CSR softphone)
  *
- * Centralizes the HCP-first booking flow so all three surfaces share identical
+ * Centralizes the UltraOffice booking flow so all three surfaces share identical
  * customer resolution, payload shape, error handling, and result reporting.
- *
- * NOTE: Per project memory, no local-first inserts. This always calls
- * `create-hcp-job`; the HCP webhook creates the local record.
  */
 
 import { useState, useCallback } from "react";
@@ -24,9 +21,8 @@ export type BookingPhase = "idle" | "resolving" | "booking" | "syncing" | "booke
 
 export type BookingResult = {
   ok: boolean;
-  hcp_id?: string;
-  hcp_job_number?: string;
-  hcp_estimate_number?: string;
+  job_id?: string;
+  job_number?: string;
   type?: "job" | "estimate";
   scheduled?: boolean;
   error?: string;
@@ -113,36 +109,49 @@ export function useBookingAction() {
           is_estimate: m.job_type === "estimate",
         };
 
-        console.log("[useBookingAction] create-hcp-job payload:", body);
+        console.log("[useBookingAction] customer-actions create_job payload:", body);
         setState(action_item_id, { phase: "booking" });
 
-        const { data: hcpResult, error: hcpError } = await supabase.functions.invoke(
-          "create-hcp-job",
-          { body }
-        );
+        const { data: jobResult, error: jobError } = await supabase.functions.invoke("customer-actions", {
+          body: {
+            mode: "create_job",
+            customer_id: body.customer_id,
+            customer_name: body.customer_name,
+            customer_phone: body.customer_phone,
+            customer_email: body.customer_email,
+            description: body.description,
+            job_type: body.job_type,
+            address: body.address,
+            assigned_to: body.assigned_to,
+            scheduled_start: body.scheduled_date && body.scheduled_time
+              ? `${body.scheduled_date}T${body.scheduled_time}:00`
+              : null,
+            action_item_id,
+            created_by: body.created_by,
+            is_estimate: body.is_estimate,
+          },
+        });
 
-        console.log("[useBookingAction] create-hcp-job response:", { hcpResult, hcpError });
+        console.log("[useBookingAction] customer-actions create_job response:", { jobResult, jobError });
 
-        if (hcpError) throw new Error(hcpError.message || "Edge function call failed");
-        if (!hcpResult) throw new Error("No response from booking function");
-        if (hcpResult.error) throw new Error(hcpResult.error);
-        if (!hcpResult.hcp_id) throw new Error("HCP did not return a job/estimate id");
+        if (jobError) throw new Error(jobError.message || "Edge function call failed");
+        if (!jobResult) throw new Error("No response from booking function");
+        if (jobResult.error) throw new Error(jobResult.error);
+        if (!jobResult.job?.id) throw new Error("UltraOffice did not return a job id");
 
         const result: BookingResult = {
           ok: true,
-          hcp_id: hcpResult.hcp_id,
-          hcp_job_number: hcpResult.hcp_job_number,
-          hcp_estimate_number: hcpResult.hcp_estimate_number,
-          type: hcpResult.type,
-          scheduled: hcpResult.scheduled,
+          job_id: jobResult.job.id,
+          job_number: jobResult.job.job_number ? String(jobResult.job.job_number) : undefined,
+          type: body.is_estimate ? "estimate" : "job",
+          scheduled: Boolean(body.scheduled_date),
         };
 
         setState(action_item_id, { phase: "syncing", result });
 
-        const refNum =
-          result.hcp_job_number || result.hcp_estimate_number || result.hcp_id;
+        const refNum = result.job_number || result.job_id;
         toast.success(
-          `${result.type === "estimate" ? "Estimate" : "Job"} #${refNum} created in HCP — syncing to board`
+          `${result.type === "estimate" ? "Estimate" : "Job"} #${refNum} created`
         );
 
         invalidateActionItemQueues(qc);
@@ -174,3 +183,4 @@ export function useBookingAction() {
 
   return { book, getState, reset };
 }
+

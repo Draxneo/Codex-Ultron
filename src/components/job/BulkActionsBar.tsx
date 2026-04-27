@@ -80,13 +80,6 @@ export function BulkActionsBar({ selectedItems, totalItems, employees, onClose, 
         if (error) throw error;
       }
 
-      // Fire-and-forget HCP syncs
-      for (const item of selectedItems) {
-        supabase.functions.invoke("sync-job-to-hcp", {
-          body: { [item.item_type === "estimate" ? "estimate_id" : "job_id"]: item.id },
-        }).catch(() => {});
-      }
-
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["estimates"] });
 
@@ -129,12 +122,6 @@ export function BulkActionsBar({ selectedItems, totalItems, employees, onClose, 
           .update({ assigned_to: empName } as any)
           .in("id", estimates.map(e => e.id));
         if (error) throw error;
-      }
-
-      for (const item of selectedItems) {
-        supabase.functions.invoke("sync-job-to-hcp", {
-          body: { [item.item_type === "estimate" ? "estimate_id" : "job_id"]: item.id },
-        }).catch(() => {});
       }
 
       queryClient.invalidateQueries({ queryKey: ["jobs"] });

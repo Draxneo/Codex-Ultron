@@ -5,14 +5,14 @@
  * 1. Format data (Title Case names, standardize address/phone)
  * 2. Create chat channel
  * 3. Auto-stamp line items from templates (jobs only)
- * 4. Push to HCP (route to /estimates or /jobs based on type)
+ * 4. Legacy HCP push only when explicitly requested
  * 5. Log activity
  *
  * This is the ONE SOURCE OF TRUTH for post-creation logic.
  * Every pathway (UI, HITL, estimate conversion, customer-actions) calls this.
  *
  * Accepts either { job_id } or { estimate_id }.
- * If job_id is provided and job_type === 'estimate', pushes to HCP /estimates.
+ * If skip_hcp is false and job_id is provided with job_type === 'estimate', pushes to HCP /estimates.
  */
 import { corsHeaders } from "../_shared/cors.ts";
 import { formatPhone, formatEmail, formatName } from "../_shared/formatters.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
@@ -443,7 +443,7 @@ Deno.serve(async (req) => {
       const sb = getSupabaseAdmin();
 
   try {
-    const { job_id, estimate_id, created_by, skip_hcp } = await req.json();
+    const { job_id, estimate_id, created_by, skip_hcp = true } = await req.json();
     if (!job_id && !estimate_id) throw new Error("job_id or estimate_id required");
 
     // Determine source table and fetch record

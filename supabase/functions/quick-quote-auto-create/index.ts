@@ -17,7 +17,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const HCP_API_KEY = Deno.env.get("HCP_API_KEY") ?? "";
+const HCP_API_KEY = Deno.env.get("HCP_SYNC_ENABLED") === "true" ? (Deno.env.get("HCP_API_KEY") ?? "") : "";
 
 const PAYMENT_LABEL: Record<string, string> = {
   A: "Option A — 0% APR · 36 mo (financed)",

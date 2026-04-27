@@ -98,12 +98,6 @@ export function useApproveQuickQuote() {
       if (error) throw error;
 
       // Auto-create / update HCP job + dispatcher notification — non-blocking
-      try {
-        await supabase.functions.invoke("quick-quote-auto-create", { body: { token } });
-      } catch (err) {
-        console.warn("[useApproveQuickQuote] quick-quote-auto-create failed", err);
-      }
-
       return data as unknown as QuickQuoteLink;
     },
     onSuccess: (_, { token }) => {

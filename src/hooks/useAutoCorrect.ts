@@ -351,7 +351,7 @@ function applyCorrections(text: string, cursor: number, mode: AutoCorrectMode): 
     if (isSoftSentenceEnd) {
       const updatedCursor = cursor + diff;
       const textBeforePunct = result.slice(0, updatedCursor);
-      const sentenceStartMatch = textBeforePunct.match(/(?:^|[.!?\n]\s*|  )([^.!?\n]*)$/);
+      const sentenceStartMatch = textBeforePunct.match(/(?:^|[.!?\n]\s*| {2})([^.!?\n]*)$/);
       if (sentenceStartMatch) {
         const sentenceStart = updatedCursor - sentenceStartMatch[1].length - 1;
         const sentenceEnd = updatedCursor;
@@ -428,14 +428,8 @@ export function useAutoCorrect(
 
   const skipCorrections = mode === "off" || mode === "native-only" || isNative || isAndroidWebView();
 
-  if (skipCorrections) {
-    return {
-      handleChange: (e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value),
-      inputRef,
-    };
-  }
-
   useEffect(() => {
+    if (skipCorrections) return;
     const el = inputRef.current;
     if (!el) return;
     const start = () => { composingRef.current = true; };
@@ -453,10 +447,14 @@ export function useAutoCorrect(
       el.removeEventListener("compositionend", end);
       el.removeEventListener("beforeinput", onBeforeInput as EventListener);
     };
-  }, []);
+  }, [skipCorrections]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (skipCorrections) {
+        setValue(e.target.value);
+        return;
+      }
       if (spellcheckRef.current) {
         spellcheckRef.current = false;
         setValue(e.target.value);
@@ -476,7 +474,7 @@ export function useAutoCorrect(
         });
       }
     },
-    [setValue, mode]
+    [setValue, mode, skipCorrections]
   );
 
   return { handleChange, inputRef };
@@ -497,14 +495,8 @@ export function useAutoCorrectTextarea(
   const { isNative } = useCapacitor();
   const skipCorrections = mode === "off" || mode === "native-only" || isNative || isAndroidWebView();
 
-  if (skipCorrections) {
-    return {
-      handleChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => setValue(e.target.value),
-      textareaRef,
-    };
-  }
-
   useEffect(() => {
+    if (skipCorrections) return;
     const el = textareaRef.current;
     if (!el) return;
     const start = () => { composingRef.current = true; };
@@ -522,10 +514,14 @@ export function useAutoCorrectTextarea(
       el.removeEventListener("compositionend", end);
       el.removeEventListener("beforeinput", onBeforeInput as EventListener);
     };
-  }, []);
+  }, [skipCorrections]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (skipCorrections) {
+        setValue(e.target.value);
+        return;
+      }
       if (spellcheckRef.current) {
         spellcheckRef.current = false;
         setValue(e.target.value);
@@ -545,7 +541,7 @@ export function useAutoCorrectTextarea(
         });
       }
     },
-    [setValue, mode]
+    [setValue, mode, skipCorrections]
   );
 
   return { handleChange, textareaRef };
@@ -644,7 +640,7 @@ export function useContentEditableAutoCorrect(
       el.removeEventListener("keyup", handleKeyUp);
       el.removeEventListener("input", handleInput);
     };
-  }, [ref, mode]);
+  }, [ref, mode, isNative]);
 }
 
 /**

@@ -1873,7 +1873,7 @@ async function executeToolCall(
 
       // ── Push customer to HCP ──
       let hcpSyncMsg = "";
-      const HCP_API_KEY = Deno.env.get("HCP_API_KEY");
+      const HCP_API_KEY = Deno.env.get("HCP_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
       if (HCP_API_KEY) {
         try {
           const hcpBody: any = {
@@ -1944,7 +1944,7 @@ async function executeToolCall(
 
       // Push to HCP if linked
       let hcpSyncMsg = "";
-      const HCP_API_KEY = Deno.env.get("HCP_API_KEY");
+      const HCP_API_KEY = Deno.env.get("HCP_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
       if (HCP_API_KEY && existing.hcp_customer_id) {
         try {
           const hcpBody: any = {};

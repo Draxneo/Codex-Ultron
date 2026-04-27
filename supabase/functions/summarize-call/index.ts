@@ -444,7 +444,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
     }
 
     // ── Push call summary as note to HCP (job or estimate) ──
-    const hcpApiKey = Deno.env.get("HCP_API_KEY");
+    const hcpApiKey = Deno.env.get("HCP_NOTE_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
     let hcpNotePushed = false;
 
     if (hcpApiKey) {

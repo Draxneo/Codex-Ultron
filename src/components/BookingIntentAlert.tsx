@@ -302,8 +302,8 @@ export function BookingIntentAlert() {
                 <div className="min-w-0">
                   <p className="font-medium text-foreground">
                     {state.result.type === "estimate" ? "Estimate" : "Job"} #
-                    {state.result.hcp_job_number || state.result.hcp_estimate_number || state.result.hcp_id}
-                    {" "}created in HCP
+                    {state.result.job_number || state.result.job_id}
+                    {" "}created
                   </p>
                   <p className="text-muted-foreground">
                     {phase === "syncing" ? "Syncing to dispatch board…" : "Booked"}
@@ -355,8 +355,8 @@ export function BookingIntentAlert() {
               disabled={isWorking || isDone || needsPropertySelection}
             >
               {phase === "resolving" && (<><Loader2 className="h-4 w-4 animate-spin" />Resolving customer…</>)}
-              {phase === "booking" && (<><Loader2 className="h-4 w-4 animate-spin" />Booking in HCP…</>)}
-              {phase === "syncing" && (<><Loader2 className="h-4 w-4 animate-spin" />Syncing to board…</>)}
+              {phase === "booking" && (<><Loader2 className="h-4 w-4 animate-spin" />Booking...</>)}
+              {phase === "syncing" && (<><Loader2 className="h-4 w-4 animate-spin" />Updating board...</>)}
               {phase === "booked" && (<><CheckCircle2 className="h-4 w-4" />Booked</>)}
               {(phase === "idle" || phase === "failed") && (
                 <><CalendarPlus className="h-4 w-4" />{needsPropertySelection ? "Choose Property" : isFailed ? "Retry Booking" : "Book It Now"}</>

@@ -78,11 +78,6 @@ export function RescheduleButton({ jobId, jobNumber, table = "jobs" }: Reschedul
         details: `Rescheduled to ${dateStr} ${tw.label}`,
       });
 
-      // Fire-and-forget sync to HCP
-      supabase.functions.invoke("sync-job-to-hcp", {
-        body: { [table === "estimates" ? "estimate_id" : "job_id"]: jobId },
-      }).catch((err) => console.warn("HCP sync failed:", err));
-
       queryClient.invalidateQueries({ queryKey: [table, jobId] });
       queryClient.invalidateQueries({ queryKey: [table] });
       queryClient.invalidateQueries({ queryKey: ["activity_log"] });

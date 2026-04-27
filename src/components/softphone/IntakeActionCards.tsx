@@ -243,7 +243,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                   <div className="flex items-center gap-1.5 rounded border border-[hsl(var(--success))]/40 bg-[hsl(var(--success))]/10 p-1.5 text-[10px]">
                     <CheckCircle2 className="h-3 w-3 shrink-0 text-[hsl(var(--success))]" />
                     <span className="text-foreground font-medium">
-                      #{state.result.hcp_job_number || state.result.hcp_estimate_number || state.result.hcp_id}
+                      #{state.result.job_number || state.result.job_id}
                     </span>
                     <span className="text-muted-foreground">
                       {phase === "syncing" ? "syncing…" : "booked"}
@@ -293,7 +293,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                   {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
                   {(phase === "idle" || phase === "failed") && <CalendarPlus className="h-3.5 w-3.5" />}
                   {phase === "resolving" && "Resolving…"}
-                  {phase === "booking" && "Booking in HCP…"}
+                  {phase === "booking" && "Booking..."}
                   {phase === "syncing" && "Syncing…"}
                   {phase === "booked" && "Booked"}
                   {phase === "idle" && (needsPropertySelection ? "Choose Property" : "Book It Now")}

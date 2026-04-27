@@ -12,6 +12,19 @@ interface Props {
   customerName?: string;
 }
 
+type EstimatePresentationRow = {
+  id: string;
+  token: string;
+  first_viewed_at: string | null;
+};
+
+type EstimateResponseRow = {
+  action: string | null;
+  selected_tier: string | null;
+  payment_preference: string | null;
+  responded_at: string | null;
+};
+
 export function EstimateCartStatus({ estimateId, customerPhone, customerName }: Props) {
   const { toast } = useToast();
 
@@ -19,19 +32,17 @@ export function EstimateCartStatus({ estimateId, customerPhone, customerName }: 
     queryKey: ["estimate_cart_status", estimateId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("estimate_presentations" as any)
-        .select("*")
+        .from("estimate_presentations")
+        .select("id, token, first_viewed_at")
         .eq("estimate_id", estimateId)
         .eq("cart_source", "tech_onsite")
         .order("created_at", { ascending: false });
-      return (data || []) as any[];
+      return (data || []) as EstimatePresentationRow[];
     },
   });
 
-  if (!presentations?.length) return null;
-
-  const latest = presentations[0];
-  const hasResponse = latest.first_viewed_at;
+  const latest = presentations?.[0];
+  const hasResponse = latest?.first_viewed_at;
 
   const resend = async () => {
     if (!customerPhone) return;
@@ -52,17 +63,20 @@ export function EstimateCartStatus({ estimateId, customerPhone, customerName }: 
 
   // Check for approved response
   const { data: responses } = useQuery({
-    queryKey: ["estimate_cart_responses", latest.id],
+    queryKey: ["estimate_cart_responses", latest?.id],
+    enabled: !!latest?.id,
     queryFn: async () => {
       const { data } = await supabase
-        .from("estimate_responses" as any)
-        .select("*")
-        .eq("presentation_id", latest.id)
+        .from("estimate_responses")
+        .select("action, selected_tier, payment_preference, responded_at")
+        .eq("presentation_id", latest!.id)
         .order("responded_at", { ascending: false })
         .limit(1);
-      return (data || []) as any[];
+      return (data || []) as EstimateResponseRow[];
     },
   });
+
+  if (!latest) return null;
 
   const response = responses?.[0];
   const status = response?.action === "approved" ? "approved" : hasResponse ? "viewed" : "pending";

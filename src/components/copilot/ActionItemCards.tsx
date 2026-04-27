@@ -127,7 +127,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const handleAction = async (item: any, status: ActionItemResolutionStatus) => {
     setActionId(item.id);
     try {
-      // HCP-first booking via shared helper
+      // UltraOffice booking via shared helper
       if (status === ACTION_ITEM_STATUS.accepted && item.category === "new_appointment" && item.metadata) {
         const selectedProperty = propertySelections[item.id];
         const metadata = {
@@ -418,7 +418,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                     <div className="flex items-center gap-1.5 rounded border border-[hsl(var(--success))]/40 bg-[hsl(var(--success))]/10 p-1.5 text-[10px]">
                       <CheckCircle2 className="h-3 w-3 shrink-0 text-[hsl(var(--success))]" />
                       <span className="text-foreground font-medium">
-                        #{bs.result.hcp_job_number || bs.result.hcp_estimate_number || bs.result.hcp_id}
+                        #{bs.result.job_number || bs.result.job_id}
                       </span>
                       <span className="text-muted-foreground">
                         {bs.phase === "syncing" ? "syncing to board…" : "booked"}
@@ -595,8 +595,8 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                       {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                       {isBookingItem
                         ? (bs.phase === "resolving" ? "Resolving…"
-                          : bs.phase === "booking" ? "Booking in HCP…"
-                          : bs.phase === "syncing" ? "Syncing…"
+                          : bs.phase === "booking" ? "Booking..."
+                          : bs.phase === "syncing" ? "Updating..."
                           : bs.phase === "booked" ? "Booked"
                           : bs.phase === "failed" ? "Retry Booking"
                           : needsPropertySelection && !selectedProperty ? "Choose Property"

@@ -82,7 +82,7 @@ export function usePushNotifications() {
           } else if (type === "call") {
             navigate(telephony.routes.phone);
           } else if (type === "chat") {
-            navigate("/chat");
+            navigate("/inbox");
           }
         });
 

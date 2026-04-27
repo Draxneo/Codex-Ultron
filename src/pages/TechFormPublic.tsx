@@ -614,13 +614,6 @@ export default function TechFormPublic() {
         ),
       }));
 
-      // Push photo to HCP (fire-and-forget)
-      if (job?.id) {
-        supabase.functions.invoke("upload-to-hcp", {
-          body: { job_id: job.id, file_path: path, bucket: "tech-form-photos", file_name: photo.name },
-        }).catch((e: any) => console.warn("HCP photo upload failed:", e));
-      }
-
       if (needsExtraction && photoRow) {
         const extractionType = ocrType || (isSupplyTicket ? "supply_ticket" : "data_plate");
         // Set extraction status for OCR photo types

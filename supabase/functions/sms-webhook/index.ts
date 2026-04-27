@@ -937,18 +937,6 @@ IMPORTANT RULES:
               });
             }
 
-            // Push to HCP (best-effort)
-            try {
-              const noteBody: any = { note: noteContent, source: "SMS Inbound" };
-              if (hasActiveJob) noteBody.job_id = customerJob.id;
-              else noteBody.estimate_id = upcomingEstimate.id;
-              const { error: noteErr } = await supabase.functions.invoke("push-job-note-hcp", { body: noteBody });
-              if (noteErr) console.error("[sms-webhook] push-job-note-hcp failed:", noteErr);
-              else console.log(`[sms-webhook] Pushed SMS as HCP note to ${target} ${targetRecord.id}`);
-            } catch (e) {
-              console.error("[sms-webhook] note push exception:", e);
-            }
-
             // Create a low-key follow_up card for dispatcher visibility
             await supabase.from("action_items").insert({
               title: `${customerName} texted about ${ref}`,
