@@ -26,6 +26,20 @@ function greetingTwiml(audioUrl: string | null, text: string): string {
   return `<Say voice="Polly.Joanna">${escapeXml(text)}</Say>`;
 }
 
+function menuGreetingTwiml(
+  audioUrl: string | null,
+  greetingText: string,
+  menuText: string,
+): string {
+  if (audioUrl) {
+    return `<Play>${escapeXml(audioUrl)}</Play>
+    <Say voice="Polly.Joanna">${escapeXml(menuText)}</Say>`;
+  }
+  return `<Say voice="Polly.Joanna">${
+    escapeXml(`${greetingText} ${menuText}`.trim())
+  }</Say>`;
+}
+
 function buildQueueTwiml({
   holdMusicUrl,
   waitSeconds,
@@ -960,12 +974,7 @@ Deno.serve(async (req) => {
       }&amp;ContactType=${
         encodeURIComponent(contactType)
       }&amp;Attempt=1" timeout="8" input="dtmf">
-    ${
-        greetingTwiml(
-          config.greeting_audio_url,
-          config.greeting_text + " " + menuText,
-        )
-      }
+    ${menuGreetingTwiml(config.greeting_audio_url, config.greeting_text, menuText)}
   </Gather>
   <Gather numDigits="1" action="${escapeXml(ivrHandlerUrl)}?CallSid=${
         encodeURIComponent(callSid)
