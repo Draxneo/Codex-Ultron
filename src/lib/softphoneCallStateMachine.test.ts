@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   initialCallLifecycleState,
   reduceCallLifecycle,
+  toCallLabel,
   toUiStatus,
 } from "./softphoneCallStateMachine";
 
@@ -14,14 +15,18 @@ describe("softphone call state machine", () => {
         localCallId: "local-1",
         twilioCallSid: "CA-child",
         parentCallSid: "CA-parent",
+        platform: "electron",
         customerNumber: "+12105551212",
         agentIdentity: "uo2_user_clint",
       },
+      at: "2026-04-27T10:00:00.000Z",
     });
 
     expect(result.state.appState).toBe("incoming_ringing");
     expect(result.state.activeCall?.direction).toBe("inbound");
+    expect(result.state.activeCall?.platform).toBe("electron");
     expect(result.state.activeCall?.activeCallSid).toBe("CA-child");
+    expect(result.state.activeCall?.startedAt).toBe("2026-04-27T10:00:00.000Z");
     expect(result.effects).toContain("show_incoming_ui");
   });
 
@@ -51,11 +56,13 @@ describe("softphone call state machine", () => {
       type: "REMOTE_ANSWERED",
       twilioCallSid: "CA-child",
       parentCallSid: "CA-parent",
+      at: "2026-04-27T10:01:00.000Z",
     });
 
     expect(connecting.state.appState).toBe("connecting");
     expect(answered.state.appState).toBe("in_call");
     expect(answered.state.activeCall?.parentCallSid).toBe("CA-parent");
+    expect(answered.state.activeCall?.answeredAt).toBe("2026-04-27T10:01:00.000Z");
     expect(answered.effects).toContain("start_timer");
   });
 
@@ -68,10 +75,16 @@ describe("softphone call state machine", () => {
       { type: "REMOTE_ANSWERED", twilioCallSid: "CA-parent" },
     ).state;
 
-    const ended = reduceCallLifecycle(onCall, { type: "REMOTE_ENDED", status: "completed" }).state;
+    const ended = reduceCallLifecycle(onCall, {
+      type: "REMOTE_ENDED",
+      status: "completed",
+      at: "2026-04-27T10:05:00.000Z",
+    }).state;
     const late = reduceCallLifecycle(ended, { type: "OUTBOUND_RINGING", twilioCallSid: "CA-parent" });
 
     expect(late.state.appState).toBe("ended");
+    expect(late.state.lastEndedCall?.terminalReason).toBe("completed");
+    expect(late.state.lastEndedCall?.endedAt).toBe("2026-04-27T10:05:00.000Z");
     expect(late.effects).toContain("ignore_after_terminal");
   });
 
@@ -106,5 +119,12 @@ describe("softphone call state machine", () => {
     expect(ending.state.appState).toBe("ending");
     expect(ending.state.activeCall?.pendingEndedBy).toBe("agent");
     expect(ending.effects).toContain("disconnect_active_call");
+  });
+
+  it("exposes user-facing labels from the same state value", () => {
+    expect(toCallLabel("incoming_ringing")).toBe("Incoming call");
+    expect(toCallLabel("outgoing_dialing")).toBe("Calling...");
+    expect(toCallLabel("reconnecting")).toBe("Reconnecting...");
+    expect(toCallLabel("failed")).toBe("Call failed");
   });
 });

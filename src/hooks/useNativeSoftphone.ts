@@ -22,6 +22,13 @@ import {
 } from "@/lib/communications";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import type { SoftphoneStatus, SoftphoneState } from "./useSoftphone";
+import {
+  initialCallLifecycleState,
+  reduceCallLifecycle,
+  type ActiveCallRecord,
+  type CallLifecycleEvent,
+  type CallLifecycleState,
+} from "@/lib/softphoneCallStateMachine";
 
 let nativePlugin: any = null;
 let pluginLoadPromise: Promise<void> | null = null;
@@ -91,10 +98,44 @@ export function useNativeSoftphone(enabled: boolean = true) {
     error: null,
   });
   const statusRef = useRef<SoftphoneStatus>("offline");
+  const lifecycleRef = useRef<CallLifecycleState>(initialCallLifecycleState);
 
   useEffect(() => {
     statusRef.current = state.status;
   }, [state.status]);
+
+  const dispatchLifecycle = useCallback((event: CallLifecycleEvent) => {
+    const previous = lifecycleRef.current;
+    const transition = reduceCallLifecycle(previous, event);
+    lifecycleRef.current = transition.state;
+    console.log("[NativeSoftphone state.transition]", {
+      event: event.type,
+      previousState: previous.appState,
+      nextState: transition.state.appState,
+      effects: transition.effects,
+      activeCallSid: transition.state.activeCall?.activeCallSid || null,
+      parentCallSid: transition.state.activeCall?.parentCallSid || null,
+      childCallSid: transition.state.activeCall?.childCallSid || null,
+      direction: transition.state.activeCall?.direction || null,
+      platform: "android",
+    });
+    return transition;
+  }, []);
+
+  const buildNativeCallRecord = useCallback((
+    data: any,
+    direction: "inbound" | "outbound",
+    phone?: string | null,
+  ): Partial<ActiveCallRecord> => ({
+    twilioCallSid: data?.callSid || data?.CallSid || null,
+    parentCallSid: data?.parentCallSid || data?.ParentCallSid || null,
+    childCallSid: direction === "inbound" ? (data?.callSid || data?.CallSid || null) : null,
+    activeCallSid: data?.callSid || data?.CallSid || data?.parentCallSid || data?.ParentCallSid || null,
+    direction,
+    platform: "android",
+    customerNumber: phone || data?.from || data?.to || null,
+    agentIdentity: currentEmployeeNameRef.current,
+  }), []);
 
   // Build employee-only contact map AND resolve current user's employee name
   // for answered_by attribution (see useSoftphone.ts for the same logic).
@@ -253,6 +294,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       const newToken = await fetchToken();
       if (!newToken) throw new Error("Unable to refresh voice token");
       registeredRef.current = false;
+      dispatchLifecycle({ type: "DEVICE_REGISTERING" });
       setState((s) => ({ ...s, status: "registering", error: null }));
       await plugin.login({ accessToken: newToken });
       scheduleTokenRefresh();
@@ -261,7 +303,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       console.error(`[NativeSoftphone] Registration refresh failed (${reason}):`, err?.message || err);
       return false;
     }
-  }, [fetchToken, scheduleTokenRefresh]);
+  }, [dispatchLifecycle, fetchToken, scheduleTokenRefresh]);
 
   const attachPluginListeners = useCallback(async (plugin: any) => {
     if (listenersRegisteredRef.current) return;
@@ -272,6 +314,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       registeredRef.current = true;
       initializingRef.current = false;
       scheduleTokenRefresh();
+      dispatchLifecycle({ type: "DEVICE_READY" });
       setState((s) => ({ ...s, status: "ready", error: null }));
       console.log("[NativeSoftphone] registrationSuccess fired");
     });
@@ -284,6 +327,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       initializingRef.current = false;
       const errMsg = data?.error || data?.message || JSON.stringify(data) || "Registration failed";
       console.error("[NativeSoftphone] registrationFailure:", errMsg, data);
+      dispatchLifecycle({ type: "DEVICE_ERROR", error: errMsg });
       setState((s) => ({ ...s, status: "error", error: errMsg }));
     });
 
@@ -319,6 +363,14 @@ export function useNativeSoftphone(enabled: boolean = true) {
       }
 
       const resolvedName = await resolveCallerName(from);
+      const inviteTransition = dispatchLifecycle({
+        type: "INBOUND_INVITE",
+        call: buildNativeCallRecord(data, "inbound", from),
+      });
+      if (inviteTransition.effects.includes("reject_duplicate_inbound")) {
+        try { if (callSid) await plugin.rejectCall({ callSid }); } catch {}
+        return;
+      }
       setState((s) => {
         // Defensive guard: state may have flipped to on-call during the await
         if (s.status === "on-call" || s.status === "connecting" || s.status === "ringing" || s.incomingCall) {
@@ -350,6 +402,11 @@ export function useNativeSoftphone(enabled: boolean = true) {
 
     const callConnectedHandle = await plugin.addListener("callConnected", (data: any) => {
       activeCallSidRef.current = data?.callSid || "";
+      dispatchLifecycle({
+        type: "REMOTE_ANSWERED",
+        twilioCallSid: data?.callSid || null,
+        parentCallSid: data?.parentCallSid || null,
+      });
       setState((s) => ({ ...s, status: "on-call", activeCall: data, incomingCall: null }));
       startTimer();
 
@@ -380,6 +437,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     });
 
     const callDisconnectedHandle = await plugin.addListener("callDisconnected", (data: any) => {
+      dispatchLifecycle({ type: "REMOTE_ENDED", status: data?.status || "completed" });
       activeCallSidRef.current = null;
       incomingCallSidRef.current = null;
       stopTimer();
@@ -403,6 +461,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
 
     const outgoingCallFailedHandle = await plugin.addListener("outgoingCallFailed", (data: any) => {
       console.error("[NativeSoftphone] outgoingCallFailed:", data);
+      dispatchLifecycle({ type: "CALL_FAILED", error: data?.reason || data?.error || "Outgoing call failed" });
       activeCallSidRef.current = null;
       incomingCallSidRef.current = null;
       stopTimer();
@@ -423,6 +482,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     });
 
     const callRingingHandle = await plugin.addListener("callRinging", () => {
+      dispatchLifecycle({ type: "OUTBOUND_RINGING" });
       // Only set ringing if we're NOT already on-call or connected — the native
       // SDK can re-fire this event during call setup, which would restart the ringtone.
       setState((s) => {
@@ -432,6 +492,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     });
 
     const callInviteCancelledHandle = await plugin.addListener("callInviteCancelled", () => {
+      dispatchLifecycle({ type: "REMOTE_ENDED", status: "canceled" });
       // Update call_log to 'canceled' so other devices know
       const canceledSid = incomingCallSidRef.current;
       if (canceledSid) {
@@ -474,6 +535,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     const offlineHandle = await plugin.addListener("offline", async (data: any) => {
       console.warn("[NativeSoftphone] offline event — refreshing registration", data);
       registeredRef.current = false;
+      dispatchLifecycle({ type: "DEVICE_OFFLINE" });
       setState((s) => ({ ...s, status: s.status === "on-call" ? s.status : "offline" }));
       await refreshRegistration("offline event");
     });
@@ -485,6 +547,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
         await refreshRegistration(`error:${errMsg}`);
         return;
       }
+      dispatchLifecycle({ type: "DEVICE_ERROR", error: errMsg });
       setState((s) => ({ ...s, error: errMsg }));
     });
 
@@ -503,13 +566,14 @@ export function useNativeSoftphone(enabled: boolean = true) {
       deviceErrorHandle,
     ];
     listenersRegisteredRef.current = true;
-  }, [clearRegistrationRetries, clearRegistrationTimeout, clearTokenRefreshTimer, refreshRegistration, resolveCallerName, scheduleTokenRefresh, startTimer, stopTimer]);
+  }, [buildNativeCallRecord, clearRegistrationRetries, clearRegistrationTimeout, clearTokenRefreshTimer, dispatchLifecycle, refreshRegistration, resolveCallerName, scheduleTokenRefresh, startTimer, stopTimer]);
 
   const initialize = useCallback(async () => {
     if (initializingRef.current || registeredRef.current) return;
     initializingRef.current = true;
 
     try {
+      dispatchLifecycle({ type: "DEVICE_REGISTERING" });
       setState((s) => ({ ...s, status: "registering", error: null }));
       console.log("[NativeSoftphone] initialize() starting...");
 
@@ -517,6 +581,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       const plugin = getPlugin();
       if (!plugin) {
         console.error("[NativeSoftphone] plugin is null after loadPlugin()");
+        dispatchLifecycle({ type: "DEVICE_ERROR", error: "Native voice plugin not available" });
         setState((s) => ({ ...s, status: "error", error: "Native voice plugin not available" }));
         initializingRef.current = false;
         return;
@@ -526,6 +591,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       const token = await fetchToken();
       if (!token) {
         console.error("[NativeSoftphone] token is null/empty");
+        dispatchLifecycle({ type: "DEVICE_OFFLINE" });
         setState((s) => ({ ...s, status: "offline", error: "Not authenticated" }));
         initializingRef.current = false;
         return;
@@ -580,10 +646,11 @@ export function useNativeSoftphone(enabled: boolean = true) {
       clearRegistrationTimeout();
       clearRegistrationRetries();
       console.error("[NativeSoftphone] Init error:", err);
+      dispatchLifecycle({ type: "DEVICE_ERROR", error: err.message });
       setState((s) => ({ ...s, status: "error", error: err.message }));
       initializingRef.current = false;
     }
-  }, [attachPluginListeners, clearRegistrationRetries, clearRegistrationTimeout, fetchToken]);
+  }, [attachPluginListeners, clearRegistrationRetries, clearRegistrationTimeout, dispatchLifecycle, fetchToken]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -724,10 +791,17 @@ export function useNativeSoftphone(enabled: boolean = true) {
       jobId: resolvedJobId,
       customerId: resolvedCustomerId,
     });
+    dispatchLifecycle({
+      type: "OUTBOUND_DIAL",
+      call: buildNativeCallRecord({ to: normalizedNumber }, "outbound", normalizedNumber),
+    });
     setState((s) => ({ ...s, status: "connecting", callerInfo: { number: normalizedNumber, name: resolvedName } }));
     try {
       const callResult = await plugin.makeCall({ to: normalizedNumber });
       const returnedSid: string | null = (callResult as any)?.callSid ?? null;
+      if (returnedSid) {
+        dispatchLifecycle({ type: "OUTBOUND_RINGING", twilioCallSid: returnedSid });
+      }
 
       // ── Deterministic linking ──
       // Native SDK doesn't support custom TwiML params, so the call_log row is created
@@ -781,23 +855,26 @@ export function useNativeSoftphone(enabled: boolean = true) {
         if (!ok) setTimeout(() => { applyPatch().catch(() => {}); }, 1500);
       }
     } catch (err: any) {
+      dispatchLifecycle({ type: "CALL_FAILED", error: err.message });
       setState((s) => ({ ...s, status: "ready", error: err.message }));
     }
-  }, [initialize, resolveCallerName, pendingJobId, pendingCustomerId]);
+  }, [buildNativeCallRecord, dispatchLifecycle, initialize, resolveCallerName, pendingJobId, pendingCustomerId]);
 
   const acceptCall = useCallback(async () => {
     const plugin = getPlugin();
     if (!plugin || !incomingCallSidRef.current) return;
     // Immediately move to "connecting" so the ringtone stops before the SDK fires callConnected
+    dispatchLifecycle({ type: "LOCAL_ACCEPT" });
     setState((s) => ({ ...s, status: "connecting" as SoftphoneStatus, incomingCall: null }));
     try { await plugin.acceptCall({ callSid: incomingCallSidRef.current }); } catch {}
-  }, []);
+  }, [dispatchLifecycle]);
 
   const rejectCall = useCallback(async () => {
     const plugin = getPlugin();
     if (!plugin || !incomingCallSidRef.current) return;
     const rejectedSid = incomingCallSidRef.current;
     try {
+      dispatchLifecycle({ type: "LOCAL_REJECT" });
       await plugin.rejectCall({ callSid: rejectedSid });
       // Update call_log to no-answer
       supabase
@@ -810,11 +887,12 @@ export function useNativeSoftphone(enabled: boolean = true) {
       incomingCallSidRef.current = null;
       setState((s) => ({ ...s, incomingCall: null, status: "ready" }));
     } catch {}
-  }, []);
+  }, [dispatchLifecycle]);
 
   const hangUp = useCallback(async () => {
     const plugin = getPlugin();
     if (!plugin) return;
+    dispatchLifecycle({ type: "LOCAL_HANGUP" });
     try { await plugin.endCall({ callSid: activeCallSidRef.current || undefined }); } catch {}
     activeCallSidRef.current = null;
     stopTimer();
@@ -824,7 +902,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       isMuted: false, callDuration: 0,
       status: registeredRef.current ? "ready" : "offline",
     }));
-  }, [stopTimer]);
+  }, [dispatchLifecycle, stopTimer]);
 
   const toggleMute = useCallback(async () => {
     const plugin = getPlugin();

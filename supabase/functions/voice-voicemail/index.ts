@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildKeytermParams } from "../_shared/deepgramKeyterms.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
+import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 
 function escapeXml(str: string): string {
   return str
@@ -111,6 +112,14 @@ Deno.serve(async (req) => {
 
     const formData = await req.text();
     const params = new URLSearchParams(formData);
+    const sigValid = await validateTwilioSignature(req, formData);
+    if (!sigValid) {
+      console.warn("Rejecting voice-voicemail: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
+    }
 
     const recordingUrl = params.get("RecordingUrl") || "";
     const recordingSid = params.get("RecordingSid") || "";
@@ -468,16 +477,24 @@ Deno.serve(async (req) => {
 
       const transcription = await transcribeRecording(recordingUrl);
 
-      await supabase.from("voicemails").insert({
-        call_log_id: callEntry?.id || null,
-        phone_number: from,
-        contact_name: contactName || null,
-        contact_type: contactType,
-        recording_url: recordingUrl,
-        recording_sid: recordingSid,
-        duration_seconds: recordingDuration,
-        transcription: transcription || null,
-      });
+      const voicemailPayload = {
+          call_log_id: callEntry?.id || null,
+          phone_number: from,
+          contact_name: contactName || null,
+          contact_type: contactType,
+          recording_url: recordingUrl,
+          recording_sid: recordingSid,
+          duration_seconds: recordingDuration,
+          transcription: transcription || null,
+        };
+
+      if (recordingSid) {
+        await supabase
+          .from("voicemails")
+          .upsert(voicemailPayload, { onConflict: "recording_sid", ignoreDuplicates: false });
+      } else {
+        await supabase.from("voicemails").insert(voicemailPayload);
+      }
 
       if (callEntry) {
         await supabase.from("call_log").update({

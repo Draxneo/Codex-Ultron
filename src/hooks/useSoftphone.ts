@@ -157,9 +157,10 @@ export function useSoftphone(enabled: boolean = true) {
     childCallSid: direction === "inbound" ? (call.parameters?.CallSid || null) : null,
     activeCallSid: call.parameters?.CallSid || call.parameters?.ParentCallSid || null,
     direction,
+    platform: isElectronMainWindow ? "electron" : "web",
     customerNumber: phone || call.parameters?.From || call.parameters?.To || null,
     agentIdentity: currentEmployeeNameRef.current,
-  }), []);
+  }), [isElectronMainWindow]);
 
   const markPendingEndedByAgent = useCallback((call: Call | null) => {
     const sids = [call?.parameters?.ParentCallSid, call?.parameters?.CallSid].filter(Boolean) as string[];

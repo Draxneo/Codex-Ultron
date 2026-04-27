@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildKeytermParams } from "../_shared/deepgramKeyterms.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
+import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 
 const NEGATIVE_TERMINAL_STATUSES = new Set([
   "no-answer",
@@ -251,6 +252,15 @@ Deno.serve(async (req) => {
   try {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
+
+    const sigValid = await validateTwilioSignature(req, formData);
+    if (!sigValid) {
+      console.warn("Rejecting voice-status-callback: invalid Twilio signature");
+      return new Response(JSON.stringify({ error: "Invalid Twilio signature" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const callSid = params.get("CallSid") || "";
     const parentCallSid = params.get("ParentCallSid") || "";

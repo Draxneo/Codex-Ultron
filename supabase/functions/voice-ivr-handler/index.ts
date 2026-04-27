@@ -11,6 +11,7 @@ import {
   resolveIvrRoutingDepartmentKey,
 } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
+import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 
 type IvrRoutingOption = {
   label?: string | null;
@@ -125,6 +126,14 @@ Deno.serve(async (req) => {
 
     const formData = await req.text();
     const params = new URLSearchParams(formData);
+    const sigValid = await validateTwilioSignature(req, formData);
+    if (!sigValid) {
+      console.warn("Rejecting voice-ivr-handler: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
+    }
     const digit = params.get("Digits") || url.searchParams.get("Digit") || "";
     const attemptParam = url.searchParams.get("Attempt") || "";
 

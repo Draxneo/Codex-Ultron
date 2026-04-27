@@ -14,6 +14,8 @@ export type AppCallState =
   | "offline";
 
 export type CallDirection = "inbound" | "outbound" | null;
+export type CallPlatform = "electron" | "android" | "pstn" | "web" | "unknown";
+export type CallEndedBy = "agent" | "customer" | "twilio" | "timeout" | "unknown" | null;
 
 export type SoftphoneUiStatus =
   | "offline"
@@ -31,9 +33,15 @@ export interface ActiveCallRecord {
   childCallSid: string | null;
   activeCallSid: string | null;
   direction: CallDirection;
+  platform: CallPlatform;
   customerNumber: string | null;
   agentIdentity: string | null;
   pendingEndedBy: "agent" | null;
+  startedAt: string | null;
+  answeredAt: string | null;
+  endedAt: string | null;
+  terminalReason: string | null;
+  endedBy: CallEndedBy;
 }
 
 export interface CallLifecycleState {
@@ -44,22 +52,39 @@ export interface CallLifecycleState {
 }
 
 export type CallLifecycleEvent =
-  | { type: "DEVICE_REGISTERING" }
-  | { type: "DEVICE_READY" }
-  | { type: "DEVICE_OFFLINE" }
-  | { type: "DEVICE_ERROR"; error?: string | null }
-  | { type: "INBOUND_INVITE"; call: Partial<ActiveCallRecord> }
-  | { type: "OUTBOUND_DIAL"; call: Partial<ActiveCallRecord> }
-  | { type: "OUTBOUND_RINGING"; twilioCallSid?: string | null; parentCallSid?: string | null; childCallSid?: string | null }
-  | { type: "LOCAL_ACCEPT" }
-  | { type: "REMOTE_ANSWERED"; twilioCallSid?: string | null; parentCallSid?: string | null; childCallSid?: string | null }
-  | { type: "LOCAL_HANGUP" }
-  | { type: "LOCAL_REJECT" }
-  | { type: "REMOTE_ENDED"; status?: string | null }
-  | { type: "RECONNECTING" }
-  | { type: "RECONNECTED" }
-  | { type: "CALL_FAILED"; error?: string | null }
-  | { type: "RESET_TO_READY" };
+  ({
+    type: "DEVICE_REGISTERING";
+  } | {
+    type: "DEVICE_READY";
+  } | {
+    type: "DEVICE_OFFLINE";
+  } | {
+    type: "DEVICE_ERROR"; error?: string | null;
+  } | {
+    type: "INBOUND_INVITE"; call: Partial<ActiveCallRecord>;
+  } | {
+    type: "OUTBOUND_DIAL"; call: Partial<ActiveCallRecord>;
+  } | {
+    type: "OUTBOUND_RINGING"; twilioCallSid?: string | null; parentCallSid?: string | null; childCallSid?: string | null;
+  } | {
+    type: "LOCAL_ACCEPT";
+  } | {
+    type: "REMOTE_ANSWERED"; twilioCallSid?: string | null; parentCallSid?: string | null; childCallSid?: string | null;
+  } | {
+    type: "LOCAL_HANGUP";
+  } | {
+    type: "LOCAL_REJECT";
+  } | {
+    type: "REMOTE_ENDED"; status?: string | null; endedBy?: CallEndedBy;
+  } | {
+    type: "RECONNECTING";
+  } | {
+    type: "RECONNECTED";
+  } | {
+    type: "CALL_FAILED"; error?: string | null;
+  } | {
+    type: "RESET_TO_READY";
+  }) & { at?: string };
 
 export interface CallLifecycleTransition {
   state: CallLifecycleState;
@@ -122,6 +147,38 @@ export function toUiStatus(appState: AppCallState): SoftphoneUiStatus {
   }
 }
 
+export function toCallLabel(appState: AppCallState, direction: CallDirection = null): string {
+  switch (appState) {
+    case "incoming_ringing":
+      return "Incoming call";
+    case "outgoing_dialing":
+      return "Calling...";
+    case "outgoing_ringing":
+      return "Ringing...";
+    case "connecting":
+      return "Connecting...";
+    case "in_call":
+      return "On call";
+    case "reconnecting":
+      return "Reconnecting...";
+    case "ending":
+      return "Ending call...";
+    case "ended":
+      return direction === "inbound" ? "Call ended" : "Call ended";
+    case "failed":
+      return "Call failed";
+    case "device_registering":
+      return "Registering phone...";
+    case "ready":
+    case "idle":
+      return "Ready";
+    case "offline":
+      return "Offline";
+    default:
+      return "Offline";
+  }
+}
+
 export function buildActiveCallRecord(call: Partial<ActiveCallRecord>): ActiveCallRecord {
   const activeCallSid = call.activeCallSid || call.twilioCallSid || call.childCallSid || call.parentCallSid || null;
   return {
@@ -131,10 +188,20 @@ export function buildActiveCallRecord(call: Partial<ActiveCallRecord>): ActiveCa
     childCallSid: call.childCallSid || null,
     activeCallSid,
     direction: call.direction || null,
+    platform: call.platform || "unknown",
     customerNumber: call.customerNumber || null,
     agentIdentity: call.agentIdentity || null,
     pendingEndedBy: call.pendingEndedBy || null,
+    startedAt: call.startedAt || null,
+    answeredAt: call.answeredAt || null,
+    endedAt: call.endedAt || null,
+    terminalReason: call.terminalReason || null,
+    endedBy: call.endedBy || null,
   };
+}
+
+function eventTime(event: { at?: string }): string {
+  return event.at || new Date().toISOString();
 }
 
 function mergeCallIds(
@@ -194,7 +261,7 @@ export function reduceCallLifecycle(
         state: {
           ...current,
           appState: "incoming_ringing",
-          activeCall: buildActiveCallRecord({ ...event.call, direction: "inbound" }),
+          activeCall: buildActiveCallRecord({ ...event.call, direction: "inbound", startedAt: event.call.startedAt || eventTime(event) }),
           error: null,
         },
         effects: ["show_incoming_ui"],
@@ -207,7 +274,7 @@ export function reduceCallLifecycle(
         state: {
           ...current,
           appState: "outgoing_dialing",
-          activeCall: buildActiveCallRecord({ ...event.call, direction: "outbound" }),
+          activeCall: buildActiveCallRecord({ ...event.call, direction: "outbound", startedAt: event.call.startedAt || eventTime(event) }),
           error: null,
         },
         effects: ["start_safety_timer"],
@@ -234,7 +301,9 @@ export function reduceCallLifecycle(
         state: {
           ...current,
           appState: "in_call",
-          activeCall: mergeCallIds(current.activeCall, event),
+          activeCall: mergeCallIds(current.activeCall, event)
+            ? { ...mergeCallIds(current.activeCall, event)!, answeredAt: current.activeCall?.answeredAt || eventTime(event) }
+            : null,
           error: null,
         },
         effects: ["start_timer", "mark_answered"],
@@ -256,7 +325,7 @@ export function reduceCallLifecycle(
           ...current,
           appState: "ended",
           activeCall: null,
-          lastEndedCall: { ...current.activeCall, pendingEndedBy: "agent" },
+          lastEndedCall: { ...current.activeCall, pendingEndedBy: "agent", endedAt: eventTime(event), terminalReason: "rejected", endedBy: "agent" },
         },
         effects: ["reject_incoming_call", "stop_timer", "cleanup_call_listeners"],
       };
@@ -277,7 +346,9 @@ export function reduceCallLifecycle(
         state: {
           ...current,
           appState: "ended",
-          lastEndedCall: current.activeCall,
+          lastEndedCall: current.activeCall
+            ? { ...current.activeCall, endedAt: eventTime(event), terminalReason: event.status || "completed", endedBy: event.endedBy || current.activeCall.pendingEndedBy || "unknown" }
+            : null,
           activeCall: null,
           error: null,
         },
@@ -288,7 +359,9 @@ export function reduceCallLifecycle(
         state: {
           ...current,
           appState: "failed",
-          lastEndedCall: current.activeCall,
+          lastEndedCall: current.activeCall
+            ? { ...current.activeCall, endedAt: eventTime(event), terminalReason: event.error || "failed", endedBy: "unknown" }
+            : null,
           activeCall: null,
           error: event.error || "Call failed",
         },
