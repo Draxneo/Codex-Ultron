@@ -11,6 +11,14 @@ type HistoryJob = {
   description?: string | null;
 };
 
+type HistoryEstimate = {
+  id: string;
+  estimate_number: string | null;
+  scheduled_date: string | null;
+  created_at: string | null;
+  description?: string | null;
+};
+
 type HistoryPhoto = {
   created_at: string | null;
 };
@@ -109,21 +117,30 @@ export function useCustomerPhotos(customerId: string | undefined) {
         .select("id, job_number, hcp_job_number, job_type, scheduled_date, description")
         .or(customerLinkFilter(customerId!, hcpCustomerId));
       if (jobsError) throw jobsError;
-      if (!jobs || jobs.length === 0) return [];
 
-      const typedJobs = jobs as HistoryJob[];
+      const typedJobs = (jobs || []) as HistoryJob[];
       const jobIds = typedJobs.map((j) => j.id);
       const jobMap = Object.fromEntries(typedJobs.map((j) => [j.id, j]));
 
-      // Fetch legacy attachments
-      const { data: attachments, error: attErr } = await supabase
-        .from("job_attachments")
-        .select("id, file_name, file_path, file_type, job_id, created_at")
-        .in("job_id", jobIds)
+      const { data: estimates } = await supabase
+        .from("estimates")
+        .select("id, estimate_number, scheduled_date, created_at, description")
+        .eq("customer_id", customerId!)
         .order("created_at", { ascending: false });
-      if (attErr) throw attErr;
+      const typedEstimates = (estimates || []) as HistoryEstimate[];
+      const estimateMap = Object.fromEntries(typedEstimates.map((e) => [e.id, e]));
 
-      const attachmentPhotos = (attachments || []).map((p) => {
+      // Fetch legacy attachments
+      const attachments = jobIds.length
+        ? await supabase
+            .from("job_attachments")
+            .select("id, file_name, file_path, file_type, job_id, created_at")
+            .in("job_id", jobIds)
+            .order("created_at", { ascending: false })
+        : { data: [], error: null };
+      if (attachments.error) throw attachments.error;
+
+      const attachmentPhotos = (attachments.data || []).map((p) => {
         const j = jobMap[p.job_id];
         return {
           ...p,
@@ -137,11 +154,45 @@ export function useCustomerPhotos(customerId: string | undefined) {
         };
       });
 
+      const { data: hcpAttachments, error: hcpAttErr } = await supabase
+        .from("hcp_attachments" as any)
+        .select("id, source_type, file_name, file_type, storage_bucket, storage_path, customer_id, estimate_id, created_at, uploaded_at, archive_status")
+        .eq("customer_id", customerId!)
+        .in("source_type", ["customer", "estimate"])
+        .eq("archive_status", "archived")
+        .not("storage_path", "is", null)
+        .order("created_at", { ascending: false });
+      if (hcpAttErr) throw hcpAttErr;
+
+      const hcpAttachmentPhotos = ((hcpAttachments || []) as any[]).map((p) => {
+        const estimate = p.estimate_id ? estimateMap[p.estimate_id] : null;
+        const bucket = p.storage_bucket || (p.source_type === "estimate" ? "estimate-attachments" : "customer-attachments");
+        return {
+          id: p.id,
+          file_name: p.file_name || "attachment",
+          file_path: p.storage_path,
+          file_type: p.file_type,
+          job_id: null,
+          estimate_id: p.estimate_id || null,
+          created_at: p.uploaded_at || p.created_at,
+          url: resolveStorageMediaUrl(p.storage_path, bucket),
+          source: "hcp_attachment" as const,
+          source_type: p.source_type,
+          photo_type: null as string | null,
+          job_number: estimate?.estimate_number || null,
+          job_type: p.source_type === "estimate" ? "Estimate" : "Customer file",
+          scheduled_date: estimate?.scheduled_date || estimate?.created_at || null,
+          job_description: estimate?.description || null,
+        };
+      });
+
       // Fetch tech form photos
-      const { data: forms } = await supabase
-        .from("tech_forms")
-        .select("id, job_id")
-        .in("job_id", jobIds);
+      const { data: forms } = jobIds.length
+        ? await supabase
+            .from("tech_forms")
+            .select("id, job_id")
+            .in("job_id", jobIds)
+        : { data: [] };
 
       let techPhotosMapped: HistoryPhoto[] = [];
       if (forms && forms.length > 0) {
@@ -176,7 +227,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
       }
 
       // Merge and sort by date descending
-      return [...techPhotosMapped, ...attachmentPhotos].sort((a, b) => {
+      return [...techPhotosMapped, ...attachmentPhotos, ...hcpAttachmentPhotos].sort((a, b) => {
         const da = a.created_at ? new Date(a.created_at).getTime() : 0;
         const db = b.created_at ? new Date(b.created_at).getTime() : 0;
         return db - da;

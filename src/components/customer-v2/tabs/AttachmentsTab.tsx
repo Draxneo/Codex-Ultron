@@ -18,9 +18,11 @@ type Photo = {
   job_id: string | null;
   created_at: string | null;
   file_type?: string | null;
-  source: "attachment" | "tech_form";
+  source: "attachment" | "tech_form" | "hcp_attachment";
+  source_type?: string | null;
   photo_type: string | null;
   job_number: string | null;
+  estimate_id?: string | null;
   job_type: string | null;
   scheduled_date: string | null;
   job_description: string | null;
@@ -55,7 +57,7 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
   const filtered = (photos as Photo[]).filter((p) => {
     if (filter === "all") return true;
     if (filter === "tech") return p.source === "tech_form";
-    if (filter === "jobs") return p.source === "attachment";
+    if (filter === "jobs") return p.source === "attachment" || p.source_type === "estimate";
     return true;
   });
 
@@ -97,14 +99,14 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
 
   // Group by job_id (null bucket for orphans), preserving newest-first order
   const groups = useMemo(() => {
-    const map = new Map<string, { jobId: string | null; photos: Photo[]; sample: Photo }>();
+    const map = new Map<string, { jobId: string | null; estimateId: string | null; photos: Photo[]; sample: Photo }>();
     for (const p of filtered) {
-      const key = p.job_id || "__no_job__";
+      const key = p.job_id || p.estimate_id || (p.source === "hcp_attachment" ? p.id : "__no_job__");
       const existing = map.get(key);
       if (existing) {
         existing.photos.push(p);
       } else {
-        map.set(key, { jobId: p.job_id, photos: [p], sample: p });
+        map.set(key, { jobId: p.job_id, estimateId: p.estimate_id || null, photos: [p], sample: p });
       }
     }
     // Sort groups: jobs with a scheduled_date desc, then by created_at desc
@@ -145,11 +147,15 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
         </div>
       ) : (
         <div className="space-y-6">
-          {groups.map(({ jobId, photos: groupPhotos, sample }) => {
-            const jobLabel = sample.job_number
-              ? `Job #${sample.job_number}`
+          {groups.map(({ jobId, estimateId, photos: groupPhotos, sample }) => {
+            const itemLabel = sample.job_number
+              ? `${estimateId ? "Estimate" : "Job"} #${sample.job_number}`
               : jobId
               ? "Job"
+              : estimateId
+              ? "Estimate"
+              : sample.source_type === "customer"
+              ? "Customer files"
               : "Unlinked";
             const dateLabel = formatDate(
               sample.scheduled_date || sample.created_at,
@@ -157,21 +163,21 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
             );
 
             return (
-              <section key={jobId || "__no_job__"} className="space-y-2">
+              <section key={jobId || estimateId || sample.id || "__no_job__"} className="space-y-2">
                 {/* Group header */}
                 <div className="flex items-center justify-between gap-3 pb-1.5 border-b">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {jobId ? (
+                    {jobId || estimateId ? (
                       <Link
-                        to={`/jobs/${jobId}`}
+                        to={jobId ? `/jobs/${jobId}` : `/estimates/${estimateId}`}
                         className="text-sm font-bold hover:underline inline-flex items-center gap-1"
                       >
-                        {jobLabel}
+                        {itemLabel}
                         <ExternalLink className="h-3 w-3 opacity-60" />
                       </Link>
                     ) : (
                       <span className="text-sm font-bold text-muted-foreground">
-                        {jobLabel}
+                        {itemLabel}
                       </span>
                     )}
                     {sample.job_type && (
@@ -196,7 +202,7 @@ export function AttachmentsTab({ customerId }: { customerId: string }) {
                     url: p.url,
                     fileName: p.file_name,
                     fileType: p.file_type,
-                    badge: p.source === "tech_form" ? "Tech" : undefined,
+                    badge: p.source === "tech_form" ? "Tech" : p.source_type === "estimate" ? "Estimate" : p.source_type === "customer" ? "Customer" : undefined,
                     caption: `${p.file_name} · ${formatDate(p.created_at, "")}${
                       p.photo_type ? ` · ${p.photo_type.replace(/_/g, " ")}` : ""
                     }`,
