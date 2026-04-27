@@ -116,6 +116,23 @@ async function loadKnownProperties(supabase: any, customerId: string | null) {
   return properties;
 }
 
+function streetSignature(raw: string | null | undefined): { num: string; word: string } {
+  const s = (raw || "").trim();
+  const num = (s.match(/\d+/) || [""])[0];
+  const word = (s.replace(/^\d+\s*/, "").match(/[A-Za-z]+/) || [""])[0].toLowerCase();
+  return { num, word };
+}
+
+function matchKnownProperty(address: string | null | undefined, properties: any[]) {
+  if (!address || !properties?.length) return null;
+  const wanted = streetSignature(address);
+  if (!wanted.num || !wanted.word) return null;
+  return properties.find((p: any) => {
+    const sig = streetSignature(p.street || p.address);
+    return sig.num === wanted.num && !!sig.word && wanted.word.startsWith(sig.word.slice(0, 4));
+  }) || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -848,10 +865,35 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
         }
 
         const knownProperties = await loadKnownProperties(supabase, resolvedCustomerId);
-        const needsPropertySelection = knownProperties.length > 1 && !(verifiedAddress || extracted.address);
+        const extractedAddress = verifiedAddress || extracted.address || null;
+        const matchedProperty = knownProperties.length > 0
+          ? matchKnownProperty(extractedAddress, knownProperties)
+          : null;
+        const needsPropertySelection = knownProperties.length > 1 && (!extractedAddress || !matchedProperty);
+
+        const baseFollowUpNote = `Phone call summary:\n${extracted.summary || extracted.problem_description || "Call reviewed by JARVIS"}${
+          extracted.problem_description ? `\n\nIssue: ${extracted.problem_description}` : ""
+        }${extracted.scheduling_preference ? `\nScheduling preference: ${extracted.scheduling_preference}` : ""}${
+          extractedAddress ? `\nAddress mentioned: ${extractedAddress}` : ""
+        }`;
 
         if (activeJob) {
           const jobRef = activeJob.hcp_job_number ? `#${activeJob.hcp_job_number}` : "in progress";
+          if (resolvedCustomerId) {
+            await supabase.from("customer_notes").insert({
+              customer_id: resolvedCustomerId,
+              scope: "job",
+              entity_id: activeJob.id,
+              author_name: "JARVIS",
+              body: baseFollowUpNote,
+            });
+          }
+          await supabase.from("activity_log").insert({
+            job_id: activeJob.id,
+            action: "call_follow_up_note",
+            performed_by: "JARVIS",
+            details: baseFollowUpNote,
+          });
           await supabase.from("action_items").insert({
             title: customerName
               ? `${customerName} called about active job ${jobRef}`
@@ -872,12 +914,22 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               suppressed_booking: true,
               suppressed_reason: "active_job_in_progress",
               active_job_id: activeJob.id,
+              local_note_added: !!resolvedCustomerId,
             },
           });
           shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: SUPPRESSED booking — active job ${activeJob.id}; created follow_up instead`);
         } else if (activeEstimate) {
           const estimateRef = activeEstimate.estimate_number ? `#${activeEstimate.estimate_number}` : "upcoming estimate";
+          if (resolvedCustomerId) {
+            await supabase.from("customer_notes").insert({
+              customer_id: resolvedCustomerId,
+              scope: "estimate",
+              entity_id: activeEstimate.id,
+              author_name: "JARVIS",
+              body: baseFollowUpNote,
+            });
+          }
           await supabase.from("action_items").insert({
             title: customerName
               ? `${customerName} called about estimate ${estimateRef}`
@@ -897,6 +949,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               suppressed_booking: true,
               suppressed_reason: "active_estimate_in_progress",
               active_estimate_id: activeEstimate.id,
+              local_note_added: !!resolvedCustomerId,
             },
           });
           shouldInjectBookingCard = false;
@@ -920,6 +973,10 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               call_id,
               requires_property_selection: true,
               property_options: knownProperties,
+              property_review_reason: extractedAddress
+                ? "customer_mentioned_address_not_on_file"
+                : "customer_has_multiple_properties",
+              mentioned_address: extractedAddress,
               service_type: extracted.service_type || null,
               job_type: extracted.service_type === "estimate" ? "estimate" : (extracted.service_type || "service"),
               scheduling_preference: extracted.scheduling_preference || null,
@@ -947,7 +1004,13 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
-              address: verifiedAddress || extracted.address || null,
+              address: matchedProperty?.address || extractedAddress,
+              address_id: matchedProperty?.id || null,
+              address_match: matchedProperty ? {
+                outcome: matchedProperty.is_primary ? "matched_primary" : "matched_secondary",
+                label: matchedProperty.label,
+                address: matchedProperty.address,
+              } : null,
               service_type: extracted.service_type || null,
               job_type: extracted.service_type === "estimate" ? "estimate" : (extracted.service_type || "service"),
               scheduling_preference: extracted.scheduling_preference || null,
