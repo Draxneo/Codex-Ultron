@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Wrench, ClipboardList, User } from "lucide-react";
+import { Plus, Wrench, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,10 +9,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { NewEstimateDialog } from "@/components/NewEstimateDialog";
+import { useAuth } from "@/hooks/useAuth";
+import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
 export function NewItemDropdown() {
   const [showNewJob, setShowNewJob] = useState(false);
   const [showNewEstimate, setShowNewEstimate] = useState(false);
+  const { role } = useAuth();
+  const allowedTabs = useEmployeeTabAccess();
+  const canCreateJobs = role === "admin" || !allowedTabs || allowedTabs.has("jobs");
+
+  if (!canCreateJobs) return null;
 
   return (
     <>
