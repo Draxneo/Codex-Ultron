@@ -1,0 +1,67 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export const ACTION_ITEM_STATUS = {
+  pending: "pending",
+  accepted: "accepted",
+  dismissed: "dismissed",
+} as const;
+
+export type ActionItemStatus = (typeof ACTION_ITEM_STATUS)[keyof typeof ACTION_ITEM_STATUS];
+export type ActionItemResolutionStatus =
+  | typeof ACTION_ITEM_STATUS.accepted
+  | typeof ACTION_ITEM_STATUS.dismissed;
+
+export const ACTION_ITEMS_PENDING_QUERY_KEY = ["action_items_pending"] as const;
+export const HUD_ATTENTION_COUNTS_QUERY_KEY = ["hud_attention_counts"] as const;
+
+type ResolveActionItemInput = {
+  id: string;
+  status: ActionItemResolutionStatus;
+  userId?: string | null;
+  title?: string | null;
+  jobId?: string | null;
+  activityDetails?: string | null;
+};
+
+export async function resolveActionItem({
+  id,
+  status,
+  userId,
+  title,
+  jobId,
+  activityDetails,
+}: ResolveActionItemInput) {
+  const resolvedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("action_items" as any)
+    .update({
+      status,
+      resolved_at: resolvedAt,
+      resolved_by: userId || null,
+    })
+    .eq("id", id);
+
+  if (error) throw error;
+
+  if (title || activityDetails) {
+    await supabase.from("activity_log").insert({
+      action: `action_item_${status}`,
+      details: activityDetails || `${title} - ${status}`,
+      job_id: jobId || null,
+    });
+  }
+}
+
+export function invalidateActionItemQueues(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ACTION_ITEMS_PENDING_QUERY_KEY });
+  qc.invalidateQueries({ queryKey: HUD_ATTENTION_COUNTS_QUERY_KEY });
+}
+
+export function getActionItemPhone(item: {
+  customer_phone?: string | null;
+  metadata?: unknown;
+}) {
+  const metadata = (item.metadata || {}) as any;
+  return metadata.phone || metadata.customer_phone || metadata.callback_phone || item.customer_phone || null;
+}

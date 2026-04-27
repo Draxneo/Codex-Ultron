@@ -16,13 +16,26 @@ const DEFAULTS: Record<string, string> = {
   call_todo_extraction: "gpt-5-mini",
 };
 
+const FALLBACK_OPENAI_MODEL = "gpt-5-mini";
+
+const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  "gpt-4o": FALLBACK_OPENAI_MODEL,
+  "gpt-4o-mini": FALLBACK_OPENAI_MODEL,
+};
+
 export function normalizeOpenAIModel(model?: string | null): string {
-  const value = (model || "").trim();
-  if (!value) return "gpt-5-mini";
-  if (value.startsWith("openai/")) return value.slice("openai/".length);
-  if (value.startsWith("google/") || value.startsWith("gemini") || value.startsWith("anthropic/")) {
-    return "gpt-5-mini";
+  const raw = (model || "").trim();
+  if (!raw) return FALLBACK_OPENAI_MODEL;
+
+  const value = raw.startsWith("openai/") ? raw.slice("openai/".length) : raw;
+  const lower = value.toLowerCase();
+
+  if (raw.startsWith("google/") || lower.startsWith("gemini") || raw.startsWith("anthropic/") || lower.startsWith("claude")) {
+    return FALLBACK_OPENAI_MODEL;
   }
+
+  if (LEGACY_MODEL_ALIASES[lower]) return LEGACY_MODEL_ALIASES[lower];
+
   return value;
 }
 
@@ -42,5 +55,5 @@ export async function getTaskModel(sb: any, taskKey: string): Promise<string> {
   } catch (e) {
     console.error(`getTaskModel(${taskKey}) error:`, e);
   }
-  return DEFAULTS[taskKey] || "gpt-5-mini";
+  return DEFAULTS[taskKey] || FALLBACK_OPENAI_MODEL;
 }

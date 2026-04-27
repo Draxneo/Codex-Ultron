@@ -818,7 +818,7 @@ async function createCallbackAction(supabase: any, info: {
       priority: info.intent === "repair" ? "high" : "medium",
       source: "sms_intake",
       customer_phone: info.phone,
-      status: "open",
+      status: "pending",
       metadata: {
         customer_id: info.customerId,
         preferred_contact: info.callbackPreference,

@@ -1245,6 +1245,9 @@ async function firecrawlScrape(url: string, firecrawlKey: string) {
 }
 
 // ==================== Extracted Tool Executor ====================
+// Gateway rule: every mutating JARVIS tool must create a pending
+// jarvis_action_approval action_item first. Only mode="approved_action"
+// may replay the tool with the saved approval token.
 // All collapsed agent logic lives here now — zero-hop execution.
 
 const JARVIS_HITL_MUTATING_TOOLS = new Set([
@@ -1351,6 +1354,7 @@ async function queueJarvisToolApproval(sb: any, toolName: string, args: any) {
       tool_args: args || {},
       approval_token: approvalToken,
       approval_required: true,
+      approval_gateway: "jarvis-action-gateway",
       editable_message_field: args?.message ? "message" : args?.custom_message ? "custom_message" : null,
     },
     facts: {
@@ -1367,6 +1371,7 @@ async function queueJarvisToolApproval(sb: any, toolName: string, args: any) {
     status: "pending_approval",
     tool: toolName,
     action_item_id: data.id,
+    approval_gateway: "jarvis-action-gateway",
     message: `${label} is waiting for dispatcher approval. No customer-facing records were changed.`,
   };
 }
@@ -2858,33 +2863,23 @@ serve(async (req) => {
     try { body = await req.json(); } catch { /* no body = briefing mode */ }
 
     const mode = body.mode || "briefing";
-    // Always use admin ai_model_config — ignore client model override to prevent stale/blocked models
+    // Backend-only model router: ignore client model overrides and use the
+    // normalized ai_model_config value as the actual OpenAI runtime model.
     const taskKey = mode === "briefing" ? "daily_briefing" : "copilot_chat";
-    let requestedModel = await getTaskModel(sb, taskKey);
+    const configuredModel = await getTaskModel(sb, taskKey);
+    let requestedModel = configuredModel;
 
-    // Safety net: block any non-gateway models that somehow got into the config
-    if (requestedModel.startsWith("claude") || requestedModel.includes("anthropic")) {
-      console.warn(`Blocked non-gateway model "${requestedModel}" in ai_model_config[${taskKey}] — falling back to Lovable AI`);
-      requestedModel = "gpt-5-mini";
-    }
-    if (requestedModel.startsWith("google/") || requestedModel.startsWith("gemini") || requestedModel.startsWith("gpt-5")) {
-      console.warn(`Model "${requestedModel}" is not safe for the current OpenAI chat-completions path; using gpt-4o-mini.`);
-      requestedModel = "gpt-4o-mini";
-    }
-
-    // ===== COST GUARD: Force Flash unless intent explicitly justifies Pro =====
-    // Gemini 2.5 Pro is ~10× the price of Flash. Only allow Pro for modes that
-    // truly benefit from deeper reasoning — everything else is downgraded.
-    const PRO_ALLOWED_MODES = new Set(["deep_reasoning", "paste_to_action", "complex_analysis"]);
-    const callerMode = (body.mode || "").toLowerCase();
-    const explicitlyWantsPro = body.force_pro === true || PRO_ALLOWED_MODES.has(callerMode);
+    // Safety net: block stale provider-prefixed models that bypassed normalization.
     if (
-      (requestedModel.includes("gemini-2.5-pro") || requestedModel.includes("gpt-5") && !requestedModel.includes("mini") && !requestedModel.includes("nano"))
-      && !explicitlyWantsPro
+      requestedModel.startsWith("claude") ||
+      requestedModel.includes("anthropic") ||
+      requestedModel.startsWith("google/") ||
+      requestedModel.startsWith("gemini")
     ) {
-      console.log(`[cost-guard] Downgraded ${requestedModel} → gpt-5-mini for mode "${callerMode || "chat"}" (no deep_reasoning flag)`);
+      console.warn(`Blocked non-OpenAI model "${requestedModel}" in ai_model_config[${taskKey}] - using gpt-5-mini.`);
       requestedModel = "gpt-5-mini";
     }
+    const callerMode = (body.mode || "").toLowerCase();
 
     // CRM tools (create_customer, create_job) are now inline in executeToolCall()
 
@@ -2918,7 +2913,8 @@ serve(async (req) => {
         actionItem.category !== "jarvis_action_approval" ||
         actionItem.status !== "pending" ||
         metadata.approval_token !== token ||
-        !metadata.tool_name
+        !metadata.tool_name ||
+        !JARVIS_HITL_MUTATING_TOOLS.has(metadata.tool_name)
       ) {
         return new Response(JSON.stringify({ error: "Invalid or expired JARVIS approval action." }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -3549,7 +3545,7 @@ TOOL ROUTING RULES (follow strictly)
       model: requestedModel,
       messages,
       stream: false,
-      max_tokens: 8192,
+      max_completion_tokens: 8192,
     };
     if (chatTools) {
       aiRequestBody.tools = chatTools;

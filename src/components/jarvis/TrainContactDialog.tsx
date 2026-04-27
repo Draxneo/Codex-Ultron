@@ -23,6 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Brain, Loader2, Trash2 } from "lucide-react";
+import { ACTION_ITEM_STATUS, invalidateActionItemQueues } from "@/lib/actionItemLifecycle";
 
 const CONTACT_TYPES = [
   { value: "vendor", label: "Vendor (supply house, parts)" },
@@ -121,9 +122,13 @@ export function TrainContactDialog({ open, onOpenChange, phone, defaultName }: P
       if (["vendor", "marketing", "answering_service", "spam", "tech_partner"].includes(contactType)) {
         await supabase
           .from("action_items")
-          .delete()
+          .update({
+            status: ACTION_ITEM_STATUS.dismissed,
+            resolved_at: new Date().toISOString(),
+            resolved_by: user?.id || null,
+          })
           .eq("category", "new_lead")
-          .eq("status", "pending")
+          .eq("status", ACTION_ITEM_STATUS.pending)
           .or(`customer_phone.eq.${phone},customer_phone.eq.+1${phoneDigits},customer_phone.eq.${phoneDigits}`);
       }
 
@@ -132,7 +137,7 @@ export function TrainContactDialog({ open, onOpenChange, phone, defaultName }: P
         description: `Future messages from ${name.trim()} will be tagged as ${contactType.replace("_", " ")}.`,
       });
 
-      qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+      invalidateActionItemQueues(qc);
       qc.invalidateQueries({ queryKey: ["sms_threads"] });
       onOpenChange(false);
     } catch (e: any) {
@@ -148,7 +153,7 @@ export function TrainContactDialog({ open, onOpenChange, phone, defaultName }: P
     try {
       await supabase.from("known_contacts" as any).delete().eq("id", existingId);
       toast({ title: "Removed", description: "JARVIS will treat this number as unknown again." });
-      qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+      invalidateActionItemQueues(qc);
       onOpenChange(false);
     } catch (e: any) {
       toast({ title: "Delete failed", description: e.message, variant: "destructive" });

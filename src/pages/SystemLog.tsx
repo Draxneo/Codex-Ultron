@@ -5,6 +5,7 @@ import { ctHeaderLabel } from "@/lib/dateGrouping";
 import {
   Activity, AlertTriangle, AlertCircle, RefreshCw, PhoneCall,
   CheckCircle2, Clock, Repeat, Skull, Trash2, ChevronDown, ChevronRight, Route,
+  DollarSign, TrendingUp,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/formatters";
+import { useApiUsageObservability } from "@/hooks/useApiUsageObservability";
 
 type Severity = "info" | "warning" | "error" | "critical";
 
@@ -425,6 +428,124 @@ function OnCallPanel() {
   );
 }
 
+function ApiUsagePanel() {
+  const { data, isLoading, refetch, isFetching } = useApiUsageObservability();
+  const topStatuses = useMemo(() => {
+    if (!data?.alerts.statuses) return [];
+    const order = { critical: 0, warning: 1, ok: 2 } as const;
+    return [...data.alerts.statuses].sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 6);
+  }, [data]);
+
+  const severityTone = (severity: string) => {
+    if (severity === "critical") return "bg-rose-600 text-white border-rose-700";
+    if (severity === "warning") return "bg-amber-500/10 text-amber-700 border-amber-500/30";
+    return "bg-emerald-500/10 text-emerald-700 border-emerald-500/30";
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching} className="h-8 ml-auto">
+          <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isFetching && "animate-spin")} /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Card>
+          <CardContent className="p-3 flex items-center gap-3">
+            <DollarSign className="h-5 w-5 text-emerald-600" />
+            <div>
+              <div className="text-2xl font-bold leading-none">
+                {formatCurrency((data?.metrics.todayCostCents ?? 0) / 100)}
+              </div>
+              <div className="text-xs text-muted-foreground">API cost today</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 flex items-center gap-3">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <div>
+              <div className="text-2xl font-bold leading-none">{data?.metrics.todayCallCount.toLocaleString() ?? 0}</div>
+              <div className="text-xs text-muted-foreground">Calls today</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="text-sm font-medium">{data?.trendSourceLabel ?? "Daily rollups plus recent detail"}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {data?.rollupRowsUsed ?? 0} rollup rows, {data?.recentDetailRowsUsed ?? 0} recent detail rows
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">API Cost Status</CardTitle>
+          <CardDescription>Daily limits use recent detail for same-day alerts; trend history prefers rollups when present.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? <div className="p-6 text-sm text-muted-foreground">Loading...</div>
+            : topStatuses.length === 0 ? <div className="p-6 text-sm text-muted-foreground">No API usage data yet.</div>
+            : (
+              <div>
+                {topStatuses.map((status) => (
+                  <div key={status.limit.service} className="border-b last:border-b-0 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={cn("uppercase text-[10px]", severityTone(status.severity))}>
+                      {status.severity}
+                    </Badge>
+                    <span className="font-medium">{status.limit.label}</span>
+                    <span className="text-xs text-muted-foreground">{status.currentCalls.toLocaleString()} calls</span>
+                    <span className="ml-auto text-xs tabular-nums">
+                      {formatCurrency(status.currentCostUsd)}
+                      <span className="text-muted-foreground"> / {formatCurrency(status.limit.dailyCostUsd)} daily limit</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Today By Service</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(data?.metrics.byService.length || 0) === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground">No API calls logged today.</div>
+          ) : (
+            <div>
+              {data!.metrics.byService.map((service) => (
+                <div key={service.service} className="border-b last:border-b-0 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs">{service.service}</span>
+                  <span className="text-xs text-muted-foreground">{service.call_count.toLocaleString()} calls</span>
+                  {service.tokens_total > 0 && (
+                    <span className="text-xs text-muted-foreground">{service.tokens_total.toLocaleString()} tokens</span>
+                  )}
+                  <span className="ml-auto text-xs tabular-nums font-medium">{formatCurrency(service.total_cost_cents / 100)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {(data?.metrics.byFunction.length || 0) > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {data!.metrics.byFunction.slice(0, 12).map((fn) => (
+            <Badge key={fn.function_name} variant="secondary" className="text-[10px] font-mono">
+              {fn.function_name}: {fn.call_count}x ({formatCurrency(fn.total_cost_cents / 100)})
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TracePanel() {
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [kindFilter, setKindFilter] = useState<string>("all");
@@ -616,12 +737,14 @@ export default function SystemLog() {
           <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Errors</TabsTrigger>
             <TabsTrigger value="trace" className="gap-1.5"><Route className="h-3.5 w-3.5" /> Trace</TabsTrigger>
+            <TabsTrigger value="api" className="gap-1.5"><DollarSign className="h-3.5 w-3.5" /> API Usage</TabsTrigger>
             <TabsTrigger value="cron" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Cron</TabsTrigger>
             <TabsTrigger value="retries" className="gap-1.5"><Repeat className="h-3.5 w-3.5" /> Retry Queue</TabsTrigger>
             <TabsTrigger value="oncall" className="gap-1.5"><PhoneCall className="h-3.5 w-3.5" /> On-Call</TabsTrigger>
           </TabsList>
           <TabsContent value="errors"><ErrorsPanel /></TabsContent>
           <TabsContent value="trace"><TracePanel /></TabsContent>
+          <TabsContent value="api"><ApiUsagePanel /></TabsContent>
           <TabsContent value="cron"><CronPanel /></TabsContent>
           <TabsContent value="retries"><RetryQueuePanel /></TabsContent>
           <TabsContent value="oncall"><OnCallPanel /></TabsContent>

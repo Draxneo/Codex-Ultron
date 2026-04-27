@@ -92,7 +92,7 @@ export function ModelConfigPanel() {
                   <Icon className="h-4 w-4 text-primary shrink-0" />
                   {cfg.label}
                 </CardTitle>
-                
+                {selected && <Badge variant="outline" className="text-[10px]">{selected.label}</Badge>}
               </div>
               <CardDescription className="text-xs mt-0.5">{meta.description}</CardDescription>
             </CardHeader>
@@ -119,6 +119,15 @@ export function ModelConfigPanel() {
 
   return (
     <div className="space-y-6">
+      <Card className="border-border/60">
+        <CardHeader className="pb-3 pt-3 px-4">
+          <CardTitle className="text-sm font-medium">JARVIS Model Router</CardTitle>
+          <CardDescription className="text-xs mt-0.5">
+            Saved OpenAI model IDs are used by the backend runtime. Stale Gemini, Anthropic, and GPT-4o values are normalized to GPT-5 Mini.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
       {/* Response Gate */}
       <Card className="border-primary/30 bg-primary/5">
         <CardHeader className="pb-2 pt-3 px-4">

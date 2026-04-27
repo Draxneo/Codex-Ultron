@@ -18,8 +18,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { useBookingAction } from "@/hooks/useBookingAction";
+import {
+  ACTION_ITEM_STATUS,
+  invalidateActionItemQueues,
+  resolveActionItem,
+} from "@/lib/actionItemLifecycle";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BOOKING_CATEGORIES = ["new_appointment", "booking_confirm"];
 
 type BookingAlert = {
@@ -60,6 +64,7 @@ export function BookingIntentAlert() {
   const { open: copilotOpen } = useCopilotPanel();
   const { book, getState, reset } = useBookingAction();
   const copilotOpenRef = useRef(copilotOpen);
+  const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
   copilotOpenRef.current = copilotOpen;
 
   // Subscribe to new booking-intent action_items
@@ -75,7 +80,7 @@ export function BookingIntentAlert() {
         },
         async (payload: any) => {
           const row = payload.new;
-          if (row?.status === "pending" && BOOKING_CATEGORIES.includes(row.category)) {
+          if (row?.status === ACTION_ITEM_STATUS.pending && BOOKING_CATEGORIES.includes(row.category)) {
             const isSmsSource = row.source === "sms";
             if (isSmsSource && copilotOpenRef.current) {
               console.log("[BookingIntentAlert] Skipping SMS alert — copilot is open");
@@ -147,7 +152,15 @@ export function BookingIntentAlert() {
     async (alert: BookingAlert) => {
       const result = await book({
         action_item_id: alert.id,
-        metadata: alert.metadata,
+        metadata: {
+          ...(alert.metadata || {}),
+          ...(propertySelections[alert.id] ? {
+            address: propertySelections[alert.id].address || propertySelections[alert.id].formatted,
+            address_id: propertySelections[alert.id].id || null,
+            requires_property_selection: false,
+            selected_property_label: propertySelections[alert.id].label || null,
+          } : {}),
+        },
         description: alert.description,
         customer_phone: alert.customer_phone,
       });
@@ -155,24 +168,34 @@ export function BookingIntentAlert() {
         // Auto-dismiss after success state shows briefly
         setTimeout(() => {
           dismiss(alert.id);
+          setPropertySelections((prev) => {
+            const next = { ...prev };
+            delete next[alert.id];
+            return next;
+          });
           reset(alert.id);
         }, 2500);
       }
     },
-    [book, dismiss, reset]
+    [book, dismiss, propertySelections, reset]
   );
 
   const handleDismiss = useCallback(
     async (alert: BookingAlert) => {
-      await supabase.from("action_items" as any).update({
-        status: "dismissed",
-        resolved_at: new Date().toISOString(),
-        resolved_by: user?.id || null,
-      }).eq("id", alert.id);
+      await resolveActionItem({
+        id: alert.id,
+        status: ACTION_ITEM_STATUS.dismissed,
+        userId: user?.id,
+        title: alert.title,
+      });
 
-      qc.invalidateQueries({ queryKey: ["action_items_pending"] });
-      qc.invalidateQueries({ queryKey: ["hud_attention_counts"] });
+      invalidateActionItemQueues(qc);
       dismiss(alert.id);
+      setPropertySelections((prev) => {
+        const next = { ...prev };
+        delete next[alert.id];
+        return next;
+      });
       reset(alert.id);
     },
     [user, qc, dismiss, reset]
@@ -191,6 +214,10 @@ export function BookingIntentAlert() {
         const isDone = phase === "booked" || phase === "syncing";
         const isFailed = phase === "failed";
         const phone = m.customer_phone || m.phone || alert.customer_phone;
+        const propertyOptions = Array.isArray(m.property_options) ? m.property_options : [];
+        const selectedProperty = propertySelections[alert.id];
+        const needsPropertySelection =
+          !!m.requires_property_selection && propertyOptions.length > 0 && !selectedProperty;
 
         return (
           <div
@@ -285,19 +312,54 @@ export function BookingIntentAlert() {
               </div>
             )}
 
+            {propertyOptions.length > 0 && m.requires_property_selection && (
+              <div className="space-y-2 rounded-md border border-orange-500/30 bg-orange-500/5 p-2">
+                <p className="text-[10px] font-medium text-orange-700">
+                  Choose service property before booking
+                </p>
+                {m.mentioned_address && (
+                  <p className="text-[11px] text-muted-foreground">Customer mentioned: {m.mentioned_address}</p>
+                )}
+                <div className="grid gap-1.5">
+                  {propertyOptions.map((property: any, index: number) => {
+                    const address = property.address || property.formatted;
+                    const active = selectedProperty?.id
+                      ? selectedProperty.id === property.id
+                      : (selectedProperty?.address || selectedProperty?.formatted) === address;
+                    return (
+                      <Button
+                        key={`${property.id || index}-${address}`}
+                        size="sm"
+                        variant={active ? "default" : "outline"}
+                        className="h-auto justify-start gap-2 whitespace-normal py-2 text-left"
+                        onClick={() => setPropertySelections((prev) => ({ ...prev, [alert.id]: property }))}
+                        disabled={isWorking || isDone}
+                      >
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-xs font-medium">{property.label || "Property"}</span>
+                          <span className="block text-[11px] opacity-80">{address}</span>
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Action */}
             <Button
               size="sm"
               className="w-full gap-2 bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))]"
               onClick={() => handleBookIt(alert)}
-              disabled={isWorking || isDone}
+              disabled={isWorking || isDone || needsPropertySelection}
             >
               {phase === "resolving" && (<><Loader2 className="h-4 w-4 animate-spin" />Resolving customer…</>)}
               {phase === "booking" && (<><Loader2 className="h-4 w-4 animate-spin" />Booking in HCP…</>)}
               {phase === "syncing" && (<><Loader2 className="h-4 w-4 animate-spin" />Syncing to board…</>)}
               {phase === "booked" && (<><CheckCircle2 className="h-4 w-4" />Booked</>)}
               {(phase === "idle" || phase === "failed") && (
-                <><CalendarPlus className="h-4 w-4" />{isFailed ? "Retry Booking" : "Book It Now"}</>
+                <><CalendarPlus className="h-4 w-4" />{needsPropertySelection ? "Choose Property" : isFailed ? "Retry Booking" : "Book It Now"}</>
               )}
             </Button>
           </div>

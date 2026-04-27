@@ -6,17 +6,22 @@
  */
 
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   CalendarPlus, Loader2, UserPlus, Briefcase, Search,
-  Phone, MessageSquare, Mail, Voicemail, CheckCircle2, AlertTriangle,
+  Phone, MessageSquare, Mail, Voicemail, CheckCircle2, AlertTriangle, MapPin, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewCustomerDialog } from "@/components/NewCustomerDialog";
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { useBookingAction } from "@/hooks/useBookingAction";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { useAuth } from "@/hooks/useAuth";
+import {
+  ACTION_ITEM_STATUS,
+  invalidateActionItemQueues,
+  resolveActionItem,
+} from "@/lib/actionItemLifecycle";
 const BOOKING_CATEGORIES = ["new_appointment", "booking_confirm"];
 
 type BookingIntent = {
@@ -49,7 +54,10 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
   const [intents, setIntents] = useState<BookingIntent[]>([]);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [showNewJob, setShowNewJob] = useState(false);
+  const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
   const { book, getState, reset } = useBookingAction();
+  const { user } = useAuth();
+  const qc = useQueryClient();
 
   // Normalize phone for matching
   const normalizedPhone = phoneNumber?.replace(/\D/g, "").slice(-10) || "";
@@ -62,7 +70,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
       const { data } = await supabase
         .from("action_items")
         .select("*")
-        .eq("status", "pending")
+        .eq("status", ACTION_ITEM_STATUS.pending)
         .in("category", BOOKING_CATEGORIES)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -87,7 +95,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
         { event: "INSERT", schema: "public", table: "action_items" },
         (payload: any) => {
           const row = payload.new;
-          if (row?.status !== "pending" || !BOOKING_CATEGORIES.includes(row.category)) return;
+          if (row?.status !== ACTION_ITEM_STATUS.pending || !BOOKING_CATEGORIES.includes(row.category)) return;
           const rowDigits = (row.customer_phone || "").replace(/\D/g, "").slice(-10);
           if (normalizedPhone && rowDigits === normalizedPhone) {
             setIntents((prev) => {
@@ -117,16 +125,46 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
   const handleBookIt = async (intent: BookingIntent) => {
     const result = await book({
       action_item_id: intent.id,
-      metadata: intent.metadata,
+      metadata: {
+        ...(intent.metadata || {}),
+        ...(propertySelections[intent.id] ? {
+          address: propertySelections[intent.id].address || propertySelections[intent.id].formatted,
+          address_id: propertySelections[intent.id].id || null,
+          requires_property_selection: false,
+          selected_property_label: propertySelections[intent.id].label || null,
+        } : {}),
+      },
       description: intent.description,
       customer_phone: intent.customer_phone,
     });
     if (result.ok) {
       setTimeout(() => {
         setIntents((prev) => prev.filter((a) => a.id !== intent.id));
+        setPropertySelections((prev) => {
+          const next = { ...prev };
+          delete next[intent.id];
+          return next;
+        });
         reset(intent.id);
       }, 2500);
     }
+  };
+
+  const handleDismiss = async (intent: BookingIntent) => {
+    await resolveActionItem({
+      id: intent.id,
+      status: ACTION_ITEM_STATUS.dismissed,
+      userId: user?.id,
+      title: intent.title,
+    });
+    invalidateActionItemQueues(qc);
+    setIntents((prev) => prev.filter((a) => a.id !== intent.id));
+    setPropertySelections((prev) => {
+      const next = { ...prev };
+      delete next[intent.id];
+      return next;
+    });
+    reset(intent.id);
   };
 
   return (
@@ -145,6 +183,10 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
             const isWorking = phase === "resolving" || phase === "booking" || phase === "syncing";
             const isDone = phase === "booked" || phase === "syncing";
             const isFailed = phase === "failed";
+            const propertyOptions = Array.isArray(m.property_options) ? m.property_options : [];
+            const selectedProperty = propertySelections[intent.id];
+            const needsPropertySelection =
+              !!m.requires_property_selection && propertyOptions.length > 0 && !selectedProperty;
 
             return (
               <div
@@ -161,6 +203,14 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                       <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{intent.description}</p>
                     )}
                   </div>
+                  <button
+                    onClick={() => handleDismiss(intent)}
+                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Dismiss"
+                    disabled={isWorking}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </div>
 
                 {/* Context pills */}
@@ -201,11 +251,43 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                   </div>
                 )}
 
+                {propertyOptions.length > 0 && m.requires_property_selection && (
+                  <div className="rounded border border-orange-500/30 bg-orange-500/5 p-2 space-y-1.5">
+                    <p className="text-[10px] font-medium text-orange-700">
+                      Choose service property
+                    </p>
+                    <div className="grid gap-1.5">
+                      {propertyOptions.map((property: any, index: number) => {
+                        const address = property.address || property.formatted;
+                        const active = selectedProperty?.id
+                          ? selectedProperty.id === property.id
+                          : (selectedProperty?.address || selectedProperty?.formatted) === address;
+                        return (
+                          <Button
+                            key={`${property.id || index}-${address}`}
+                            size="sm"
+                            variant={active ? "default" : "outline"}
+                            className="h-auto justify-start gap-1.5 whitespace-normal py-1.5 text-left text-[10px]"
+                            onClick={() => setPropertySelections((prev) => ({ ...prev, [intent.id]: property }))}
+                            disabled={isWorking || isDone}
+                          >
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="min-w-0">
+                              <span className="block font-medium">{property.label || "Property"}</span>
+                              <span className="block opacity-80">{address}</span>
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   size="sm"
                   className="w-full gap-1.5 h-8 text-xs bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))]"
                   onClick={() => handleBookIt(intent)}
-                  disabled={isWorking || isDone}
+                  disabled={isWorking || isDone || needsPropertySelection}
                 >
                   {isWorking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -214,7 +296,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                   {phase === "booking" && "Booking in HCP…"}
                   {phase === "syncing" && "Syncing…"}
                   {phase === "booked" && "Booked"}
-                  {phase === "idle" && "Book It Now"}
+                  {phase === "idle" && (needsPropertySelection ? "Choose Property" : "Book It Now")}
                   {phase === "failed" && "Retry Booking"}
                 </Button>
               </div>

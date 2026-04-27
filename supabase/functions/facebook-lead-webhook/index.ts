@@ -162,9 +162,10 @@ Deno.serve(async (req) => {
           await supabase.from("action_items").insert({
             title: `New Facebook Lead: ${firstName} ${lastName}`.trim(),
             description: `Phone: ${phone}${email ? `, Email: ${email}` : ""}. JARVIS sent an intro text. Follow up if no reply.`,
-            category: "sales_callback",
+            category: "new_lead",
             priority: "high",
             source: "jarvis",
+            status: "pending",
             customer_phone: formattedPhone,
             metadata: { lead_id: lead?.id, source: "facebook" },
           });

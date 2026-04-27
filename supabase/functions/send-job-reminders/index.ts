@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     const { data: existingCard } = await supabase.from("action_items")
       .select("id")
       .eq("category", "reminder_batch")
-      .eq("status", "open")
+      .eq("status", "pending")
       .gte("created_at", todayStart.toISOString())
       .limit(1);
 
@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
       category: "reminder_batch",
       source: "jarvis",
       priority: "medium",
-      status: "open",
+      status: "pending",
     });
 
     console.log(`Created reminder batch card with ${previews.length} job previews`);

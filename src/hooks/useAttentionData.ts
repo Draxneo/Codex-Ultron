@@ -13,10 +13,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useFollowUpJobs } from "@/hooks/useJobs";
 import { useAgreementVisitsDue, useExpiringAgreements, useServiceAgreements } from "@/hooks/useServiceAgreements";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { safeCount } from "@/lib/querySafety";
+import { ACTION_ITEM_STATUS } from "@/lib/actionItemLifecycle";
 import {
   AlertTriangle, CalendarX, MessageSquare, CreditCard, FileText, Shield,
   Receipt, FileCheck, Camera, ThumbsUp, CalendarCheck, ClipboardCheck, FileQuestion,
@@ -178,12 +178,17 @@ function useAttentionCounts() {
 
         // 22: Action items pending (JARVIS decision queue — replaces address_verify + jarvis_observer)
         supabase.from("action_items" as any).select("id", { count: "exact", head: true })
-          .eq("status", "pending"),
+          .eq("status", ACTION_ITEM_STATUS.pending),
 
         // 23: New leads (uncontacted, excluding LSA — LSA has its own card)
-        supabase.from("leads").select("id", { count: "exact", head: true })
-          .eq("status", "new")
-          .neq("source", "google_lsa"),
+        supabase.from("action_items" as any).select("id", { count: "exact", head: true })
+          .eq("status", ACTION_ITEM_STATUS.pending)
+          .eq("category", "new_lead"),
+
+        // 24: Follow-up cards now live in action_items.
+        supabase.from("action_items" as any).select("id", { count: "exact", head: true })
+          .eq("status", ACTION_ITEM_STATUS.pending)
+          .eq("category", "follow_up"),
 
       ]);
 
@@ -213,6 +218,7 @@ function useAttentionCounts() {
       const paymentFailed      = safeCount(results[21], "Payment Failures", errors);
       const actionItems        = safeCount(results[22], "Action Items", errors);
       const newLeads           = safeCount(results[23], "New Leads", errors);
+      const followUpActionItems = safeCount(results[24], "Follow-Up", errors);
 
       let customerResponsesCount = 0;
 
@@ -274,6 +280,7 @@ function useAttentionCounts() {
         paymentFailed,
         actionItems,
         newLeads,
+        followUpActionItems,
         // Error tracking — nothing fails silently
         _errors: errors,
       };
@@ -295,7 +302,6 @@ export interface AttentionItem {
 
 export function useAttentionData() {
   const { data: counts, error: countsError, isError } = useAttentionCounts();
-  const { data: followUpJobs } = useFollowUpJobs();
   const { data: visitsDue } = useAgreementVisitsDue();
   const { data: expiringAgreements } = useExpiringAgreements(30);
   const { data: allAgreements } = useServiceAgreements();
@@ -311,7 +317,7 @@ export function useAttentionData() {
     "hud-realtime-sync"
   );
 
-  const followUpCount = followUpJobs?.length || 0;
+  const followUpCount = counts?.followUpActionItems || 0;
   const visitsDueCount = visitsDue?.length || 0;
   const activeAgreementsCount = (allAgreements || []).filter(a => a.status === "active" && new Date(a.end_date) >= new Date()).length;
   const aiHandledCount = counts?.aiCompleted || 0;
@@ -330,7 +336,7 @@ export function useAttentionData() {
     { label: "Parts Ready",       count: counts?.partsReady || 0,       icon: Receipt,        color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/?attention=parts_ready",   severity: "info" },
     { label: "Missing Site Data", count: counts?.missingSite || 0,      icon: Camera,         color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/?attention=missing_site",  severity: "warning" },
     { label: "Past Due",          count: counts?.overdue || 0,          icon: AlertTriangle,  color: "text-overdue",      bg: "bg-overdue/10",      route: "/?attention=overdue",       severity: "critical" },
-    { label: "Follow-Up",         count: followUpCount,                    icon: MessageSquare,  color: "text-sky",          bg: "bg-sky/10",          route: "/jobs/backlog",             severity: "warning" },
+    { label: "Follow-Up",         count: followUpCount,                    icon: MessageSquare,  color: "text-sky",          bg: "bg-sky/10",          route: "/copilot",                  severity: "warning" },
     { label: "Deposits",          count: counts?.deposits || 0,         icon: CreditCard,     color: "text-amber-600",    bg: "bg-amber-600/10",    route: "/?attention=deposits",      severity: "warning" },
     { label: "Finance",           count: counts?.finance || 0,          icon: FileText,       color: "text-purple-600",   bg: "bg-purple-600/10",   route: "/?attention=finance",       severity: "warning" },
     { label: "Invoices",          count: counts?.invoices || 0,         icon: FileCheck,      color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/?attention=invoices",      severity: "warning" },
@@ -346,7 +352,7 @@ export function useAttentionData() {
     { label: "Comfort Club",      count: activeAgreementsCount,            icon: Crown,          color: "text-teal-600",     bg: "bg-teal-600/10",     route: "/agreements",               severity: "info",   alwaysShow: true },
     { label: "Payment Failures",  count: counts?.paymentFailed || 0,    icon: CreditCard,     color: "text-destructive",  bg: "bg-destructive/10",  route: "/jobs?filter=payment_failed", severity: "critical" },
     { label: "Action Items",      count: counts?.actionItems || 0,      icon: Bot,            color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "critical" },
-    { label: "New Leads",         count: counts?.newLeads || 0,         icon: User,           color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/leads",                    severity: "critical", alwaysShow: true },
+    { label: "New Leads",         count: counts?.newLeads || 0,         icon: User,           color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/copilot",                  severity: "critical", alwaysShow: true },
     
   ];
 
@@ -363,7 +369,7 @@ export function useAttentionData() {
     { key: "overdue",          icon: AlertTriangle, label: "Past Due",            count: counts?.overdue || 0,          color: "text-overdue",      bgClass: "from-overdue/10 to-card",    borderClass: "border-overdue/30",  route: "/?attention=overdue" },
     { key: "ready_schedule",   icon: CalendarX,     label: "Ready to Schedule",   count: counts?.readyToSchedule || 0,  color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/jobs/backlog" },
     { key: "waiting_parts",    icon: Receipt,       label: "Waiting on Parts",    count: counts?.waitingOnParts || 0,   color: "text-orange-600",   bgClass: "from-orange-600/10 to-card", borderClass: "border-orange-600/30", route: "/jobs/backlog" },
-    { key: "followup",         icon: MessageSquare, label: "Follow-Up",           count: followUpCount,                    color: "text-sky",          bgClass: "from-sky/10 to-card",        borderClass: "border-sky/30",      route: "/jobs/backlog" },
+    { key: "followup",         icon: MessageSquare, label: "Follow-Up",           count: followUpCount,                    color: "text-sky",          bgClass: "from-sky/10 to-card",        borderClass: "border-sky/30",      route: "/copilot" },
     { key: "payment_failed",   icon: CreditCard,    label: "Payment Failures",    count: counts?.paymentFailed || 0,   color: "text-destructive",  bgClass: "from-destructive/10 to-card", borderClass: "border-destructive/30", route: "/jobs?filter=payment_failed" },
     { key: "expiring",         icon: Shield,        label: "Expiring Agreements", count: expiringCount,                    color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/agreements" },
   ];

@@ -5,6 +5,10 @@ import { Bell, ChevronDown, ChevronUp, Loader2, Send, MessageSquare, X } from "l
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  ACTION_ITEM_STATUS,
+  invalidateActionItemQueues,
+} from "@/lib/actionItemLifecycle";
 
 interface ReminderPreview {
   jobId: string;
@@ -20,16 +24,16 @@ export function ReminderBatchCard() {
   const [dismissing, setDismissing] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  // One-time stale cleanup: mark any open reminder_batch items older than today as done
+  // One-time stale cleanup: mark any pending reminder_batch items older than today as dismissed
   useEffect(() => {
     (async () => {
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
       await supabase
         .from("action_items")
-        .update({ status: "done", resolved_at: new Date().toISOString() })
+        .update({ status: ACTION_ITEM_STATUS.dismissed, resolved_at: new Date().toISOString() })
         .eq("category", "reminder_batch")
-        .eq("status", "open")
+        .eq("status", ACTION_ITEM_STATUS.pending)
         .lt("created_at", todayStart.toISOString());
       qc.invalidateQueries({ queryKey: ["reminder_batch_card"] });
     })();
@@ -45,7 +49,7 @@ export function ReminderBatchCard() {
         .from("action_items")
         .select("id, description")
         .eq("category", "reminder_batch")
-        .eq("status", "open")
+        .eq("status", ACTION_ITEM_STATUS.pending)
         .gte("created_at", todayStart.toISOString())
         .order("created_at", { ascending: false })
         .limit(1);
@@ -71,15 +75,15 @@ export function ReminderBatchCard() {
       });
       if (error) throw error;
 
-      // Mark the action item as done
+      // Mark the action item as accepted
       await supabase.from("action_items").update({
-        status: "done",
+        status: ACTION_ITEM_STATUS.accepted,
         resolved_at: new Date().toISOString(),
       }).eq("id", actionItem.id);
 
       toast({ title: "Reminders Sent", description: `${previews.length} appointment reminders sent.` });
       qc.invalidateQueries({ queryKey: ["reminder_batch_card"] });
-      qc.invalidateQueries({ queryKey: ["action_items"] });
+      invalidateActionItemQueues(qc);
     } catch (e: any) {
       toast({ title: "Error sending reminders", description: e.message, variant: "destructive" });
     }
@@ -90,11 +94,11 @@ export function ReminderBatchCard() {
     setDismissing(true);
     try {
       await supabase.from("action_items").update({
-        status: "done",
+        status: ACTION_ITEM_STATUS.dismissed,
         resolved_at: new Date().toISOString(),
       }).eq("id", actionItem.id);
       qc.invalidateQueries({ queryKey: ["reminder_batch_card"] });
-      qc.invalidateQueries({ queryKey: ["action_items"] });
+      invalidateActionItemQueues(qc);
     } catch (e: any) {
       toast({ title: "Error dismissing", description: e.message, variant: "destructive" });
     }

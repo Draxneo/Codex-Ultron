@@ -21,12 +21,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { TrainContactDialog } from "@/components/jarvis/TrainContactDialog";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import {
+  ACTION_ITEM_STATUS,
+  ACTION_ITEMS_PENDING_QUERY_KEY,
+  getActionItemPhone,
+  invalidateActionItemQueues,
+  resolveActionItem,
+  type ActionItemResolutionStatus,
+} from "@/lib/actionItemLifecycle";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   new_appointment:  { label: "New Job",  icon: CalendarPlus,  color: "text-green-500" },
+  new_lead:         { label: "New Lead", icon: UserCheck,     color: "text-emerald-500" },
+  follow_up:        { label: "Follow",   icon: MessageSquare, color: "text-sky-500" },
   missed_call:      { label: "Missed",   icon: PhoneMissed,   color: "text-red-500" },
   address_verify:   { label: "Address",   icon: MapPin,        color: "text-orange-500" },
   name_verify:      { label: "Name",      icon: UserCheck,     color: "text-amber-500" },
@@ -50,7 +57,6 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const softphone = useSoftphoneContext();
-  const telephony = useTelephonyMode();
   const { book, getState } = useBookingAction();
   const [actionId, setActionId] = useState<string | null>(null);
   const [trainPhone, setTrainPhone] = useState<{ phone: string; name?: string } | null>(null);
@@ -90,13 +96,15 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         source: "action_item_reply", hitlApproved: true, silent: true,
       });
       if (!result.success) throw new Error(result.error || "Send failed");
-      await supabase.from("action_items" as any).update({
-        status: "accepted",
-        resolved_at: new Date().toISOString(),
-        resolved_by: user?.id || null,
-      }).eq("id", item.id);
+      await resolveActionItem({
+        id: item.id,
+        status: ACTION_ITEM_STATUS.accepted,
+        userId: user?.id,
+        title: item.title,
+        jobId: item.job_id,
+      });
       toast({ title: "Reply sent", description: draft.slice(0, 80) });
-      qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+      invalidateActionItemQueues(qc);
     } catch (e: any) {
       toast({ title: "Send failed", description: e.message, variant: "destructive" });
     }
@@ -104,28 +112,28 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   };
 
   const { data: items, isLoading } = useQuery({
-    queryKey: ["action_items_pending"],
+    queryKey: ACTION_ITEMS_PENDING_QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("action_items" as any)
         .select("*")
-        .eq("status", "pending")
+        .eq("status", ACTION_ITEM_STATUS.pending)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as any[];
     },
   });
 
-  const handleAction = async (item: any, status: "accepted" | "dismissed") => {
+  const handleAction = async (item: any, status: ActionItemResolutionStatus) => {
     setActionId(item.id);
     try {
       // HCP-first booking via shared helper
-      if (status === "accepted" && item.category === "new_appointment" && item.metadata) {
+      if (status === ACTION_ITEM_STATUS.accepted && item.category === "new_appointment" && item.metadata) {
         const selectedProperty = propertySelections[item.id];
         const metadata = {
           ...item.metadata,
           ...(selectedProperty ? {
-            address: selectedProperty.address,
+            address: selectedProperty.address || selectedProperty.formatted,
             address_id: selectedProperty.id || null,
             requires_property_selection: false,
             selected_property_label: selectedProperty.label || null,
@@ -142,14 +150,14 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         });
         setActionId(null);
         if (result.ok) {
-          qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+          invalidateActionItemQueues(qc);
           qc.invalidateQueries({ queryKey: ["jobs"] });
           qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
         }
         return;
       }
 
-      if (status === "accepted" && item.category === "jarvis_action_approval" && item.metadata) {
+      if (status === ACTION_ITEM_STATUS.accepted && item.category === "jarvis_action_approval" && item.metadata) {
         const meta = item.metadata as any;
         const editableField = meta.editable_message_field as string | null | undefined;
         let approvalToken = meta.approval_token;
@@ -192,7 +200,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           title: "JARVIS action approved",
           description: item.title,
         });
-        qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+        invalidateActionItemQueues(qc);
         qc.invalidateQueries({ queryKey: ["jobs"] });
         qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
         qc.invalidateQueries({ queryKey: ["customers"] });
@@ -200,25 +208,20 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         return;
       }
 
-      // Default: just mark as accepted/dismissed
-      await supabase.from("action_items" as any).update({
+      await resolveActionItem({
+        id: item.id,
         status,
-        resolved_at: new Date().toISOString(),
-        resolved_by: user?.id || null,
-      }).eq("id", item.id);
-
-      await supabase.from("activity_log").insert({
-        action: `action_item_${status}`,
-        details: `${item.title} — ${status}`,
-        job_id: item.job_id || null,
+        userId: user?.id,
+        title: item.title,
+        jobId: item.job_id,
       });
 
       toast({
-        title: status === "accepted" ? "Accepted" : "Dismissed",
+        title: status === ACTION_ITEM_STATUS.accepted ? "Accepted" : "Dismissed",
         description: item.title,
       });
 
-      qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+      invalidateActionItemQueues(qc);
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -314,10 +317,13 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   )}
                   <div className="grid gap-1.5">
                     {propertyOptions.map((property: any, index: number) => {
-                      const active = selectedProperty?.address === property.address;
+                      const address = property.address || property.formatted;
+                      const active = selectedProperty?.id
+                        ? selectedProperty.id === property.id
+                        : (selectedProperty?.address || selectedProperty?.formatted) === address;
                       return (
                         <Button
-                          key={`${property.id || index}-${property.address}`}
+                          key={`${property.id || index}-${address}`}
                           size="sm"
                           variant={active ? "default" : "outline"}
                           className="h-auto justify-start gap-2 whitespace-normal py-2 text-left"
@@ -327,7 +333,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                           <MapPin className="h-3 w-3 shrink-0" />
                           <span className="min-w-0">
                             <span className="block text-xs font-medium">{property.label || "Property"}</span>
-                            <span className="block text-[11px] opacity-80">{property.address}</span>
+                            <span className="block text-[11px] opacity-80">{address}</span>
                           </span>
                         </Button>
                       );
@@ -424,11 +430,25 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
               })()}
 
               {(() => {
-                const trainablePhone =
-                  (item.metadata as any)?.phone || item.customer_phone;
+                const trainablePhone = getActionItemPhone(item);
                 const isTrainable =
                   !!trainablePhone &&
                   ["new_lead", "missed_call", "thread_attention"].includes(item.category);
+                const bs = getState(item.id);
+                const isWorking = bs.phase === "resolving" || bs.phase === "booking" || bs.phase === "syncing";
+                const isBookingItem = item.category === "new_appointment";
+                const isBusy = actionId === item.id || isWorking;
+                const phone = getActionItemPhone(item);
+                const closeAsAccepted = () => handleAction(item, ACTION_ITEM_STATUS.accepted);
+                const closeAsDismissed = () => handleAction(item, ACTION_ITEM_STATUS.dismissed);
+                const callPhone = () => {
+                  if (phone) softphone.setDialNumber(phone);
+                  closeAsAccepted();
+                };
+                const textPhone = () => {
+                  if (phone) navigate(`/inbox?section=sms&phone=${encodeURIComponent(phone)}`);
+                  closeAsAccepted();
+                };
 
                 if (item.category === "missed_call") {
                   return (
@@ -436,14 +456,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                       <Button
                         size="sm"
                         className="flex-1"
-                        onClick={() => {
-                          const phone = (item.metadata as any)?.phone || item.customer_phone;
-                          if (phone) {
-                            // Always use the in-app popup dialer (SoftphoneStrip)
-                            softphone.setDialNumber(phone);
-                          }
-                          handleAction(item, "accepted");
-                        }}
+                        onClick={callPhone}
                         disabled={actionId === item.id}
                       >
                         <Phone className="h-3 w-3" /> Call Back
@@ -452,13 +465,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         size="sm"
                         variant="secondary"
                         className="flex-1"
-                        onClick={() => {
-                          const phone = (item.metadata as any)?.phone || item.customer_phone;
-                          if (phone) {
-                            navigate(`/inbox?section=sms&phone=${encodeURIComponent(phone)}`);
-                          }
-                          handleAction(item, "accepted");
-                        }}
+                        onClick={textPhone}
                         disabled={actionId === item.id}
                       >
                         <MessageSquare className="h-3 w-3" /> Text
@@ -477,7 +484,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleAction(item, "dismissed")}
+                        onClick={closeAsDismissed}
                         disabled={actionId === item.id}
                       >
                         <X className="h-3 w-3" />
@@ -486,24 +493,113 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   );
                 }
 
-                const bs = getState(item.id);
-                const isWorking = bs.phase === "resolving" || bs.phase === "booking" || bs.phase === "syncing";
-                const isBookingItem = item.category === "new_appointment";
+                if (item.category === "new_lead") {
+                  return (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={callPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <Phone className="h-3 w-3" /> Call
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={textPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <MessageSquare className="h-3 w-3" /> Text
+                      </Button>
+                      {isTrainable && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Train JARVIS who this is"
+                          onClick={() => setTrainPhone({ phone: trainablePhone, name: (item.metadata as any)?.customer_name })}
+                          disabled={isBusy}
+                        >
+                          <Brain className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={closeAsDismissed}
+                        disabled={isBusy}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                }
+
+                if (item.category === "follow_up") {
+                  const estimateId = itemMetadata.active_estimate_id || itemMetadata.upcoming_estimate_id;
+                  const reviewPath = item.job_id
+                    ? `/jobs/${item.job_id}`
+                    : estimateId
+                      ? `/estimates/${estimateId}`
+                      : null;
+                  return (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          if (reviewPath) navigate(reviewPath);
+                          closeAsAccepted();
+                        }}
+                        disabled={isBusy}
+                      >
+                        <Eye className="h-3 w-3" /> Review
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={textPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <MessageSquare className="h-3 w-3" /> Text
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={callPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <Phone className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={closeAsDismissed}
+                        disabled={isBusy}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       className="flex-1"
-                      onClick={() => handleAction(item, "accepted")}
-                      disabled={actionId === item.id || isWorking}
+                      onClick={closeAsAccepted}
+                      disabled={isBusy || (needsPropertySelection && !selectedProperty)}
                     >
-                      {(actionId === item.id || isWorking) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                       {isBookingItem
                         ? (bs.phase === "resolving" ? "Resolving…"
                           : bs.phase === "booking" ? "Booking in HCP…"
                           : bs.phase === "syncing" ? "Syncing…"
                           : bs.phase === "booked" ? "Booked"
                           : bs.phase === "failed" ? "Retry Booking"
+                          : needsPropertySelection && !selectedProperty ? "Choose Property"
                           : "Accept & Book")
                         : "Accept"}
                     </Button>
@@ -513,7 +609,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         variant="outline"
                         title="Train JARVIS who this is"
                         onClick={() => setTrainPhone({ phone: trainablePhone, name: (item.metadata as any)?.customer_name })}
-                        disabled={actionId === item.id || isWorking}
+                        disabled={isBusy}
                       >
                         <Brain className="h-3 w-3" />
                       </Button>
@@ -521,8 +617,8 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleAction(item, "dismissed")}
-                      disabled={actionId === item.id || isWorking}
+                      onClick={closeAsDismissed}
+                      disabled={isBusy}
                     >
                       <X className="h-3 w-3" />
                     </Button>
