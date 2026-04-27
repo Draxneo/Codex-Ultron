@@ -34,6 +34,10 @@ type DocumentLineItem = {
   quantity: number;
   unitPrice: number;
   total: number;
+  optionId?: string | null;
+  optionName?: string | null;
+  itemType?: string | null;
+  detailUnavailable?: boolean;
 };
 
 type RelatedLink = {
@@ -85,6 +89,23 @@ function dateLabel(value: string | null | undefined, pattern = "MMM d, yyyy") {
   }
 }
 
+function timeLabel(value: string | null | undefined) {
+  if (!value) return null;
+  if (!value.includes("T")) return value;
+  try {
+    return format(new Date(value), "h:mm a");
+  } catch {
+    return value;
+  }
+}
+
+function timeWindowLabel(start: string | null | undefined, end: string | null | undefined) {
+  const startLabel = timeLabel(start);
+  const endLabel = timeLabel(end);
+  if (startLabel && endLabel) return `${startLabel} - ${endLabel}`;
+  return startLabel || endLabel || null;
+}
+
 function customerNameFrom(row: any, customer?: any) {
   const fromCustomer = [customer?.first_name, customer?.last_name].filter(Boolean).join(" ").trim();
   return fromCustomer || row?.customer_name || "Customer";
@@ -118,14 +139,30 @@ function normalizeJobItems(items: any[] | null | undefined): DocumentLineItem[] 
 }
 
 function normalizeEstimateItems(items: any[] | null | undefined): DocumentLineItem[] {
-  return (items || []).map((item) => ({
+  const normalized = (items || []).map((item) => ({
     id: item.id,
     name: item.name || item.description || item.option_name || "Line item",
     description: item.description || item.option_name || null,
     quantity: numberValue(item.quantity || 1),
     unitPrice: numberValue(item.unit_price),
     total: numberValue(item.total_price),
+    optionId: item.hcp_option_id || null,
+    optionName: item.option_name || null,
+    itemType: item.item_type || item.kind || null,
+    detailUnavailable: item.item_type === "estimate_option",
   }));
+
+  const optionIdsWithRealItems = new Set(
+    normalized
+      .filter((item) => item.itemType === "estimate_line_item")
+      .map((item) => item.optionId)
+      .filter(Boolean),
+  );
+
+  return normalized.filter((item) => {
+    const isOptionShell = item.itemType === "estimate_option" || item.itemType === "option" || item.name.toLowerCase().startsWith("option #");
+    return !(isOptionShell && item.optionId && optionIdsWithRealItems.has(item.optionId));
+  });
 }
 
 function normalizeInvoiceItems(items: any[] | null | undefined): DocumentLineItem[] {
@@ -510,7 +547,7 @@ export default function RecordDocument() {
                 <InfoRow
                   icon={Briefcase}
                   label="Arrival window"
-                  value={[data.arrivalStart, data.arrivalEnd].filter(Boolean).join(" - ") || null}
+                  value={timeWindowLabel(data.arrivalStart, data.arrivalEnd)}
                 />
                 <InfoRow icon={User} label="Assigned" value={data.assignedTo} />
               </div>
@@ -550,8 +587,15 @@ export default function RecordDocument() {
                     data.lineItems.map((item, index) => (
                       <tr key={item.id} className={index % 2 === 0 ? "bg-white" : "bg-muted/30"}>
                         <td className="px-4 py-3">
+                          {item.optionName && item.optionName !== item.name && (
+                            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-accent">{item.optionName}</p>
+                          )}
                           <p className="font-medium text-foreground">{item.name}</p>
-                          {item.description && item.description !== item.name && (
+                          {item.detailUnavailable ? (
+                            <p className="mt-0.5 text-xs text-amber-700">
+                              HCP archived this option total, but did not expose the itemized option details for this older estimate.
+                            </p>
+                          ) : item.description && item.description !== item.name && (
                             <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
                           )}
                         </td>

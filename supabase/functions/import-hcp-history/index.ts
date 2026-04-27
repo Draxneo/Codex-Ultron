@@ -177,6 +177,76 @@ function mapHcpEstimate(est: any) {
   };
 }
 
+function getMoney(value: any): number {
+  if (value === null || value === undefined || value === "") return 0;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  // HCP money fields usually arrive in cents.
+  return Math.abs(n) >= 1000 ? n / 100 : n;
+}
+
+function firstText(...values: any[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function getEstimateLineItemOptionId(item: any): string {
+  return (
+    item.option_id ||
+    item.estimate_option_id ||
+    item.estimate_option?.id ||
+    item.option?.id ||
+    item.option_number ||
+    "default"
+  );
+}
+
+function mapHcpEstimateLineItem(item: any, estimate: any, idx: number) {
+  const quantity = Number(item.quantity ?? 1) || 1;
+  const amount = getMoney(item.amount ?? item.total_amount ?? item.total ?? item.price);
+  const unitPrice = getMoney(item.unit_price ?? item.price ?? (amount ? amount / quantity : 0));
+  const totalPrice = amount || unitPrice * quantity;
+  const optionId = getEstimateLineItemOptionId(item);
+
+  return {
+    estimate_id: estimate.id,
+    hcp_estimate_id: estimate.hcp_id,
+    hcp_option_id: optionId,
+    hcp_line_item_id: item.id || item.uuid || `${optionId}:${idx}`,
+    option_name: firstText(item.option_name, item.estimate_option?.name, item.option?.name, item.option_number),
+    name: firstText(item.name, item.description, item.service_item?.name, item.material?.name) || "Line item",
+    description: firstText(item.description, item.details, item.service_item?.description, item.material?.description),
+    quantity,
+    unit_price: unitPrice,
+    unit_cost: getMoney(item.unit_cost),
+    total_price: totalPrice,
+    tax_amount: getMoney(item.tax_amount),
+    discount_amount: getMoney(item.discount_amount),
+    kind: firstText(item.kind, item.type),
+    item_type: "estimate_line_item",
+    sort_order: Number(item.sort_order ?? item.position ?? idx) || idx,
+    raw_hcp_json: item,
+  };
+}
+
+function estimateLineItemsFromDetail(detail: any): any[] {
+  const direct = Array.isArray(detail?.line_items) ? detail.line_items : [];
+  const optionItems = Array.isArray(detail?.options)
+    ? detail.options.flatMap((option: any) => {
+        const items = Array.isArray(option?.line_items) ? option.line_items : [];
+        return items.map((item: any) => ({
+          ...item,
+          option_id: item.option_id || option.id,
+          option_name: item.option_name || option.name,
+          option_number: item.option_number || option.option_number,
+        }));
+      })
+    : [];
+  return [...direct, ...optionItems];
+}
+
 function extractCustomer(record: any) {
   const cust = record.customer;
   if (!cust || !cust.id) return null;
@@ -388,6 +458,99 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         resource: "estimates", page, total_pages: totalPages,
         imported: mapped.length, customers_found: custMap.size, done,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    } else if (resource === "estimate_line_items") {
+      // Fetch actual line items inside HCP estimate options. Older imports only
+      // captured the option shell, which loses Option 1 / Option 2 detail.
+      const batchSize = body.batch_size || 15;
+      const offset = body.offset || 0;
+
+      const { data: estimateRows, error: estimateErr } = await supabase
+        .from("estimates")
+        .select("id, hcp_id, estimate_number, created_at")
+        .not("hcp_id", "is", null)
+        .order("created_at", { ascending: true })
+        .range(offset, offset + batchSize - 1);
+
+      if (estimateErr) throw new Error(`Estimates query failed: ${estimateErr.message}`);
+
+      const totalEstimatesRes = await supabase
+        .from("estimates")
+        .select("id", { count: "exact", head: true })
+        .not("hcp_id", "is", null);
+      const totalEstimates = totalEstimatesRes.count || 0;
+
+      let lineItemsImported = 0;
+      let estimatesProcessed = 0;
+      const samples: any[] = [];
+
+      for (const estimate of (estimateRows || [])) {
+        if (!estimate.hcp_id) continue;
+
+        const url = `https://api.housecallpro.com/estimates/${estimate.hcp_id}/line_items`;
+        try {
+          let fetchResult;
+          try {
+            fetchResult = await fetchHcp(url, hcpApiKey);
+          } catch (lineItemErr: any) {
+            // Some HCP accounts/older estimates still do not expose this endpoint.
+            // Fall back to the estimate detail payload and extract options[].line_items
+            // if HCP includes them there.
+            const detailResult = await fetchHcp(`https://api.housecallpro.com/estimates/${estimate.hcp_id}`, hcpApiKey);
+            fetchResult = {
+              ...detailResult,
+              data: { line_items: estimateLineItemsFromDetail(detailResult.data) },
+            };
+          }
+          if (fetchResult.retry) {
+            return new Response(JSON.stringify({
+              resource: "estimate_line_items",
+              offset: offset + estimatesProcessed,
+              total_estimates: totalEstimates,
+              imported: lineItemsImported,
+              estimates_processed: estimatesProcessed,
+              retry: true,
+              retry_after: fetchResult.retry_after || 10,
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+
+          const raw = fetchResult.data;
+          const items = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (raw?.line_items || raw?.items || []));
+          if (samples.length < 3 && items.length > 0) samples.push({ estimate_number: estimate.estimate_number, keys: Object.keys(items[0] || {}) });
+
+          if (items.length > 0) {
+            const mapped = items.map((item: any, idx: number) => mapHcpEstimateLineItem(item, estimate, idx));
+            const { error: upsertErr } = await supabase
+              .from("estimate_line_items")
+              .upsert(mapped, { onConflict: "hcp_estimate_id,hcp_option_id,hcp_line_item_id" });
+            if (upsertErr) {
+              console.error(`Estimate line item upsert failed for ${estimate.hcp_id}: ${upsertErr.message}`);
+            } else {
+              lineItemsImported += mapped.length;
+            }
+          }
+        } catch (err: any) {
+          console.error(`Failed to fetch estimate line items for ${estimate.hcp_id}: ${err.message}`);
+        }
+
+        estimatesProcessed++;
+        if (estimatesProcessed < (estimateRows || []).length) {
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+
+      const newOffset = offset + estimatesProcessed;
+      const done = newOffset >= totalEstimates || (estimateRows || []).length < batchSize;
+
+      return new Response(JSON.stringify({
+        resource: "estimate_line_items",
+        offset: newOffset,
+        total_estimates: totalEstimates,
+        imported: lineItemsImported,
+        estimates_processed: estimatesProcessed,
+        done,
+        samples,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } else if (resource === "line_items") {
