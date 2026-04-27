@@ -15,6 +15,15 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function normalizeE164Phone(phone: string | null | undefined): string {
+  const value = (phone || "").trim();
+  if (value.startsWith("+")) return value;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return value;
+}
+
 function buildQueueTwiml({
   holdMusicUrl,
   waitSeconds,
@@ -103,6 +112,7 @@ Deno.serve(async (req) => {
     const recordingDuration = parseInt(params.get("RecordingDuration") || "0");
     const recordingStatus = params.get("RecordingStatus") || "";
     const dialCallStatus = params.get("DialCallStatus") || "";
+    const dialCallDuration = parseInt(params.get("DialCallDuration") || "0", 10);
 
     const supabase = getSupabaseAdmin();
     const { data: smsTestModeRow } = await supabase
@@ -142,7 +152,12 @@ Deno.serve(async (req) => {
       });
 
       // Call was answered and completed — clean hangup, no voicemail
-      if (dialCallStatus === "completed") {
+      const cleanlyAnsweredDial =
+        dialCallStatus === "completed" ||
+        dialCallStatus === "answered" ||
+        dialCallDuration > 0;
+
+      if (cleanlyAnsweredDial) {
         return new Response(
           '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup /></Response>',
           {
@@ -221,8 +236,7 @@ Deno.serve(async (req) => {
       // Twilio sometimes returns "answered" / blank / unexpected statuses when a softphone
       // briefly grabs and drops the call — those used to fall straight through to voicemail.
       // Now they overflow to the answering service first.
-      const isNoAnswer = dialCallStatus !== "completed" &&
-        dialCallStatus !== "answered" && !isBusy;
+      const isNoAnswer = !cleanlyAnsweredDial && !isBusy;
 
       const shouldOverflow = overflowEnabled && overflowNumber &&
         ((isBusy && overflowOnBusy) || (isNoAnswer && overflowOnNoAnswer));
@@ -305,7 +319,7 @@ Deno.serve(async (req) => {
           console.error("Failed to tag overflow on call_log:", e);
         }
 
-        const twilioNumber = Deno.env.get("TWILIO_PHONE_NUMBER") || from;
+        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
         const overflowStatusCallback =
           `${supabaseUrl}/functions/v1/voice-status-callback`;
         console.log(

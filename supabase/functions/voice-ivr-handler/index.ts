@@ -26,6 +26,15 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function normalizeE164Phone(phone: string | null | undefined): string {
+  const value = (phone || "").trim();
+  if (value.startsWith("+")) return value;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return value;
+}
+
 function buildQueueTwiml({
   holdMusicUrl,
   waitSeconds,
@@ -178,7 +187,7 @@ Deno.serve(async (req) => {
     const queueWaitSeconds = (config as any).overflow_ring_seconds_before_handoff || dialTimeout;
 
     function overflowDialTwiml(reason: string): string {
-      const callerId = Deno.env.get("TWILIO_PHONE_NUMBER") || from;
+      const callerId = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
       const overflowStatusCallback = `${supabaseUrl}/functions/v1/voice-status-callback`;
       console.log(`🎙️ OVERFLOW TwiML generated: reason=${reason}, callback=${overflowStatusCallback}, recording=record-from-answer-dual`);
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -471,7 +480,7 @@ Deno.serve(async (req) => {
 
     // forward_client — build list of Client identities to ring
     const callerIdMode = config.after_hours_caller_id_mode || "company";
-    const twilioNumber = Deno.env.get("TWILIO_PHONE_NUMBER") || from;
+    const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
 
     // ── Check if "Away from Desk" forwarding is active + within THIS department's hours ──
     const { data: fwdRows } = await supabase

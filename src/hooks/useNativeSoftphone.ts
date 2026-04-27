@@ -432,15 +432,15 @@ export function useNativeSoftphone(enabled: boolean = true) {
     });
 
     const callInviteCancelledHandle = await plugin.addListener("callInviteCancelled", () => {
-      // Update call_log to 'cancelled' so other devices know
-      const cancelledSid = incomingCallSidRef.current;
-      if (cancelledSid) {
+      // Update call_log to 'canceled' so other devices know
+      const canceledSid = incomingCallSidRef.current;
+      if (canceledSid) {
         supabase
           .from("call_log")
-          .update({ status: "cancelled", ended_at: new Date().toISOString() })
-          .eq("twilio_sid", cancelledSid)
+          .update({ status: "canceled", ended_at: new Date().toISOString() })
+          .eq("twilio_sid", canceledSid)
           .then(({ error }) => {
-            if (error) console.error("[NativeSoftphone] Failed to update cancelled call_log:", error);
+            if (error) console.error("[NativeSoftphone] Failed to update canceled call_log:", error);
           });
       }
       incomingCallSidRef.current = null;

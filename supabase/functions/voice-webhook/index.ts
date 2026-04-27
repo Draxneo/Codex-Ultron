@@ -20,6 +20,15 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function normalizeE164Phone(phone: string | null | undefined): string {
+  const value = (phone || "").trim();
+  if (value.startsWith("+")) return value;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return value;
+}
+
 /** Returns <Play> for audio URL or <Say> for text */
 function greetingTwiml(audioUrl: string | null, text: string): string {
   if (audioUrl) return `<Play>${escapeXml(audioUrl)}</Play>`;
@@ -450,7 +459,7 @@ Deno.serve(async (req) => {
             within_business_hours: true,
           },
         });
-        const twilioNumber = Deno.env.get("TWILIO_PHONE_NUMBER") || to;
+        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || to;
         const statusCallbackUrlFwd =
           `${supabaseUrl}/functions/v1/voice-status-callback`;
         const voicemailUrlFwd =
@@ -673,7 +682,7 @@ Deno.serve(async (req) => {
       );
 
       if (oooWithNumber.length > 0) {
-        const twilioNumber = Deno.env.get("TWILIO_PHONE_NUMBER") || from;
+        const twilioNumber = normalizeE164Phone(Deno.env.get("TWILIO_PHONE_NUMBER")) || from;
         const callerIdMode = config.after_hours_caller_id_mode || "company";
         const dialCallerId = callerIdMode === "customer" ? from : twilioNumber;
 

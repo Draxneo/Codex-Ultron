@@ -402,10 +402,10 @@ export function useSoftphone(enabled: boolean = true) {
 
   // Wire disconnect/cancel/reject handlers on any call
   const wireCallEndHandlers = useCallback((call: Call) => {
-    // Best-effort terminal write so an unanswered/cancelled outbound never
+    // Best-effort terminal write so an unanswered/canceled outbound never
     // gets stuck without an ended_at. The voice-status-callback webhook is
     // authoritative — this is a fallback if the webhook is delayed/missed.
-    const writeTerminal = (status: "cancelled" | "no-answer" | "completed") => {
+    const writeTerminal = (status: "canceled" | "no-answer" | "completed") => {
       const sids = [call.parameters?.CallSid, call.parameters?.ParentCallSid].filter(Boolean) as string[];
       if (!sids.length) return;
       supabase
@@ -450,7 +450,7 @@ export function useSoftphone(enabled: boolean = true) {
     });
     call.on("cancel", () => {
       callDebug("call.cancel", { sid: call.parameters?.CallSid });
-      writeTerminal("cancelled");
+      writeTerminal("canceled");
       markCallEnd();
       onEnd();
     });
