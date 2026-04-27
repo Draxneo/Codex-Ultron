@@ -110,32 +110,32 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(50);
 
-    // ---- 3. Pull employees so we can map user_<uuid> -> name ----
+    // ---- 3. Pull employees so we can map Twilio client identity -> name ----
     const identities = Array.from(new Set(bindings.map((b) => b.identity)));
-    const userIds = identities
-      .filter((i) => i.startsWith("user_"))
-      .map((i) => i.slice(5));
+    const normalizedIdentityIds = identities
+      .map((identity) => identity.replace(/^uo2_user_/, "").replace(/^user_/, ""))
+      .filter(Boolean);
 
-    const { data: employees } = userIds.length
+    const { data: employees } = normalizedIdentityIds.length
       ? await supabase
           .from("employees")
-          .select("user_id, full_name, role")
-          .in("user_id", userIds)
+          .select("name, role, profile_id")
+          .not("profile_id", "is", null)
       : { data: [] };
 
     const empMap = new Map(
-      (employees || []).map((e: any) => [e.user_id, e])
+      (employees || []).map((e: any) => [String(e.profile_id || "").replace(/-/g, ""), e])
     );
 
     // Group by identity
     const byIdentity: Record<string, any> = {};
     for (const b of bindings) {
       if (!byIdentity[b.identity]) {
-        const userId = b.identity.startsWith("user_") ? b.identity.slice(5) : null;
-        const emp = userId ? empMap.get(userId) : null;
+        const normalizedId = b.identity.replace(/^uo2_user_/, "").replace(/^user_/, "");
+        const emp = normalizedId ? empMap.get(normalizedId) : null;
         byIdentity[b.identity] = {
           identity: b.identity,
-          employee_name: emp?.full_name || null,
+          employee_name: emp?.name || null,
           employee_role: emp?.role || null,
           bindings: [],
         };
