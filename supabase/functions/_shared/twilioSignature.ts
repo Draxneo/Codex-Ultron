@@ -46,6 +46,52 @@ function isLocalOrDevRequest(req: Request): boolean {
   return hostnames.some(isLocalHostname);
 }
 
+function cleanBaseUrl(value: string | undefined): string {
+  return (value || "").trim().replace(/\/$/, "");
+}
+
+function envUrl(name: string): string {
+  return cleanBaseUrl(Deno.env.get(name));
+}
+
+function configuredWebhookUrlCandidates(pathCandidates: string[]): string[] {
+  const slugs = pathCandidates
+    .map((path) => path.split("/").filter(Boolean).at(-1) || "")
+    .filter(Boolean);
+  const slug = slugs[0] || "";
+
+  const exactEnvNamesBySlug: Record<string, string[]> = {
+    "voice-webhook": ["TWILIO_VOICE_WEBHOOK_URL"],
+    "voice-ivr-handler": ["TWILIO_VOICE_IVR_HANDLER_URL"],
+    "voice-status-callback": ["TWILIO_VOICE_STATUS_CALLBACK_URL"],
+    "voice-voicemail": ["TWILIO_VOICE_VOICEMAIL_URL"],
+    "sms-webhook": ["TWILIO_SMS_WEBHOOK_URL"],
+    "sms-status-callback": ["TWILIO_SMS_STATUS_CALLBACK_URL"],
+    "twilio-voice-twiml": ["TWILIO_VOICE_TWIML_URL"],
+  };
+
+  const exactUrls = (exactEnvNamesBySlug[slug] || [])
+    .map(envUrl)
+    .filter(Boolean);
+
+  const publicBases = [
+    envUrl("TWILIO_WEBHOOK_PUBLIC_BASE_URL"),
+    envUrl("PUBLIC_SUPABASE_FUNCTIONS_URL"),
+    envUrl("SUPABASE_FUNCTIONS_URL"),
+  ].filter(Boolean);
+
+  const baseUrls = publicBases.flatMap((base) =>
+    pathCandidates.map((path) => `${base}${path}`)
+  );
+
+  return Array.from(new Set([...exactUrls, ...baseUrls]));
+}
+
+function maskSignature(signature: string): string {
+  if (signature.length <= 12) return "[redacted]";
+  return `${signature.slice(0, 6)}...${signature.slice(-6)}`;
+}
+
 /**
  * Validate Twilio request signature (X-Twilio-Signature header).
  * Prevents spoofed webhook calls. See:
@@ -138,11 +184,18 @@ export async function validateTwilioSignature(
     "",
   ]));
   const urlCandidates = Array.from(new Set(
-    baseCandidates.flatMap((base) =>
-      pathCandidates.flatMap((path) =>
-        queryCandidates.map((query) => `${base}${path}${query}`)
-      )
-    ),
+    [
+      ...configuredWebhookUrlCandidates(pathCandidates).flatMap((url) => {
+        const parsed = new URL(url);
+        const basePath = `${parsed.origin}${parsed.pathname}`;
+        return queryCandidates.map((query) => `${basePath}${query}`);
+      }),
+      ...baseCandidates.flatMap((base) =>
+        pathCandidates.flatMap((path) =>
+          queryCandidates.map((query) => `${base}${path}${query}`)
+        )
+      ),
+    ],
   ));
 
   const bodyParams = Array.from(requestParams.entries());
@@ -181,20 +234,15 @@ export async function validateTwilioSignature(
     }
   }
 
-  const expectedAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-  const requestAccountSid = requestParams.get("AccountSid");
-  if (
-    expectedAccountSid &&
-    requestAccountSid === expectedAccountSid &&
-    signature.length >= 20
-  ) {
-    console.warn(
-      `Twilio signature mismatch accepted by AccountSid fallback for ${internalUrl.pathname}. ` +
-        "Keep this monitored; tighten after capturing real proxy URL shape.",
-    );
-    return true;
-  }
-
-  console.warn(`Twilio signature mismatch for ${urlCandidates.length} candidate URL(s). Got: ${signature}`);
+  console.warn(JSON.stringify({
+    message: "Twilio signature mismatch",
+    path: internalUrl.pathname,
+    requestUrl: req.url,
+    candidateCount: urlCandidates.length,
+    candidateUrls: urlCandidates.slice(0, 12),
+    bodyParamKeys: Array.from(new Set(bodyParams.map(([key]) => key))).sort(),
+    queryParamKeys: Array.from(new Set(queryParams.map(([key]) => key))).sort(),
+    receivedSignature: maskSignature(signature),
+  }));
   return false;
 }

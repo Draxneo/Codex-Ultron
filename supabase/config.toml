@@ -97,6 +97,9 @@ verify_jwt = false
 [functions.sms-webhook]
 verify_jwt = false
 
+[functions.sms-status-callback]
+verify_jwt = false
+
 [functions.tech-form-chat]
 verify_jwt = false
 
