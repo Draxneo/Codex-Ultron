@@ -559,7 +559,7 @@ Deno.serve(async (req) => {
       const { data: profiles } = await supabase.from("profiles").select("id");
       const clientTags = (profiles || []).length > 0
         ? (profiles as any[]).map((p: any) => {
-          const clientId = `user_${p.id.replace(/-/g, "")}`;
+          const clientId = `uo2_user_${p.id.replace(/-/g, "")}`;
           const callerNameParam = contactName
             ? ` CapacitorTwilioCallerName="${escapeXml(contactName)}"`
             : "";

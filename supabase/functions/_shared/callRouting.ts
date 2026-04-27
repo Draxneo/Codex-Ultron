@@ -120,6 +120,10 @@ export async function isUserBusy(
 }
 
 /** Map an employee name → Ultraphone client identity (`user_<uuid_no_dashes>`). */
+function buildVoiceClientIdentity(profileId: string): string {
+  return `uo2_user_${String(profileId).replace(/-/g, "")}`;
+}
+
 async function resolveClientIdentityForEmployee(
   supabase: any,
   employeeName: string,
@@ -145,7 +149,7 @@ async function resolveClientIdentityForEmployee(
     const chosenEmployee = exactEmployee || partialEmployee;
 
     if (chosenEmployee?.profile_id) {
-      return `user_${String(chosenEmployee.profile_id).replace(/-/g, "")}`;
+      return buildVoiceClientIdentity(chosenEmployee.profile_id);
     }
 
     // Ultraphone client identities are derived from profile ids.
@@ -167,7 +171,7 @@ async function resolveClientIdentityForEmployee(
     const chosenProfile = exactProfile || partialProfile;
 
     if (chosenProfile?.id) {
-      return `user_${String(chosenProfile.id).replace(/-/g, "")}`;
+      return buildVoiceClientIdentity(chosenProfile.id);
     }
   } catch (e) {
     console.warn("[callRouting] resolveClientIdentityForEmployee failed:", e);

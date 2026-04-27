@@ -571,7 +571,8 @@ Deno.serve(async (req) => {
 
     let clientTags: string;
     if (clientIdentities.length > 0) {
-      clientTags = buildClientTags(clientIdentities, contactName || null);
+      clientTags = buildClientTags(clientIdentities, contactName || null)
+        .replace(/>user_/g, ">uo2_user_");
       console.log(`[ivr-handler] dept "${option.label}" → ${chosenEmployees.join(", ")}`);
     } else if (assignedIds.length > 0 && evaluation.reason === "no_rules") {
       // Fallback only when no department-routing rules exist for this IVR option.
@@ -592,7 +593,7 @@ Deno.serve(async (req) => {
 
       for (const uid of assignedIds) {
         const employee = employeesByProfile.get(uid);
-        const employeeName = employee?.name || `user_${uid}`;
+        const employeeName = employee?.name || `uo2_user_${uid}`;
         if (employee?.ooo_enabled) {
           fallbackAwayCount++;
           await logSystemTrace({
@@ -717,7 +718,7 @@ Deno.serve(async (req) => {
       }
 
       clientTags = availableAssignedIds.map((uid: string) => {
-        const identity = `user_${uid.replace(/-/g, "")}`;
+        const identity = `uo2_user_${uid.replace(/-/g, "")}`;
         return `<Client>${escapeXml(identity)}</Client>`;
       }).join("\n    ");
       console.log(`[ivr-handler] dept "${option.label}": routing rule yielded nobody — falling back to ${assignedIds.length} assigned users`);

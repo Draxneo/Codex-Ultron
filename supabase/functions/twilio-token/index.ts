@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       pushCredentialSid = Deno.env.get("TWILIO_PUSH_CREDENTIAL_SID_APNS") || undefined;
     }
 
-    const identity = `user_${user.id.replace(/-/g, "")}`;
+    const identity = `uo2_user_${user.id.replace(/-/g, "")}`;
     console.log(`twilio-token: platform=${platform}, identity=${identity}, pushCredSid=${pushCredentialSid ? "set" : "NOT SET"}, room=${room || "none"}`);
     const accessToken = await generateToken(identity, room, pushCredentialSid);
 
