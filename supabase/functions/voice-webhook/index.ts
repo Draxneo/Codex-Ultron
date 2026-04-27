@@ -747,6 +747,39 @@ Deno.serve(async (req) => {
         });
 
       if (clientIdentities.length === 0) {
+        if (evaluation.reason === "all_busy" && overflowEnabled && overflowNumber && overflowOnBusy) {
+          console.log(
+            "[voice-webhook] No-IVR path: everyone busy in 'general' - sending straight to answering service",
+          );
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-webhook",
+            eventKind: "route_selected",
+            summary: `All general-routing recipients busy; overflow to ${
+              (config as any).answering_service_label || "Answering Service"
+            }`,
+            reason: "all_busy",
+            severity: "warning",
+            traceGroup: callSid,
+            entityType: "call",
+            entityId: callSid,
+            callSid,
+            metadata: {
+              department: "general",
+              overflow_number: overflowNumber,
+              evaluation,
+              queue_retry: queueRetry,
+            },
+          });
+          return new Response(
+            overflowDialTwiml("all_busy", from),
+            {
+              headers: { ...corsHeaders, "Content-Type": "text/xml" },
+              status: 200,
+            },
+          );
+        }
+
         if (evaluation.reason === "all_busy" && !queueRetry) {
           console.log(
             `[voice-webhook] No-IVR path: everyone busy in 'general' — queueing caller for ${queueWaitSeconds}s`,
