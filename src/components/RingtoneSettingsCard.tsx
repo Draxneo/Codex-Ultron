@@ -89,9 +89,9 @@ export function RingtoneSettingsCard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      toast({ title: "File too large", description: "Max 2MB for ringtone files", variant: "destructive" });
+      toast({ title: "File too large", description: "Max 10MB for ringtone files", variant: "destructive" });
       return;
     }
 
@@ -104,7 +104,17 @@ export function RingtoneSettingsCard() {
     setUploading(true);
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const { error } = await supabase.storage.from("ringtones").upload(safeName, file, { upsert: true });
+      const extension = safeName.split(".").pop()?.toLowerCase();
+      const contentType =
+        extension === "mp3" ? "audio/mpeg" :
+        extension === "wav" ? "audio/wav" :
+        extension === "ogg" ? "audio/ogg" :
+        file.type || "application/octet-stream";
+      const { error } = await supabase.storage.from("ringtones").upload(safeName, file, {
+        upsert: true,
+        contentType,
+        cacheControl: "300",
+      });
       if (error) throw error;
 
       await refetchCustom();
@@ -215,7 +225,7 @@ export function RingtoneSettingsCard() {
               <Upload className="h-3.5 w-3.5" />
               {uploading ? "Uploading…" : "Upload audio file"}
             </Button>
-            <span className="text-[10px] text-muted-foreground self-center">MP3, WAV, OGG · Max 2 MB</span>
+            <span className="text-[10px] text-muted-foreground self-center">MP3, WAV, OGG · Max 10 MB</span>
           </div>
         </div>
 
