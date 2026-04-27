@@ -8,7 +8,7 @@ import { RepairPricingMatrix } from "@/components/catalog/RepairPricingMatrix";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
-const CATEGORIES = ["Electrical", "Refrigerant", "Airflow", "Motors", "Controls", "Safety", "Drainage", "Upgrades", "General"];
+const DEFAULT_CATEGORIES = ["Electrical", "Refrigerant", "Airflow", "Motors", "Controls", "Safety", "Drainage", "Upgrades", "General"];
 
 const SORT_OPTIONS = [
   { value: "name_asc", label: "Name: A → Z" },
@@ -47,6 +47,14 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
     },
   });
 
+  const categories = useMemo(() => {
+    const seen = new Set(DEFAULT_CATEGORIES);
+    for (const item of items) {
+      if (item.category) seen.add(item.category);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
   const filtered = useMemo(() => {
     let result = items.filter(i => i.is_active);
 
@@ -58,9 +66,10 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
     if (query) {
       const q = query.toLowerCase();
       result = result.filter(i =>
-        i.name.toLowerCase().includes(q) ||
-        i.customer_description.toLowerCase().includes(q) ||
-        i.keywords.some(k => k.toLowerCase().includes(q))
+        (i.name || "").toLowerCase().includes(q) ||
+        (i.customer_description || "").toLowerCase().includes(q) ||
+        (i.tech_description || "").toLowerCase().includes(q) ||
+        (Array.isArray(i.keywords) ? i.keywords : []).some(k => String(k).toLowerCase().includes(q))
       );
     }
 
@@ -76,10 +85,10 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
         return result.sort((a, b) => (order[a.default_severity as keyof typeof order] ?? 1) - (order[b.default_severity as keyof typeof order] ?? 1));
       }
       case "labor_desc":
-        return result.sort((a, b) => b.default_labor_hours - a.default_labor_hours);
+        return result.sort((a, b) => Number(b.default_labor_hours ?? 0) - Number(a.default_labor_hours ?? 0));
       case "category":
       default:
-        return result.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+        return result.sort((a, b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
     }
   }, [items, query, category, severity, sortBy]);
 
@@ -105,7 +114,7 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all_categories">All Categories</SelectItem>
-            {CATEGORIES.map(c => (
+            {categories.map(c => (
               <SelectItem key={c} value={c}>{c}</SelectItem>
             ))}
           </SelectContent>
