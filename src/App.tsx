@@ -92,7 +92,6 @@ import RepairCatalog from "./pages/RepairCatalog";
 import Catalog from "./pages/Catalog";
 import QuickQuote from "./pages/QuickQuote";
 import QuickQuoteCustomerView from "./pages/QuickQuoteCustomerView";
-import PayPage from "./pages/PayPage";
 import { SoftphoneProvider } from "./components/SoftphoneProvider";
 import { ViewAsProvider } from "./contexts/ViewAsContext";
 import { AdminViewAsBar } from "./components/AdminViewAsBar";
@@ -511,12 +510,12 @@ function AppRouter() {
         <Route path="/shopping-cart" element={<Navigate to="/catalog" replace />} />
         <Route path="/catalog" element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
         <Route path="/quick-quote" element={<ProtectedRoute><QuickQuote /></ProtectedRoute>} />
-        <Route path="/pay" element={<ProtectedRoute><PayPage /></ProtectedRoute>} />
+        <Route path="/pay" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
 
         {/* Redirects */}
         
         <Route path="/estimates" element={<Navigate to="/" replace />} />
-        <Route path="/paysheet" element={<Navigate to="/pay" replace />} />
+        <Route path="/paysheet" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
         <Route path="/reports" element={<Navigate to="/admin?section=reports" replace />} />
 
         <Route path="*" element={<NotFound />} />

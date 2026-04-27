@@ -1163,7 +1163,7 @@ export default function Admin() {
 
   if (loading) return null;
   if (allowedTabs && !allowedTabs.has("admin")) {
-    return <Navigate to="/pay" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const handleNavigateSection = (section: string) => {

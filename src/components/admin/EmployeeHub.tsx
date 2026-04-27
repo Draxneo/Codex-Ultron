@@ -23,7 +23,7 @@ import {
   Users, Shield, DollarSign, Calendar, Activity,
   Plus, Trash2, UserPlus, Mail, MessageSquare, Clock,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEmployees, useAddEmployee, useUpdateEmployee, useToggleEmployee, useDeleteEmployee, useInviteUser } from "@/hooks/useEmployees";
@@ -357,9 +357,23 @@ function ComingSoon({ icon: Icon, title, blurb }: { icon: any; title: string; bl
 
 /* ──────────── Hub ──────────── */
 export function EmployeeHub() {
-  const [tab, setTab] = useState("roster");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("employeeTab") || "roster";
+  const [tab, setTab] = useState(initialTab);
+
+  const handleTabChange = (nextTab: string) => {
+    setTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === "roster") {
+      nextParams.delete("employeeTab");
+    } else {
+      nextParams.set("employeeTab", nextTab);
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
   return (
-    <Tabs value={tab} onValueChange={setTab} className="w-full">
+    <Tabs value={tab} onValueChange={handleTabChange} className="w-full">
       <TabsList className="grid w-full grid-cols-5">
         <TabsTrigger value="roster" className="gap-1.5"><Users className="h-3.5 w-3.5" />Roster</TabsTrigger>
         <TabsTrigger value="permissions" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Permissions</TabsTrigger>
