@@ -31,6 +31,32 @@ type TwilioRecording = {
   call_sid: string;
 };
 
+const ACTIVE_TWILIO_STATUSES = new Set(["queued", "ringing", "in-progress"]);
+const TERMINAL_TWILIO_STATUSES = new Set(["completed", "no-answer", "busy", "canceled", "failed"]);
+const RECONCILE_STATUSES = ["no-answer", "unknown", "ringing", "initiated", "in-progress", "missed-while-busy"];
+
+function coerceTerminalStatus(status: string | null | undefined): string {
+  const normalized = (status || "").toLowerCase();
+  return TERMINAL_TWILIO_STATUSES.has(normalized) ? normalized : "completed";
+}
+
+function parseTwilioDuration(value: string | null | undefined): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function mergeExtractedData(
+  existing: Record<string, unknown> | null | undefined,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...(existing || {}),
+    ...patch,
+    reconciled_by: "reconcile-stuck-calls",
+    reconciled_at: new Date().toISOString(),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -76,12 +102,18 @@ Deno.serve(async (req) => {
     if (u.searchParams.get("scope") === "recent") scope = "recent";
   } catch { /* ignore */ }
 
-  let rows: { id: string; twilio_sid: string; status: string; created_at: string }[] = [];
+  let rows: {
+    id: string;
+    twilio_sid: string;
+    status: string;
+    created_at: string;
+    extracted_data?: Record<string, unknown> | null;
+  }[] = [];
 
   if (specificSid) {
     const { data } = await supabase
       .from("call_log")
-      .select("id, twilio_sid, status, created_at")
+      .select("id, twilio_sid, status, created_at, extracted_data")
       .eq("twilio_sid", specificSid);
     rows = (data || []) as any;
   } else if (scope === "recent") {
@@ -90,11 +122,11 @@ Deno.serve(async (req) => {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data } = await supabase
       .from("call_log")
-      .select("id, twilio_sid, status, created_at, duration_seconds, recording_url")
+      .select("id, twilio_sid, status, created_at, duration_seconds, recording_url, extracted_data")
       .not("twilio_sid", "is", null)
       .is("duration_seconds", null)
       .is("recording_url", null)
-      .in("status", ["no-answer", "unknown", "ringing", "initiated", "in-progress", "missed-while-busy"])
+      .in("status", RECONCILE_STATUSES)
       .gte("created_at", twoHoursAgo)
       .lt("created_at", tenMinAgo)
       .limit(100);
@@ -105,11 +137,11 @@ Deno.serve(async (req) => {
     const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data } = await supabase
       .from("call_log")
-      .select("id, twilio_sid, status, created_at, duration_seconds, recording_url")
+      .select("id, twilio_sid, status, created_at, duration_seconds, recording_url, extracted_data")
       .not("twilio_sid", "is", null)
       .is("duration_seconds", null)
       .is("recording_url", null)
-      .in("status", ["no-answer", "unknown", "ringing", "initiated", "in-progress", "missed-while-busy"])
+      .in("status", RECONCILE_STATUSES)
       .gte("created_at", sevenDaysAgo)
       .lt("created_at", fifteenMinAgo)
       .limit(200);
@@ -126,7 +158,7 @@ Deno.serve(async (req) => {
   const stuckCutoff = new Date(Date.now() - 255 * 60 * 1000).toISOString();
   const { data: stuckRows, error: stuckErr } = await supabase
     .from("call_log")
-    .select("id, twilio_sid, status, started_at")
+    .select("id, twilio_sid, status, started_at, extracted_data")
     .eq("status", "in-progress")
     .lt("started_at", stuckCutoff)
     .limit(50);
@@ -135,7 +167,12 @@ Deno.serve(async (req) => {
   const results: any[] = [];
   if (!stuckErr && stuckRows && stuckRows.length > 0) {
     console.log(`[reconcile] Force-closing ${stuckRows.length} stuck in-progress rows`);
-    for (const stuck of stuckRows as Array<{ id: string; twilio_sid: string | null; started_at: string | null }>) {
+    for (const stuck of stuckRows as Array<{
+      id: string;
+      twilio_sid: string | null;
+      started_at: string | null;
+      extracted_data?: Record<string, unknown> | null;
+    }>) {
       // If we have a Twilio SID, ask Twilio for ground truth before stamping
       let finalStatus = "completed";
       let endTime = new Date().toISOString();
@@ -144,7 +181,7 @@ Deno.serve(async (req) => {
       if (stuck.twilio_sid) {
         const twilioCall: TwilioCall | null = await fetchTwilio(`/Calls/${stuck.twilio_sid}.json`);
         if (twilioCall) {
-          if (["queued", "ringing", "in-progress"].includes(twilioCall.status)) {
+          if (ACTIVE_TWILIO_STATUSES.has(twilioCall.status)) {
             results.push({
               id: stuck.id,
               sid: stuck.twilio_sid,
@@ -153,11 +190,9 @@ Deno.serve(async (req) => {
             });
             continue;
           }
-          finalStatus = ["completed", "no-answer", "busy", "canceled", "failed"].includes(twilioCall.status)
-            ? twilioCall.status
-            : "completed";
+          finalStatus = coerceTerminalStatus(twilioCall.status);
           if (twilioCall.end_time) endTime = new Date(twilioCall.end_time).toISOString();
-          const dur = Number(twilioCall.duration) || 0;
+          const dur = parseTwilioDuration(twilioCall.duration);
           if (dur > 0) durationSeconds = dur;
         }
       }
@@ -168,6 +203,11 @@ Deno.serve(async (req) => {
           status: finalStatus,
           ended_at: endTime,
           ...(durationSeconds !== null ? { duration_seconds: durationSeconds } : {}),
+          extracted_data: mergeExtractedData(stuck.extracted_data, {
+            terminal_reason: finalStatus,
+            twilio_parent_status: finalStatus,
+            ghost_busy_force_closed: true,
+          }),
         })
         .eq("id", stuck.id);
 
@@ -203,17 +243,24 @@ Deno.serve(async (req) => {
     )[0] || null;
 
     // Derive ground truth
-    const parentDuration = Number(parent.duration) || 0;
-    const childWithDuration = children.find((c) => Number(c.duration) > 0);
-    const finalDuration = Math.max(parentDuration, Number(childWithDuration?.duration) || 0);
+    const parentDuration = parseTwilioDuration(parent.duration);
+    const childWithDuration = children.find((c) => parseTwilioDuration(c.duration) > 0);
+    const finalDuration = Math.max(parentDuration, parseTwilioDuration(childWithDuration?.duration));
 
-    const endTime = parent.end_time ? new Date(parent.end_time).toISOString() : null;
+    const parentIsTerminal = TERMINAL_TWILIO_STATUSES.has(parent.status);
+    const childStatuses = children.map((c) => c.status);
+    const hasActiveChild = childStatuses.some((status) => ACTIVE_TWILIO_STATUSES.has(status));
+    const endTime = parent.end_time
+      ? new Date(parent.end_time).toISOString()
+      : parentIsTerminal && !hasActiveChild
+        ? new Date().toISOString()
+        : null;
 
     // Map Twilio status → our status taxonomy
     let newStatus = parent.status;
     if (finalDuration > 0 || bestRecording) {
       newStatus = "completed";
-    } else if (["no-answer", "busy", "canceled", "failed"].includes(parent.status)) {
+    } else if (TERMINAL_TWILIO_STATUSES.has(parent.status)) {
       newStatus = parent.status;
     }
 
@@ -227,6 +274,16 @@ Deno.serve(async (req) => {
       ...(recordingUrl ? { recording_url: recordingUrl } : {}),
       ...(endTime ? { ended_at: endTime } : {}),
       ...(parent.answered_by ? { answered_by: parent.answered_by } : {}),
+      extracted_data: mergeExtractedData(row.extracted_data, {
+        terminal_reason: TERMINAL_TWILIO_STATUSES.has(newStatus) || newStatus === "completed" ? newStatus : undefined,
+        twilio_parent_status: parent.status,
+        twilio_parent_sid: parent.sid,
+        twilio_child_sids: children.map((c) => c.sid),
+        twilio_child_statuses: childStatuses,
+        latest_child_call_sid: children[0]?.sid || undefined,
+        had_recording: !!bestRecording,
+        recording_sid: bestRecording?.sid || undefined,
+      }),
     };
 
     const { error } = await supabase.from("call_log").update(update).eq("id", row.id);
