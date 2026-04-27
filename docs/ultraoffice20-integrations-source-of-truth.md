@@ -19,6 +19,21 @@ Render deploys from GitHub. Local commits pushed to `main` are expected to trigg
 
 The staging app should use the staging Supabase URL and publishable key. Service-role keys must not be placed in frontend env files.
 
+## Environment Files
+
+Local frontend env files (`.env` and `.env.local`) are public-only Vite config:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PROJECT_ID`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GOOGLE_MAPS_API_KEY`
+
+Do not put Twilio, Stripe, OpenAI, Supabase service-role, Render, HCP, or admin/session secrets in frontend env files.
+
+Local tool-only secrets belong in `.env.tools.local`. Production server secrets belong in Supabase secrets or Render environment variables, not in the browser bundle.
+
+Run `npm run env:audit` after env changes.
+
 ## Auth
 
 The admin user for staging is `clint@carnesandsons.com`.
@@ -34,6 +49,19 @@ Only the test number currently points at the UltraOffice2.0 staging Supabase fun
 - Voice webhook: `https://tqkqqjvddfrcxrxfvzvz.supabase.co/functions/v1/voice-webhook`
 - SMS webhook: `https://tqkqqjvddfrcxrxfvzvz.supabase.co/functions/v1/sms-webhook`
 - SMS status callback: `https://tqkqqjvddfrcxrxfvzvz.supabase.co/functions/v1/sms-status-callback`
+
+Canonical Twilio server secret names:
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_API_KEY_SID`
+- `TWILIO_API_KEY_SECRET`
+- `TWILIO_TWIML_APP_SID`
+- `TWILIO_PHONE_NUMBER`
+- optional `TWILIO_CALLER_ID` if different from `TWILIO_PHONE_NUMBER`
+- optional `TWILIO_PUSH_CREDENTIAL_SID_FCM` for Android
+
+Do not use old aliases like `TWILIO_API_KEY` or `TWILIO_API_SECRET`.
 
 All other production Twilio numbers should remain pointed at the old system until an explicit cutover.
 

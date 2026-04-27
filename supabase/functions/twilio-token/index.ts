@@ -19,8 +19,8 @@ function isRateLimited(key: string): boolean {
 
 async function generateToken(identity: string, pushCredentialSid?: string): Promise<string> {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-  const apiKey = Deno.env.get("TWILIO_API_KEY_SID") || Deno.env.get("TWILIO_API_KEY") || "";
-  const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET") || Deno.env.get("TWILIO_API_SECRET") || "";
+  const apiKey = Deno.env.get("TWILIO_API_KEY_SID") || "";
+  const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET") || "";
   const twimlAppSid = Deno.env.get("TWILIO_TWIML_APP_SID")!;
 
   if (!accountSid || !apiKey || !apiSecret || !twimlAppSid) {
