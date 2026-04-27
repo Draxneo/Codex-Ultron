@@ -37,6 +37,9 @@ verify_jwt = false
 [functions.hcp-history-import-raw]
 verify_jwt = false
 
+[functions.hcp-history-normalize]
+verify_jwt = false
+
 [functions.extract-document-text]
 verify_jwt = false
 
