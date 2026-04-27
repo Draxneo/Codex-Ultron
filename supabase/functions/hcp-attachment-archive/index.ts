@@ -337,7 +337,11 @@ Deno.serve(async (req) => {
         });
 
         if (!dryRun) {
-          const status = message.startsWith("File exceeds archive limit") ? "too_large" : "failed";
+          const status = message.startsWith("File exceeds archive limit")
+            ? "too_large"
+            : message === "No downloadable HCP URL found" && (row.retry_count || 0) >= 2
+            ? "missing"
+            : "failed";
           await supabase
             .from("hcp_attachments")
             .update({
