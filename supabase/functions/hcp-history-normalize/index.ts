@@ -8,6 +8,7 @@ type NormalizeResource =
   | "addresses"
   | "jobs"
   | "estimates"
+  | "estimate_items"
   | "invoices"
   | "invoice_items"
   | "invoice_payments"
@@ -19,6 +20,7 @@ const RESOURCE_TO_SOURCE_TYPES: Record<NormalizeResource, string[]> = {
   addresses: ["customer_address"],
   jobs: ["job"],
   estimates: ["estimate"],
+  estimate_items: ["estimate_option"],
   invoices: ["invoice"],
   invoice_items: ["invoice_line_item"],
   invoice_payments: ["invoice_payment"],
@@ -310,6 +312,52 @@ async function normalizeEstimates(supabase: any, raws: any[], runId: string) {
   return rows.length;
 }
 
+async function normalizeEstimateItems(supabase: any, raws: any[], runId: string) {
+  const estimateMap = await getEstimateMap(supabase, raws.map((r: any) => r.parent_source_key).filter(Boolean));
+  const rows = await Promise.all(raws.map(async (rawRow: any, index: number) => {
+    const raw = rawRow.raw_json || {};
+    const estimate = estimateMap.get(rawRow.parent_source_key);
+    if (!estimate) return null;
+    const notes = Array.isArray(raw.notes)
+      ? raw.notes
+          .map((note: any) => firstText(note.content, note.body, note.text, note.note))
+          .filter(Boolean)
+          .join("\n\n")
+      : null;
+    const total = getAmount(raw.total_amount ?? raw.amount ?? raw.total ?? raw.total_price);
+    const optionName = firstText(raw.name, raw.option_number ? `Option ${raw.option_number}` : null) || "Imported HCP estimate option";
+    return {
+      estimate_id: estimate.id,
+      hcp_estimate_id: rawRow.parent_source_key,
+      hcp_option_id: raw.id || raw.uuid || rawRow.source_key,
+      hcp_line_item_id: raw.id || raw.uuid || rawRow.source_key,
+      option_name: optionName,
+      name: optionName,
+      description: notes || firstText(raw.description, raw.message_from_pro, raw.status) || optionName,
+      quantity: 1,
+      unit_price: total,
+      unit_cost: getAmount(raw.unit_cost),
+      total_price: total,
+      tax_amount: getAmount(raw.tax_amount),
+      discount_amount: getAmount(raw.discount_amount),
+      kind: firstText(raw.kind, raw.type) || "estimate_option",
+      item_type: firstText(raw.item_type, raw.type) || "estimate_option",
+      sort_order: asNumber(raw.option_number || index),
+      raw_hcp_json: raw,
+      source_hash: await sha256(raw),
+      import_run_id: runId,
+    };
+  }));
+
+  const filtered = rows.filter(Boolean);
+  if (!filtered.length) return 0;
+  const { error } = await supabase
+    .from("estimate_line_items")
+    .upsert(filtered, { onConflict: "hcp_estimate_id,hcp_option_id,hcp_line_item_id" });
+  if (error) throw new Error(`Estimate item upsert failed: ${error.message}`);
+  return filtered.length;
+}
+
 async function normalizeInvoices(supabase: any, raws: any[], runId: string) {
   const jobMap = await getJobMap(supabase, raws.map((r: any) => r.raw_json?.job_id).filter(Boolean));
   const rows = await Promise.all(raws.map(async (rawRow: any) => {
@@ -532,6 +580,8 @@ async function normalizeResource(supabase: any, resource: NormalizeResource, raw
       return await normalizeJobs(supabase, raws, runId);
     case "estimates":
       return await normalizeEstimates(supabase, raws, runId);
+    case "estimate_items":
+      return await normalizeEstimateItems(supabase, raws, runId);
     case "invoices":
       return await normalizeInvoices(supabase, raws, runId);
     case "invoice_items":
