@@ -327,21 +327,24 @@ Deno.serve(async (req) => {
       } catch (err: any) {
         failed++;
         const message = err?.message || "Unknown archive error";
+        const isMissingFromHcp =
+          message === "No downloadable HCP URL found" ||
+          message === "Download failed after refresh: 404";
+        const status = message.startsWith("File exceeds archive limit")
+          ? "too_large"
+          : isMissingFromHcp && (row.retry_count || 0) >= 2
+          ? "missing"
+          : "failed";
         results.push({
           id: row.id,
           source_type: row.source_type,
           hcp_attachment_id: row.hcp_attachment_id,
           file_name: row.file_name,
-          status: "failed",
+          status,
           error: message,
         });
 
         if (!dryRun) {
-          const status = message.startsWith("File exceeds archive limit")
-            ? "too_large"
-            : message === "No downloadable HCP URL found" && (row.retry_count || 0) >= 2
-            ? "missing"
-            : "failed";
           await supabase
             .from("hcp_attachments")
             .update({
