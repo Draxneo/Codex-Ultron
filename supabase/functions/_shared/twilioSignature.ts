@@ -97,14 +97,37 @@ export async function validateTwilioSignature(
     })(),
   ].filter(Boolean)));
 
+  const rawQuery = internalUrl.search || "";
+  const sortedQuery = internalUrl.searchParams.size > 0
+    ? `?${
+      Array.from(internalUrl.searchParams.entries())
+        .sort(([aKey, aValue], [bKey, bValue]) => {
+          if (aKey === bKey) return aValue.localeCompare(bValue);
+          return aKey.localeCompare(bKey);
+        })
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join("&")
+    }`
+    : "";
+
+  const queryCandidates = Array.from(new Set([rawQuery, sortedQuery, ""]));
   const urlCandidates = Array.from(new Set(
-    baseCandidates.flatMap((base) => pathCandidates.map((path) => `${base}${path}${internalUrl.search}`)),
+    baseCandidates.flatMap((base) =>
+      pathCandidates.flatMap((path) =>
+        queryCandidates.map((query) => `${base}${path}${query}`)
+      )
+    ),
   ));
 
-  const params = Array.from(new URLSearchParams(body).entries()).sort(([aKey, aValue], [bKey, bValue]) => {
+  const bodyParams = Array.from(new URLSearchParams(body).entries());
+  const queryParams = Array.from(internalUrl.searchParams.entries());
+  const paramCandidates = [
+    bodyParams,
+    [...bodyParams, ...queryParams],
+  ].map((items) => items.sort(([aKey, aValue], [bKey, bValue]) => {
     if (aKey === bKey) return aValue.localeCompare(bValue);
     return aKey.localeCompare(bKey);
-  });
+  }));
 
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -116,17 +139,19 @@ export async function validateTwilioSignature(
   );
 
   for (const fullUrl of urlCandidates) {
-    let dataString = fullUrl;
-    for (const [keyName, value] of params) {
-      dataString += keyName + value;
-    }
+    for (const params of paramCandidates) {
+      let dataString = fullUrl;
+      for (const [keyName, value] of params) {
+        dataString += keyName + value;
+      }
 
-    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(dataString));
-    const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
+      const sig = await crypto.subtle.sign("HMAC", key, enc.encode(dataString));
+      const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
 
-    if (constantTimeEqual(computed, signature)) {
-      console.log(`Twilio signature validated for ${fullUrl}`);
-      return true;
+      if (constantTimeEqual(computed, signature)) {
+        console.log(`Twilio signature validated for ${fullUrl}`);
+        return true;
+      }
     }
   }
 
