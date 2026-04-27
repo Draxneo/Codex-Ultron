@@ -154,7 +154,7 @@ function normalizeEstimateItems(items: any[] | null | undefined): DocumentLineIt
 
   const optionIdsWithRealItems = new Set(
     normalized
-      .filter((item) => item.itemType === "estimate_line_item")
+      .filter((item) => item.itemType === "estimate_line_item" || item.itemType === "invoice_line_item")
       .map((item) => item.optionId)
       .filter(Boolean),
   );
