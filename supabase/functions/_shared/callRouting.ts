@@ -101,15 +101,13 @@ export async function isUserBusy(
       return true;
     }
 
-    // Defensive fallback: if there's an unattributed live call, treat the
-    // routing destination as busy. This is safer than double-ringing them.
-    // Reason: client-side answered_by attribution can fail silently when
-    // employees rows aren't linked to profile_id. Better to overflow to the
-    // answering service than to bridge a 2nd caller into the active call's
-    // notification stream and risk dropping the original call.
+    // Ignore unattributed in-progress rows for busy routing. One stale or
+    // partially reconciled callback should not poison the whole phone tree.
+    // Client-side duplicate-call guards still reject a second invite if the
+    // dispatcher is actually connected.
     if (rows.some((r) => !r.answered_by)) {
-      console.log(`[callRouting] ${employeeName}: BUSY (unattributed live call — defensive)`);
-      return true;
+      console.log(`[callRouting] ${employeeName}: ignoring unattributed in-progress call`);
+      return false;
     }
 
     return false;
