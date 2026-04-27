@@ -98,6 +98,12 @@ export async function validateTwilioSignature(
   ].filter(Boolean)));
 
   const rawQuery = internalUrl.search || "";
+  const formEncodedQuery = internalUrl.searchParams.size > 0
+    ? `?${internalUrl.searchParams.toString()}`
+    : "";
+  const percentSpaceQuery = formEncodedQuery
+    ? formEncodedQuery.replace(/\+/g, "%20")
+    : "";
   const sortedQuery = internalUrl.searchParams.size > 0
     ? `?${
       Array.from(internalUrl.searchParams.entries())
@@ -109,8 +115,26 @@ export async function validateTwilioSignature(
         .join("&")
     }`
     : "";
+  const sortedFormEncodedQuery = internalUrl.searchParams.size > 0
+    ? `?${
+      Array.from(internalUrl.searchParams.entries())
+        .sort(([aKey, aValue], [bKey, bValue]) => {
+          if (aKey === bKey) return aValue.localeCompare(bValue);
+          return aKey.localeCompare(bKey);
+        })
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/%20/g, "+")}`)
+        .join("&")
+    }`
+    : "";
 
-  const queryCandidates = Array.from(new Set([rawQuery, sortedQuery, ""]));
+  const queryCandidates = Array.from(new Set([
+    rawQuery,
+    formEncodedQuery,
+    percentSpaceQuery,
+    sortedQuery,
+    sortedFormEncodedQuery,
+    "",
+  ]));
   const urlCandidates = Array.from(new Set(
     baseCandidates.flatMap((base) =>
       pathCandidates.flatMap((path) =>
