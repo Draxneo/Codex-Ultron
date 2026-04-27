@@ -1247,6 +1247,130 @@ async function firecrawlScrape(url: string, firecrawlKey: string) {
 // ==================== Extracted Tool Executor ====================
 // All collapsed agent logic lives here now — zero-hop execution.
 
+const JARVIS_HITL_MUTATING_TOOLS = new Set([
+  "update_instruction",
+  "log_learning",
+  "send_sms_to_employee",
+  "send_tech_form_link",
+  "send_chat_message",
+  "create_customer",
+  "update_customer",
+  "create_job",
+  "update_job_field",
+  "create_quote",
+  "generate_install_quote",
+  "convert_estimate_to_job",
+  "generate_letterhead_document",
+  "send_brochure_email",
+  "create_vendor",
+  "invoke_repair_quote",
+  "invoke_supplyhouse",
+  "invoke_carrier_enterprise",
+  "invoke_invoicing",
+  "create_parts_order",
+  "update_warranty_status",
+  "create_todo",
+  "complete_todo",
+  "move_photos_to_job",
+]);
+
+const JARVIS_HITL_TOOL_LABELS: Record<string, string> = {
+  update_instruction: "Update JARVIS instruction",
+  log_learning: "Save JARVIS learning",
+  send_sms_to_employee: "Send SMS to employee",
+  send_tech_form_link: "Send tech form link",
+  send_chat_message: "Send team chat message",
+  create_customer: "Create customer",
+  update_customer: "Update customer",
+  create_job: "Create job",
+  update_job_field: "Update job",
+  create_quote: "Create quote",
+  generate_install_quote: "Generate install quote",
+  convert_estimate_to_job: "Convert estimate to job",
+  generate_letterhead_document: "Generate document",
+  send_brochure_email: "Send brochure email",
+  create_vendor: "Create vendor",
+  invoke_repair_quote: "Generate repair quote",
+  invoke_supplyhouse: "Use SupplyHouse account",
+  invoke_carrier_enterprise: "Use Carrier Enterprise account",
+  invoke_invoicing: "Create invoice/payment action",
+  create_parts_order: "Create parts order",
+  update_warranty_status: "Update warranty status",
+  create_todo: "Create task",
+  complete_todo: "Complete task",
+  move_photos_to_job: "Move SMS photos to job",
+};
+
+function summarizeJarvisApprovalArgs(toolName: string, args: any): string {
+  const parts: string[] = [];
+  if (args.customer_name) parts.push(`Customer: ${args.customer_name}`);
+  if (args.first_name || args.last_name) parts.push(`Customer: ${[args.first_name, args.last_name].filter(Boolean).join(" ")}`);
+  if (args.customer_id) parts.push(`Customer ID: ${args.customer_id}`);
+  if (args.job_id) parts.push(`Job ID: ${args.job_id}`);
+  if (args.estimate_id || args.estimate_review_id) parts.push(`Estimate: ${args.estimate_id || args.estimate_review_id}`);
+  if (args.field_name) parts.push(`Field: ${args.field_name} = ${args.value ?? "(now)"}`);
+  if (args.customer_email) parts.push(`Email: ${args.customer_email}`);
+  if (args.action) parts.push(`Action: ${args.action}`);
+  if (args.employee_name) parts.push(`Employee: ${args.employee_name}`);
+  if (args.channel_name) parts.push(`Channel: ${args.channel_name}`);
+  if (args.message) parts.push(`Message: ${String(args.message).slice(0, 180)}`);
+  if (args.custom_message) parts.push(`Message: ${String(args.custom_message).slice(0, 180)}`);
+  if (toolName === "create_quote") {
+    parts.push(`System: ${[args.brand, args.tonnage ? `${args.tonnage} ton` : null, args.system_type].filter(Boolean).join(" ") || "Not specified"}`);
+  }
+  return parts.filter(Boolean).slice(0, 6).join("\n") || JSON.stringify(args).slice(0, 500);
+}
+
+function isApprovedJarvisToolCall(toolName: string, args: any, approvedAction?: any) {
+  if (!approvedAction?.metadata) return false;
+  const metadata = approvedAction.metadata;
+  return (
+    metadata.tool_name === toolName &&
+    metadata.approval_token &&
+    approvedAction.token === metadata.approval_token &&
+    JSON.stringify(metadata.tool_args || {}) === JSON.stringify(args || {})
+  );
+}
+
+async function queueJarvisToolApproval(sb: any, toolName: string, args: any) {
+  const approvalToken = crypto.randomUUID();
+  const label = JARVIS_HITL_TOOL_LABELS[toolName] || toolName;
+  const description = summarizeJarvisApprovalArgs(toolName, args);
+  const { data, error } = await sb.from("action_items").insert({
+    title: `Review JARVIS action: ${label}`,
+    description,
+    category: "jarvis_action_approval",
+    priority: toolName === "send_brochure_email" || toolName === "invoke_invoicing" ? "high" : "normal",
+    status: "pending",
+    source: "jarvis",
+    customer_phone: args.customer_phone || args.phone || null,
+    job_id: args.job_id || null,
+    suggested_action: "Review and approve this JARVIS action before it changes customer-facing records.",
+    metadata: {
+      tool_name: toolName,
+      tool_args: args || {},
+      approval_token: approvalToken,
+      approval_required: true,
+      editable_message_field: args?.message ? "message" : args?.custom_message ? "custom_message" : null,
+    },
+    facts: {
+      who: args.customer_name || args.first_name || args.last_name
+        ? { label: args.customer_name || [args.first_name, args.last_name].filter(Boolean).join(" "), customer_id: args.customer_id || undefined, phone: args.customer_phone || args.phone || undefined }
+        : undefined,
+      what: { label, category: "jarvis_action_approval" },
+      where: args.address ? { label: "Service address", address: args.address } : undefined,
+      why: { label: "JARVIS requested a mutating action", source: "hitl_guard" },
+    },
+  }).select("id").single();
+  if (error) throw error;
+  return {
+    status: "pending_approval",
+    tool: toolName,
+    action_item_id: data.id,
+    message: `${label} is waiting for dispatcher approval. No customer-facing records were changed.`,
+  };
+}
+
 async function executeToolCall(
   toolName: string,
   args: any,
@@ -1254,7 +1378,8 @@ async function executeToolCall(
   supabaseUrl: string,
   supabaseKey: string,
   openaiApiKey: string | undefined,
-  req: Request
+  req: Request,
+  approvedAction?: any
 ): Promise<any> {
   let result: any = { status: "skipped" };
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
@@ -1280,6 +1405,10 @@ async function executeToolCall(
   }
 
   try {
+    if (JARVIS_HITL_MUTATING_TOOLS.has(toolName) && !isApprovedJarvisToolCall(toolName, args, approvedAction)) {
+      return await queueJarvisToolApproval(sb, toolName, args);
+    }
+
     // ═══════ Equipment ═══════
     if (toolName === "lookup_equipment") {
       let query = sb.from("equipment_matchups").select("*").order("brand");
@@ -2565,6 +2694,19 @@ async function executeToolCall(
     result = { status: "error", error: e instanceof Error ? e.message : "Tool execution failed" };
   }
 
+  if (approvedAction?.actionItemId && result?.status !== "error") {
+    await sb.from("action_items").update({
+      status: "accepted",
+      resolved_at: new Date().toISOString(),
+      resolved_by: approvedAction.userId || null,
+      metadata: {
+        ...(approvedAction.metadata || {}),
+        executed_at: new Date().toISOString(),
+        execution_result: result,
+      },
+    }).eq("id", approvedAction.actionItemId);
+  }
+
   return result;
 }
 
@@ -2756,6 +2898,64 @@ serve(async (req) => {
     }
 
     // Central Time variables — reliable manual offset (Intl timezone may silently return UTC in Deno)
+    if (mode === "approved_action") {
+      const actionItemId = body.approved_action_item_id;
+      const token = body.approved_action_token;
+      if (!actionItemId || !token) {
+        return new Response(JSON.stringify({ error: "approved_action_item_id and approved_action_token are required." }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: actionItem, error: actionErr } = await sb.from("action_items")
+        .select("id, category, status, metadata")
+        .eq("id", actionItemId)
+        .maybeSingle();
+      if (actionErr) throw actionErr;
+      const metadata = actionItem?.metadata || {};
+      if (
+        !actionItem ||
+        actionItem.category !== "jarvis_action_approval" ||
+        actionItem.status !== "pending" ||
+        metadata.approval_token !== token ||
+        !metadata.tool_name
+      ) {
+        return new Response(JSON.stringify({ error: "Invalid or expired JARVIS approval action." }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const toolResult = await executeToolCall(
+        metadata.tool_name,
+        metadata.tool_args || {},
+        sb,
+        supabaseUrl,
+        supabaseKey,
+        openaiApiKey,
+        req,
+        { actionItemId, token, metadata }
+      );
+      await sb.from("action_items")
+        .update({
+          status: "accepted",
+          resolved_at: new Date().toISOString(),
+          metadata: {
+            ...metadata,
+            approved_at: new Date().toISOString(),
+            approval_result: toolResult,
+          },
+        })
+        .eq("id", actionItemId);
+      await sb.from("activity_log").insert({
+        action: "jarvis_action_approved",
+        details: `Approved JARVIS action: ${metadata.tool_name}`,
+        job_id: (metadata.tool_args || {}).job_id || null,
+      });
+      return new Response(JSON.stringify({ result: toolResult, tool_actions: [toolResult] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { dayOfWeek, localDateStr, localTimeStr } = getCentralTimeStrings();
 
     // Load lean system prompt by assembling active prompt_sections

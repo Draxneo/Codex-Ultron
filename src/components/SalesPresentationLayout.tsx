@@ -9,7 +9,8 @@ import heroComfort from "@/assets/brochure-hero-comfort.jpg";
 import heroSleep from "@/assets/brochure-hero-sleep.jpg";
 import { BRAND_LOGOS, BRAND_ACCENT, BRAND_GRADIENTS, useBrandEngineering } from "@/data/brandEngineering";
 import { usePresentationSections } from "@/hooks/usePresentationSections";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { useQuery } from "@tanstack/react-query";
+import { getPublicCompanySettings } from "@/lib/companySettings";
 
 // ── Shared types ──
 export interface Feature { icon: string; title: string; desc: string; }
@@ -738,7 +739,11 @@ export function LifestyleClose() {
 }
 
 export function BrochureFooter({ expiresAt, showPhone = false }: { expiresAt?: string; showPhone?: boolean }) {
-  const { settings } = useCompanySettings();
+  const { data: settings = {} } = useQuery({
+    queryKey: ["public_company_settings"],
+    queryFn: getPublicCompanySettings,
+    staleTime: 30 * 60 * 1000,
+  });
   const companyName = settings.company_name || "";
   const companyPhone = settings.company_phone || "";
   const companyEmail = settings.company_email || "";

@@ -11,6 +11,8 @@ export interface AgreementPresentation {
   last_viewed_at: string | null;
   view_count: number;
   enrolled_at: string | null;
+  customer_name?: string | null;
+  company?: Record<string, string>;
 }
 
 export function useAgreementPresentationByToken(token: string | undefined) {
@@ -19,11 +21,9 @@ export function useAgreementPresentationByToken(token: string | undefined) {
     enabled: !!token,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("agreement_presentations" as any)
-        .select("*")
-        .eq("token", token!)
-        .single();
+        .rpc("get_public_agreement_presentation" as any, { p_token: token! });
       if (error) throw error;
+      if (!data) throw new Error("Presentation not found");
       return data as unknown as AgreementPresentation;
     },
   });
@@ -50,21 +50,11 @@ export function useCreateAgreementPresentation() {
   });
 }
 
-export async function recordAgreementView(id: string, currentCount: number, isFirst: boolean) {
-  const updates: any = {
-    last_viewed_at: new Date().toISOString(),
-    view_count: currentCount + 1,
-  };
-  if (isFirst) updates.first_viewed_at = new Date().toISOString();
-  await supabase
-    .from("agreement_presentations" as any)
-    .update(updates)
-    .eq("id", id);
+export async function recordAgreementView(token: string) {
+  await supabase.rpc("track_public_agreement_presentation_view" as any, { p_token: token });
 }
 
-export async function markAgreementEnrolled(id: string) {
-  await supabase
-    .from("agreement_presentations" as any)
-    .update({ enrolled_at: new Date().toISOString() } as any)
-    .eq("id", id);
+export async function markAgreementEnrolled(token: string) {
+  const { error } = await supabase.rpc("submit_public_agreement_enrollment" as any, { p_token: token });
+  if (error) throw error;
 }

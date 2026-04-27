@@ -23,3 +23,9 @@ export async function getCompanySettings(keys: string[]): Promise<Record<string,
 
   return Object.fromEntries(((data as any[]) || []).map((row) => [row.key, row.value ?? ""]));
 }
+
+export async function getPublicCompanySettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.rpc("get_public_company_settings" as any);
+  if (error) throw error;
+  return (data || {}) as Record<string, string>;
+}

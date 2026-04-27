@@ -1,6 +1,5 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Shield, Crown, TrendingUp, Calendar, Sparkles, Clock, Wrench, DollarSign, Zap, Award, Phone } from "lucide-react";
@@ -15,7 +14,6 @@ import {
 } from "@/hooks/useAgreementPresentations";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 /* ── Icon mapping for perks ── */
@@ -49,31 +47,21 @@ const VALUE_ROWS = [
 export default function AgreementPresentation() {
   const { token } = useParams<{ token: string }>();
   const { data: presentation, isLoading } = useAgreementPresentationByToken(token);
-  const { settings } = useCompanySettings();
   const [viewRecorded, setViewRecorded] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
-  const [customerName, setCustomerName] = useState("");
 
-  const companyName = settings?.company_name || DEFAULT_COMPANY_NAME;
+  const companyName = presentation?.company?.company_name || DEFAULT_COMPANY_NAME;
+  const customerName = presentation?.customer_name || "";
 
   useEffect(() => {
     if (!presentation) return;
     if (!viewRecorded) {
-      recordAgreementView(presentation.id, presentation.view_count, !presentation.first_viewed_at);
+      recordAgreementView(presentation.token);
       setViewRecorded(true);
     }
     if (presentation.enrolled_at) setEnrolled(true);
-
-    supabase
-      .from("customers")
-      .select("first_name, last_name")
-      .eq("id", presentation.customer_id)
-      .single()
-      .then(({ data }) => {
-        if (data) setCustomerName(`${data.first_name || ""} ${data.last_name || ""}`.trim());
-      });
-  }, [presentation]);
+  }, [presentation, viewRecorded]);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Skeleton className="w-96 h-48" /></div>;
@@ -95,7 +83,7 @@ export default function AgreementPresentation() {
   const handleEnroll = async () => {
     setEnrolling(true);
     try {
-      await markAgreementEnrolled(presentation.id);
+      await markAgreementEnrolled(presentation.token);
       setEnrolled(true);
       toast({ title: "Welcome to the family!", description: "We'll be in touch to schedule your first visit." });
     } catch {

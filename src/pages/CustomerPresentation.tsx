@@ -1,7 +1,5 @@
 import { useParams } from "react-router-dom";
-import { PaymentOptionDivider } from "@/components/brochure/PaymentOptionDivider";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { QuickCheckoutPresentation } from "@/components/QuickCheckoutPresentation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -28,7 +26,6 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { getCustomerAgreementDiscount } from "@/hooks/useServiceAgreements";
 
 interface RepairTier {
   item: string;
@@ -82,42 +79,13 @@ export default function CustomerPresentation() {
       setViewRecorded(true);
     }
 
-    // Load estimate + brochure data
-    const load = async () => {
-      const [estResult, bResult, cResult, aResult] = await Promise.all([
-        supabase.from("estimates" as any).select("*").eq("id", presentation.estimate_id).single(),
-        supabase.from("brochure_blocks").select("*").order("sort_order"),
-        supabase.from("comparison_blocks").select("*").order("sort_order"),
-        supabase.from("addons").select("*").eq("active", true).order("sort_order"),
-      ]);
-      if (estResult.data) {
-        setEstimate(estResult.data);
-        const est = estResult.data as any;
-        // Check member status
-        if (est.customer_id) {
-          const discount = await getCustomerAgreementDiscount(est.customer_id);
-          if (discount.hasAgreement) {
-            setMemberInfo(discount);
-          }
-        }
-        // Fetch diagnosis/before photos from the source service job
-        if (est.source_job_id) {
-          const { data: photos } = await supabase
-            .from("tech_form_photos" as any)
-            .select("photo_url, label")
-            .eq("job_id", est.source_job_id)
-            .order("created_at");
-          if (photos && photos.length > 0) {
-            setDiagnosisPhotos(photos.map((p: any) => ({ url: p.photo_url, label: p.label })));
-          }
-        }
-      }
-      if (bResult.data) setBlocks(bResult.data.map((d: any) => ({ ...d, features: d.features || [] })));
-      if (cResult.data) setCompBlocks(cResult.data.map((d: any) => ({ ...d, rows: d.rows || [] })));
-      if (aResult.data) setAddons(aResult.data);
-      setLoading(false);
-    };
-    load();
+    setEstimate(presentation.estimate || null);
+    setBlocks((presentation.blocks || []).map((d: any) => ({ ...d, features: d.features || [] })));
+    setCompBlocks((presentation.comparisonBlocks || []).map((d: any) => ({ ...d, rows: d.rows || [] })));
+    setAddons(presentation.addons || []);
+    setMemberInfo(presentation.memberInfo || { hasAgreement: false });
+    setDiagnosisPhotos(presentation.diagnosisPhotos || []);
+    setLoading(false);
   }, [presentation, viewRecorded]);
 
   const handleSubmit = async (action: "approved" | "changes_requested" | "declined") => {
@@ -125,8 +93,7 @@ export default function CustomerPresentation() {
     setSubmitting(true);
     try {
       await submitEstimateResponse({
-        estimate_id: presentation.estimate_id,
-        presentation_id: presentation.id,
+        token: presentation.token,
         action,
         message: message || undefined,
         payment_preference: action === "approved" ? selectedPayment || undefined : undefined,

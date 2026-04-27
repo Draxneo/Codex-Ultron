@@ -72,6 +72,12 @@ export interface EstimatePresentation {
   first_viewed_at: string | null;
   last_viewed_at: string | null;
   view_count: number;
+  estimate?: any;
+  blocks?: any[];
+  comparisonBlocks?: any[];
+  addons?: any[];
+  memberInfo?: { hasAgreement: boolean; discountPercent?: number; planName?: string };
+  diagnosisPhotos?: { url: string; label?: string }[];
 }
 
 export interface EstimateResponse {
@@ -162,114 +168,21 @@ export async function recordPresentationView(presentationToken: string) {
 
 /** Submit a customer response */
 export async function submitEstimateResponse(params: {
-  estimate_id: string;
-  presentation_id: string;
+  token: string;
   action: "approved" | "changes_requested" | "declined";
   message?: string;
   payment_preference?: string;
   selected_tier?: string;
   selected_addons?: any;
 }) {
-  const { error } = await supabase
-    .from("estimate_responses" as any)
-    .insert(params as any);
+  const { error } = await supabase.rpc("submit_public_estimate_response" as any, {
+    p_token: params.token,
+    p_action: params.action,
+    p_message: params.message || null,
+    p_payment_preference: params.payment_preference || null,
+    p_selected_tier: params.selected_tier || null,
+    p_selected_addons: params.selected_addons || null,
+  });
   if (error) throw error;
 
-  // If approved, stamp customer_approved_at on the estimate
-  if (params.action === "approved") {
-    await supabase
-      .from("estimates" as any)
-      .update({ customer_approved_at: new Date().toISOString() } as any)
-      .eq("id", params.estimate_id);
-
-    // Bridge: copy approved service_repair_items → job_line_items
-    await bridgeRepairApproval(params.estimate_id, params.selected_tier);
-  }
-}
-
-/**
- * Repair Approval Bridge — closes the gap between service_repair_items and job_line_items.
- * When a customer approves a repair tier, copies matching service_repair_items into
- * job_line_items (the ONE SOURCE OF TRUTH for invoicing) and auto-waives the service call fee.
- */
-async function bridgeRepairApproval(estimateId: string, selectedTier?: string) {
-  if (!selectedTier) return;
-
-  // 1. Get the source job from the estimate
-  const { data: estimate } = await supabase
-    .from("estimates" as any)
-    .select("source_job_id, estimate_type")
-    .eq("id", estimateId)
-    .single();
-
-  const est = estimate as any;
-  if (!est?.source_job_id || est.estimate_type !== "service_repair") return;
-
-  const jobId = est.source_job_id;
-
-  // 2. Determine which severity tiers are included
-  // "necessary" = just necessary, "recommended" = necessary + recommended, "deluxe" = all
-  const tierMap: Record<string, string[]> = {
-    necessary: ["necessary"],
-    recommended: ["necessary", "recommended"],
-    deluxe: ["necessary", "recommended", "deluxe"],
-  };
-  const includedSeverities = tierMap[selectedTier] || [selectedTier];
-
-  // 3. Fetch matching service_repair_items
-  const { data: repairItems } = await supabase
-    .from("service_repair_items" as any)
-    .select("*")
-    .eq("job_id", jobId)
-    .in("severity", includedSeverities);
-
-  if (!repairItems || (repairItems as any[]).length === 0) return;
-
-  // 4. Mark them as approved
-  const repairIds = (repairItems as any[]).map((r: any) => r.id);
-  await supabase
-    .from("service_repair_items" as any)
-    .update({ approved: true } as any)
-    .in("id", repairIds);
-
-  // 5. Get current max sort_order in job_line_items
-  const { data: existingItems } = await supabase
-    .from("job_line_items" as any)
-    .select("id, sort_order, description, waived")
-    .eq("job_id", jobId)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-
-  let nextSort = ((existingItems as any)?.[0]?.sort_order ?? 0) + 1;
-
-  // 6. Insert approved repair items into job_line_items
-  const newLineItems = (repairItems as any[]).map((item: any, i: number) => ({
-    job_id: jobId,
-    description: item.description,
-    quantity: 1,
-    unit_price: item.final_price,
-    total: item.final_price,
-    sort_order: nextSort + i,
-    template_id: null, // dynamic repair item, not from catalog
-    waived: false,
-  }));
-
-  await supabase.from("job_line_items" as any).insert(newLineItems as any);
-
-  // 7. Auto-waive service call fee (if repair items are being added)
-  const { data: allLineItems } = await supabase
-    .from("job_line_items" as any)
-    .select("id, description, waived")
-    .eq("job_id", jobId);
-
-  const serviceCallItem = (allLineItems as any[])?.find(
-    (li: any) => !li.waived && li.description?.toLowerCase().includes("service call")
-  );
-
-  if (serviceCallItem) {
-    await supabase
-      .from("job_line_items" as any)
-      .update({ waived: true, waived_reason: "Waived with repair" } as any)
-      .eq("id", serviceCallItem.id);
-  }
 }

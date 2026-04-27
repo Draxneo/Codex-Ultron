@@ -8,7 +8,6 @@ import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, 
 import { toast } from "sonner";
 import { FinancingWidget } from "@/components/cart/FinancingWidget";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
-import { getCompanySettings } from "@/lib/companySettings";
 import { calcMonthly36, calcMonthly120 } from "@/lib/paymentOptions";
 import type { JobCart, JobCartItem } from "@/hooks/useJobCart";
 
@@ -44,12 +43,10 @@ export default function CustomerCart() {
     const load = async () => {
       if (!token) { setError("Missing token"); setLoading(false); return; }
       try {
-        const [{ data: publicCart, error: cartErr }, settingsMap] = await Promise.all([
-          (supabase as any).rpc("get_public_job_cart", { p_token: token }),
-          getCompanySettings(["company_name", "company_phone", "company_tagline"]),
-        ]);
+        const { data: publicCart, error: cartErr } = await (supabase as any).rpc("get_public_job_cart", { p_token: token });
         if (cartErr) throw cartErr;
         if (!publicCart?.cart) { setError("Cart not found"); setLoading(false); return; }
+        const settingsMap = publicCart.company || {};
 
         setData({
           cart: publicCart.cart as JobCart,

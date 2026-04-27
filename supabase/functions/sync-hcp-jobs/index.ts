@@ -46,6 +46,107 @@ async function fetchHcpJobs(hcpApiKey: string, url: string, maxPages = 1) {
   return allJobs;
 }
 
+type QueryResult = PromiseLike<{ data: unknown | null; error?: unknown }>;
+type SupabaseChain = QueryResult & {
+  select: (...args: unknown[]) => SupabaseChain;
+  eq: (...args: unknown[]) => SupabaseChain;
+  maybeSingle: () => Promise<{ data: unknown | null; error?: unknown }>;
+  update: (...args: unknown[]) => SupabaseChain;
+  insert: (...args: unknown[]) => SupabaseChain;
+  in: (...args: unknown[]) => SupabaseChain;
+  limit: (...args: unknown[]) => SupabaseChain;
+};
+type SupabaseClientLike = {
+  from: (table: string) => SupabaseChain;
+  rpc: (fn: string, args?: Record<string, unknown>) => SupabaseChain;
+};
+
+function optionalText(value: unknown) {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+async function upsertEstimateCustomers(supabase: SupabaseClientLike, estimates: Array<Record<string, unknown>>) {
+  const customerMap = new Map<string, Record<string, unknown>>();
+  for (const est of estimates) {
+    const cust = (est.customer || {}) as Record<string, unknown>;
+    const address = (est.address || {}) as Record<string, unknown>;
+    const custAddress = (cust.address || {}) as Record<string, unknown>;
+    const hcpCustomerId = optionalText(cust.id);
+    if (!hcpCustomerId || customerMap.has(hcpCustomerId)) continue;
+
+    const rawCustName = `${optionalText(cust.first_name) || ""} ${optionalText(cust.last_name) || ""}`.trim();
+    const nameParts = rawCustName.split(" ").filter(Boolean);
+    customerMap.set(hcpCustomerId, {
+      hcp_customer_id: hcpCustomerId,
+      first_name: formatName(optionalText(cust.first_name) || nameParts[0] || null),
+      last_name: formatName(optionalText(cust.last_name) || nameParts.slice(1).join(" ") || null),
+      email: formatEmail(optionalText(cust.email)),
+      phone: formatPhone(optionalText(cust.mobile_number) || optionalText(cust.home_number) || optionalText(cust.work_number) || optionalText(cust.phone_number)),
+      mobile_phone: formatPhone(optionalText(cust.mobile_number)),
+      address: formatAddress(optionalText(address.street) || optionalText(custAddress.street)),
+      city: formatCity(optionalText(address.city) || optionalText(custAddress.city)),
+      state: formatState(optionalText(address.state) || optionalText(custAddress.state)),
+      zip: optionalText(address.zip) || optionalText(custAddress.zip),
+      company: optionalText(cust.company),
+    });
+  }
+
+  if (customerMap.size === 0) return new Map<string, string>();
+
+  for (const customerRow of customerMap.values()) {
+    const { hcp_customer_id, ...rawFields } = customerRow;
+    const fields: Record<string, any> = {};
+    for (const [key, value] of Object.entries(rawFields)) {
+      if (value !== null && value !== undefined && value !== "") fields[key] = value;
+    }
+
+    const { data: existing } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("hcp_customer_id", hcp_customer_id)
+      .maybeSingle();
+
+    const existingCustomer = existing as { id: string } | null;
+    if (existingCustomer) {
+      if (Object.keys(fields).length > 0) {
+        await supabase.from("customers").update(fields).eq("id", existingCustomer.id);
+      }
+      continue;
+    }
+
+    let phoneMatch: { id: string } | null = null;
+    const phoneDigits = String(fields.phone || fields.mobile_phone || "").replace(/\D/g, "").slice(-10);
+    if (phoneDigits.length === 10) {
+      const { data: matched } = await supabase
+        .rpc("find_customer_by_phone", { digits: phoneDigits })
+        .limit(1)
+        .maybeSingle();
+      phoneMatch = matched as { id: string } | null;
+    }
+
+    if (phoneMatch) {
+      await supabase
+        .from("customers")
+        .update({ ...fields, hcp_customer_id })
+        .eq("id", phoneMatch.id);
+      console.log(`Linked estimate HCP customer ${hcp_customer_id} to existing phone match ${phoneMatch.id}`);
+    } else {
+      await supabase.from("customers").insert({ hcp_customer_id, ...fields });
+    }
+  }
+
+  const hcpCustomerIds = Array.from(customerMap.keys());
+  const { data: resolvedCustomers } = await supabase
+    .from("customers")
+    .select("id, hcp_customer_id")
+    .in("hcp_customer_id", hcpCustomerIds);
+
+  return new Map(
+    ((resolvedCustomers || []) as Array<{ hcp_customer_id: string; id: string }>)
+      .map((c) => [c.hcp_customer_id, c.id])
+  );
+}
+
 // --- Main handler ---
 
 Deno.serve(async (req) => {
@@ -506,9 +607,13 @@ Deno.serve(async (req) => {
         const uniqueEstimates = Array.from(estMap.values());
 
         if (uniqueEstimates.length > 0) {
+          const estimateCustomerIds = await upsertEstimateCustomers(supabase, uniqueEstimates);
           const mappedEstimates = uniqueEstimates.map((est: any) => {
             const fields = mapHcpEstimateToFields(est);
             fields.work_status = mapHcpEstimateStatus(est.work_status);
+            if (fields.hcp_customer_id && estimateCustomerIds.has(fields.hcp_customer_id)) {
+              fields.customer_id = estimateCustomerIds.get(fields.hcp_customer_id);
+            }
             return fields;
           });
 
@@ -533,7 +638,16 @@ Deno.serve(async (req) => {
             .from("estimates")
             .upsert(mappedEstimates, { onConflict: "hcp_id" });
           if (estErr) console.log("Estimate upsert error:", estErr.message);
-          else estimatesSynced = mappedEstimates.length;
+          else {
+            estimatesSynced = mappedEstimates.length;
+            for (const [hcpCustId, localCustId] of estimateCustomerIds.entries()) {
+              await supabase
+                .from("estimates")
+                .update({ customer_id: localCustId })
+                .eq("hcp_customer_id", hcpCustId)
+                .is("customer_id", null);
+            }
+          }
           console.log(`Synced ${estimatesSynced} estimates from HCP`);
         }
       } catch (estError: any) {

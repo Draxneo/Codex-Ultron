@@ -1,15 +1,50 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+type HistoryJob = {
+  id: string;
+  job_number: string | null;
+  hcp_job_number?: string | null;
+  job_type: string | null;
+  scheduled_date: string | null;
+  description?: string | null;
+};
+
+type HistoryPhoto = {
+  created_at: string | null;
+};
+
+type CustomerJobCount = {
+  customer_id: string;
+  job_count: number;
+  last_job_date: string | null;
+};
+
+async function getCustomerHcpId(customerId: string) {
+  const { data, error } = await supabase
+    .from("customers")
+    .select("hcp_customer_id")
+    .eq("id", customerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.hcp_customer_id || null;
+}
+
+function customerLinkFilter(customerId: string, hcpCustomerId: string | null) {
+  if (!hcpCustomerId) return `customer_id.eq.${customerId}`;
+  return `customer_id.eq.${customerId},and(customer_id.is.null,hcp_customer_id.eq.${hcpCustomerId})`;
+}
+
 export function useCustomerJobs(customerId: string | undefined) {
   return useQuery({
     queryKey: ["customer-jobs", customerId],
     enabled: !!customerId,
     queryFn: async () => {
+      const hcpCustomerId = await getCustomerHcpId(customerId!);
       const { data, error } = await supabase
         .from("jobs")
         .select("id, job_number, job_type, status, scheduled_date, address, assigned_to, customer_name")
-        .eq("customer_id", customerId!)
+        .or(customerLinkFilter(customerId!, hcpCustomerId))
         .order("scheduled_date", { ascending: false, nullsFirst: false });
       if (error) throw error;
       return data;
@@ -22,10 +57,11 @@ export function useCustomerEstimates(customerId: string | undefined) {
     queryKey: ["customer-estimates", customerId],
     enabled: !!customerId,
     queryFn: async () => {
+      const hcpCustomerId = await getCustomerHcpId(customerId!);
       const { data, error } = await supabase
         .from("estimates")
         .select("id, estimate_number, work_status, scheduled_date, address, assigned_to, description, options, created_at")
-        .eq("customer_id", customerId!)
+        .or(customerLinkFilter(customerId!, hcpCustomerId))
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -39,10 +75,11 @@ export function useCustomerInvoices(customerId: string | undefined) {
     enabled: !!customerId,
     queryFn: async () => {
       // Get all job IDs for this customer first
+      const hcpCustomerId = await getCustomerHcpId(customerId!);
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
         .select("id")
-        .eq("customer_id", customerId!);
+        .or(customerLinkFilter(customerId!, hcpCustomerId));
       if (jobsError) throw jobsError;
       if (!jobs || jobs.length === 0) return [];
 
@@ -65,15 +102,17 @@ export function useCustomerPhotos(customerId: string | undefined) {
     enabled: !!customerId,
     queryFn: async () => {
       // Get all jobs for this customer (with details so we can label photos)
+      const hcpCustomerId = await getCustomerHcpId(customerId!);
       const { data: jobs, error: jobsError } = await supabase
         .from("jobs")
         .select("id, job_number, hcp_job_number, job_type, scheduled_date, description")
-        .eq("customer_id", customerId!);
+        .or(customerLinkFilter(customerId!, hcpCustomerId));
       if (jobsError) throw jobsError;
       if (!jobs || jobs.length === 0) return [];
 
-      const jobIds = jobs.map((j) => j.id);
-      const jobMap = Object.fromEntries(jobs.map((j) => [j.id, j]));
+      const typedJobs = jobs as HistoryJob[];
+      const jobIds = typedJobs.map((j) => j.id);
+      const jobMap = Object.fromEntries(typedJobs.map((j) => [j.id, j]));
 
       // Fetch legacy attachments
       const { data: attachments, error: attErr } = await supabase
@@ -84,7 +123,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
       if (attErr) throw attErr;
 
       const attachmentPhotos = (attachments || []).map((p) => {
-        const j = jobMap[p.job_id] as any;
+        const j = jobMap[p.job_id];
         return {
           ...p,
           url: supabase.storage.from("job-photos").getPublicUrl(p.file_path).data.publicUrl,
@@ -103,7 +142,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
         .select("id, job_id")
         .in("job_id", jobIds);
 
-      let techPhotosMapped: any[] = [];
+      let techPhotosMapped: HistoryPhoto[] = [];
       if (forms && forms.length > 0) {
         const formIds = forms.map((f) => f.id);
         const formJobMap = Object.fromEntries(forms.map((f) => [f.id, f.job_id]));
@@ -116,7 +155,7 @@ export function useCustomerPhotos(customerId: string | undefined) {
 
         techPhotosMapped = (techPhotos || []).map((p) => {
           const jobId = formJobMap[p.tech_form_id] || null;
-          const j = jobId ? (jobMap[jobId] as any) : null;
+          const j = jobId ? jobMap[jobId] : null;
           return {
             id: p.id,
             file_name: p.file_path.split("/").pop() || "photo",
@@ -150,11 +189,11 @@ export function useCustomerJobCounts() {
   return useQuery({
     queryKey: ["customer-job-counts"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_customer_job_counts" as any).limit(5000);
+      const { data, error } = await supabase.rpc("get_customer_job_counts").limit(5000);
       if (error) throw error;
 
       const counts: Record<string, { count: number; lastDate: string | null }> = {};
-      for (const row of (data as any[]) || []) {
+      for (const row of ((data || []) as CustomerJobCount[])) {
         counts[row.customer_id] = {
           count: Number(row.job_count),
           lastDate: row.last_job_date,
@@ -176,7 +215,7 @@ export function useActiveJobCustomerIds() {
         .not("status", "in", '("done","invoiced","canceled","completed")')
         .not("customer_id", "is", null);
       if (error) throw error;
-      return new Set((data || []).map((r: any) => r.customer_id));
+      return new Set((data || []).map((r) => r.customer_id));
     },
     refetchInterval: 60000,
   });

@@ -31,6 +31,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; co
   address_verify:   { label: "Address",   icon: MapPin,        color: "text-orange-500" },
   name_verify:      { label: "Name",      icon: UserCheck,     color: "text-amber-500" },
   booking_confirm:  { label: "Booking",   icon: CalendarPlus,  color: "text-blue-500" },
+  jarvis_action_approval: { label: "Approval", icon: Brain, color: "text-violet-500" },
   thread_attention: { label: "Thread",    icon: MessageCircle, color: "text-violet-500" },
   permit_needed:    { label: "Permit",    icon: AlertTriangle, color: "text-red-500" },
   general:          { label: "General",   icon: Bot,           color: "text-muted-foreground" },
@@ -134,6 +135,57 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         return;
       }
 
+      if (status === "accepted" && item.category === "jarvis_action_approval" && item.metadata) {
+        const meta = item.metadata as any;
+        const editableField = meta.editable_message_field as string | null | undefined;
+        let approvalToken = meta.approval_token;
+        if (editableField) {
+          const editedMessage = (replyDrafts[item.id] ?? meta.tool_args?.[editableField] ?? "").trim();
+          if (!editedMessage) {
+            throw new Error("Message is empty. Rewrite it or dismiss the action.");
+          }
+          if (editedMessage !== meta.tool_args?.[editableField]) {
+            approvalToken = crypto.randomUUID();
+            const updatedMeta = {
+              ...meta,
+              approval_token: approvalToken,
+              tool_args: {
+                ...(meta.tool_args || {}),
+                [editableField]: editedMessage,
+              },
+              rewritten_at: new Date().toISOString(),
+              rewritten_by: user?.id || null,
+            };
+            const { error: updateErr } = await supabase
+              .from("action_items" as any)
+              .update({ metadata: updatedMeta })
+              .eq("id", item.id);
+            if (updateErr) throw updateErr;
+          }
+        }
+        const { data, error } = await supabase.functions.invoke("ai-task-agent", {
+          body: {
+            mode: "approved_action",
+            approved_action_item_id: item.id,
+            approved_action_token: approvalToken,
+          },
+        });
+        if (error) throw error;
+        if (data?.result?.status === "error") {
+          throw new Error(data.result.error || "Approved action failed");
+        }
+        toast({
+          title: "JARVIS action approved",
+          description: item.title,
+        });
+        qc.invalidateQueries({ queryKey: ["action_items_pending"] });
+        qc.invalidateQueries({ queryKey: ["jobs"] });
+        qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
+        qc.invalidateQueries({ queryKey: ["customers"] });
+        qc.invalidateQueries({ queryKey: ["outbound_drafts"] });
+        return;
+      }
+
       // Default: just mark as accepted/dismissed
       await supabase.from("action_items" as any).update({
         status,
@@ -186,6 +238,12 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           const meta = catMeta(item.category);
           const Icon = meta.icon;
           const priorityClass = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.normal;
+          const itemMetadata = (item.metadata || {}) as any;
+          const editableApprovalField =
+            item.category === "jarvis_action_approval" ? itemMetadata.editable_message_field : null;
+          const editableApprovalText = editableApprovalField
+            ? replyDrafts[item.id] ?? itemMetadata.tool_args?.[editableApprovalField] ?? ""
+            : "";
 
           return (
             <div key={item.id} className={`rounded-lg border p-3 space-y-2 ${priorityClass}`}>
@@ -219,6 +277,20 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 <div className="rounded bg-muted/50 px-2 py-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground mb-0.5">Suggested</p>
                   <p className="text-xs">{item.suggested_action}</p>
+                </div>
+              )}
+
+              {editableApprovalField && (
+                <div className="rounded border border-violet-500/30 bg-violet-500/5 p-2 space-y-1.5">
+                  <p className="text-[10px] font-medium text-violet-700">
+                    Message JARVIS wants to send (rewrite before approving)
+                  </p>
+                  <Textarea
+                    value={editableApprovalText}
+                    onChange={(e) => setReplyDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
+                    className="min-h-[70px] text-xs bg-background"
+                    disabled={actionId === item.id}
+                  />
                 </div>
               )}
 
