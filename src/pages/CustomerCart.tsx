@@ -45,7 +45,7 @@ export default function CustomerCart() {
       try {
         const { data: publicCart, error: cartErr } = await (supabase as any).rpc("get_public_job_cart", { p_token: token });
         if (cartErr) throw cartErr;
-        if (!publicCart?.cart) { setError("Cart not found"); setLoading(false); return; }
+        if (!publicCart?.cart) { setError("Estimate not found"); setLoading(false); return; }
         const settingsMap = publicCart.company || {};
 
         setData({
@@ -59,7 +59,7 @@ export default function CustomerCart() {
           },
         });
       } catch (e: any) {
-        setError(e.message || "Failed to load cart");
+        setError(e.message || "Failed to load estimate");
       } finally {
         setLoading(false);
       }
@@ -112,7 +112,7 @@ export default function CustomerCart() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="p-6 max-w-sm text-center">
-          <p className="text-sm text-muted-foreground">{error || "Cart unavailable"}</p>
+          <p className="text-sm text-muted-foreground">{error || "Estimate unavailable"}</p>
         </Card>
       </div>
     );
@@ -174,9 +174,9 @@ export default function CustomerCart() {
             <div>
               <p className="font-semibold text-primary">
                 {isPayAfterCompletion
-                  ? "Approved - this cart is saved for payment after the work is complete."
+                  ? "Approved - this estimate is saved for payment after the work is complete."
                   : isFinancing
-                    ? "Approved - financing is selected and this cart is saved while financing is completed."
+                    ? "Approved - financing is selected and this estimate is saved while financing is completed."
                   : "Approved - your tech will collect on site."}
               </p>
               {isPayAfterCompletion && (
@@ -192,10 +192,10 @@ export default function CustomerCart() {
         {canEditCart && (
           <div className="space-y-1">
             <h1 className="text-2xl font-bold">
-              {job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Cart"}
+              {job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Here's what {job?.assigned_to || "your tech"} put together for you. Review and choose how you'd like to pay.
+              Here's Estimate {cart.estimate_number || ""} from {job?.assigned_to || "your tech"}. Review the options and choose how you'd like to proceed.
             </p>
           </div>
         )}

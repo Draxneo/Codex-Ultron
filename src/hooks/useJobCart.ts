@@ -19,6 +19,8 @@ export interface JobCart {
   paid_at: string | null;
   payment_method: string | null;
   payment_timing: string | null;
+  estimate_number: string | null;
+  selected_invoice_id: string | null;
   source_presentation_id: string | null;
   selected_option_key: string | null;
   approved_scope_snapshot: Record<string, any> | null;
@@ -108,9 +110,9 @@ export function useJobCart(jobId: string | undefined) {
 
   const addItem = useMutation({
     mutationFn: async (item: NewCartItem) => {
-      if (!cartQuery.data?.id) throw new Error("No cart available");
+      if (!cartQuery.data?.id) throw new Error("No estimate available");
       const permissions = getJobCartPermissions(cartQuery.data, itemCount);
-      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This estimate cannot be edited.");
       const qty = item.quantity ?? 1;
       const { data, error } = await (supabase as any)
         .from("job_cart_items")
@@ -135,7 +137,7 @@ export function useJobCart(jobId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_cart_items", cartQuery.data?.id] });
       queryClient.invalidateQueries({ queryKey: ["job_cart", jobId] });
-      toast.success("Added to cart");
+      toast.success("Added to estimate");
     },
     onError: (e: any) => toast.error(e.message || "Failed to add"),
   });
@@ -144,7 +146,7 @@ export function useJobCart(jobId: string | undefined) {
     mutationFn: async ({ id, quantity, unit_price }: { id: string; quantity?: number; unit_price?: number }) => {
       const updates: any = {};
       const permissions = getJobCartPermissions(cartQuery.data, itemCount);
-      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This estimate cannot be edited.");
       if (quantity !== undefined) updates.quantity = quantity;
       if (unit_price !== undefined) updates.unit_price = unit_price;
       // Recompute total if either changed — fetch existing first if needed
@@ -166,7 +168,7 @@ export function useJobCart(jobId: string | undefined) {
   const removeItem = useMutation({
     mutationFn: async (id: string) => {
       const permissions = getJobCartPermissions(cartQuery.data, itemCount);
-      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This cart cannot be edited.");
+      if (!permissions.canEditItems) throw new Error(permissions.lockedReason || "This estimate cannot be edited.");
       const { error } = await (supabase as any).from("job_cart_items").delete().eq("id", id);
       if (error) throw error;
     },
@@ -179,10 +181,10 @@ export function useJobCart(jobId: string | undefined) {
 
   const sendToCustomer = useMutation({
     mutationFn: async ({ phone, customerName }: { phone?: string | null; customerName?: string | null }) => {
-      if (!cartQuery.data?.id) throw new Error("No cart");
+      if (!cartQuery.data?.id) throw new Error("No estimate");
       const permissions = getJobCartPermissions(cartQuery.data, itemCount);
       if (!permissions.canSendForApproval && !permissions.canSendPaymentLink) {
-        throw new Error(permissions.lockedReason || "This cart cannot be sent.");
+        throw new Error(permissions.lockedReason || "This estimate cannot be sent.");
       }
       const link = `${window.location.origin}/cart/${cartQuery.data.public_token}`;
       if (permissions.canSendForApproval) {
@@ -194,11 +196,12 @@ export function useJobCart(jobId: string | undefined) {
       // Send SMS via centralized pipeline
       if (phone) {
         const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
-        const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "cart";
+        const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "estimate";
+        const estimateLabel = cartQuery.data.estimate_number ? ` ${cartQuery.data.estimate_number}` : "";
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({
           to: phone,
-          body: `${greeting}here's your ${linkLabel} from Carnes and Sons Air Conditioning: ${link}`,
+          body: `${greeting}here's your ${linkLabel}${estimateLabel} from Carnes and Sons Air Conditioning: ${link}`,
           jobId,
           contactName: customerName || null,
           contactType: "customer",
@@ -210,7 +213,7 @@ export function useJobCart(jobId: string | undefined) {
     },
     onSuccess: (link) => {
       queryClient.invalidateQueries({ queryKey: ["job_cart", jobId] });
-      toast.success("Cart sent to customer", { description: link });
+      toast.success("Estimate sent to customer", { description: link });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send"),
   });

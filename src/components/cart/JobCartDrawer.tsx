@@ -62,7 +62,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
         {items.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Cart is empty</p>
+            <p className="text-sm">Estimate is empty</p>
             <Button variant="outline" size="sm" className="mt-3" onClick={onAddMore} disabled={!permissions.canEditItems}>
               <Plus className="h-4 w-4 mr-1" /> Add Items
             </Button>
@@ -161,7 +161,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
         <DrawerContent className="h-[92vh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" /> Job Cart
+              <ShoppingCart className="h-5 w-5 text-primary" /> {cart?.estimate_number || "Job Estimate"}
             </DrawerTitle>
           </DrawerHeader>
           <div className="relative flex-1 min-h-0">{body}</div>
@@ -174,7 +174,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
-          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5 text-primary" /> Job Cart</SheetTitle>
+          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5 text-primary" /> {cart?.estimate_number || "Job Estimate"}</SheetTitle>
         </SheetHeader>
         <div className="relative flex-1 min-h-0">{body}</div>
       </SheetContent>

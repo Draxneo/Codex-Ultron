@@ -1,15 +1,15 @@
 /**
- * TechCartCard — Mobile-inline cart for the tech job detail page.
+ * TechCartCard — Mobile-inline Estimate builder for the tech job detail page.
  *
  * State-driven action row replaces the old single "Send" button:
- *  - draft     → Send Cart for Approval · Present
+ *  - draft     → Send Estimate for Approval · Present
  *  - sent      → "Sent · waiting" / "Viewed Xm ago" pill · Resend · Present
  *  - approved  → Approved badge · Charge / Invoice · Present receipt
  *  - declined  → Declined badge · Revise & Resend
  *  - paid      → Paid badge (no actions)
  *
  * Realtime subscription on `job_carts` (in useJobCart) auto-invalidates,
- * so buttons swap as the customer interacts with the public cart link.
+ * so buttons swap as the customer interacts with the public Estimate link.
  */
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -94,7 +94,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const renderActionRow = () => {
     if (itemCount === 0) {
       return (
-        <p className="text-[11px] text-muted-foreground italic">Add items, then send to customer for approval.</p>
+        <p className="text-[11px] text-muted-foreground italic">Add options, then send this Estimate for approval.</p>
       );
     }
 
@@ -184,7 +184,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
           disabled={sendToCustomer.isPending || !customerPhone}
         >
           <Send className="h-3.5 w-3.5" />
-          {sendToCustomer.isPending ? "Sending…" : "Send Cart for Customer Approval"}
+          {sendToCustomer.isPending ? "Sending..." : "Send Estimate for Approval"}
         </Button>
         <Button size="sm" variant="outline" className="h-9 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
           <Presentation className="h-3.5 w-3.5" /> Present
@@ -201,7 +201,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
             <ShoppingCart className="h-5 w-5 text-amber-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground leading-tight">Cart</p>
+            <p className="text-sm font-medium text-foreground leading-tight">{cart?.estimate_number || "Estimate"}</p>
             <p className="text-xs text-muted-foreground leading-tight">
               {itemCount} item{itemCount !== 1 ? "s" : ""} · ${total.toFixed(2)}
             </p>

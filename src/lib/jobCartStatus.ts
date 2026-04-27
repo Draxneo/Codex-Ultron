@@ -33,8 +33,8 @@ function normalized(value?: string | null) {
 export function getJobCartStatus(cart?: JobCart | null, itemCount = 0): JobCartStatusInfo {
   if (!cart) {
     return {
-      label: "No cart",
-      detail: "No customer cart has been started.",
+      label: "No estimate",
+      detail: "No customer Estimate has been started.",
       tone: "neutral",
       needsPayment: false,
       canSendPaymentLink: false,
@@ -123,7 +123,7 @@ export function getJobCartStatus(cart?: JobCart | null, itemCount = 0): JobCartS
   if (isApproved) {
     return {
       label: "Approved, unpaid",
-      detail: "Customer approved the cart. Payment still needs to be collected.",
+      detail: "Customer approved the Estimate. Payment still needs to be collected.",
       tone: "warning",
       needsPayment: true,
       canSendPaymentLink: true,
@@ -139,7 +139,7 @@ export function getJobCartStatus(cart?: JobCart | null, itemCount = 0): JobCartS
   if (status === "sent") {
     return {
       label: hasBeenViewed ? "Viewed" : "Sent",
-      detail: hasBeenViewed ? "Customer opened the cart link." : "Cart is waiting for the customer to open and approve.",
+      detail: hasBeenViewed ? "Customer opened the Estimate link." : "Estimate is waiting for the customer to open and approve.",
       tone: hasBeenViewed ? "info" : "neutral",
       needsPayment: false,
       canSendPaymentLink: itemCount > 0,
@@ -174,11 +174,11 @@ export function getJobCartPermissions(cart?: JobCart | null, itemCount = 0): Job
   const isCanceled = status === "canceled";
   const isDeclined = status === "declined";
   const lockedReason = statusInfo.isPaid
-    ? "This cart is paid and locked."
+    ? "This estimate is paid and locked."
     : statusInfo.isApproved
-      ? "This cart is approved and locked. Create a new cart for changes."
+      ? "This estimate is approved and locked. Create a new Estimate for changes."
       : isCanceled
-        ? "This cart is canceled."
+        ? "This estimate is canceled."
         : null;
 
   const canEditItems = Boolean(cart && !statusInfo.isPaid && !statusInfo.isApproved && !isCanceled);

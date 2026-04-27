@@ -61,7 +61,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
   const applyPromo = async (code: string, amount: number) => {
     if (!cart?.id) return;
     if (!permissions.canApplyPromo) {
-      toast.error(permissions.lockedReason || "This cart cannot be changed.");
+      toast.error(permissions.lockedReason || "This estimate cannot be changed.");
       return;
     }
     const { error } = await (supabase as any)
@@ -75,28 +75,28 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
   const removePromo = async () => {
     if (!cart?.id) return;
     if (!permissions.canApplyPromo) {
-      toast.error(permissions.lockedReason || "This cart cannot be changed.");
+      toast.error(permissions.lockedReason || "This estimate cannot be changed.");
       return;
     }
     await (supabase as any).from("job_carts").update({ discount_code: null, discount_amount: 0 }).eq("id", cart.id);
     queryClient.invalidateQueries({ queryKey: ["job_cart", jobId] });
   };
 
-  if (isLoading) return <p className="text-center text-muted-foreground py-8 text-sm">Loading cart...</p>;
+  if (isLoading) return <p className="text-center text-muted-foreground py-8 text-sm">Loading estimate...</p>;
 
   const discountAmount = Number((cart as any)?.discount_amount || 0);
   const discountCode = (cart as any)?.discount_code as string | null;
 
   return (
     <div className="p-4 space-y-4">
-      {/* Cart status header */}
+      {/* Estimate status header */}
       <Card className="p-4 flex items-center justify-between bg-gradient-to-br from-primary/5 to-transparent">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
             <ShoppingCart className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <p className="font-bold text-lg">${Number(cart?.total || 0).toFixed(2)}</p>
+            <p className="font-bold text-lg">{cart?.estimate_number || "Estimate"} · ${Number(cart?.total || 0).toFixed(2)}</p>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <Badge className={cn("border text-[10px]", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
               {permissions.lockedReason && <span className="text-[11px] text-muted-foreground">{permissions.lockedReason}</span>}
@@ -157,7 +157,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
         </div>
         <GoodBetterBestPicker
           scope={CART_TIER_SCOPE}
-          ctaLabel="Add to Cart"
+          ctaLabel="Add to Estimate"
           onSelect={(m, tier) => {
             const price = Number(m.factory_rebate_price ?? m.total_price ?? 0);
             addItem.mutate({
@@ -177,7 +177,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
       {items.length === 0 ? (
         <Card className="p-8 text-center">
           <ShoppingCart className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground mb-3">No items yet. Build the customer's cart from the catalog.</p>
+          <p className="text-sm text-muted-foreground mb-3">No items yet. Build the customer's Estimate from the catalog.</p>
           <Button onClick={() => setPickerOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Add First Item
           </Button>
@@ -242,7 +242,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
             />
           </Card>}
 
-          {/* A/B/C payment framing — mirrors what the customer sees on the public cart */}
+          {/* A/B/C payment framing - mirrors what the customer sees on the public Estimate */}
           {(() => {
             const hasEquipment = items.some((i) => i.kind === "equipment");
             const total = Number(cart?.total || 0);
@@ -292,7 +292,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
       />
       <TierPresetManager
         scope={CART_TIER_SCOPE}
-        scopeLabel="Job Cart — Equipment Add-on"
+        scopeLabel="Job Estimate - Equipment Add-on"
         open={tierManagerOpen}
         onOpenChange={setTierManagerOpen}
       />

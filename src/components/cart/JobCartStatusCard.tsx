@@ -31,7 +31,7 @@ export function JobCartStatusCard({ jobId, customerName, customerPhone }: Props)
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold">Customer Cart</h3>
+              <h3 className="text-sm font-semibold">{cart?.estimate_number || "Customer Estimate"}</h3>
               <Badge className={cn("border", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{statusInfo.detail}</p>
@@ -65,7 +65,7 @@ export function JobCartStatusCard({ jobId, customerName, customerPhone }: Props)
               onClick={() => sendToCustomer.mutate({ phone: customerPhone, customerName })}
               disabled={!customerPhone || items.length === 0 || sendToCustomer.isPending}
             >
-              <Send className="h-3.5 w-3.5" /> {statusInfo.canCollectNow ? "Send Payment Link" : "Send Cart"}
+              <Send className="h-3.5 w-3.5" /> {statusInfo.canCollectNow ? "Send Payment Link" : "Send Estimate"}
             </Button>
           )}
           {publicLink && (
