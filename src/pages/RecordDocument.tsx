@@ -176,6 +176,24 @@ function normalizeInvoiceItems(items: any[] | null | undefined): DocumentLineIte
   }));
 }
 
+function isOnlyEstimateShell(items: DocumentLineItem[]) {
+  return items.length > 0 && items.every((item) => item.itemType === "estimate_option" || item.detailUnavailable);
+}
+
+function normalizeInvoiceItemsAsEstimate(items: any[] | null | undefined, option?: DocumentLineItem | null): DocumentLineItem[] {
+  return (items || []).map((item) => ({
+    id: item.id,
+    name: item.description || "Line item",
+    description: null,
+    quantity: numberValue(item.quantity || 1),
+    unitPrice: numberValue(item.unit_price),
+    total: numberValue(item.total),
+    optionId: option?.optionId || null,
+    optionName: option?.name || option?.optionName || null,
+    itemType: "invoice_line_item",
+  }));
+}
+
 async function fetchCustomer(customerId: string | null | undefined) {
   if (!customerId) return null;
   const { data, error } = await supabase
@@ -298,7 +316,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
   if (!estimate) throw new Error("Estimate not found");
 
   const customer = await fetchCustomer(estimate.customer_id);
-  const [lineItemsRes, convertedJobRes, notes, attachments] = await Promise.all([
+  const [lineItemsRes, convertedJobRes, inferredJobsRes, notes, attachments] = await Promise.all([
     supabase
       .from("estimate_line_items" as any)
       .select("*")
@@ -309,19 +327,54 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
       .select("id, job_number, status")
       .eq("estimate_id", id)
       .maybeSingle(),
+    estimate.customer_id || estimate.hcp_customer_id
+      ? supabase
+          .from("jobs")
+          .select("id, job_number, status, created_at, scheduled_date, address, customer_id, hcp_customer_id")
+          .or([
+            estimate.customer_id ? `customer_id.eq.${estimate.customer_id}` : "",
+            estimate.hcp_customer_id ? `hcp_customer_id.eq.${estimate.hcp_customer_id}` : "",
+          ].filter(Boolean).join(","))
+          .gte("created_at", estimate.created_at)
+          .order("created_at", { ascending: true })
+          .limit(8)
+      : Promise.resolve({ data: [], error: null } as any),
     fetchNotes(estimate.customer_id, id),
     fetchHcpAttachments("estimate_id", id),
   ]);
 
   if (lineItemsRes.error) throw lineItemsRes.error;
-  const lineItems = normalizeEstimateItems(lineItemsRes.data as any[]);
+  let lineItems = normalizeEstimateItems(lineItemsRes.data as any[]);
+  const convertedJob =
+    convertedJobRes.data ||
+    ((inferredJobsRes.data || []) as any[]).find((job) => {
+      const jobAddress = String(job.address || "").toLowerCase();
+      const estimateAddress = String(estimate.address || "").toLowerCase();
+      return !estimateAddress || !jobAddress || jobAddress === estimateAddress;
+    }) ||
+    null;
+
+  if (convertedJob && isOnlyEstimateShell(lineItems)) {
+    const { data: invoiceRows } = await supabase
+      .from("customer_invoices")
+      .select("id, invoice_number, total, customer_invoice_items(id, description, quantity, unit_price, total)")
+      .eq("job_id", convertedJob.id)
+      .order("total", { ascending: false })
+      .limit(1);
+
+    const invoiceItems = ((invoiceRows?.[0] as any)?.customer_invoice_items || []) as any[];
+    if (invoiceItems.length > 0) {
+      lineItems = normalizeInvoiceItemsAsEstimate(invoiceItems, lineItems[0]);
+    }
+  }
+
   const subtotal = numberValue((estimate as any).total_amount) || sumItems(lineItems);
-  const related = convertedJobRes.data
+  const related = convertedJob
     ? [
         {
-          label: `Job #${(convertedJobRes.data as any).job_number || (convertedJobRes.data as any).id.slice(0, 8)}`,
-          href: `/records/job/${(convertedJobRes.data as any).id}`,
-          meta: (convertedJobRes.data as any).status || "job",
+          label: `Job #${(convertedJob as any).job_number || (convertedJob as any).id.slice(0, 8)}`,
+          href: `/records/job/${(convertedJob as any).id}`,
+          meta: (convertedJob as any).status || "job",
         },
       ]
     : [];
