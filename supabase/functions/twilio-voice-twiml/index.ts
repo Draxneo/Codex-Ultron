@@ -1,6 +1,7 @@
 import { resolveContact } from "../_shared/resolveContact.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -10,6 +11,14 @@ Deno.serve(async (req) => {
   try {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
+    const sigValid = await validateTwilioSignature(req, formData);
+    if (!sigValid) {
+      console.warn("Rejecting twilio-voice-twiml: invalid Twilio signature");
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 403 },
+      );
+    }
 
     // Desktop JS SDK sends "To" while the native Android service may send lowercase "to"
     const to = params.get("To") || params.get("to") || params.get("phone") || "";
@@ -99,7 +108,7 @@ Deno.serve(async (req) => {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial callerId="${safeCallerId}" timeLimit="14400" hangupOnStar="true" record="record-from-answer-dual" recordingStatusCallback="${supabaseUrl}/functions/v1/voice-status-callback" recordingStatusCallbackEvent="completed failed" statusCallback="${supabaseUrl}/functions/v1/voice-status-callback" statusCallbackEvent="initiated ringing answered completed">
+  <Dial callerId="${safeCallerId}" timeLimit="14400" hangupOnStar="true" answerOnBridge="true" record="record-from-answer-dual" recordingStatusCallback="${supabaseUrl}/functions/v1/voice-status-callback" recordingStatusCallbackEvent="completed failed" statusCallback="${supabaseUrl}/functions/v1/voice-status-callback" statusCallbackEvent="initiated ringing answered completed">
     <Number>${safeTo}</Number>
   </Dial>
 </Response>`;
@@ -116,4 +125,3 @@ Deno.serve(async (req) => {
     );
   }
 });
-

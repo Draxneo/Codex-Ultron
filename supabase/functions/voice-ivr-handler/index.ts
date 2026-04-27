@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
       console.log(`🎙️ OVERFLOW TwiML generated: reason=${reason}, callback=${overflowStatusCallback}, recording=record-from-answer-dual`);
       return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" timeLimit="3600" hangupOnStar="true" callerId="${escapeXml(callerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(overflowStatusCallback)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(overflowStatusCallback)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="30" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" callerId="${escapeXml(callerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(overflowStatusCallback)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(overflowStatusCallback)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(overflowNumber)}</Number>
   </Dial>
 </Response>`;
@@ -479,7 +479,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(option.forward_to)}</Number>
   </Dial>
 </Response>`,
@@ -525,7 +525,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(callFwdNumber)}</Number>
   </Dial>
 </Response>`,
@@ -568,7 +568,7 @@ Deno.serve(async (req) => {
 <Response>
   ${streamTwiml}
   <Say voice="Polly.Joanna">${escapeXml(oooMatch.name)} is currently away from their desk. Forwarding your call.</Say>
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(oooMatch.ooo_forward_number)}</Number>
   </Dial>
 </Response>`,
@@ -897,7 +897,7 @@ Deno.serve(async (req) => {
       `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     ${clientTags}
   </Dial>
 </Response>`,

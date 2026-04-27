@@ -472,7 +472,7 @@ Deno.serve(async (req) => {
           `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="25" action="${escapeXml(voicemailUrlFwd)}" callerId="${
+  <Dial timeout="25" answerOnBridge="true" action="${escapeXml(voicemailUrlFwd)}" callerId="${
             escapeXml(twilioNumber)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(statusCallbackUrlFwd)
@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
       return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="30" timeLimit="3600" hangupOnStar="true" callerId="${
+  <Dial timeout="30" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" callerId="${
         escapeXml(callerId)
       }" record="record-from-answer-dual" recordingStatusCallback="${
         escapeXml(overflowStatusCallback)
@@ -579,7 +579,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" action="${
+  <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
           escapeXml(from)
@@ -718,7 +718,7 @@ Deno.serve(async (req) => {
 <Response>
   ${streamTwiml}
   ${greetingTwiml(config.greeting_audio_url, config.greeting_text)}
-  <Dial timeout="${dialTimeout}" action="${
+  <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
             escapeXml(voicemailUrl)
           }" callerId="${
             escapeXml(dialCallerId)
@@ -931,7 +931,7 @@ Deno.serve(async (req) => {
 <Response>
   ${streamTwiml}
   ${greetingTwiml(config.greeting_audio_url, config.greeting_text)}
-  <Dial timeout="${dialTimeout}" action="${
+  <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
           escapeXml(from)

@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" callerId="${
+  <Dial timeout="30" answerOnBridge="true" callerId="${
             escapeXml(twilioNumber)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(overflowStatusCallback)
