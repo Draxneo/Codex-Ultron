@@ -723,6 +723,9 @@ const Jobs = () => {
             currentDay={currentDay}
             routeOrders={dispatchRouteOrders}
             cardDensity={calSettings.cardDensity}
+            visibleFields={calSettings.visibleFields}
+            businessHoursOnly={calSettings.businessHoursOnly}
+            showHolidays={calSettings.showHolidays}
           />
         )}
 
@@ -774,6 +777,9 @@ const Jobs = () => {
             }}
             routeOrders={weekRouteOrders}
             cardDensity={calSettings.cardDensity}
+            visibleFields={calSettings.visibleFields}
+            businessHoursOnly={calSettings.businessHoursOnly}
+            showHolidays={calSettings.showHolidays}
           />
         )}
 

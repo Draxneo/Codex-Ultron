@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
-import type { CardDensity } from "@/components/job/CalendarSettings";
+import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
 import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { useHistoricalWeather } from "@/hooks/useHistoricalWeather";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { format as formatDate } from "date-fns";
+import { getUsHolidayName } from "@/lib/usHolidays";
 
 interface BoardItem {
   id: string;
@@ -46,8 +47,10 @@ const TECH_HEX_PALETTE = [
 ];
 const UNASSIGNED_COLOR = "#64748b";
 
-const START_HOUR = 7;
-const END_HOUR = 19;
+const DEFAULT_START_HOUR = 6;
+const DEFAULT_END_HOUR = 21;
+const BUSINESS_START_HOUR = 7;
+const BUSINESS_END_HOUR = 19;
 const HOUR_HEIGHT = 80; // taller for single day view
 
 function formatTime(dateStr: string) {
@@ -61,11 +64,16 @@ interface DayCalendarBoardProps {
   currentDay: Date;
   routeOrders?: Map<string, { order: number; travelMin: number | null; fromLabel: string | null }>;
   cardDensity?: CardDensity;
+  visibleFields?: CalendarVisibleFields;
+  businessHoursOnly?: boolean;
+  showHolidays?: boolean;
 }
 
-export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay, routeOrders, cardDensity = "comfortable" }: DayCalendarBoardProps) {
-  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
-  const totalHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false }: DayCalendarBoardProps) {
+  const startHour = businessHoursOnly ? BUSINESS_START_HOUR : DEFAULT_START_HOUR;
+  const endHour = businessHoursOnly ? BUSINESS_END_HOUR : DEFAULT_END_HOUR;
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
+  const totalHeight = (endHour - startHour) * HOUR_HEIGHT;
   const isTodayDay = isToday(currentDay);
   const dayKey = formatDate(currentDay, "yyyy-MM-dd");
   const { data: forecastMap } = useWeatherForecast();
@@ -116,7 +124,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
         endH = end.getHours() + end.getMinutes() / 60;
       }
       if (endH <= startH) endH = startH + 1;
-      return { top: (startH - START_HOUR) * HOUR_HEIGHT, height: Math.max((endH - startH) * HOUR_HEIGHT, 60) };
+      return { top: (startH - startHour) * HOUR_HEIGHT, height: Math.max((endH - startH) * HOUR_HEIGHT, 60) };
     } catch { return null; }
   }
 
@@ -132,6 +140,11 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
               <span className={cn("text-[10px] font-bold uppercase", isTodayDay ? "text-primary" : "text-muted-foreground")}>
                 {format(currentDay, "EEE d")}
               </span>
+              {showHolidays && getUsHolidayName(currentDay) && (
+                <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 text-center leading-tight">
+                  {getUsHolidayName(currentDay)}
+                </span>
+              )}
               <WeatherBadge forecast={todayForecast} />
             </div>
             <div className="relative border-r" style={{ height: totalHeight }}>
@@ -139,7 +152,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
                 <div
                   key={hour}
                   className="absolute w-full border-b border-border/30 flex items-start justify-end pr-2 pt-0.5"
-                  style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                  style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
                 >
                   <span className="text-[10px] text-muted-foreground font-medium">
                     {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
@@ -172,7 +185,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
                 {/* Time grid + cards */}
                 <div className="relative border-r" style={{ height: totalHeight }}>
                   {hours.map((hour) => (
-                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
+                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
                   ))}
 
                   {items.map((item) => {
@@ -192,6 +205,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
                           height={pos.height}
                           routeInfo={routeInfo}
                           cardDensity={cardDensity}
+                          visibleFields={visibleFields}
                         />
                       </div>
                     );
@@ -217,6 +231,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
                     techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR}
                     routeInfo={routeOrders?.get(item.id)}
                     cardDensity={cardDensity}
+                    visibleFields={visibleFields}
                   />
                 ))}
               </div>
@@ -232,7 +247,7 @@ export function DayCalendarBoard({ dayItems, employees, onItemClick, currentDay,
 import { JobScheduleCard } from "@/components/job/JobScheduleCard";
 
 function DayCard({
-  item, onClick, techColor, height, routeInfo, cardDensity = "comfortable",
+  item, onClick, techColor, height, routeInfo, cardDensity = "comfortable", visibleFields,
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -240,6 +255,7 @@ function DayCard({
   height?: number;
   routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null };
   cardDensity?: CardDensity;
+  visibleFields?: CalendarVisibleFields;
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -261,6 +277,7 @@ function DayCard({
             item={item}
             techColor={techColor}
             routeInfo={routeInfo}
+            visibleFields={visibleFields}
             compact={isCompact}
             onClick={() => onClick(item)}
           />
@@ -268,28 +285,27 @@ function DayCard({
       </HoverCardTrigger>
       <HoverCardContent side="right" align="start" className="w-72 p-3 z-50 space-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm">{emoji}</span>
-          <span className="font-semibold text-sm">{item.customer_name || "No Name"}</span>
-          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: techColor }}>{tag}</span>
+          {visibleFields?.customerTags !== false && <span className="text-sm">{emoji}</span>}
+          {visibleFields?.customer !== false && <span className="font-semibold text-sm">{item.customer_name || "No Name"}</span>}
+          {visibleFields?.customerTags !== false && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: techColor }}>{tag}</span>}
         </div>
-        {timeStr && <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{timeStr}</p>}
-        {item.address && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{item.address}</p>}
-        {item.customer_phone && (
+        {timeStr && visibleFields?.arrivalWindow !== false && <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{timeStr}</p>}
+        {item.address && visibleFields?.street !== false && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{item.address}</p>}
+        {item.customer_phone && visibleFields?.phone && (
           <div className="flex items-center gap-2">
             <ClickToCall phone={item.customer_phone} jobId={item.id} className="text-xs" />
             <SmsButton phone={item.customer_phone} className="text-xs" />
           </div>
         )}
-        {routeInfo?.travelMin != null && (
+        {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Car className="h-3 w-3" />
             Stop #{routeInfo.order} · {routeInfo.travelMin} min drive{routeInfo.fromLabel ? ` from ${routeInfo.fromLabel}` : ""}
           </p>
         )}
-        {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
-        {number && <p className="text-[10px] text-muted-foreground/60">{number}</p>}
+        {item.description && visibleFields?.description !== false && <p className="text-xs text-muted-foreground">{item.description}</p>}
+        {number && visibleFields?.jobNumber !== false && <p className="text-[10px] text-muted-foreground/60">{number}</p>}
       </HoverCardContent>
     </HoverCard>
   );
 }
-

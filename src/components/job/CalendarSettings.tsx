@@ -6,10 +6,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 
 const SETTINGS_KEY = "calendar_settings";
 
 export type CardDensity = "compact" | "comfortable" | "expanded";
+export type CalendarVisibleFields = CalendarSettingsData["visibleFields"];
 
 export interface CalendarSettingsData {
   businessHoursOnly: boolean;
@@ -30,7 +32,7 @@ export interface CalendarSettingsData {
   };
 }
 
-const DEFAULT_SETTINGS: CalendarSettingsData = {
+export const DEFAULT_CALENDAR_SETTINGS: CalendarSettingsData = {
   businessHoursOnly: false,
   showHolidays: false,
   cardDensity: "comfortable",
@@ -49,29 +51,42 @@ const DEFAULT_SETTINGS: CalendarSettingsData = {
   },
 };
 
+function mergeCalendarSettings(value: unknown): CalendarSettingsData {
+  if (!value || typeof value !== "object") return DEFAULT_CALENDAR_SETTINGS;
+  const parsed = value as Partial<CalendarSettingsData>;
+  return {
+    ...DEFAULT_CALENDAR_SETTINGS,
+    ...parsed,
+    visibleFields: {
+      ...DEFAULT_CALENDAR_SETTINGS.visibleFields,
+      ...(parsed.visibleFields || {}),
+    },
+  };
+}
+
 export function useCalendarSettings() {
+  const { calendar_settings, setCalendarSettings } = useUserPreferences();
   const [settings, setSettings] = useState<CalendarSettingsData>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
-      if (!stored) return DEFAULT_SETTINGS;
-      const parsed = JSON.parse(stored);
-      // Deep merge visibleFields so new fields get defaults
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        visibleFields: {
-          ...DEFAULT_SETTINGS.visibleFields,
-          ...(parsed.visibleFields || {}),
-        },
-      };
+      if (!stored) return DEFAULT_CALENDAR_SETTINGS;
+      return mergeCalendarSettings(JSON.parse(stored));
     } catch {
-      return DEFAULT_SETTINGS;
+      return DEFAULT_CALENDAR_SETTINGS;
     }
   });
+
+  useEffect(() => {
+    if (!calendar_settings) return;
+    const merged = mergeCalendarSettings(calendar_settings);
+    setSettings(merged);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+  }, [calendar_settings]);
 
   const update = (next: CalendarSettingsData) => {
     setSettings(next);
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    setCalendarSettings(next as unknown as Record<string, unknown>);
   };
 
   return { settings, update };

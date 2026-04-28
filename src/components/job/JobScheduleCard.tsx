@@ -11,6 +11,7 @@
 import { format } from "date-fns";
 import { Clock, Phone, MapPin, Car } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CalendarVisibleFields } from "@/components/job/CalendarSettings";
 
 const JOB_TYPE_EMOJI: Record<string, string> = {
   service: "🔧", install: "🏗️", maintenance: "🔄", estimate: "📋", phone_call: "📞",
@@ -35,6 +36,9 @@ export interface JobCardItem {
   arrival_start?: string | null;
   arrival_end?: string | null;
   estimate_number?: string | null;
+  amount?: number | null;
+  total?: number | null;
+  total_amount?: number | null;
 }
 
 export interface JobCardRouteInfo {
@@ -47,6 +51,7 @@ interface Props {
   item: JobCardItem;
   techColor: string;
   routeInfo?: JobCardRouteInfo;
+  visibleFields?: CalendarVisibleFields;
   /** When true, hide address + phone for tighter rows */
   compact?: boolean;
   onClick?: () => void;
@@ -55,7 +60,7 @@ interface Props {
 }
 
 export function JobScheduleCard({
-  item, techColor, routeInfo, compact = false, onClick, className, style,
+  item, techColor, routeInfo, visibleFields, compact = false, onClick, className, style,
 }: Props) {
   const jobType = item.job_type || "service";
   const emoji = JOB_TYPE_EMOJI[jobType] || "🔧";
@@ -74,6 +79,10 @@ export function JobScheduleCard({
       : routeInfo.travelMin <= 30 ? "bg-amber-500/80"
       : "bg-red-500/80"
     : null;
+  const amount = item.amount ?? item.total_amount ?? item.total ?? null;
+  const addressParts = (item.address || "").split(",").map((part) => part.trim()).filter(Boolean);
+  const street = addressParts[0] || item.address;
+  const zip = item.address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || null;
 
   return (
     <div
@@ -87,16 +96,16 @@ export function JobScheduleCard({
       <div className="flex-1 min-w-0 px-2 py-1.5 flex flex-col gap-0.5 overflow-hidden">
         {/* Row 1: route# · emoji · name · travel pill */}
         <div className="flex items-center gap-1 min-w-0">
-          {routeInfo && (
+          {routeInfo && visibleFields?.travelTime !== false && (
             <span className="text-[9px] font-bold bg-white/30 text-white rounded-full w-4 h-4 flex items-center justify-center shrink-0">
               {routeInfo.order}
             </span>
           )}
-          <span className="text-[11px] shrink-0">{emoji}</span>
+          {visibleFields?.customerTags !== false && <span className="text-[11px] shrink-0">{emoji}</span>}
           <span className="text-[12px] font-semibold text-white flex-1 leading-tight">
-            {item.customer_name || "No Name"}
+            {visibleFields?.customer === false ? (number || tag) : (item.customer_name || "No Name")}
           </span>
-          {routeInfo?.travelMin != null && (
+          {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
             <span className={cn("text-[9px] font-bold text-white px-1 py-0.5 rounded flex items-center gap-0.5 shrink-0", travelColor)}>
               <Car className="h-3 w-3" />
               {routeInfo.travelMin}m
@@ -106,24 +115,29 @@ export function JobScheduleCard({
 
         {/* Row 2: tag + time */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[9px] font-bold uppercase px-1 py-0 rounded bg-white/20 text-white">{tag}</span>
-          {timeStr && (
+          {visibleFields?.customerTags !== false && <span className="text-[9px] font-bold uppercase px-1 py-0 rounded bg-white/20 text-white">{tag}</span>}
+          {timeStr && visibleFields?.arrivalWindow !== false && (
             <span className="text-[10px] text-white/80 flex items-center gap-0.5">
               <Clock className="h-3 w-3" />
               {timeStr}
             </span>
           )}
+          {amount != null && visibleFields?.amount && (
+            <span className="text-[10px] font-bold text-white/90">
+              ${Number(amount).toLocaleString()}
+            </span>
+          )}
         </div>
 
         {/* Row 3: address */}
-        {!compact && item.address && (
+        {!compact && item.address && visibleFields?.street !== false && (
           <p className="text-[10px] text-white/70 flex items-center gap-0.5 leading-tight">
-            <MapPin className="h-3 w-3 shrink-0" />{item.address}
+            <MapPin className="h-3 w-3 shrink-0" />{street}{visibleFields?.zip && zip ? `, ${zip}` : ""}
           </p>
         )}
 
         {/* Row 4: phone */}
-        {!compact && item.customer_phone && (
+        {!compact && item.customer_phone && visibleFields?.phone && (
           <span className="text-[10px] text-white/70 flex items-center gap-0.5">
             <Phone className="h-3 w-3 shrink-0" />
             {item.customer_phone}
@@ -131,12 +145,12 @@ export function JobScheduleCard({
         )}
 
         {/* Row 5: job number */}
-        {number && (
+        {number && visibleFields?.jobNumber !== false && (
           <span className="text-[9px] text-white/50 font-medium">{number}</span>
         )}
 
         {/* Row 6: travel from label */}
-        {routeInfo?.fromLabel && routeInfo.travelMin != null && (
+        {routeInfo?.fromLabel && routeInfo.travelMin != null && visibleFields?.travelTime !== false && (
           <span className="text-[9px] text-white/50 italic">
             {routeInfo.travelMin} min from {routeInfo.fromLabel}
           </span>

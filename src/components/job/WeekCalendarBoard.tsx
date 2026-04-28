@@ -7,10 +7,11 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
 import { Button } from "@/components/ui/button";
-import type { CardDensity } from "@/components/job/CalendarSettings";
+import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
 import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { useHistoricalWeather } from "@/hooks/useHistoricalWeather";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
+import { getUsHolidayName } from "@/lib/usHolidays";
 
 interface BoardItem {
   id: string;
@@ -59,8 +60,10 @@ const TECH_HEX_PALETTE = [
 const UNASSIGNED_COLOR = "#6b7280";
 
 const TIME_GUTTER_WIDTH = 60;
-const START_HOUR = 7;
-const END_HOUR = 19;
+const DEFAULT_START_HOUR = 6;
+const DEFAULT_END_HOUR = 21;
+const BUSINESS_START_HOUR = 7;
+const BUSINESS_END_HOUR = 19;
 const HOUR_HEIGHT = 64;
 const HEADER_HEIGHT = 116;
 
@@ -100,15 +103,20 @@ interface WeekCalendarBoardProps {
   onToggleSelect?: (id: string) => void;
   routeOrders?: Map<string, { order: number; travelMin: number | null; fromLabel: string | null }>;
   cardDensity?: CardDensity;
+  visibleFields?: CalendarVisibleFields;
+  businessHoursOnly?: boolean;
+  showHolidays?: boolean;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable" }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
   const rangeStart = addDays(weekStart, -CENTER_WEEK_INDEX * 7);
   const days = Array.from({ length: VISIBLE_WEEKS * 7 }, (_, i) => addDays(rangeStart, i));
-  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+  const startHour = businessHoursOnly ? BUSINESS_START_HOUR : DEFAULT_START_HOUR;
+  const endHour = businessHoursOnly ? BUSINESS_END_HOUR : DEFAULT_END_HOUR;
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   const { data: forecastMap } = useWeatherForecast();
   const dayKeys = useMemo(() => days.map((d) => format(d, "yyyy-MM-dd")), [days]);
   const { data: historicalMap } = useHistoricalWeather(dayKeys);
@@ -177,7 +185,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
     });
   }, [days, dayItemsMap]);
 
-  const totalHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+  const totalHeight = (endHour - startHour) * HOUR_HEIGHT;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeDayRef = useRef<HTMLDivElement>(null);
   const [edgePadding, setEdgePadding] = useState({ left: 0, right: 0 });
@@ -236,7 +244,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
               <div
                 key={hour}
                 className="absolute w-full border-b border-border/30 flex items-start justify-end pr-2 pt-0.5"
-                style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
               >
                 <span className="text-[10px] text-muted-foreground font-medium">
                   {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
@@ -286,6 +294,11 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                     <span className={cn("text-lg font-bold leading-none", isTodayDay ? "text-primary-foreground" : "text-foreground")}>
                       {format(day, "d")}
                     </span>
+                    {showHolidays && getUsHolidayName(day) && (
+                      <span className={cn("text-[9px] font-semibold leading-none truncate max-w-full", isTodayDay ? "text-primary-foreground/80" : "text-amber-700 dark:text-amber-300")}>
+                        {getUsHolidayName(day)}
+                      </span>
+                    )}
                     {dayItems.length > 0 && (
                       <span className={cn("text-[10px] font-medium leading-none", isTodayDay ? "text-primary-foreground/70" : "text-muted-foreground")}>
                         {dayItems.length} item{dayItems.length !== 1 ? "s" : ""}
@@ -302,21 +315,21 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   style={{ height: totalHeight }}
                 >
                   {hours.map((hour) => (
-                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
+                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
                   ))}
 
                   {/* Untimed items */}
                   {untimed.length > 0 && (
                     <div className="absolute top-0 left-0 right-0 z-20 p-0.5 flex flex-col gap-0.5">
                       {untimed.map(item => (
-                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} />
+                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} />
                       ))}
                     </div>
                   )}
 
                   {/* Timed cards */}
                   {laid.map(({ item, startH, endH, col, totalCols }) => {
-                    const top = (startH - START_HOUR) * HOUR_HEIGHT;
+                    const top = (startH - startHour) * HOUR_HEIGHT;
                     const height = Math.max((endH - startH) * HOUR_HEIGHT, 40);
                     const colWidth = 100 / totalCols;
                     const left = col * colWidth;
@@ -338,6 +351,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                           onToggleSelect={onToggleSelect}
                           routeInfo={routeOrders?.get(item.id)}
                           cardDensity={cardDensity}
+                          visibleFields={visibleFields}
                         />
                       </div>
                     );
@@ -366,6 +380,7 @@ function WeekCard({
   onToggleSelect,
   routeInfo,
   cardDensity = "comfortable",
+  visibleFields,
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -378,6 +393,7 @@ function WeekCard({
   onToggleSelect?: (id: string) => void;
   routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null };
   cardDensity?: CardDensity;
+  visibleFields?: CalendarVisibleFields;
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -393,6 +409,10 @@ function WeekCard({
   const number = item.item_type === "estimate"
     ? (item.estimate_number ? `Est #${item.estimate_number}` : null)
     : ((item.job_number || item.hcp_job_number) ? `Job #${item.job_number || item.hcp_job_number}` : null);
+  const amount = item.amount ?? item.total_amount ?? item.total ?? null;
+  const addressParts = (item.address || "").split(",").map((part) => part.trim()).filter(Boolean);
+  const street = addressParts[0] || item.address;
+  const zip = item.address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || null;
 
   const initials = item.assigned_to
     ? item.assigned_to.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()
@@ -432,7 +452,7 @@ function WeekCard({
       <div className={cn("flex-1 min-w-0 px-1.5 py-1 flex flex-col gap-0.5 overflow-hidden", isTiny && "py-0.5")}>
         {/* Row 1: route order + checkbox/emoji + customer name + travel badge + initials */}
         <div className="flex items-center gap-1 min-w-0">
-          {routeInfo && (
+          {routeInfo && visibleFields?.travelTime !== false && (
             <span className="text-[8px] font-bold bg-white/30 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shrink-0">
               {routeInfo.order}
             </span>
@@ -446,17 +466,17 @@ function WeekCard({
               className="h-3 w-3 shrink-0 rounded border-white/50 accent-white cursor-pointer"
             />
           )}
-          <span className="text-[10px] shrink-0">{emoji}</span>
+          {visibleFields?.customerTags !== false && <span className="text-[10px] shrink-0">{emoji}</span>}
           <span className="text-[11px] font-semibold text-white flex-1 break-words leading-tight">
-            {item.customer_name || "No Name"}
+            {visibleFields?.customer === false ? (number || tag) : (item.customer_name || "No Name")}
           </span>
-          {routeInfo?.travelMin != null && (
+          {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
             <span className={cn("text-[8px] font-bold text-white px-1 py-0 rounded flex items-center gap-0.5 shrink-0", travelColor)}>
               <Car className="h-2.5 w-2.5" />
               {routeInfo.travelMin}m
             </span>
           )}
-          {initials && !isCompact && (
+          {initials && !isCompact && visibleFields?.team !== false && (
             <span className="text-[8px] font-bold bg-white/25 text-white rounded-full w-4 h-4 flex items-center justify-center shrink-0">
               {initials}
             </span>
@@ -476,32 +496,37 @@ function WeekCard({
         {/* Row 2: Tag + Time */}
         {!isTiny && !isCompact && (
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[8px] font-bold uppercase px-1 py-0 rounded bg-white/20 text-white">
+            {visibleFields?.customerTags !== false && <span className="text-[8px] font-bold uppercase px-1 py-0 rounded bg-white/20 text-white">
               {tag}
-            </span>
-            {showTime && timeStr && (
+            </span>}
+            {showTime && timeStr && visibleFields?.arrivalWindow !== false && (
               <span className="text-[9px] text-white/80 flex items-center gap-0.5">
                 <Clock className="h-2.5 w-2.5" />
                 {timeStr}
+              </span>
+            )}
+            {amount != null && visibleFields?.amount && (
+              <span className="text-[9px] font-bold text-white/90">
+                ${Number(amount).toLocaleString()}
               </span>
             )}
           </div>
         )}
 
         {/* Row 3: Address (expanded or comfortable non-small) */}
-        {!isSmall && !isCompact && item.address && (
+        {!isSmall && !isCompact && item.address && visibleFields?.street !== false && (
           <p className="text-[9px] text-white/70 flex items-center gap-0.5 break-words leading-tight">
-            <MapPin className="h-2.5 w-2.5 shrink-0" />{item.address}
+            <MapPin className="h-2.5 w-2.5 shrink-0" />{street}{visibleFields?.zip && zip ? `, ${zip}` : ""}
           </p>
         )}
 
         {/* Row 4: Description (expanded only) */}
-        {isExpanded && !isSmall && item.description && (
+        {isExpanded && !isSmall && item.description && visibleFields?.description !== false && (
           <p className="text-[9px] text-white/70 break-words leading-tight">{item.description}</p>
         )}
 
         {/* Row 5: Phone */}
-        {!isSmall && !isCompact && item.customer_phone && (
+        {!isSmall && !isCompact && item.customer_phone && visibleFields?.phone && (
           <span className="text-[9px] text-white/70 flex items-center gap-0.5">
             <Phone className="h-2.5 w-2.5 shrink-0" />
             {item.customer_phone}
@@ -509,7 +534,7 @@ function WeekCard({
         )}
 
         {/* Row 6: Job number */}
-        {!isTiny && !isCompact && number && (
+        {!isTiny && !isCompact && number && visibleFields?.jobNumber !== false && (
           <span className="text-[8px] text-white/50 font-medium">{number}</span>
         )}
       </div>
@@ -522,14 +547,14 @@ function WeekCard({
         {cardContent}
       </HoverCardTrigger>
       <HoverCardContent side="right" align="start" className="w-72 p-0 overflow-hidden z-50">
-        <CardPopover item={item} techColor={techColor} routeInfo={routeInfo} />
+        <CardPopover item={item} techColor={techColor} routeInfo={routeInfo} visibleFields={visibleFields} />
       </HoverCardContent>
     </HoverCard>
   );
 }
 
 // ── Hover Popover Content ──
-function CardPopover({ item, techColor, routeInfo }: { item: BoardItem; techColor: string; routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null } }) {
+function CardPopover({ item, techColor, routeInfo, visibleFields }: { item: BoardItem; techColor: string; routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null }; visibleFields?: CalendarVisibleFields }) {
   const navigate = useNavigate();
   const openQuickQuote = () => {
     const params = new URLSearchParams();
@@ -574,15 +599,15 @@ function CardPopover({ item, techColor, routeInfo }: { item: BoardItem; techColo
       {/* Body */}
       <div className="p-3 space-y-2.5">
         {/* Date & Time */}
-        {(scheduledDate || timeStr) && (
+        {(scheduledDate || (timeStr && visibleFields?.arrivalWindow !== false)) && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 shrink-0" />
-            <span>{scheduledDate}{timeStr ? ` · ${timeStr}` : ""}</span>
+            <span>{scheduledDate}{timeStr && visibleFields?.arrivalWindow !== false ? ` · ${timeStr}` : ""}</span>
           </div>
         )}
 
         {/* Travel Time */}
-        {routeInfo?.travelMin != null && (
+        {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Car className="h-3.5 w-3.5 shrink-0" />
             <span>
@@ -593,12 +618,12 @@ function CardPopover({ item, techColor, routeInfo }: { item: BoardItem; techColo
         )}
 
         {/* Customer Name */}
-        <div className="text-sm font-semibold text-foreground">
+        {visibleFields?.customer !== false && <div className="text-sm font-semibold text-foreground">
           {item.customer_name || "No Name"}
-        </div>
+        </div>}
 
         {/* Address */}
-        {item.address && (
+        {item.address && visibleFields?.street !== false && (
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>{item.address}</span>
@@ -606,7 +631,7 @@ function CardPopover({ item, techColor, routeInfo }: { item: BoardItem; techColo
         )}
 
         {/* Phone + Quick Actions */}
-        {item.customer_phone && (
+        {item.customer_phone && visibleFields?.phone && (
           <div className="flex items-center gap-2">
             <ClickToCall phone={item.customer_phone} contactName={item.customer_name || undefined} jobId={item.id} className="text-xs text-muted-foreground hover:text-primary" iconClassName="h-3.5 w-3.5" />
             <SmsButton phone={item.customer_phone} iconClassName="h-3.5 w-3.5" />
@@ -620,12 +645,12 @@ function CardPopover({ item, techColor, routeInfo }: { item: BoardItem; techColo
         </Button>
 
         {/* Description */}
-        {item.description && (
+        {item.description && visibleFields?.description !== false && (
           <p className="text-xs text-muted-foreground border-t pt-2">{item.description}</p>
         )}
 
         {/* Assigned tech */}
-        {item.assigned_to && (
+        {item.assigned_to && visibleFields?.team !== false && (
           <div className="flex items-center gap-2 border-t pt-2">
             <span className="w-5 h-5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shrink-0" style={{ backgroundColor: techColor }}>
               {item.assigned_to.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}

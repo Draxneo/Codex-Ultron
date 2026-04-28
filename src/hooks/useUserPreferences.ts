@@ -6,12 +6,14 @@ interface UserPreferences {
   preferred_model: string;
   jarvis_enabled: boolean;
   copilot_position: { x: number; y: number } | null;
+  calendar_settings: Record<string, unknown> | null;
 }
 
 const DEFAULTS: UserPreferences = {
   preferred_model: "gpt-5-mini",
   jarvis_enabled: false,
   copilot_position: null,
+  calendar_settings: null,
 };
 
 export function useUserPreferences() {
@@ -25,7 +27,7 @@ export function useUserPreferences() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("preferred_model, jarvis_enabled, copilot_position")
+        .select("preferred_model, jarvis_enabled, copilot_position, calendar_settings")
         .eq("id", userId!)
         .single();
       if (error) throw error;
@@ -33,6 +35,7 @@ export function useUserPreferences() {
         preferred_model: (data as any)?.preferred_model ?? DEFAULTS.preferred_model,
         jarvis_enabled: (data as any)?.jarvis_enabled ?? DEFAULTS.jarvis_enabled,
         copilot_position: (data as any)?.copilot_position ?? DEFAULTS.copilot_position,
+        calendar_settings: (data as any)?.calendar_settings ?? DEFAULTS.calendar_settings,
       } as UserPreferences;
     },
   });
@@ -52,12 +55,14 @@ export function useUserPreferences() {
   const setPreferredModel = (model: string) => updatePref.mutate({ preferred_model: model });
   const setJarvisEnabled = (enabled: boolean) => updatePref.mutate({ jarvis_enabled: enabled });
   const setCopilotPosition = (pos: { x: number; y: number }) => updatePref.mutate({ copilot_position: pos });
+  const setCalendarSettings = (settings: Record<string, unknown>) => updatePref.mutate({ calendar_settings: settings });
 
   return {
     ...prefs,
     setPreferredModel,
     setJarvisEnabled,
     setCopilotPosition,
+    setCalendarSettings,
     isUpdating: updatePref.isPending,
   };
 }
