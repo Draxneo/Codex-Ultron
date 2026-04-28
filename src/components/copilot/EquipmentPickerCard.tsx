@@ -5,24 +5,24 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wrench, Check, Loader2 } from "lucide-react";
 
-type Step = "brand" | "tonnage" | "system_type" | "location" | "tier";
+type Step = "brand" | "tonnage" | "system_type" | "tier" | "location";
 
-const STEP_ORDER: Step[] = ["brand", "tonnage", "system_type", "location", "tier"];
+const STEP_ORDER: Step[] = ["brand", "tonnage", "system_type", "tier", "location"];
 
 const STEP_LABELS: Record<Step, string> = {
   brand: "Brand",
   tonnage: "Tonnage",
   system_type: "System Type",
-  location: "Install Location",
   tier: "Tier",
+  location: "Orientation",
 };
 
 const STEP_QUESTIONS: Record<Step, string> = {
   brand: "Which brand?",
   tonnage: "What tonnage?",
   system_type: "What system type?",
-  location: "Where is the install?",
   tier: "Which tier?",
+  location: "Where is the system installed?",
 };
 
 const LOCATION_OPTIONS = [
@@ -79,7 +79,7 @@ export function EquipmentPickerCard({ initialOptions, onComplete, disabled }: Eq
       const loc = LOCATION_OPTIONS.find(l => l.value === newSelections.location);
       const orientationNote = loc ? ` (${loc.orientation})` : "";
       const sysDisplay = SYSTEM_TYPE_DISPLAY[newSelections.system_type || ""] || newSelections.system_type;
-      const summary = `Equipment selection: ${newSelections.brand} / ${newSelections.tonnage} Ton / ${sysDisplay} / ${newSelections.location}${orientationNote} / ${newSelections.tier}`;
+      const summary = `Equipment selection: ${newSelections.brand} / ${newSelections.tonnage} Ton / ${sysDisplay} / ${newSelections.tier} / ${newSelections.location}${orientationNote}`;
       onComplete(summary);
       return;
     }
@@ -87,12 +87,6 @@ export function EquipmentPickerCard({ initialOptions, onComplete, disabled }: Eq
     const nextStep = STEP_ORDER[stepIdx + 1];
     setCurrentStep(nextStep);
     setLoading(true);
-
-    if (nextStep === "location") {
-      setOptions(LOCATION_OPTIONS.map(l => l.label));
-      setLoading(false);
-      return;
-    }
 
     // Query equipment_matchups for next step options
     let query = supabase
@@ -102,6 +96,25 @@ export function EquipmentPickerCard({ initialOptions, onComplete, disabled }: Eq
     if (newSelections.brand) query = query.eq("brand", newSelections.brand);
     if (newSelections.tonnage) query = query.eq("tonnage", Number(newSelections.tonnage));
     if (newSelections.system_type) query = query.ilike("system_type", `%${newSelections.system_type}%`);
+
+    if (nextStep === "location") {
+      let appQuery = supabase
+        .from("equipment_matchups" as any)
+        .select("application");
+      if (newSelections.brand) appQuery = appQuery.eq("brand", newSelections.brand);
+      if (newSelections.tonnage) appQuery = appQuery.eq("tonnage", Number(newSelections.tonnage));
+      if (newSelections.system_type) appQuery = appQuery.eq("system_type", newSelections.system_type);
+      if (newSelections.tier) appQuery = appQuery.eq("tier", newSelections.tier);
+      const { data: appData } = await appQuery;
+      const apps = new Set((appData || []).map((d: any) => d.application).filter(Boolean));
+      const locs = LOCATION_OPTIONS.filter((l) =>
+        apps.has("Multiposition") ||
+        apps.has(l.orientation)
+      );
+      setOptions(locs.length ? locs.map((l) => l.label) : LOCATION_OPTIONS.map((l) => l.label));
+      setLoading(false);
+      return;
+    }
 
     const { data } = await query;
 

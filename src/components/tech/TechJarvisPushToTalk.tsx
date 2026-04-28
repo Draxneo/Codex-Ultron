@@ -179,6 +179,7 @@ export function TechJarvisPushToTalk({
           `Active job: ${jobNumber || jobId}${customerName ? ` for ${customerName}` : ""}.`,
           `Job ID: ${jobId}.`,
           "Tech workflow: photos plus voice notes should become repair/replacement recommendations, cart options, and a customer-ready approval/payment link.",
+          "When discussing replacement equipment, think like the field team: brand, tonnage, system type, tier, then orientation/install location. Example: Carrier 3 ton Performance gas heat system in the attic.",
           "If the tech describes options, respond with clear cart item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved.",
           "When recommending cart choices, add a final section named CART OPTIONS. Put each priced option on one line like: Option A: Replace capacitor | price: $289 | description: Includes part, labor, testing.",
         ].join(" ");

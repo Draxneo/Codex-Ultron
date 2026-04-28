@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, X, Zap, Wrench, Package, Plus, Send } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
@@ -14,6 +15,8 @@ import { useJobCart } from "@/hooks/useJobCart";
 import { getJobCartPermissions } from "@/lib/jobCartStatus";
 import type { EquipmentMatchup } from "@/hooks/useEquipmentMatchups";
 import type { RepairCatalogItem } from "@/components/RepairProductCard";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 interface Props {
   jobId: string;
@@ -25,6 +28,21 @@ interface Props {
 }
 
 const HOURLY_LABOR_RATE = 165; // fallback only when catalog has no base_price
+const TIER_ORDER = ["Value", "Value Plus", "Good", "Better", "Best", "Ultimate"];
+const SYSTEM_TYPE_LABELS: Record<string, string> = {
+  gas_heat: "Gas Heat",
+  heat_pump: "Heat Pump",
+  electric: "Straight Cool",
+  dual_fuel: "Dual Fuel",
+};
+
+const ORIENTATION_OPTIONS = [
+  { label: "Attic", value: "Attic", applications: ["Multiposition", "Horizontal"] },
+  { label: "Closet", value: "Closet", applications: ["Multiposition", "Vertical"] },
+  { label: "Horizontal", value: "Horizontal", applications: ["Horizontal"] },
+  { label: "Vertical", value: "Vertical", applications: ["Vertical"] },
+  { label: "Multiposition", value: "Multiposition", applications: ["Multiposition"] },
+];
 
 export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) {
   const isMobile = useIsMobile();
@@ -39,13 +57,17 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     addItem.mutate({
       kind: "equipment",
       source_id: m.id,
-      name: `${m.brand} ${m.tier || ""} ${m.tonnage ? m.tonnage + "T" : ""} ${m.system_type || ""}`.replace(/\s+/g, " ").trim(),
+      name: `${m.brand} ${m.tonnage ? `${m.tonnage}T` : ""} ${m.tier || ""} ${SYSTEM_TYPE_LABELS[m.system_type || ""] || m.system_type || "System"}`.replace(/\s+/g, " ").trim(),
       description: m.condenser_model + (m.furnace_model ? ` + ${m.furnace_model}` : "") + (m.coil_model ? ` + ${m.coil_model}` : ""),
       unit_price: m.total_price || 0,
       metadata: {
         ahri_number: m.ahri_number,
         seer2: m.seer2,
         tonnage: m.tonnage,
+        brand: m.brand,
+        system_type: m.system_type,
+        tier: m.tier,
+        application: m.application,
         condenser_model: m.condenser_model,
         furnace_model: m.furnace_model,
         coil_model: m.coil_model,
@@ -115,9 +137,13 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto px-3 pt-3 pb-28">
+        <div className={isMobile ? "flex-1 overflow-y-auto px-3 pt-3 pb-24" : "flex-1 overflow-y-auto px-3 pt-3 pb-28"}>
           <TabsContent value="equipment" className="mt-0">
-            <EquipmentCatalogBrowser onAddToCart={handleAddEquipment} compact={isMobile} maxHeight={isMobile ? "max-h-none" : undefined} />
+            {isMobile ? (
+              <GuidedEquipmentPicker onAdd={handleAddEquipment} disabled={!permissions.canEditItems} />
+            ) : (
+              <EquipmentCatalogBrowser onAddToCart={handleAddEquipment} compact={false} />
+            )}
           </TabsContent>
           <TabsContent value="repairs" className="mt-0">
             <RepairCatalogBrowser onAddToCart={handleAddRepair} compact={isMobile} maxHeight={isMobile ? "max-h-none" : undefined} />
@@ -154,7 +180,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
       </Tabs>
 
       {/* Sticky bottom strip */}
-      <div className="absolute inset-x-0 bottom-0 bg-background border-t shadow-lg p-3 z-10">
+      <div className={isMobile ? "hidden" : "absolute inset-x-0 bottom-0 bg-background border-t shadow-lg p-3 z-10"}>
         <div className="flex items-center gap-2 flex-1">
           <ShoppingCart className="h-5 w-5 text-primary" />
           <div>
@@ -203,6 +229,243 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
       </SheetContent>
     </Sheet>
   );
+}
+
+function GuidedEquipmentPicker({ onAdd, disabled }: { onAdd: (m: EquipmentMatchup) => void; disabled?: boolean }) {
+  const [brand, setBrand] = useState("");
+  const [tonnage, setTonnage] = useState("");
+  const [systemType, setSystemType] = useState("");
+  const [tier, setTier] = useState("");
+  const [orientation, setOrientation] = useState("");
+
+  const { data: matchups = [], isLoading } = useQuery({
+    queryKey: ["equipment_matchups_guided_picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("equipment_matchups" as any)
+        .select("id, brand, system_type, tier, application, condenser_model, furnace_model, coil_model, tonnage, seer2, eer2, hspf2, cooling_cap, afue, ahri_number, component_price, total_price, factory_rebate_price, monthly_payment, monthly_payment_120, cps_tonnage, early_rebate, burnout_rebate, notes, low_margin_price, cps_rebate_tier, features_benefits, heat_kit, ahri_certificate_path, image_url, created_at")
+        .order("brand")
+        .order("tonnage")
+        .order("tier");
+      if (error) throw error;
+      return (data || []) as unknown as EquipmentMatchup[];
+    },
+  });
+
+  const brands = useMemo(() => unique(matchups.map((m) => m.brand)).sort(), [matchups]);
+  const tonnages = useMemo(() => {
+    if (!brand) return [];
+    return unique(matchups.filter((m) => m.brand === brand).map((m) => m.tonnage).filter(Boolean))
+      .sort((a, b) => Number(a) - Number(b))
+      .map(String);
+  }, [brand, matchups]);
+  const systemTypes = useMemo(() => {
+    if (!brand || !tonnage) return [];
+    return unique(
+      matchups
+        .filter((m) => m.brand === brand && m.tonnage === Number(tonnage))
+        .map((m) => m.system_type)
+        .filter(Boolean),
+    ).sort() as string[];
+  }, [brand, matchups, tonnage]);
+  const tiers = useMemo(() => {
+    if (!brand || !tonnage || !systemType) return [];
+    return (unique(
+      matchups
+        .filter((m) => m.brand === brand && m.tonnage === Number(tonnage) && m.system_type === systemType)
+        .map((m) => m.tier)
+        .filter(Boolean),
+    ) as string[]).sort((a, b) => TIER_ORDER.indexOf(a) - TIER_ORDER.indexOf(b));
+  }, [brand, matchups, systemType, tonnage]);
+  const orientations = useMemo(() => {
+    if (!brand || !tonnage || !systemType || !tier) return [];
+    const apps = unique(
+      matchups
+        .filter((m) => m.brand === brand && m.tonnage === Number(tonnage) && m.system_type === systemType && m.tier === tier)
+        .map((m) => m.application)
+        .filter(Boolean),
+    ) as string[];
+    return ORIENTATION_OPTIONS.filter((option) => option.applications.some((app) => apps.includes(app)));
+  }, [brand, matchups, systemType, tier, tonnage]);
+
+  const results = useMemo(() => {
+    if (!brand || !tonnage || !systemType || !tier || !orientation) return [];
+    const option = ORIENTATION_OPTIONS.find((item) => item.value === orientation);
+    const acceptedApplications = option?.applications || [orientation];
+    const matches = matchups.filter(
+      (m) =>
+        m.brand === brand &&
+        m.tonnage === Number(tonnage) &&
+        m.system_type === systemType &&
+        m.tier === tier &&
+        acceptedApplications.includes(m.application || ""),
+    );
+    return preferBestOrientation(matches, acceptedApplications);
+  }, [brand, matchups, orientation, systemType, tier, tonnage]);
+
+  const summaryParts = [
+    brand,
+    tonnage ? `${tonnage} Ton` : null,
+    systemType ? SYSTEM_TYPE_LABELS[systemType] || systemType : null,
+    tier,
+    orientation,
+  ].filter(Boolean);
+
+  const resetAfterBrand = (value: string) => {
+    setBrand(value);
+    setTonnage("");
+    setSystemType("");
+    setTier("");
+    setOrientation("");
+  };
+  const resetAfterTonnage = (value: string) => {
+    setTonnage(value);
+    setSystemType("");
+    setTier("");
+    setOrientation("");
+  };
+  const resetAfterType = (value: string) => {
+    setSystemType(value);
+    setTier("");
+    setOrientation("");
+  };
+  const resetAfterTier = (value: string) => {
+    setTier(value);
+    setOrientation("");
+  };
+
+  if (isLoading) return <p className="py-10 text-center text-sm text-muted-foreground">Loading systems...</p>;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <p className="text-sm font-semibold text-foreground">Build the system like a tech</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Brand, tonnage, type, tier, then where it sits.
+        </p>
+        {summaryParts.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {summaryParts.map((part) => (
+              <Badge key={part} variant="secondary" className="text-[10px]">
+                {part}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <OptionStep label="Brand" options={brands} value={brand} onSelect={resetAfterBrand} />
+      <OptionStep label="Tonnage" options={tonnages} value={tonnage} onSelect={resetAfterTonnage} disabled={!brand} format={(v) => `${v} Ton`} />
+      <OptionStep
+        label="Type"
+        options={systemTypes}
+        value={systemType}
+        onSelect={resetAfterType}
+        disabled={!tonnage}
+        format={(v) => SYSTEM_TYPE_LABELS[v] || v}
+      />
+      <OptionStep label="Tier" options={tiers} value={tier} onSelect={resetAfterTier} disabled={!systemType} />
+      <OptionStep
+        label="Orientation"
+        options={orientations.map((item) => item.value)}
+        value={orientation}
+        onSelect={setOrientation}
+        disabled={!tier}
+      />
+
+      {brand && tonnage && systemType && tier && orientation && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Matching systems</p>
+          {results.length === 0 ? (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center text-sm text-muted-foreground">
+              No matchup for {summaryParts.join(" ")}.
+            </div>
+          ) : (
+            results.map((matchup) => (
+              <Card key={matchup.id} className="p-3 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-tight text-foreground">
+                      {matchup.brand} {matchup.tonnage}T {matchup.tier} {SYSTEM_TYPE_LABELS[matchup.system_type || ""] || matchup.system_type}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {matchup.application || "Any orientation"} · {matchup.seer2 ? `${matchup.seer2} SEER2` : "SEER2 not set"}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-bold tabular-nums">${Number(matchup.total_price || 0).toLocaleString()}</p>
+                </div>
+                <div className="rounded-md bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
+                  <p className="truncate">Condenser: {matchup.condenser_model}</p>
+                  {matchup.furnace_model && <p className="truncate">Furnace: {matchup.furnace_model}</p>}
+                  {matchup.coil_model && <p className="truncate">Coil: {matchup.coil_model}</p>}
+                  {matchup.ahri_number && <p className="truncate">AHRI: {matchup.ahri_number}</p>}
+                </div>
+                <Button className="h-10 w-full" onClick={() => onAdd(matchup)} disabled={disabled}>
+                  <ShoppingCart className="mr-1 h-4 w-4" /> Add to Cart
+                </Button>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OptionStep({
+  label,
+  options,
+  value,
+  onSelect,
+  disabled,
+  format = (v) => v,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onSelect: (value: string) => void;
+  disabled?: boolean;
+  format?: (value: string) => string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        {value && <span className="text-xs font-medium text-primary">{format(value)}</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {disabled ? (
+          <span className="text-xs text-muted-foreground">Choose the previous step first.</span>
+        ) : options.length === 0 ? (
+          <span className="text-xs text-muted-foreground">No options found.</span>
+        ) : (
+          options.map((option) => (
+            <Button
+              key={option}
+              type="button"
+              size="sm"
+              variant={value === option ? "default" : "outline"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => onSelect(option)}
+            >
+              {format(option)}
+            </Button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values));
+}
+
+function preferBestOrientation(matchups: EquipmentMatchup[], acceptedApplications: string[]) {
+  const multiposition = matchups.filter((m) => m.application === "Multiposition");
+  const preferredSpecific = matchups.filter((m) => m.application && acceptedApplications.includes(m.application) && m.application !== "Multiposition");
+  const pool = multiposition.length > 0 ? multiposition : preferredSpecific.length > 0 ? preferredSpecific : matchups;
+  return [...pool].sort((a, b) => Number(b.seer2 || 0) - Number(a.seer2 || 0));
 }
 
 function PartsPickerGrid({
