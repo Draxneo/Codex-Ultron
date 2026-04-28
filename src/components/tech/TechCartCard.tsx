@@ -122,11 +122,11 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
   const renderActionRow = () => {
     if (itemCount === 0) {
       return (
-        <div className="flex items-start gap-2 rounded-xl bg-muted/50 px-3 py-3">
-          <AlertCircle className="mt-0.5 h-4 w-4 text-amber-600" />
+        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
           <div>
-            <p className="text-sm font-semibold">Start with at least one option.</p>
-            <p className="text-xs text-muted-foreground">Add a repair, part, equipment package, or custom item. Nothing is sent until you tap send.</p>
+            <p className="text-sm font-semibold leading-tight">Add one option to start.</p>
+            <p className="text-xs text-muted-foreground leading-tight">Nothing sends until you tap send.</p>
           </div>
         </div>
       );
@@ -155,22 +155,22 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           {statusInfo.canSendPaymentLink && renderSendGuard("Payment link")}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {statusInfo.canCollectNow && (
-              <Button className="h-14 text-sm gap-2" onClick={handleCollectPayment} disabled={!publicLink}>
-                <CreditCard className="h-5 w-5" /> Collect Payment
+              <Button className="h-11 text-sm gap-2" onClick={handleCollectPayment} disabled={!publicLink}>
+                <CreditCard className="h-4 w-4" /> Collect Payment
               </Button>
             )}
             {statusInfo.canSendPaymentLink && (
               <Button
                 variant="outline"
-                className="h-14 text-sm gap-2"
+                className="h-11 text-sm gap-2"
                 onClick={handleSend}
                 disabled={sendDisabled}
               >
-                <Send className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Send Payment Link"}
+                <Send className="h-4 w-4" /> {sendToCustomer.isPending ? "Sending..." : "Send Payment Link"}
               </Button>
             )}
-            <Button variant="outline" className="h-14 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
-              <Presentation className="h-5 w-5" /> Present
+            <Button variant="outline" className="h-11 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+              <Presentation className="h-4 w-4" /> Present
             </Button>
           </div>
         </div>
@@ -186,7 +186,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <p className="text-xs text-muted-foreground">Revise the customer options, then resend when the customer is ready.</p>
           {renderSendGuard("Revised estimate")}
           <Button className="h-14 w-full text-sm gap-2" onClick={handleSend} disabled={sendDisabled}>
-            <RefreshCw className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Revise & Resend"}
+            <RefreshCw className="h-4 w-4" /> {sendToCustomer.isPending ? "Sending..." : "Revise & Resend"}
           </Button>
         </div>
       );
@@ -209,17 +209,17 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           </div>
           {renderSendGuard("Estimate link")}
           <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            className="h-14 text-sm gap-2"
-            onClick={handleSend}
-            disabled={sendDisabled}
-          >
-            <RefreshCw className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Resend"}
-          </Button>
-          <Button className="h-14 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
-            <Presentation className="h-5 w-5" /> Present
-          </Button>
+            <Button
+              variant="outline"
+              className="h-11 text-sm gap-2"
+              onClick={handleSend}
+              disabled={sendDisabled}
+            >
+              <RefreshCw className="h-4 w-4" /> {sendToCustomer.isPending ? "Sending..." : "Resend"}
+            </Button>
+            <Button className="h-11 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+              <Presentation className="h-4 w-4" /> Present
+            </Button>
           </div>
         </div>
       );
@@ -238,14 +238,14 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         </div>
         {renderSendGuard("Estimate link")}
         <Button
-          className="h-16 w-full text-base gap-2 bg-amber-500 hover:bg-amber-600 text-white"
+          className="h-12 w-full text-sm gap-2"
           onClick={handleSend}
           disabled={sendDisabled}
         >
-          <Send className="h-5 w-5" />
+          <Send className="h-4 w-4" />
           {sendToCustomer.isPending ? "Sending..." : "Send Cart for Approval"}
         </Button>
-        <Button variant="outline" className="h-12 w-full text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+        <Button variant="outline" className="h-11 w-full text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
           <Presentation className="h-4 w-4" /> Present on this phone first
         </Button>
       </div>
@@ -259,45 +259,40 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
     const planPrice = memberInfo.planSource === "install_included"
       ? "Included with install"
       : `$${memberInfo.planAnnualPrice.toFixed(0)}/year`;
-    const visiblePerks = memberInfo.perks.slice(0, 3);
+    const visiblePerks = memberInfo.perks.slice(0, 2);
 
     if (memberInfo.isLoading) {
       return (
-        <div className="px-3 py-3 border-b border-border">
-          <div className="h-16 rounded-lg bg-muted animate-pulse" />
+        <div className="px-3 py-2 border-b border-border">
+          <div className="h-12 rounded-lg bg-muted animate-pulse" />
         </div>
       );
     }
 
     if (memberInfo.isActive) {
       return (
-        <div className="px-3 py-3 border-b border-border bg-emerald-500/5">
-          <div className="rounded-xl border border-emerald-500/25 bg-background p-3">
-            <div className="flex items-start gap-2">
-              <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+        <div className="px-3 py-2 border-b border-border bg-emerald-500/5">
+          <div className="rounded-lg border border-emerald-500/25 bg-background p-2.5">
+            <div className="flex items-start gap-2.5">
+              <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
                 <Crown className="h-4 w-4 text-emerald-600" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground">Comfort Club member</p>
+                  <p className="text-sm font-semibold text-foreground leading-tight">Comfort Club member</p>
                   {savings > 0 && (
-                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+                    <Badge className="shrink-0 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                       -{money(savings)}
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
                   {memberInfo.planName} gives this customer {memberInfo.discountPercent}% member pricing.
                 </p>
-                {savings > 0 && (
-                  <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                    {memberInfo.savingsLabel}: {money(savings)}
-                  </p>
-                )}
                 {visiblePerks.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-1">
                     {visiblePerks.map((perk) => (
-                      <span key={perk} className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                      <span key={perk} className="max-w-full rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-emerald-700 dark:text-emerald-400 line-clamp-1">
                         {perk}
                       </span>
                     ))}
@@ -311,32 +306,31 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
     }
 
     return (
-      <div className="px-3 py-3 border-b border-border bg-amber-500/5">
-        <div className="rounded-xl border border-amber-500/25 bg-background p-3">
-          <div className="flex items-start gap-2">
-            <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+      <div className="px-3 py-2 border-b border-border bg-amber-500/5">
+        <div className="rounded-lg border border-amber-500/25 bg-background p-2.5">
+          <div className="flex items-start gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-amber-500/10 flex items-center justify-center shrink-0">
               <BadgePercent className="h-4 w-4 text-amber-600" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">Offer Comfort Club</p>
-                <Badge variant="outline" className="text-[10px]">{planPrice}</Badge>
+                <p className="text-sm font-semibold text-foreground leading-tight">Offer Comfort Club</p>
+                <Badge variant="outline" className="shrink-0 text-[10px]">{planPrice}</Badge>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
                 {savings > 0
-                  ? `This cart could show about $${savings.toFixed(2)} in member savings.`
-                  : `${memberInfo.planName} includes member pricing and service perks.`}
+                  ? `Potential member savings: $${savings.toFixed(2)}.`
+                  : `${memberInfo.planName} adds member pricing and service perks.`}
               </p>
               {visiblePerks.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1">
                   {visiblePerks.map((perk) => (
-                    <span key={perk} className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                    <span key={perk} className="max-w-full rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-400 line-clamp-1">
                       {perk}
                     </span>
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-muted-foreground">Membership checkout is separate from this cart.</p>
             </div>
           </div>
         </div>
@@ -361,7 +355,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       )}
 
       {bare && (
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-amber-500/5">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-amber-500/5">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground">Customer options</p>
             <p className="text-xs text-muted-foreground">
@@ -381,7 +375,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       )}
 
       {/* Status-driven action row */}
-      <div className="px-3 py-3 border-b border-border bg-muted/10">{renderActionRow()}</div>
+      <div className="px-3 py-2.5 border-b border-border bg-muted/10">{renderActionRow()}</div>
 
       {renderComfortClub()}
 
@@ -435,8 +429,10 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           </ul>
         </div>
       ) : (
-        <div className="px-4 py-6 text-center">
-          <p className="text-xs text-muted-foreground">No items yet. Add from pricebook or create custom.</p>
+        <div className="px-3 py-3">
+          <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-3 text-center">
+            <p className="text-xs text-muted-foreground">No items yet. Add from pricebook or create custom.</p>
+          </div>
         </div>
       )}
 
@@ -488,11 +484,11 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
 
       {/* Add row — disabled once customer has approved/paid */}
       {permissions.canEditItems && (
-        <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border">
+        <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 h-12 text-sm gap-1.5"
+            className="flex-1 h-10 text-sm gap-1.5"
             onClick={() => setPickerOpen(true)}
           >
             <Plus className="h-3.5 w-3.5" /> Pricebook
@@ -500,7 +496,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 h-12 text-sm gap-1.5"
+            className="flex-1 h-10 text-sm gap-1.5"
             onClick={() => setCustomOpen((v) => !v)}
           >
             <Plus className="h-3.5 w-3.5" /> Custom

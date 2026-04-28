@@ -138,9 +138,9 @@ export default function TechJobDetail() {
   };
 
   return (
-    <div className="flex flex-col min-h-full bg-background pb-36">
+    <div className="flex flex-col min-h-full bg-muted/20 pb-28">
       {/* Sticky header */}
-      <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-card border-b border-border">
+      <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-background/95 border-b border-border backdrop-blur">
         <Button
           variant="ghost"
           size="icon"
@@ -157,7 +157,7 @@ export default function TechJobDetail() {
       </header>
 
       {/* Sticky action bar */}
-      <div className="sticky top-12 z-10 flex items-center gap-1 px-2 h-11 bg-card border-b border-border overflow-x-auto">
+      <div className="sticky top-12 z-10 flex items-center gap-1 px-2 h-11 bg-background/95 border-b border-border overflow-x-auto backdrop-blur">
         <ActionPill icon={Phone} label="Call" onClick={callCustomer} disabled={!customerPhone} />
         <ActionPill icon={MessageSquare} label="SMS" onClick={openCustomerSms} disabled={!customerPhone} />
         <ActionPill icon={Navigation} label={sendingOMW ? "Sending" : "On My Way"} onClick={sendOnMyWay} disabled={!customerPhone || sendingOMW || !!(job as any).on_my_way_sent_at} />
@@ -187,25 +187,22 @@ export default function TechJobDetail() {
 
       {/* Card stack */}
       <main className="px-3 pt-3 flex flex-col gap-3 max-w-2xl mx-auto w-full">
-        <Card className="overflow-hidden border-primary/20 bg-primary/5">
-          <div className="p-4 space-y-3">
+        <Card className="overflow-hidden border-border bg-background">
+          <div className="p-3 space-y-3">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Tech workflow</p>
-              <h1 className="text-xl font-bold text-foreground">Pictures. Talk. Cart.</h1>
-              <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-                Snap what you see, tell JARVIS the diagnosis, then build the customer options and send the link.
-              </p>
+              <h1 className="text-lg font-bold text-foreground">Photos, JARVIS, cart.</h1>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Button type="button" className="h-16 flex-col gap-1" onClick={() => scrollToSection("tech-photos")}>
+              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-photos")}>
                 <ImagePlus className="h-5 w-5" />
                 <span className="text-xs">Photos</span>
               </Button>
-              <Button type="button" className="h-16 flex-col gap-1 bg-purple-600 hover:bg-purple-700" onClick={() => scrollToSection("tech-jarvis")}>
+              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-jarvis")}>
                 <Mic className="h-5 w-5" />
                 <span className="text-xs">Talk</span>
               </Button>
-              <Button type="button" className="h-16 flex-col gap-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => scrollToSection("tech-cart")}>
+              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-cart")}>
                 <ShoppingCart className="h-5 w-5" />
                 <span className="text-xs">Cart</span>
               </Button>
@@ -237,7 +234,7 @@ export default function TechJobDetail() {
           iconBg="bg-sky-500/10"
           iconColor="text-sky-500"
           collapsible={false}
-          className="order-7"
+          className="order-8"
         >
           <TechWeatherCard
             jobId={id!}
@@ -261,7 +258,7 @@ export default function TechJobDetail() {
         </TechCollapsibleCard>
 
         {/* 3. Customer card — always visible */}
-        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false} className="order-6">
+        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false} className="order-2">
           <TechCustomerCard
             customerId={job.customer_id || null}
             customerName={customerName}
@@ -282,7 +279,7 @@ export default function TechJobDetail() {
           iconBg="bg-emerald-500/10"
           iconColor="text-emerald-500"
           defaultOpen={false}
-          className="order-8"
+          className="order-9"
         >
           <TechServicePlansCard customerId={job.customer_id || null} bare />
         </TechCollapsibleCard>
@@ -293,7 +290,7 @@ export default function TechJobDetail() {
           title="Schedule"
           iconBg="bg-indigo-500/10"
           iconColor="text-indigo-500"
-          className="order-9"
+          className="order-10"
         >
           <TechScheduleCard
             jobId={id!}
@@ -314,7 +311,7 @@ export default function TechJobDetail() {
           iconColor="text-amber-500"
           collapsible={false}
           id="tech-cart"
-          className="order-5 scroll-mt-24"
+          className="order-5 scroll-mt-28"
         >
           <TechCartCard
             jobId={id!}
@@ -333,7 +330,7 @@ export default function TechJobDetail() {
           iconColor="text-rose-500"
           collapsible={false}
           id="tech-photos"
-          className="order-3 scroll-mt-24"
+          className="order-3 scroll-mt-28"
         >
           <TechAttachmentsCard
             jobId={id!}
@@ -353,7 +350,7 @@ export default function TechJobDetail() {
           iconColor="text-purple-500"
           collapsible={false}
           id="tech-jarvis"
-          className="order-4 scroll-mt-24"
+          className="order-4 scroll-mt-28"
         >
           <TechJarvisPushToTalk
             jobId={id!}
@@ -372,7 +369,7 @@ export default function TechJobDetail() {
           iconBg="bg-slate-500/10"
           iconColor="text-slate-500"
           defaultOpen={false}
-          className="order-10"
+          className="order-11"
         >
           <div>
             <TechIntegrationRow
@@ -404,17 +401,18 @@ export default function TechJobDetail() {
       </main>
 
       <nav
-        className="fixed left-0 right-0 bottom-16 z-30 border-t border-border bg-card/95 px-3 py-2 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className="fixed left-0 right-0 bottom-0 z-30 border-t border-border bg-background/95 px-3 pt-2 pb-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         aria-label="Tech job quick actions"
       >
         <div className="mx-auto grid max-w-2xl grid-cols-3 gap-2">
-          <Button type="button" className="h-12 flex-col gap-0.5 text-xs" onClick={() => scrollToSection("tech-photos")}>
+          <Button type="button" variant="outline" className="h-11 flex-col gap-0.5 bg-background text-xs" onClick={() => scrollToSection("tech-photos")}>
             <ImagePlus className="h-4 w-4" />
             Photos
           </Button>
           <Button
             type="button"
-            className="h-12 flex-col gap-0.5 bg-purple-600 text-xs hover:bg-purple-700"
+            variant="outline"
+            className="h-11 flex-col gap-0.5 bg-background text-xs"
             onClick={() => scrollToSection("tech-jarvis")}
           >
             <Mic className="h-4 w-4" />
@@ -422,7 +420,8 @@ export default function TechJobDetail() {
           </Button>
           <Button
             type="button"
-            className="h-12 flex-col gap-0.5 bg-amber-500 text-xs text-white hover:bg-amber-600"
+            variant="outline"
+            className="h-11 flex-col gap-0.5 bg-background text-xs"
             onClick={() => scrollToSection("tech-cart")}
           >
             <ShoppingCart className="h-4 w-4" />
