@@ -2,17 +2,29 @@
  * TechJobDetail.tsx - Job detail card stack for technicians.
  *
  * Mobile-only route: /tech/jobs/:id
- * Reuses existing data hooks (useJob, useCustomer) with no data changes.
+ * Reuses existing data hooks with no data changes.
  */
 
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Phone, MessageSquare, Radio, Navigation, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun, DollarSign } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarClock,
+  CloudSun,
+  DollarSign,
+  ImagePlus,
+  Mic,
+  Plug,
+  Shield,
+  ShoppingCart,
+  Sparkles,
+  User2,
+  Wrench,
+} from "lucide-react";
 import { useJob } from "@/hooks/useJobs";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useCustomerJobs } from "@/hooks/useCustomerHistory";
-import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
-import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TechStatusCard } from "@/components/tech/TechStatusCard";
@@ -25,22 +37,17 @@ import { TechCartCard } from "@/components/tech/TechCartCard";
 import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
-import { Card } from "@/components/ui/card";
-import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
-
-const DISPATCH_LINE = "+12106005091";
 
 export default function TechJobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employeeId } = useEffectiveAuth();
-  const softphone = useSoftphoneContext();
-  const { send: sendOMW, sending: sendingOMW } = useSendOnMyWay();
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const { data: customerJobs } = useCustomerJobs(job?.customer_id || undefined);
-  const scrollToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const scrollToSection = (sectionId: string) => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   if (isLoading) {
@@ -89,57 +96,9 @@ export default function TechJobDetail() {
   const jobNumber = job.job_number || job.hcp_job_number || "-";
   const jobCount = customerJobs?.length;
   const employeeName = job.assigned_to || null;
-  const dispatchDraft = [
-    `Tech update for Job ${jobNumber}`,
-    customerName !== "Unknown" ? customerName : null,
-    customerAddress,
-  ].filter(Boolean).join(" - ");
-
-  const openCustomerSms = () => {
-    if (!customerPhone) return;
-    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}`);
-  };
-
-  const openDispatchSms = () => {
-    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}&draft=${encodeURIComponent(`${dispatchDraft}: `)}`);
-  };
-
-  const callCustomer = () => {
-    if (!customerPhone) return;
-    softphone.dial?.(customerPhone, customerName || undefined);
-  };
-
-  const sendOnMyWay = () => {
-    void sendOMW({ jobId: id!, customerPhone, customerName, jobAddress: customerAddress, employeeName, employeeId: employeeId || null });
-  };
-
-  const jarvisJobContext = {
-    id: id!,
-    source: "tech_job_detail",
-    record_type: "job",
-    customer_id: job.customer_id,
-    customer_name: customerName,
-    customer_phone: customerPhone,
-    customer_email: customerEmail,
-    address: customerAddress,
-    job_number: jobNumber,
-    job_type: job.job_type,
-    status: job.status,
-    assigned_to: job.assigned_to,
-    scheduled_date: job.scheduled_date,
-    arrival_start: (job as any).arrival_start,
-    arrival_end: (job as any).arrival_end,
-    description: job.description,
-    suggested_actions: [
-      "Summarize the job for the technician",
-      "Help turn diagnosis notes into a repair cart",
-      "Draft a customer SMS for technician approval",
-    ],
-  };
 
   return (
-    <div className="flex flex-col min-h-full bg-muted/20 pb-28">
-      {/* Sticky header */}
+    <div className="flex flex-col min-h-full bg-muted/20 pb-4">
       <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-background/95 border-b border-border backdrop-blur">
         <Button
           variant="ghost"
@@ -156,61 +115,7 @@ export default function TechJobDetail() {
         <div className="w-9" />
       </header>
 
-      {/* Sticky action bar */}
-      <div className="sticky top-12 z-10 flex items-center gap-1 px-2 h-11 bg-background/95 border-b border-border overflow-x-auto backdrop-blur">
-        <ActionPill icon={Phone} label="Call" onClick={callCustomer} disabled={!customerPhone} />
-        <ActionPill icon={MessageSquare} label="SMS" onClick={openCustomerSms} disabled={!customerPhone} />
-        <ActionPill icon={Navigation} label={sendingOMW ? "Sending" : "On My Way"} onClick={sendOnMyWay} disabled={!customerPhone || sendingOMW || !!(job as any).on_my_way_sent_at} />
-        <ActionPill icon={Radio} label="Dispatch" onClick={openDispatchSms} />
-        <ActionPill icon={ImagePlus} label="Photos" onClick={() => scrollToSection("tech-photos")} />
-        <ActionPill icon={Mic} label="JARVIS" onClick={() => scrollToSection("tech-jarvis")} />
-        <ActionPill icon={ShoppingCart} label="Cart" onClick={() => scrollToSection("tech-cart")} />
-        <AskJarvisButton
-          contextType="job"
-          contextId={id!}
-          label="Ask"
-          context={jarvisJobContext}
-          variant="ghost"
-          className="h-8 shrink-0 rounded-lg px-2 text-[11px]"
-        />
-        {job.hcp_id && (
-          <a
-            href={`https://pro.housecallpro.com/app/jobs/${job.hcp_id}`}
-            target="_blank"
-            rel="noopener"
-            className="ml-auto flex items-center gap-1 text-[11px] text-primary font-medium px-2 h-8 rounded hover:bg-primary/10"
-          >
-            <ExternalLink className="h-3.5 w-3.5" /> Source
-          </a>
-        )}
-      </div>
-
-      {/* Card stack */}
       <main className="px-3 pt-3 flex flex-col gap-3 max-w-2xl mx-auto w-full">
-        <Card className="overflow-hidden border-border bg-background">
-          <div className="p-3 space-y-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Tech workflow</p>
-              <h1 className="text-lg font-bold text-foreground">Photos, JARVIS, cart.</h1>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-photos")}>
-                <ImagePlus className="h-5 w-5" />
-                <span className="text-xs">Photos</span>
-              </Button>
-              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-jarvis")}>
-                <Mic className="h-5 w-5" />
-                <span className="text-xs">Talk</span>
-              </Button>
-              <Button type="button" variant="outline" className="h-12 flex-col gap-0.5 bg-background" onClick={() => scrollToSection("tech-cart")}>
-                <ShoppingCart className="h-5 w-5" />
-                <span className="text-xs">Cart</span>
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* 1. Status card */}
         <TechStatusCard
           jobId={id!}
           status={job.status || "new"}
@@ -227,15 +132,77 @@ export default function TechJobDetail() {
           employeeId={employeeId || null}
         />
 
-        {/* 2. Weather snapshot — always visible (tech-only) */}
+        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false}>
+          <TechCustomerCard
+            customerId={job.customer_id || null}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            customerEmail={customerEmail}
+            address={customerAddress}
+            jobCount={jobCount}
+            hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
+            jobId={id}
+            bare
+          />
+        </TechCollapsibleCard>
+
         <TechCollapsibleCard
-          icon={CloudSun}
-          title="Weather"
-          iconBg="bg-sky-500/10"
-          iconColor="text-sky-500"
+          icon={ImagePlus}
+          title="Attachments"
+          iconBg="bg-rose-500/10"
+          iconColor="text-rose-500"
           collapsible={false}
-          className="order-8"
+          id="tech-photos"
+          className="scroll-mt-16"
         >
+          <TechAttachmentsCard
+            jobId={id!}
+            hcpId={(job as any).hcp_id || null}
+            customerPhone={customerPhone}
+            jobNumber={jobNumber}
+            techName={job.assigned_to || null}
+            bare
+          />
+        </TechCollapsibleCard>
+
+        <TechCollapsibleCard
+          icon={Mic}
+          title="Ask JARVIS"
+          iconBg="bg-purple-500/10"
+          iconColor="text-purple-500"
+          collapsible={false}
+          id="tech-jarvis"
+          className="scroll-mt-16"
+        >
+          <TechJarvisPushToTalk
+            jobId={id!}
+            jobNumber={jobNumber}
+            customerName={customerName}
+            bare
+            onOpenPhotos={() => scrollToSection("tech-photos")}
+            onOpenCart={() => scrollToSection("tech-cart")}
+          />
+        </TechCollapsibleCard>
+
+        <TechCollapsibleCard
+          icon={ShoppingCart}
+          title="Cart"
+          iconBg="bg-amber-500/10"
+          iconColor="text-amber-500"
+          collapsible={false}
+          id="tech-cart"
+          className="scroll-mt-16"
+        >
+          <TechCartCard
+            jobId={id!}
+            customerId={job.customer_id || null}
+            customerPhone={customerPhone}
+            customerName={customerName}
+            bare
+          />
+        </TechCollapsibleCard>
+
+        <TechCollapsibleCard icon={CloudSun} title="Weather" iconBg="bg-sky-500/10" iconColor="text-sky-500" collapsible={false}>
           <TechWeatherCard
             jobId={id!}
             scheduledDate={job.scheduled_date || null}
@@ -257,41 +224,17 @@ export default function TechJobDetail() {
           />
         </TechCollapsibleCard>
 
-        {/* 3. Customer card — always visible */}
-        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false} className="order-2">
-          <TechCustomerCard
-            customerId={job.customer_id || null}
-            customerName={customerName}
-            customerPhone={customerPhone}
-            customerEmail={customerEmail}
-            address={customerAddress}
-            jobCount={jobCount}
-            hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
-            jobId={id}
-            bare
-          />
-        </TechCollapsibleCard>
-
-        {/* 3. Service plans */}
         <TechCollapsibleCard
           icon={Shield}
           title="Service Plans"
           iconBg="bg-emerald-500/10"
           iconColor="text-emerald-500"
           defaultOpen={false}
-          className="order-9"
         >
           <TechServicePlansCard customerId={job.customer_id || null} bare />
         </TechCollapsibleCard>
 
-        {/* 4. Schedule */}
-        <TechCollapsibleCard
-          icon={CalendarClock}
-          title="Schedule"
-          iconBg="bg-indigo-500/10"
-          iconColor="text-indigo-500"
-          className="order-10"
-        >
+        <TechCollapsibleCard icon={CalendarClock} title="Schedule" iconBg="bg-indigo-500/10" iconColor="text-indigo-500">
           <TechScheduleCard
             jobId={id!}
             jobNumber={jobNumber}
@@ -303,74 +246,7 @@ export default function TechJobDetail() {
           />
         </TechCollapsibleCard>
 
-        {/* 5. Inline cart — always visible */}
-        <TechCollapsibleCard
-          icon={ShoppingCart}
-          title="Cart"
-          iconBg="bg-amber-500/10"
-          iconColor="text-amber-500"
-          collapsible={false}
-          id="tech-cart"
-          className="order-5 scroll-mt-28"
-        >
-          <TechCartCard
-            jobId={id!}
-            customerId={job.customer_id || null}
-            customerPhone={customerPhone}
-            customerName={customerName}
-            bare
-          />
-        </TechCollapsibleCard>
-
-        {/* 6. Attachments — always visible */}
-        <TechCollapsibleCard
-          icon={ImagePlus}
-          title="Attachments"
-          iconBg="bg-rose-500/10"
-          iconColor="text-rose-500"
-          collapsible={false}
-          id="tech-photos"
-          className="order-3 scroll-mt-28"
-        >
-          <TechAttachmentsCard
-            jobId={id!}
-            hcpId={(job as any).hcp_id || null}
-            customerPhone={customerPhone}
-            jobNumber={jobNumber}
-            techName={job.assigned_to || null}
-            bare
-          />
-        </TechCollapsibleCard>
-
-        {/* 7. Ask JARVIS (push-to-talk) — always visible */}
-        <TechCollapsibleCard
-          icon={Mic}
-          title="Ask JARVIS"
-          iconBg="bg-purple-500/10"
-          iconColor="text-purple-500"
-          collapsible={false}
-          id="tech-jarvis"
-          className="order-4 scroll-mt-28"
-        >
-          <TechJarvisPushToTalk
-            jobId={id!}
-            jobNumber={jobNumber}
-            customerName={customerName}
-            bare
-            onOpenPhotos={() => scrollToSection("tech-photos")}
-            onOpenCart={() => scrollToSection("tech-cart")}
-          />
-        </TechCollapsibleCard>
-
-        {/* 8. Integrations */}
-        <TechCollapsibleCard
-          icon={Plug}
-          title="Integrations"
-          iconBg="bg-slate-500/10"
-          iconColor="text-slate-500"
-          defaultOpen={false}
-          className="order-11"
-        >
+        <TechCollapsibleCard icon={Plug} title="Integrations" iconBg="bg-slate-500/10" iconColor="text-slate-500" defaultOpen={false}>
           <div>
             <TechIntegrationRow
               icon={Wrench}
@@ -399,59 +275,6 @@ export default function TechJobDetail() {
           </div>
         </TechCollapsibleCard>
       </main>
-
-      <nav
-        className="fixed left-0 right-0 bottom-0 z-30 border-t border-border bg-background/95 px-3 pt-2 pb-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-        aria-label="Tech job quick actions"
-      >
-        <div className="mx-auto grid max-w-2xl grid-cols-3 gap-2">
-          <Button type="button" variant="outline" className="h-11 flex-col gap-0.5 bg-background text-xs" onClick={() => scrollToSection("tech-photos")}>
-            <ImagePlus className="h-4 w-4" />
-            Photos
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 flex-col gap-0.5 bg-background text-xs"
-            onClick={() => scrollToSection("tech-jarvis")}
-          >
-            <Mic className="h-4 w-4" />
-            Talk
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 flex-col gap-0.5 bg-background text-xs"
-            onClick={() => scrollToSection("tech-cart")}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Cart
-          </Button>
-        </div>
-      </nav>
     </div>
-  );
-}
-
-function ActionPill({
-  icon: Icon,
-  label,
-  onClick,
-  disabled,
-}: {
-  icon: typeof Phone;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium text-foreground bg-muted/50 hover:bg-muted active:bg-muted/80 disabled:opacity-40 disabled:pointer-events-none shrink-0"
-    >
-      <Icon className="h-3.5 w-3.5" /> {label}
-    </button>
   );
 }
