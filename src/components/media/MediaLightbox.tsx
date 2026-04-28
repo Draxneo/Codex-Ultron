@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { getFileCategory, type FileCategory } from "@/lib/fileTypes";
 import { PdfPreview } from "./PdfPreview";
 import { MediaAnnotator } from "./MediaAnnotator";
+import { UniversalMediaPlayer } from "./UniversalMediaPlayer";
 import { cn } from "@/lib/utils";
 
 export interface MediaLightboxItem {
@@ -213,19 +214,25 @@ export function MediaLightbox({
               )}
 
               {cat === "video" && (
-                <video
+                <UniversalMediaPlayer
                   src={current.url}
-                  controls
+                  kind="video"
                   autoPlay
-                  className="max-w-full max-h-full"
+                  title={current.fileName || "Video"}
+                  variant="card"
+                  className="max-w-4xl w-full mx-4"
                 />
               )}
 
               {cat === "audio" && (
-                <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
-                  <p className="text-sm font-medium mb-3 truncate">{current.fileName || "Audio"}</p>
-                  <audio src={current.url} controls autoPlay className="w-full" />
-                </div>
+                <UniversalMediaPlayer
+                  src={current.url}
+                  kind="audio"
+                  autoPlay
+                  title={current.fileName || "Audio"}
+                  variant="card"
+                  className="max-w-md w-full mx-4"
+                />
               )}
 
               {cat === "pdf" && (

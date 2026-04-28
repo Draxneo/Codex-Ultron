@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { UniversalMediaPlayer } from "@/components/media";
 
 interface Props {
   callSid: string;
@@ -214,7 +215,13 @@ export function InspectTwilioButton({ callSid, callLogId, hasRecording, classNam
                             </span>
                           )}
                         </div>
-                        <audio controls className="w-full h-8" src={r.play_url} preload="none" />
+                        <UniversalMediaPlayer
+                          src={r.play_url}
+                          kind="audio"
+                          title="Recovered Twilio recording"
+                          subtitle={`${r.duration}s`}
+                          variant="inline"
+                        />
                       </div>
                     ))}
                   </div>

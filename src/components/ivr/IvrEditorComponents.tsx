@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, Play, Pause, X } from "lucide-react";
+import { Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { UniversalMediaPlayer } from "@/components/media";
 
 export const DAYS = [
   { value: 0, label: "S", full: "Sun" },
@@ -102,8 +103,6 @@ export function AudioUploadField({ label, audioUrl, textValue, onTextChange, onA
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,16 +134,6 @@ export function AudioUploadField({ label, audioUrl, textValue, onTextChange, onA
     }
   };
 
-  const handlePreview = () => {
-    if (!audioUrl) return;
-    if (previewing) { audioRef.current?.pause(); setPreviewing(false); return; }
-    const audio = new Audio(audioUrl);
-    audio.onended = () => setPreviewing(false);
-    audio.play();
-    audioRef.current = audio;
-    setPreviewing(true);
-  };
-
   return (
     <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border/50">
       <Label className="text-xs font-semibold">{label}</Label>
@@ -152,9 +141,7 @@ export function AudioUploadField({ label, audioUrl, textValue, onTextChange, onA
         <div className="flex items-center gap-2 p-2.5 bg-background rounded-md border">
           <Badge variant="secondary" className="text-[10px] shrink-0">Custom Audio</Badge>
           <span className="text-xs text-muted-foreground truncate flex-1">{audioUrl.split("/").pop()}</span>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handlePreview}>
-            {previewing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
+          <UniversalMediaPlayer src={audioUrl} kind="audio" variant="compact" className="h-7 w-7" />
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => onAudioChange(null)}>
             <X className="h-3.5 w-3.5 text-destructive" />
           </Button>

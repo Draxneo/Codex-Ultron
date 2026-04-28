@@ -1,7 +1,8 @@
-import { File, FileText, Music, Play, ExternalLink } from "lucide-react";
+import { File, FileText, Play, ExternalLink } from "lucide-react";
 import { getFileCategory, formatBytes, type FileCategory } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
 import { PdfPreview } from "./PdfPreview";
+import { UniversalMediaPlayer } from "./UniversalMediaPlayer";
 
 export type MediaVariant = "compact" | "card" | "inline";
 
@@ -92,10 +93,12 @@ export function MediaItem({
   // ---------- VIDEO ----------
   if (cat === "video") {
     return (
-      <video
+      <UniversalMediaPlayer
         src={url}
-        controls
-        className={cn(heightClass, radius, variant === "card" && "w-full", className)}
+        kind="video"
+        title={fileName || "Video"}
+        variant={variant === "compact" ? "compact" : variant === "card" ? "card" : "inline"}
+        className={cn(variant !== "compact" && heightClass, radius, className)}
       />
     );
   }
@@ -103,10 +106,13 @@ export function MediaItem({
   // ---------- AUDIO ----------
   if (cat === "audio") {
     return (
-      <div className={cn("flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2", className)}>
-        <Music className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <audio src={url} controls className="h-8 max-w-full" />
-      </div>
+      <UniversalMediaPlayer
+        src={url}
+        kind="audio"
+        title={fileName || "Audio"}
+        variant={variant === "compact" ? "compact" : variant === "card" ? "card" : "inline"}
+        className={className}
+      />
     );
   }
 

@@ -1,13 +1,14 @@
 import { useVoicemails, Voicemail } from "@/hooks/useVoicemails";
 import { format } from "date-fns";
-import { Phone, Play, Pause, Trash2, Voicemail as VoicemailIcon, Circle, MessageSquare, ChevronDown, ChevronUp, FileText, Sparkles } from "lucide-react";
+import { Phone, Trash2, Voicemail as VoicemailIcon, Circle, MessageSquare, ChevronDown, ChevronUp, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
+import { UniversalMediaPlayer } from "@/components/media";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "0:00";
@@ -18,35 +19,13 @@ function formatDuration(seconds: number | null): string {
 
 export function VoicemailPanel() {
   const { voicemails, loading, markAsRead, deleteVoicemail } = useVoicemails();
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const navigate = useNavigate();
   const { startVoicemailSession } = useCopilotPanel();
 
   const handleAskJarvis = (vm: Voicemail) => {
     if (!vm.is_read) markAsRead(vm.id);
     startVoicemailSession(vm.id, vm.phone_number, vm.contact_name || undefined);
-  };
-
-
-  const handlePlay = (vm: Voicemail) => {
-    if (!vm.recording_url) return;
-
-    if (playingId === vm.id) {
-      audioRef.current?.pause();
-      setPlayingId(null);
-      return;
-    }
-
-    if (audioRef.current) audioRef.current.pause();
-    const audio = new Audio(getRecordingProxyUrl(vm.recording_url));
-    audio.onended = () => setPlayingId(null);
-    audio.play();
-    audioRef.current = audio;
-    setPlayingId(vm.id);
-
-    if (!vm.is_read) markAsRead(vm.id);
   };
 
   const toggleExpand = (vm: Voicemail) => {
@@ -143,18 +122,16 @@ export function VoicemailPanel() {
                   <MessageSquare className="h-3.5 w-3.5 text-primary" />
                 </Button>
                 {vm.recording_url && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handlePlay(vm)}
-                  >
-                    {playingId === vm.id ? (
-                      <Pause className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Play className="h-4 w-4 text-primary" />
-                    )}
-                  </Button>
+                  <UniversalMediaPlayer
+                    src={getRecordingProxyUrl(vm.recording_url)}
+                    kind="audio"
+                    variant="compact"
+                    stopPropagation
+                    className="h-8 w-8 text-primary"
+                    onPlayed={() => {
+                      if (!vm.is_read) markAsRead(vm.id);
+                    }}
+                  />
                 )}
                 <Button
                   variant="ghost"
@@ -170,6 +147,19 @@ export function VoicemailPanel() {
             {/* Expandable transcription */}
             {isExpanded && hasTranscription && (
               <div className="px-4 pb-3 pt-0 ml-7">
+                {vm.recording_url && (
+                  <UniversalMediaPlayer
+                    src={getRecordingProxyUrl(vm.recording_url)}
+                    kind="audio"
+                    title="Voicemail recording"
+                    subtitle={formatDuration(vm.duration_seconds)}
+                    variant="inline"
+                    className="mb-3"
+                    onPlayed={() => {
+                      if (!vm.is_read) markAsRead(vm.id);
+                    }}
+                  />
+                )}
                 <div className="rounded-md bg-muted/50 border border-border/50 p-3">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     📝 Transcription

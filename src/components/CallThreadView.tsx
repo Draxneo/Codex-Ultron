@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, Play, Pause, ChevronDown, Mail, MapPin, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronDown, Mail, MapPin, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,6 +13,7 @@ import { AnsweredByBadge } from "@/components/AnsweredByBadge";
 import { InspectTwilioButton } from "@/components/inbox/InspectTwilioButton";
 import { DayDivider } from "@/components/shared/DayDivider";
 import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
+import { UniversalMediaPlayer } from "@/components/media";
 import type { CallConversation } from "@/hooks/useCallLog";
 
 interface Props {
@@ -28,27 +29,14 @@ function formatDuration(seconds: number | null): string {
 }
 
 function RecordingPlayButton({ recordingUrl }: { recordingUrl: string }) {
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const toggle = () => {
-    if (playing) {
-      audioRef.current?.pause();
-      setPlaying(false);
-      return;
-    }
-    if (audioRef.current) audioRef.current.pause();
-    const audio = new Audio(getRecordingProxyUrl(recordingUrl));
-    audio.onended = () => setPlaying(false);
-    audio.play();
-    audioRef.current = audio;
-    setPlaying(true);
-  };
-
   return (
-    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Play recording" onClick={(e) => { e.stopPropagation(); toggle(); }}>
-      {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-    </Button>
+    <UniversalMediaPlayer
+      src={getRecordingProxyUrl(recordingUrl)}
+      kind="audio"
+      variant="compact"
+      stopPropagation
+      className="h-7 w-7"
+    />
   );
 }
 
@@ -225,10 +213,14 @@ export function CallThreadView({ conversation, onBack }: Props) {
                     {isExpanded && (
                       <div className="px-4 pb-3 pt-1 border-t bg-muted/30 space-y-3">
                         {call.recording_url && (
-                          <div className="flex items-center gap-2">
-                            <RecordingPlayButton recordingUrl={call.recording_url} />
-                            <span className="text-xs text-muted-foreground">Play recording</span>
-                          </div>
+                          <UniversalMediaPlayer
+                            src={getRecordingProxyUrl(call.recording_url)}
+                            kind="audio"
+                            title="Call recording"
+                            subtitle={call.duration_seconds ? formatDuration(call.duration_seconds) : undefined}
+                            variant="inline"
+                            stopPropagation
+                          />
                         )}
                         {call.ai_summary && (
                           <div>

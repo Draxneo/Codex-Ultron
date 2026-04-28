@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  PhoneIncoming, PhoneOutgoing, PhoneOff, Play, Pause,
+  PhoneIncoming, PhoneOutgoing, PhoneOff,
   ChevronDown, Mail, MapPin, ExternalLink, Wrench, HelpCircle,
   ShieldCheck, ShieldAlert, ShieldX, MessageSquare, Bot, Voicemail,
   ArrowDownLeft, ArrowUpRight, X as XIcon,
@@ -20,6 +20,7 @@ import { DayDivider } from "@/components/shared/DayDivider";
 import { ctHeaderLabel, ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
 import { formatPhone } from "@/lib/formatters";
 import { SmsButton } from "@/components/SmsButton";
+import { UniversalMediaPlayer } from "@/components/media";
 import type { CallConversation, CallRow } from "@/hooks/useCallLog";
 
 interface Props {
@@ -69,28 +70,14 @@ function StirBadge({ status }: { status: string }) {
 }
 
 function RecordingPlayer({ recordingUrl }: { recordingUrl: string }) {
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const toggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (playing) {
-      audioRef.current?.pause();
-      setPlaying(false);
-      return;
-    }
-    if (audioRef.current) audioRef.current.pause();
-    const audio = new Audio(getRecordingProxyUrl(recordingUrl));
-    audio.onended = () => setPlaying(false);
-    audio.play();
-    audioRef.current = audio;
-    setPlaying(true);
-  };
-
   return (
-    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Play recording" onClick={toggle}>
-      {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-    </Button>
+    <UniversalMediaPlayer
+      src={getRecordingProxyUrl(recordingUrl)}
+      kind="audio"
+      variant="compact"
+      stopPropagation
+      className="h-7 w-7"
+    />
   );
 }
 
@@ -143,10 +130,14 @@ function CallDetailRow({ call }: { call: CallRow }) {
       {showDetails && (
         <div className="px-3 pb-3 pt-1 border-t bg-muted/30 space-y-2">
           {call.recording_url && (
-            <div className="flex items-center gap-2">
-              <RecordingPlayer recordingUrl={call.recording_url} />
-              <span className="text-xs text-muted-foreground">Play recording</span>
-            </div>
+            <UniversalMediaPlayer
+              src={getRecordingProxyUrl(call.recording_url)}
+              kind="audio"
+              title="Call recording"
+              subtitle={call.duration_seconds ? formatDuration(call.duration_seconds) : undefined}
+              variant="inline"
+              stopPropagation
+            />
           )}
           {call.ai_summary && (
             <div>

@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { normalizeLast10 } from "@/lib/formatters";
 import { groupByDay, ctTimeLabel } from "@/lib/dateGrouping";
 import { DayDivider } from "@/components/shared/DayDivider";
+import { getRecordingProxyUrl } from "@/lib/recordingProxy";
+import { UniversalMediaPlayer } from "@/components/media";
 
 type CallRow = {
   id: string;
@@ -146,7 +148,7 @@ function CallList({ calls }: { calls: CallRow[] }) {
             {group.items.map((call) => {
               const isInbound = call.direction === "inbound";
               const isExpanded = expandedId === call.id;
-              const hasDetails = call.transcription || call.ai_summary;
+              const hasDetails = call.recording_url || call.transcription || call.ai_summary;
 
               return (
                 <div key={call.id} className="rounded-lg border text-sm group">
@@ -189,6 +191,14 @@ function CallList({ calls }: { calls: CallRow[] }) {
                     >
                       {""}
                     </ClickToCall>
+                    {call.recording_url && !isExpanded && (
+                      <UniversalMediaPlayer
+                        src={getRecordingProxyUrl(call.recording_url)}
+                        kind="audio"
+                        variant="compact"
+                        stopPropagation
+                      />
+                    )}
                     <Badge variant={statusVariant(call.status)} className="text-[10px] shrink-0">
                       {call.status}
                     </Badge>
@@ -201,6 +211,16 @@ function CallList({ calls }: { calls: CallRow[] }) {
 
                   {isExpanded && (
                     <div className="px-3 pb-3 space-y-2 border-t pt-2">
+                      {call.recording_url && (
+                        <UniversalMediaPlayer
+                          src={getRecordingProxyUrl(call.recording_url)}
+                          kind="audio"
+                          title="Call recording"
+                          subtitle={call.duration_seconds ? formatDuration(call.duration_seconds) : undefined}
+                          variant="inline"
+                          stopPropagation
+                        />
+                      )}
                       {call.ai_summary && (
                         <div className="bg-muted/50 rounded-md p-2.5">
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
