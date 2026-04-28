@@ -68,8 +68,9 @@ async function getCachedGeocode(
   const result = json.results?.[0];
   if (!result) return null;
 
-  // Log geocode API usage (0.5 cents per call)
-  logApiUsage(sb, { service: "google_maps", function_name: "googleGeo", endpoint: "geocode", estimated_cost_cents: 0.5 });
+  // Log geocode API usage (0.5 cents per call). Await this so short edge
+  // function invocations do not finish before the cost row is written.
+  await logApiUsage(sb, { service: "google_maps", function_name: "googleGeo", endpoint: "geocode", estimated_cost_cents: 0.5 });
 
   const lat = result.geometry.location.lat;
   const lng = result.geometry.location.lng;
@@ -170,8 +171,8 @@ export async function getDirections(
   const durationInTraffic = leg.duration_in_traffic?.value || duration;
   const distance = leg.distance?.value || 0;
 
-  // Log directions API usage (0.5 cent per call now that departure_time=now is removed)
-  logApiUsage(sb, { service: "google_maps", function_name: "googleGeo", endpoint: "directions", estimated_cost_cents: 0.5 });
+  // Log directions API usage (0.5 cent per call now that departure_time=now is removed).
+  await logApiUsage(sb, { service: "google_maps", function_name: "googleGeo", endpoint: "directions", estimated_cost_cents: 0.5 });
 
   // Store in cache (fire-and-forget). DO NOT include route_hash — it's a generated column.
   // DB will compute it from md5(round coords) on insert. Use upsert on route_hash to dedupe.

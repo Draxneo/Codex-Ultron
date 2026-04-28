@@ -1,4 +1,4 @@
--- Move AI model configuration away from old Gemini/Lovable-era model names.
+-- Move AI model configuration away from old Gemini-era model names.
 
 alter table public.ai_model_config
   alter column model set default 'gpt-5-mini';

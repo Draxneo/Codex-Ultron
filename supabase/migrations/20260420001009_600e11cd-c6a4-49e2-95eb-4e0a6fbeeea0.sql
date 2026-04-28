@@ -38,7 +38,6 @@ INSERT INTO public.email_category_overrides (domain, category, is_suffix, notes)
   ('housecallpro.com', 'system', true, 'HCP CRM (suffix match)'),
   ('notification.intuit.com', 'system', false, 'QuickBooks notifications'),
   ('twilio.com', 'system', true, 'Twilio platform (suffix)'),
-  ('lovable.dev', 'system', false, 'Lovable platform'),
   ('3cx.net', 'system', false, '3CX phone system'),
   ('docusign.net', 'system', false, 'DocuSign'),
   ('fedex.com', 'system', false, 'FedEx shipping'),

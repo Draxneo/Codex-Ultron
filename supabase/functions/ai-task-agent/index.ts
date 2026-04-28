@@ -2882,7 +2882,7 @@ serve(async (req) => {
         const equipMatch = lowerText.match(/\b(carrier|trane|lennox|goodman|rheem|york|amana|daikin|bryant)\b/i);
         if (equipMatch) subQueries.push(equipMatch[1]);
 
-        // Embed all sub-queries (OpenAI directly — Lovable gateway doesn't support embeddings)
+        // Embed all sub-queries through OpenAI directly.
         const openaiKey = Deno.env.get("OPENAI_API_KEY");
         const embedResp = openaiKey ? await fetch("https://api.openai.com/v1/embeddings", {
           method: "POST",

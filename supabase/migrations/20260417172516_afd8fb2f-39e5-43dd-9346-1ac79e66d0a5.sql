@@ -10,7 +10,7 @@ WHERE service = 'lovable_ai'
   AND tokens_used IS NOT NULL
   AND tokens_used > 0;
 
--- Lovable AI rows with no token data: estimate as 0 (can't reconstruct)
+-- Legacy AI rows with no token data: estimate as 0 (can't reconstruct)
 UPDATE api_usage_log
 SET estimated_cost_cents = 0
 WHERE service = 'lovable_ai'

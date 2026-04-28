@@ -851,7 +851,7 @@ const DEV_APIS = [
   { name: "Deepgram", use: "Call transcription and voice notes from technicians.", guardrail: "Store transcript and source recording link together." },
   { name: "Google Maps", use: "Address validation, travel ETA, route cache, and street-view/property context.", guardrail: "Cache aggressively and monitor call counts." },
   { name: "Firecrawl", use: "Property and web research where structured APIs do not cover the job.", guardrail: "Use only when cached data is missing or stale." },
-  { name: "Supabase", use: "Database, auth, storage, edge functions, logs, and app source of truth.", guardrail: "No legacy Lovable URLs or old project references." },
+  { name: "Supabase", use: "Database, auth, storage, edge functions, logs, and app source of truth.", guardrail: "No legacy hosted-app URLs or old project references." },
 ];
 
 const JARVIS_SKILLS = [
