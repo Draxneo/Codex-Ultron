@@ -138,7 +138,7 @@ const commonEmojis = ["👍", "🙏", "✅", "🔥", "🎉", "👀", "💡", "�
 const quickAccessItems = [
   { label: "Jobs", href: "/jobs", icon: Briefcase },
   { label: "Schedule", href: "/schedule", icon: CalendarDays },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
+  { label: "SMS", href: "/sms", icon: Inbox },
   { label: "Customers", href: "/customers", icon: Users },
   { label: "Estimates", href: "/estimates", icon: ClipboardList },
   { label: "Phone", href: "/phone", icon: PhoneCall },

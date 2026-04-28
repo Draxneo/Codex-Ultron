@@ -67,7 +67,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 className="gap-1.5"
                 onClick={() => {
                   // Always open the in-app SMS thread.
-                  navigate(`/inbox?section=sms&phone=${encodeURIComponent(primaryPhone)}`);
+                  navigate(`/sms?phone=${encodeURIComponent(primaryPhone)}`);
                 }}
               >
                 <MessageSquare className="h-4 w-4" />

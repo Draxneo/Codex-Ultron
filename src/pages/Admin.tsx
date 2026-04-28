@@ -509,7 +509,7 @@ function TeamSection() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
+                          navigate(`/sms?phone=${encodeURIComponent(emp.phone)}`);
                         }}
                         className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
                         title={`SMS ${emp.name}`}

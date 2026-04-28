@@ -446,7 +446,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   closeAsAccepted();
                 };
                 const textPhone = () => {
-                  if (phone) navigate(`/inbox?section=sms&phone=${encodeURIComponent(phone)}`);
+                  if (phone) navigate(`/sms?phone=${encodeURIComponent(phone)}`);
                   closeAsAccepted();
                 };
 

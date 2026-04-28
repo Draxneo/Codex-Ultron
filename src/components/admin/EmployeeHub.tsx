@@ -181,7 +181,7 @@ function RosterTab() {
                               </ClickToCall>
                               <button
                                 onClick={() => {
-                                  navigate(`/inbox?section=sms&phone=${encodeURIComponent(emp.phone)}`);
+                                  navigate(`/sms?phone=${encodeURIComponent(emp.phone)}`);
                                 }}
                                 className="hover:text-primary"
                                 title={`SMS ${emp.name}`}

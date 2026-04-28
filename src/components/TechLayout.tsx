@@ -5,7 +5,7 @@
  * Supervisor adds: Backlog tab for unscheduled jobs
  */
 
-import { Briefcase, Phone, MessageSquare, DollarSign, CalendarOff, Users, Bot, Settings, Inbox } from "lucide-react";
+import { Briefcase, Phone, MessageSquare, DollarSign, CalendarOff, Users, Bot, Settings } from "lucide-react";
 import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
@@ -17,9 +17,8 @@ import { useBacklogJobs } from "@/hooks/useJobs";
 const TAB_KEY_MAP: Record<string, string> = {
   "/tech": "jobs",
   "/jobs/backlog": "jobs",
-  "/inbox?section=calls": "phone",
-  "/inbox?section=sms": "sms",
-  "/inbox": "inbox",
+  "/phone": "phone",
+  "/sms": "sms",
   "/customers": "customers",
   "/copilot": "copilot",
   "/pay": "pay",
@@ -54,25 +53,19 @@ function useTechTabs(): MobileTab[] {
       badge: () => backlogCount,
     } as MobileTab] : []),
     {
-      path: "/inbox?section=calls",
+      path: "/phone",
       icon: Phone,
       label: "Phone",
-      match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
+      match: (p: string) => p.startsWith("/phone") || p.startsWith("/calls") || (p.includes("/inbox") && p.includes("calls")),
       badge: () => missedCalls,
     },
     {
-      path: "/inbox?section=sms",
+      path: "/sms",
       icon: MessageSquare,
       label: "SMS",
-      match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
+      match: (p: string) => p.startsWith("/sms") || (p.includes("/inbox") && p.includes("sms")),
       badge: () => unreadSms,
     },
-    ...(allowedTabs?.has("inbox") ? [{
-      path: "/inbox",
-      icon: Inbox,
-      label: "Inbox",
-      match: (p: string) => p.startsWith("/inbox") && !p.includes("section=calls") && !p.includes("section=sms"),
-    } as MobileTab] : []),
     ...(allowedTabs?.has("customers") ? [{
       path: "/customers",
       icon: Users,

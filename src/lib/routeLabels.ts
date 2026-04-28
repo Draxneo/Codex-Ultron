@@ -1,7 +1,10 @@
 export const ROUTE_LABELS: Record<string, string> = {
   "/": "Jobs board",
   "/ivr-builder": "IVR Builder",
-  "/inbox": "Inbox",
+  "/phone": "Phone",
+  "/sms": "SMS",
+  "/team": "Team Chat",
+  "/inbox": "SMS",
   "/customers": "Customer CRM",
   "/parts": "Parts catalog",
   "/agreements": "Service agreements",

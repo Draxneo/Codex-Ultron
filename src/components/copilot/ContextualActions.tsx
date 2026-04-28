@@ -67,7 +67,7 @@ export function ContextualActions() {
       { label: "Unread Summary", icon: MessageSquare, action: () => sendQuery("Summarize all unread SMS conversations — who needs a response?") },
       { label: "Draft Text", icon: Send, action: () => sendQuery("Help me draft a text response to this conversation.") },
     );
-  } else if (path === "/calls") {
+  } else if (path === "/phone" || path === "/calls") {
     actions.push(
       { label: "Missed Calls", icon: Phone, action: () => sendQuery("Show me all missed calls from today and suggest which ones need a callback.") },
     );

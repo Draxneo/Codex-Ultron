@@ -1021,7 +1021,7 @@ export default function TechFormPublic() {
               variant="outline"
               className="flex-1 h-9 gap-1 text-xs text-[hsl(var(--primary))] border-primary/30 hover:bg-primary/10"
               onClick={() => {
-                navigate(`/inbox?section=sms&phone=${encodeURIComponent(job.customer_phone)}`);
+                navigate(`/sms?phone=${encodeURIComponent(job.customer_phone)}`);
               }}
             >
               <MessageSquare className="h-4 w-4" />

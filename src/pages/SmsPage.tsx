@@ -8,7 +8,7 @@ export default function SmsPage({ embedded = false }: { embedded?: boolean }) {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
   const initialPhone = searchParams.get("phone");
-  const initialDraft = searchParams.get("draft");
+  const initialDraft = searchParams.get("draft") || searchParams.get("body");
 
   return (
     <div className="h-full bg-background flex flex-col overflow-hidden">

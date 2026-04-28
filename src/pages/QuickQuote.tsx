@@ -374,7 +374,7 @@ export default function QuickQuote() {
       const firstName = (customerName || "").split(" ")[0] || "there";
       const sysLabel = `${m.brand} ${m.tonnage ? `${m.tonnage}T ` : ""}${m.system_type || "system"}`.trim();
       const body = `Hi ${firstName}, here's your ${sysLabel} quote with three easy approval options — tap to review & approve: ${url}`;
-      navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+      navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
       toast({ title: "Quote ready to send", description: "Approval link drafted in SMS." });
     } catch (e: any) {
       toast({ title: "Failed to prepare SMS", description: e?.message || String(e), variant: "destructive" });
@@ -431,7 +431,7 @@ export default function QuickQuote() {
     if (!presentationUrl || !customerPhone) return;
     const firstName = customerName.split(" ")[0] || "there";
     const body = `Hi ${firstName}, here's your system replacement quote from CS Ultra — take a look when you're ready: ${presentationUrl}`;
-    navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
   };
 
   const handleCopyLink = () => {

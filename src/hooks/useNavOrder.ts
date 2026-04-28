@@ -4,8 +4,20 @@ import { toast } from "@/hooks/use-toast";
 
 // Default nav order by route path
 const DEFAULT_ORDER = [
-  "/", "/inbox", "/team", "/customers", "/copilot", "/pay", "/admin", "/quick-quote",
+  "/", "/phone", "/sms", "/team", "/customers", "/copilot", "/pay", "/admin", "/quick-quote",
 ];
+
+function migrateLegacyOrder(order: string[]) {
+  const migrated: string[] = [];
+  for (const path of order) {
+    if (path === "/inbox") {
+      migrated.push("/phone", "/sms");
+    } else {
+      migrated.push(path);
+    }
+  }
+  return Array.from(new Set(migrated));
+}
 
 export function useNavOrder() {
   const queryClient = useQueryClient();
@@ -27,10 +39,8 @@ export function useNavOrder() {
           saved = DEFAULT_ORDER;
         }
       }
-      // Remove defunct entries from saved orders
-      saved = saved.filter((p) => DEFAULT_ORDER.includes(p));
-      // Ensure inbox is present
-      if (!saved.includes("/inbox")) saved.splice(1, 0, "/inbox");
+      // Move old combined communications nav into the split Phone/SMS routes.
+      saved = migrateLegacyOrder(saved).filter((p) => DEFAULT_ORDER.includes(p));
       // Merge in any new routes not yet in the saved order
       const missing = DEFAULT_ORDER.filter((p) => !saved.includes(p));
       return missing.length > 0 ? [...saved, ...missing] : saved;

@@ -21,8 +21,9 @@ import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/": { label: "Schedule", roles: null },
-  "/inbox": { label: "Inbox", roles: null },
-  "/team": { label: "Chat", roles: null },
+  "/phone": { label: "Phone", roles: null },
+  "/sms": { label: "SMS", roles: null },
+  "/team": { label: "Team Chat", roles: null },
   "/customers": { label: "Customers", roles: null },
   "/copilot": { label: "JARVIS", roles: null },
   "/pay": { label: "Pay", roles: null },
@@ -56,10 +57,9 @@ export function AppHeader() {
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: unreadVoicemails } = useVoicemails();
 
-  const totalInboxUnread = unreadSms + unreadVoicemails;
-
   const unreadMap: Record<string, number> = {
-    "/inbox": totalInboxUnread,
+    "/phone": unreadVoicemails,
+    "/sms": unreadSms,
   };
 
   const navItems = order
@@ -93,6 +93,8 @@ export function AppHeader() {
           {navItems.map((item) => {
             const active = item.to === "/"
               ? location.pathname === "/" || location.pathname.startsWith("/jobs") || location.pathname.startsWith("/estimates")
+              : item.to === "/phone"
+                ? location.pathname.startsWith("/phone") || location.pathname.startsWith("/calls")
               : location.pathname.startsWith(item.to);
             const unread = unreadMap[item.to] || 0;
             return (

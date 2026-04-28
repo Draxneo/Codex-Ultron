@@ -141,7 +141,7 @@ function EstimateActionBar({
             const body = presentationUrl
               ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${presentationUrl}`
               : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
-            navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+            navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
           }}
         >
           <Send className="h-5 w-5" />
@@ -375,7 +375,7 @@ export default function EstimateDetail() {
               const body = presentationUrl
                 ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${window.location.origin}${presentationUrl}`
                 : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
-              navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+              navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
             }}
           />
           <MobileActionPill icon={ArrowRight} label={linkedJobId ? "Job" : "Convert"} onClick={linkedJobId ? () => navigate(`/jobs/${linkedJobId}`) : handleConvert} />

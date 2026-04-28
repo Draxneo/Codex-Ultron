@@ -28,7 +28,7 @@ const quickActions = [
   { label: "New Job", icon: Plus, path: "/?newJob=1", bg: "bg-[hsl(var(--success))]/15", color: "text-[hsl(var(--success))]" },
   { label: "New Customer", icon: UserPlus, path: "/customers?new=1", bg: "bg-[hsl(var(--sky))]/15", color: "text-[hsl(var(--sky))]" },
   { label: "Estimates", icon: FileText, path: "/?type=estimate", bg: "bg-[hsl(var(--warm))]/15", color: "text-[hsl(var(--warm))]" },
-  { label: "Calls", icon: Phone, path: "/calls", bg: "bg-primary/10", color: "text-primary" },
+  { label: "Phone", icon: Phone, path: "/phone", bg: "bg-primary/10", color: "text-primary" },
   { label: "SMS", icon: MessageSquare, path: "/sms", bg: "bg-[hsl(var(--accent))]/15", color: "text-[hsl(var(--accent))]" },
 ];
 

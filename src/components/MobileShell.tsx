@@ -205,7 +205,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
       {/* ── Floating call banner ────────────── */}
       {showCallBanner && (
         <div
-          onClick={() => navigate("/inbox?section=calls")}
+          onClick={() => navigate("/phone")}
           className={cn(
             "shrink-0 flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors",
             hasIncoming

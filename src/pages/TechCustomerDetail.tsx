@@ -112,7 +112,7 @@ export default function TechCustomerDetail() {
                   <Phone className="h-4 w-4" /> {phone}
                 </button>
                 <Link
-                  to={`/inbox?section=sms&phone=${encodeURIComponent(phone)}`}
+                  to={`/sms?phone=${encodeURIComponent(phone)}`}
                   className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center"
                   aria-label="Send SMS"
                 >

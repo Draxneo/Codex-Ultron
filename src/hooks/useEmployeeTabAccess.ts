@@ -19,13 +19,15 @@ import { getRoleDefaults } from "@/lib/roleAccessDefaults";
 export function routeToTabKey(pathname: string, search?: string): string | undefined {
   if (pathname === "/" || pathname.startsWith("/jobs") || pathname.startsWith("/records/") || pathname === "/tech" || pathname.startsWith("/tech/jobs") || pathname.startsWith("/estimates") || pathname.startsWith("/form/")) return "jobs";
   if (pathname.startsWith("/tech/customers")) return "jobs";
-  // /inbox sections map via search param
+  // Legacy /inbox links redirect into the split Phone/SMS pages.
   if (pathname.startsWith("/inbox")) {
     if (search?.includes("sms")) return "sms";
     if (search?.includes("calls")) return "phone";
-    return "inbox";
+    if (search?.includes("voicemail")) return "phone";
+    return "sms";
   }
   if (pathname.startsWith("/calls")) return "phone";
+  if (pathname.startsWith("/phone")) return "phone";
   if (pathname.startsWith("/phone-console")) return "phone";
   if (pathname.startsWith("/sms")) return "sms";
   if (pathname.startsWith("/team")) return "chat";
@@ -55,9 +57,9 @@ export const ALL_ACCESS_KEYS = [
 
 const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = {
   jobs: "/",
-  phone: "/inbox?section=calls",
-  sms: "/inbox?section=sms",
-  inbox: "/inbox",
+  phone: "/phone",
+  sms: "/sms",
+  inbox: "/sms",
   chat: "/team",
   customers: "/customers",
   copilot: "/copilot",

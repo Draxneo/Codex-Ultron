@@ -8,11 +8,11 @@ import { useCallback, useMemo } from "react";
 import { toE164 } from "@/lib/formatters";
 
 const TELEPHONY_ROUTES = {
-  calls: "/calls",
+  calls: "/phone",
   sms: "/sms",
-  phone: "/calls",
-  voicemail: "/calls?tab=voicemail",
-  home: "/calls",
+  phone: "/phone",
+  voicemail: "/phone?tab=voicemail",
+  home: "/phone",
 } as const;
 
 export type TelephonyMode = "in-app";
@@ -62,7 +62,7 @@ export function useTelephonyMode() {
       const params = new URLSearchParams({ to: e164, autodial: "1" });
       if (opts.jobId) params.set("job", opts.jobId);
       if (opts.customerId) params.set("customer", opts.customerId);
-      await launchTarget(`/calls?${params.toString()}`);
+      await launchTarget(`/phone?${params.toString()}`);
     },
     [launchTarget],
   );
@@ -92,15 +92,15 @@ export function useTelephonyMode() {
   }, [launchTarget]);
 
   const openVoicemail = useCallback(() => {
-    void launchTarget("/calls?tab=voicemail");
+    void launchTarget("/phone?tab=voicemail");
   }, [launchTarget]);
 
   const openCallHistory = useCallback(() => {
-    void launchTarget("/calls");
+    void launchTarget("/phone");
   }, [launchTarget]);
 
   const openHome = useCallback(() => {
-    void launchTarget("/calls");
+    void launchTarget("/phone");
   }, [launchTarget]);
 
   return useMemo(

@@ -24,7 +24,7 @@ export function SmsButton({ phone, className, iconClassName = "h-3.5 w-3.5" }: S
         e.stopPropagation();
         e.preventDefault();
         const normalized = toE164(phone) || phone;
-        navigate(`/inbox?section=sms&phone=${encodeURIComponent(normalized)}`);
+        navigate(`/sms?phone=${encodeURIComponent(normalized)}`);
       }}
       className={cn(
         "inline-flex items-center justify-center h-5 w-5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors cursor-pointer",

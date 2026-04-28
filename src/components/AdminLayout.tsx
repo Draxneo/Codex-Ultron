@@ -13,8 +13,8 @@ import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
 const TAB_KEY_MAP: Record<string, string> = {
   "/": "jobs",
-  "/inbox?section=calls": "phone",
-  "/inbox?section=sms": "sms",
+  "/phone": "phone",
+  "/sms": "sms",
   "/customers": "customers",
   "/admin": "admin",
 };
@@ -32,17 +32,17 @@ function useAdminTabs(): MobileTab[] {
       match: (p: string) => p === "/" || p.startsWith("/jobs"),
     },
     {
-      path: "/inbox?section=calls",
+      path: "/phone",
       icon: Phone,
       label: "Phone",
-      match: (p: string) => p.includes("/inbox") && p.includes("calls") || p.startsWith("/calls"),
+      match: (p: string) => p.startsWith("/phone") || p.startsWith("/calls") || (p.includes("/inbox") && p.includes("calls")),
       badge: () => missedCalls,
     },
     {
-      path: "/inbox?section=sms",
+      path: "/sms",
       icon: MessageSquare,
       label: "SMS",
-      match: (p: string) => p.includes("/inbox") && p.includes("sms") || p.startsWith("/sms"),
+      match: (p: string) => p.startsWith("/sms") || (p.includes("/inbox") && p.includes("sms")),
       badge: () => unreadSms,
     },
     {

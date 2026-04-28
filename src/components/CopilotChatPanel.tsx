@@ -550,7 +550,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       "/": "Jobs", "/customers": "Customers", "/parts": "Parts",
       "/agreements": "Agreements", "/payments": "Payments",
       "/settings": "Settings", "/admin": "Admin",
-      "/sms": "SMS", "/calls": "Calls", "/chat": "Team Chat",
+      "/sms": "SMS", "/phone": "Phone", "/calls": "Phone", "/team": "Team Chat", "/chat": "Team Chat",
       "/agent-training": "Agent Training", "/brochure": "Brochures",
       "/locations": "Catalog", "/copilot": "JARVIS",
     };
@@ -732,12 +732,12 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       "📋 Summarize today's jobs",
       "Draft a text message",
     ];
-    if (routeKey === "/calls") return [
+    if (routeKey === "/phone" || routeKey === "/calls") return [
       "📞 Missed calls summary",
       "📋 Summarize today's jobs",
       "Summarize recent conversations",
     ];
-    if (routeKey === "/chat") return [
+    if (routeKey === "/team" || routeKey === "/chat") return [
       "🗨️ Unread team chats summary",
       "🔔 What needs follow-up?",
     ];
@@ -1066,7 +1066,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
                       return;
                     }
                     if ((action.type === "send_text" || action.type === "reply_sms") && action.phone) {
-                      navigate(`/inbox?section=sms&phone=${encodeURIComponent(action.phone)}`);
+                      navigate(`/sms?phone=${encodeURIComponent(action.phone)}`);
                       return;
                     }
                     if (action.type === "view_job" && action.job_id) {
@@ -1074,7 +1074,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
                       return;
                     }
                     if (action.type === "view_voicemail") {
-                      navigate("/calls?tab=voicemail");
+                      navigate("/phone?tab=voicemail");
                       return;
                     }
                     if (action.type === "send_invoice_reminder" && action.job_id) {

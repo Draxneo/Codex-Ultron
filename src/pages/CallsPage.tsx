@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Phone, PhoneOff, Voicemail, Wifi, Delete, Bot } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { CallPanel } from "@/components/CallPanel";
@@ -200,12 +201,29 @@ export default function CallsPage({ embedded = false, defaultTab = "calls" }: { 
   const { unreadCount } = useVoicemails();
   const isMobile = useIsMobile();
   const softphone = useSoftphoneContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [hideBots, setHideBots] = useState(true);
+
+  useEffect(() => {
+    setActiveTab(tabParam === "voicemail" ? "voicemail" : defaultTab);
+  }, [defaultTab, tabParam]);
 
   return (
     <div className="h-full bg-background flex flex-col overflow-hidden">
       {!embedded && !isMobile && <AppHeader />}
-      <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value);
+          const next = new URLSearchParams(searchParams);
+          if (value === "voicemail") next.set("tab", "voicemail");
+          else next.delete("tab");
+          setSearchParams(next, { replace: true });
+        }}
+        className="flex-1 flex flex-col min-h-0"
+      >
         <div className="flex items-center gap-2 px-4 py-1 border-b shrink-0 bg-card">
           <TabsList className="bg-transparent h-8 p-0 gap-1">
             <TabsTrigger value="calls" className="gap-1 text-xs h-7 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">

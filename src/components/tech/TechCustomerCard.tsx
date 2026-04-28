@@ -51,11 +51,11 @@ export function TechCustomerCard({
 
   const handleSms = () => {
     if (!customerPhone) return;
-    navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}`);
+    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}`);
   };
 
   const handleDispatch = () => {
-    navigate(`/inbox?section=sms&phone=${encodeURIComponent(DISPATCH_LINE)}`);
+    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}`);
   };
 
   const handleCall = () => {

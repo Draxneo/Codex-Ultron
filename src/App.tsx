@@ -57,7 +57,6 @@ import Agreements from "./pages/Agreements";
 import Payments from "./pages/Payments";
 import SmsPage from "./pages/SmsPage";
 import CallsPage from "./pages/CallsPage";
-import InboxPage from "./pages/InboxPage";
 import TeamCommunications from "./pages/TeamCommunications";
 import PhoneConsole from "./pages/PhoneConsole";
 import Admin from "./pages/Admin";
@@ -68,21 +67,21 @@ import InvoicePublic from "./pages/InvoicePublic";
 import CustomerCart from "./pages/CustomerCart";
 import EstimatePresentationPublic from "./pages/EstimatePresentationPublic";
 
-/** Redirect /sms?phone=X to /inbox?section=sms&phone=X preserving query params */
-function SmsRedirectComponent() {
+/** Redirect legacy /inbox sections to their split communication routes. */
+function InboxRedirectComponent() {
   const [sp] = useSearchParams();
-  const phone = sp.get("phone");
-   const draft = sp.get("draft") || sp.get("body");
-   const params = new URLSearchParams({ section: "sms" });
-   if (phone) params.set("phone", phone);
-   if (draft) params.set("draft", draft);
-   const target = `/inbox?${params.toString()}`;
-  return <Navigate to={target} replace />;
+  const section = sp.get("section");
+  const params = new URLSearchParams(sp);
+  params.delete("section");
+  const targetPath = section === "calls" || section === "voicemail" ? "/phone" : "/sms";
+  if (section === "voicemail") params.set("tab", "voicemail");
+  const query = params.toString();
+  return <Navigate to={`${targetPath}${query ? `?${query}` : ""}`} replace />;
 }
 
-/** Redirect legacy /phone route to the supported calls experience */
-function PhoneRedirectComponent() {
-  return <Navigate to="/inbox?section=calls" replace />;
+function CallsRedirectComponent() {
+  const location = useLocation();
+  return <Navigate to={`/phone${location.search}`} replace />;
 }
 
 import UnscheduledJobs from "./pages/UnscheduledJobs";
@@ -472,13 +471,13 @@ function AppRouter() {
         <Route path="/tech/jobs/:id" element={<ProtectedRoute><TechJobDetail /></ProtectedRoute>} />
         <Route path="/tech/customers/:id" element={<ProtectedRoute><TechCustomerDetail /></ProtectedRoute>} />
         <Route path="/copilot" element={<ProtectedRoute><CopilotPage /></ProtectedRoute>} />
-        <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+        <Route path="/inbox" element={<ProtectedRoute><InboxRedirectComponent /></ProtectedRoute>} />
         <Route path="/team" element={<ProtectedRoute><TeamCommunications /></ProtectedRoute>} />
         <Route path="/phone-console" element={<ProtectedRoute><PhoneConsole /></ProtectedRoute>} />
-        <Route path="/email" element={<Navigate to="/inbox" replace />} />
-        <Route path="/sms" element={<SmsRedirectComponent />} />
-        <Route path="/phone" element={<PhoneRedirectComponent />} />
-        <Route path="/calls" element={<Navigate to="/inbox?section=calls" replace />} />
+        <Route path="/email" element={<Navigate to="/sms" replace />} />
+        <Route path="/sms" element={<ProtectedRoute><SmsPage /></ProtectedRoute>} />
+        <Route path="/phone" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
+        <Route path="/calls" element={<CallsRedirectComponent />} />
         
         <Route path="/jobs" element={<Navigate to="/" replace />} />
         <Route path="/jobs/backlog" element={<ProtectedRoute><UnscheduledJobs /></ProtectedRoute>} />
