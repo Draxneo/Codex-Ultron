@@ -1,16 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
+  Briefcase,
   Bell,
+  CalendarDays,
   Check,
+  ClipboardList,
   Edit3,
+  ExternalLink,
   Hash,
+  Inbox,
+  Link as LinkIcon,
   Mic,
   MicOff,
+  Paperclip,
   PhoneCall,
   PhoneOff,
   Plus,
+  Pin,
+  PinOff,
   Send,
+  Smile,
+  Sparkles,
   Trash2,
   UserRound,
   Users,
@@ -22,13 +33,17 @@ import { AppHeader } from "@/components/AppHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { Input } from "@/components/ui/input";
+import { MediaItem } from "@/components/media";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
 import { supabase } from "@/integrations/supabase/client";
 import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
+import { formatBytes } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
 
 type ConversationType = "direct" | "room";
@@ -64,9 +79,20 @@ type TeamMessage = {
   conversation_id: string;
   sender_id: string;
   body: string;
+  attachments: TeamAttachment[] | null;
+  is_pinned: boolean;
+  pinned_by: string | null;
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+};
+
+type TeamAttachment = {
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+  path: string;
 };
 
 type TeamAudioCall = {
@@ -92,9 +118,38 @@ type TeamNotification = {
   created_at: string;
 };
 
-const db = supabase as any;
+type LooseSupabaseClient = {
+  from: (table: string) => ReturnType<typeof supabase.from>;
+};
+
+type TeamPinRpcClient = typeof supabase & {
+  rpc(
+    fn: "set_team_message_pin",
+    args: { _message_id: string; _pin: boolean },
+  ): Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
+const db = supabase as unknown as LooseSupabaseClient;
+const teamRpc = supabase as unknown as TeamPinRpcClient;
 const urlPattern = /(https?:\/\/[^\s]+)/g;
 const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
+const commonEmojis = ["👍", "🙏", "✅", "🔥", "🎉", "👀", "💡", "📌", "🚚", "🛠️", "📞", "⚠️"];
+
+const quickAccessItems = [
+  { label: "Jobs", href: "/jobs", icon: Briefcase },
+  { label: "Schedule", href: "/schedule", icon: CalendarDays },
+  { label: "Inbox", href: "/inbox", icon: Inbox },
+  { label: "Customers", href: "/customers", icon: Users },
+  { label: "Estimates", href: "/estimates", icon: ClipboardList },
+  { label: "Phone", href: "/phone", icon: PhoneCall },
+];
+
+const usefulWebLinks = [
+  { label: "Housecall Pro", href: "https://pro.housecallpro.com" },
+  { label: "AHRI Directory", href: "https://www.ahridirectory.org" },
+  { label: "ENERGY STAR Rebates", href: "https://www.energystar.gov/rebate-finder" },
+  { label: "Google Maps", href: "https://maps.google.com" },
+];
 
 function initials(name: string) {
   return name
@@ -107,6 +162,21 @@ function initials(name: string) {
 
 function messageTime(value: string) {
   return formatDistanceToNow(new Date(value), { addSuffix: true });
+}
+
+function extractUrls(text: string) {
+  return Array.from(new Set(text.match(urlPattern) ?? []));
+}
+
+function safeStorageName(name: string) {
+  const parts = name.split(".");
+  const extension = parts.length > 1 ? `.${parts.pop()}` : "";
+  const base = parts.join(".") || "attachment";
+  return `${base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60) || "attachment"}${extension.toLowerCase()}`;
 }
 
 function LinkifiedText({ text }: { text: string }) {
@@ -141,7 +211,9 @@ export default function TeamCommunications() {
   const [editingText, setEditingText] = useState("");
   const [newRoomName, setNewRoomName] = useState("");
   const [mutedCallIds, setMutedCallIds] = useState<Set<string>>(new Set());
+  const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: teamUsers = [] } = useQuery({
     queryKey: ["team-users"],
@@ -216,7 +288,22 @@ export default function TeamCommunications() {
         .order("created_at", { ascending: true })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as TeamMessage[];
+      const rows = (data ?? []) as TeamMessage[];
+      return Promise.all(
+        rows.map(async (message) => {
+          const attachments = await Promise.all(
+            (message.attachments ?? []).map(async (attachment) => {
+              const { data: signed, error: signedError } = await supabase.storage
+                .from("chat-attachments")
+                .createSignedUrl(attachment.path, 60 * 60);
+
+              return signedError ? attachment : { ...attachment, url: signed.signedUrl };
+            })
+          );
+
+          return { ...message, attachments };
+        })
+      );
     },
   });
 
@@ -302,21 +389,23 @@ export default function TeamCommunications() {
     .filter(Boolean) as TeamUser[];
 
   const sendMessage = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ body, attachments = [] }: { body: string; attachments?: TeamAttachment[] }) => {
       if (!user || !selectedConversation) throw new Error("No conversation selected");
-      const body = draft.trim();
-      if (!body) return;
-      if (body.length > 4000) throw new Error("Message is too long");
+      const trimmedBody = body.trim();
+      if (!trimmedBody && attachments.length === 0) return;
+      if (trimmedBody.length > 4000) throw new Error("Message is too long");
 
       const { error } = await db.from("team_messages").insert({
         conversation_id: selectedConversation.id,
         sender_id: user.id,
-        body,
+        body: trimmedBody,
+        attachments,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       setDraft("");
+      setPendingAttachments([]);
       queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not send message"),
@@ -527,6 +616,82 @@ export default function TeamCommunications() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-notifications", user?.id] }),
   });
 
+  const uploadAttachments = useMutation({
+    mutationFn: async (files: FileList) => {
+      if (!user || !selectedConversation) throw new Error("No conversation selected");
+      const uploaded: TeamAttachment[] = [];
+
+      for (const file of Array.from(files).slice(0, 8)) {
+        if (file.size > 20 * 1024 * 1024) {
+          throw new Error(`${file.name} is larger than 20 MB`);
+        }
+
+        const path = `team/${selectedConversation.id}/${crypto.randomUUID()}-${safeStorageName(file.name)}`;
+        const { error: uploadError } = await supabase.storage
+          .from("chat-attachments")
+          .upload(path, file, { contentType: file.type || "application/octet-stream" });
+        if (uploadError) throw uploadError;
+
+        const { data, error: signedError } = await supabase.storage
+          .from("chat-attachments")
+          .createSignedUrl(path, 60 * 60);
+        if (signedError) throw signedError;
+
+        uploaded.push({
+          name: file.name,
+          url: data.signedUrl,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          path,
+        });
+      }
+
+      return uploaded;
+    },
+    onSuccess: (attachments) => {
+      setPendingAttachments((previous) => [...previous, ...attachments]);
+      if (attachments.length > 0) toast.success(`${attachments.length} file${attachments.length === 1 ? "" : "s"} ready`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not upload file"),
+  });
+
+  const togglePin = useMutation({
+    mutationFn: async (message: TeamMessage) => {
+      const { error } = await teamRpc.rpc("set_team_message_pin", {
+        _message_id: message.id,
+        _pin: !message.is_pinned,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] }),
+    onError: () => toast.error("Could not update pin"),
+  });
+
+  const composer = useComposerIntelligence({
+    value: draft,
+    setValue: setDraft,
+    context: "chat",
+    onSend: async (text) => {
+      await sendMessage.mutateAsync({ body: text, attachments: pendingAttachments });
+    },
+  });
+
+  const sendCurrentDraft = () => {
+    if (pendingAttachments.length > 0 && !draft.trim()) {
+      sendMessage.mutate({ body: "", attachments: pendingAttachments });
+      return;
+    }
+    composer.handleSend();
+  };
+
+  const pinnedMessages = messages.filter((message) => message.is_pinned && !message.deleted_at);
+  const pinnedLinks = Array.from(
+    new Set(pinnedMessages.flatMap((message) => extractUrls(message.body)))
+  ).slice(0, 6);
+  const recentLinks = Array.from(
+    new Set(messages.flatMap((message) => (message.deleted_at ? [] : extractUrls(message.body))))
+  ).slice(-6);
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -711,7 +876,11 @@ export default function TeamCommunications() {
                     onClick={() =>
                       setMutedCallIds((previous) => {
                         const next = new Set(previous);
-                        next.has(activeCall.id) ? next.delete(activeCall.id) : next.add(activeCall.id);
+                        if (next.has(activeCall.id)) {
+                          next.delete(activeCall.id);
+                        } else {
+                          next.add(activeCall.id);
+                        }
                         return next;
                       })
                     }
@@ -736,7 +905,7 @@ export default function TeamCommunications() {
                   const own = message.sender_id === user?.id;
                   const deleted = !!message.deleted_at;
                   return (
-                    <div key={message.id} className={cn("group flex gap-3", own && "flex-row-reverse")}>
+                    <div id={`team-message-${message.id}`} key={message.id} className={cn("group flex gap-3 scroll-mt-6", own && "flex-row-reverse")}>
                       <Avatar className="mt-1 h-8 w-8">
                         <AvatarFallback className="text-xs">
                           {initials(sender?.name ?? (own ? "You" : "Team"))}
@@ -747,6 +916,7 @@ export default function TeamCommunications() {
                           <span className="font-medium text-foreground">{own ? "You" : sender?.name ?? "Team member"}</span>
                           <span>{messageTime(message.created_at)}</span>
                           {message.edited_at && !deleted && <span>edited</span>}
+                          {message.is_pinned && !deleted && <Pin className="h-3 w-3" />}
                         </div>
                         <div
                           className={cn(
@@ -783,32 +953,68 @@ export default function TeamCommunications() {
                           ) : deleted ? (
                             "Message deleted"
                           ) : (
-                            <LinkifiedText text={message.body} />
+                            <div className="space-y-2 text-left">
+                              {message.body && <LinkifiedText text={message.body} />}
+                              {(message.attachments ?? []).length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {(message.attachments ?? []).map((attachment) => (
+                                    <div
+                                      key={attachment.path || attachment.url}
+                                      className={cn(
+                                        "max-w-64 rounded-md border bg-background/90 p-2 text-foreground",
+                                        own && "bg-primary-foreground"
+                                      )}
+                                    >
+                                      <MediaItem
+                                        url={attachment.url}
+                                        fileName={attachment.name}
+                                        fileType={attachment.type}
+                                        size={attachment.size}
+                                        variant="compact"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {own && !deleted && editingMessageId !== message.id && (
-                          <div className="mt-1 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        {!deleted && editingMessageId !== message.id && (
+                          <div className={cn("mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100", own && "justify-end")}>
                             <Button
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7"
-                              onClick={() => {
-                                setEditingMessageId(message.id);
-                                setEditingText(message.body);
-                              }}
-                              title="Edit message"
+                              onClick={() => togglePin.mutate(message)}
+                              title={message.is_pinned ? "Unpin message" : "Pin message"}
                             >
-                              <Edit3 className="h-3.5 w-3.5" />
+                              {message.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => deleteMessage.mutate(message.id)}
-                              title="Delete message"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {own && (
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => {
+                                    setEditingMessageId(message.id);
+                                    setEditingText(message.body);
+                                  }}
+                                  title="Edit message"
+                                >
+                                  <Edit3 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => deleteMessage.mutate(message.id)}
+                                  title="Delete message"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -826,29 +1032,111 @@ export default function TeamCommunications() {
             </ScrollArea>
 
             <footer className="border-t bg-card/80 p-3">
-              <div className="mx-auto flex max-w-4xl items-end gap-2">
-                <Textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      sendMessage.mutate();
+              <div className="mx-auto max-w-4xl space-y-2">
+                {composer.preview && (
+                  <GrammarPreview
+                    original={composer.preview.original}
+                    polished={composer.preview.polished}
+                    onAccept={composer.acceptPolish}
+                    onReject={composer.rejectPolish}
+                    onCancel={composer.cancelPolish}
+                    loading={sendMessage.isPending}
+                  />
+                )}
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingAttachments.map((attachment) => (
+                      <div key={attachment.path} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs">
+                        <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="max-w-44 truncate font-medium">{attachment.name}</span>
+                        <span className="text-muted-foreground">{formatBytes(attachment.size)}</span>
+                        <button
+                          type="button"
+                          className="rounded-sm p-0.5 hover:bg-muted"
+                          onClick={() =>
+                            setPendingAttachments((previous) =>
+                              previous.filter((item) => item.path !== attachment.path)
+                            )
+                          }
+                          title="Remove file"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      if (event.target.files?.length) uploadAttachments.mutate(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-11 w-11 shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!selectedConversation || uploadAttachments.isPending}
+                    title="Attach files"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-1">
+                      <Badge variant="secondary" className="gap-1 text-[11px]">
+                        <Sparkles className="h-3 w-3" />
+                        Grammar assist
+                      </Badge>
+                      {commonEmojis.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-sm hover:bg-muted"
+                          onClick={() => setDraft((value) => `${value}${emoji}`)}
+                          title={`Insert ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      <Smile className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <Textarea
+                      ref={composer.inputRef}
+                      value={draft}
+                      onChange={composer.handleChange}
+                      onBlur={composer.handleBlur}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          sendCurrentDraft();
+                        }
+                      }}
+                      placeholder="Message"
+                      className="max-h-36 min-h-11 resize-none"
+                      maxLength={4000}
+                    />
+                  </div>
+                  <Button
+                    size="icon"
+                    className="h-11 w-11 shrink-0"
+                    disabled={
+                      (!draft.trim() && pendingAttachments.length === 0) ||
+                      sendMessage.isPending ||
+                      composer.isBusy ||
+                      !selectedConversation
                     }
-                  }}
-                  placeholder="Message"
-                  className="max-h-36 min-h-11 resize-none"
-                  maxLength={4000}
-                />
-                <Button
-                  size="icon"
-                  className="h-11 w-11 shrink-0"
-                  disabled={!draft.trim() || sendMessage.isPending || !selectedConversation}
-                  onClick={() => sendMessage.mutate()}
-                  title="Send"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                    onClick={sendCurrentDraft}
+                    title="Send"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </footer>
           </section>
@@ -879,6 +1167,94 @@ export default function TeamCommunications() {
                       </div>
                     </div>
                   ))}
+                </section>
+
+                <Separator />
+
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</p>
+                  <div className="space-y-2">
+                    {pinnedMessages.slice(0, 4).map((message) => (
+                      <button
+                        key={message.id}
+                        type="button"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-left text-xs hover:bg-muted"
+                        onClick={() => document.getElementById(`team-message-${message.id}`)?.scrollIntoView({ block: "center" })}
+                      >
+                        <div className="mb-1 flex items-center gap-1 font-medium">
+                          <Pin className="h-3 w-3" />
+                          <span className="truncate">{userByAuthId.get(message.sender_id)?.name ?? "Team member"}</span>
+                        </div>
+                        <p className="line-clamp-2 text-muted-foreground">
+                          {message.body || `${message.attachments?.length ?? 0} attachment${message.attachments?.length === 1 ? "" : "s"}`}
+                        </p>
+                      </button>
+                    ))}
+                    {pinnedMessages.length === 0 && <p className="text-xs text-muted-foreground">No pinned messages</p>}
+                  </div>
+                </section>
+
+                <Separator />
+
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Access</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {quickAccessItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <a
+                          key={item.href}
+                          href={item.href}
+                          className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-2 text-xs font-medium hover:bg-muted"
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          <span className="truncate">{item.label}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <Separator />
+
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Links</p>
+                  <div className="space-y-1.5">
+                    {[...pinnedLinks, ...usefulWebLinks.map((item) => item.href)]
+                      .filter((href, index, list) => list.indexOf(href) === index)
+                      .slice(0, 8)
+                      .map((href) => {
+                        const useful = usefulWebLinks.find((item) => item.href === href);
+                        return (
+                          <a
+                            key={href}
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-muted"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{useful?.label ?? href}</span>
+                          </a>
+                        );
+                      })}
+                    {recentLinks.length > 0 && (
+                      <div className="pt-1">
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent from chat</p>
+                        {recentLinks.slice(0, 3).map((href) => (
+                          <button
+                            key={href}
+                            type="button"
+                            className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-xs hover:bg-muted"
+                            onClick={() => setDraft((value) => `${value}${value ? " " : ""}${href}`)}
+                          >
+                            <LinkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{href}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </section>
 
                 <Separator />
