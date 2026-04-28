@@ -89,6 +89,27 @@ function configuredWebhookUrlCandidates(pathCandidates: string[]): string[] {
   return Array.from(new Set([...exactUrls, ...baseUrls]));
 }
 
+function getWebhookUrlQueryCandidates(url: string, fallbackQueryCandidates: string[]): string[] {
+  try {
+    const parsed = new URL(url);
+    const rawSearch = parsed.search || "";
+    if (!rawSearch) return fallbackQueryCandidates;
+    return Array.from(new Set([rawSearch, ...fallbackQueryCandidates]));
+  } catch {
+    return fallbackQueryCandidates;
+  }
+}
+
+function webhookUrlBasePath(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    console.warn(`Ignoring invalid Twilio webhook URL candidate: ${url}`);
+    return null;
+  }
+}
+
 function maskSignature(signature: string): string {
   if (signature.length <= 12) return "[redacted]";
   return `${signature.slice(0, 6)}...${signature.slice(-6)}`;
@@ -252,20 +273,22 @@ export async function validateTwilioSignature(
     sortedFormEncodedQuery,
     "",
   ]));
-  const urlCandidates = Array.from(new Set(
-    [
-      ...configuredWebhookUrlCandidates(pathCandidates).flatMap((url) => {
-        const parsed = new URL(url);
-        const basePath = `${parsed.origin}${parsed.pathname}`;
-        return queryCandidates.map((query) => `${basePath}${query}`);
-      }),
-      ...baseCandidates.flatMap((base) =>
-        pathCandidates.flatMap((path) =>
-          queryCandidates.map((query) => `${base}${path}${query}`)
-        )
-      ),
-    ],
-  ).flatMap(addStandardPortUrlVariants));
+  const rawUrlCandidates = [
+    ...configuredWebhookUrlCandidates(pathCandidates).flatMap((url) => {
+      const basePath = webhookUrlBasePath(url);
+      if (!basePath) return [];
+      return getWebhookUrlQueryCandidates(url, queryCandidates)
+        .map((query) => `${basePath}${query}`);
+    }),
+    ...baseCandidates.flatMap((base) =>
+      pathCandidates.flatMap((path) =>
+        queryCandidates.map((query) => `${base}${path}${query}`)
+      )
+    ),
+  ];
+  const urlCandidates = Array.from(
+    new Set(rawUrlCandidates.flatMap(addStandardPortUrlVariants)),
+  );
 
   const bodyParams = Array.from(requestParams.entries());
   const queryParams = Array.from(internalUrl.searchParams.entries());

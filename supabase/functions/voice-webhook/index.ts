@@ -141,6 +141,23 @@ Deno.serve(async (req) => {
       sigValid = await validateTwilioSignature(req, formData);
     } catch (sigErr) {
       console.error("Voice webhook Twilio signature validation error:", sigErr);
+      await logSystemTrace({
+        sourceType: "voice",
+        sourceName: "voice-webhook",
+        eventKind: "twilio_signature_validator_error",
+        summary: "Twilio signature validator threw before completing",
+        reason: sigErr instanceof Error ? sigErr.name : "unknown_error",
+        severity: "critical",
+        traceGroup: params.get("CallSid") || params.get("call_sid") || null,
+        entityType: "call",
+        entityId: params.get("CallSid") || params.get("call_sid") || null,
+        callSid: params.get("CallSid") || params.get("call_sid"),
+        metadata: {
+          message: sigErr instanceof Error ? sigErr.message : String(sigErr),
+          body_param_keys: Array.from(new Set(Array.from(params.keys()))).sort(),
+          request_url: req.url,
+        },
+      });
     }
     if (!sigValid) {
       console.warn("Rejecting voice webhook: invalid Twilio signature");
