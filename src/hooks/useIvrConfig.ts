@@ -28,6 +28,7 @@ export type IvrConfig = {
   overflow_after_hours: boolean;
   overflow_ring_seconds_before_handoff: number;
   overflow_after_hours_skip_voicemail: boolean;
+  overflow_offer_voicemail_choice: boolean;
 };
 
 export type IvrMenuOption = {

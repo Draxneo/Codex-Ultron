@@ -645,7 +645,7 @@ function OverflowEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
   const enabled = !!config.answering_service_enabled;
   const number = config.answering_service_number || "";
   const label = config.answering_service_label || "Answering Service";
-  const ringSeconds = config.overflow_ring_seconds_before_handoff ?? 20;
+  const ringSeconds = config.overflow_ring_seconds_before_handoff ?? 30;
 
   return (
     <div className="space-y-4">
@@ -711,14 +711,14 @@ function OverflowEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
 
         {/* Trigger toggles */}
         <div className="space-y-2">
-          <Label className="text-xs font-semibold">When to send calls to overflow</Label>
+          <Label className="text-xs font-semibold">When to send calls to the answering service</Label>
 
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
             <div className="flex items-start gap-2">
               <Phone className="h-4 w-4 text-cyan-600 mt-0.5" />
               <div>
-                <Label className="text-sm">When line is busy</Label>
-                <p className="text-[10px] text-muted-foreground">Tech is on another call</p>
+                <Label className="text-sm">When everyone is busy</Label>
+                <p className="text-[10px] text-muted-foreground">Skip the queue and send to the answering service</p>
               </div>
             </div>
             <Switch
@@ -732,7 +732,7 @@ function OverflowEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
               <Clock className="h-4 w-4 text-cyan-600 mt-0.5" />
               <div>
                 <Label className="text-sm">When no one answers</Label>
-                <p className="text-[10px] text-muted-foreground">After ring timeout below</p>
+                <p className="text-[10px] text-muted-foreground">After the department ring timeout, hand off right away</p>
               </div>
             </div>
             <Switch
@@ -758,17 +758,17 @@ function OverflowEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
 
         <Separator />
 
-        {/* Ring time slider */}
+        {/* Answering service dial timeout */}
         <div className="space-y-3 p-3 rounded-lg bg-cyan-500/5 border border-cyan-300/30">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold">Ring time before handoff</Label>
+            <Label className="text-xs font-semibold">Ring answering service for</Label>
             <Badge variant="outline" className="text-xs font-mono border-cyan-400 text-cyan-700">{ringSeconds}s</Badge>
           </div>
           <Slider
             value={[ringSeconds]}
             onValueChange={([v]) => onUpdateConfig({ overflow_ring_seconds_before_handoff: v })}
-            min={5}
-            max={45}
+            min={10}
+            max={60}
             step={1}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground">
@@ -778,6 +778,19 @@ function OverflowEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
           <p className="text-[10px] text-muted-foreground leading-snug">
             Shorter = caller never waits, hits live agent fast. Longer = team has more time to grab it.
           </p>
+        </div>
+
+        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+          <div>
+            <Label className="text-sm">Offer voicemail choice</Label>
+            <p className="text-[11px] text-muted-foreground">
+              After a missed call, ask: press 1 for voicemail or stay on the line for the answering service.
+            </p>
+          </div>
+          <Switch
+            checked={!!(config as any).overflow_offer_voicemail_choice}
+            onCheckedChange={(v) => onUpdateConfig({ overflow_offer_voicemail_choice: v } as any)}
+          />
         </div>
 
         {/* After-hours skip VM */}

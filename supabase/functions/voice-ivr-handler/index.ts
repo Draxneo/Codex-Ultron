@@ -213,8 +213,9 @@ Deno.serve(async (req) => {
       overflow_on_busy: true,
       overflow_on_no_answer: true,
       overflow_after_hours: true,
-      overflow_ring_seconds_before_handoff: 20,
+      overflow_ring_seconds_before_handoff: 30,
       overflow_after_hours_skip_voicemail: true,
+      overflow_offer_voicemail_choice: false,
     };
 
     // ── Overflow helpers ──
@@ -224,7 +225,8 @@ Deno.serve(async (req) => {
     const overflowSkipVm = (config as any).overflow_after_hours_skip_voicemail !== false;
     const overflowReadyForAh = overflowEnabled && overflowNumber && overflowAfterHours;
     const dialTimeout = config.ring_timeout_seconds || 25;
-    const queueWaitSeconds = (config as any).overflow_ring_seconds_before_handoff || dialTimeout;
+    const answeringServiceRingSeconds = Math.max(10, Math.min(60, (config as any).overflow_ring_seconds_before_handoff || 30));
+    const queueWaitSeconds = 5;
 
     function overflowDialTwiml(reason: string): string {
       const callerId = getTwilioCallerId() || from;
@@ -232,7 +234,7 @@ Deno.serve(async (req) => {
       console.log(`🎙️ OVERFLOW TwiML generated: reason=${reason}, callback=${overflowStatusCallback}, recording=record-from-answer-dual`);
       return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" callerId="${escapeXml(callerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(overflowStatusCallback)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(overflowStatusCallback)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${answeringServiceRingSeconds}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" callerId="${escapeXml(callerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(overflowStatusCallback)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(overflowStatusCallback)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(overflowNumber)}</Number>
   </Dial>
 </Response>`;

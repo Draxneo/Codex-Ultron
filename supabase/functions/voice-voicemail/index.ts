@@ -128,6 +128,8 @@ Deno.serve(async (req) => {
     const recordingStatus = params.get("RecordingStatus") || "";
     const dialCallStatus = params.get("DialCallStatus") || "";
     const dialCallDuration = parseInt(params.get("DialCallDuration") || "0", 10);
+    const overflowChoice = url.searchParams.get("OverflowChoice") || "";
+    const choiceDigit = params.get("Digits") || "";
 
     const supabase = getSupabaseAdmin();
     const { data: smsTestModeRow } = await supabase
@@ -228,11 +230,16 @@ Deno.serve(async (req) => {
       const overflowNumber = ivrCfg?.answering_service_number || "";
       const overflowOnBusy = ivrCfg?.overflow_on_busy !== false;
       const overflowOnNoAnswer = ivrCfg?.overflow_on_no_answer !== false;
+      const offerVoicemailChoice = ivrCfg?.overflow_offer_voicemail_choice === true;
       const overflowLabel = ivrCfg?.answering_service_label ||
         "Answering Service";
+      const answeringServiceRingSeconds = Math.max(
+        10,
+        Math.min(60, ivrCfg?.overflow_ring_seconds_before_handoff || 30),
+      );
       const queueWaitSeconds = Math.max(
         5,
-        ivrCfg?.overflow_ring_seconds_before_handoff || 15,
+        5,
       );
       const queueRedirectUrl = digit
         ? `${supabaseUrl}/functions/v1/voice-ivr-handler?CallSid=${
@@ -255,6 +262,7 @@ Deno.serve(async (req) => {
 
       const shouldOverflow = overflowEnabled && overflowNumber &&
         ((isBusy && overflowOnBusy) || (isNoAnswer && overflowOnNoAnswer));
+      const callerChoseVoicemail = overflowChoice === "menu" && choiceDigit === "1";
 
       if (!queueRetry && !shouldOverflow && (isBusy || isNoAnswer)) {
         console.log(
@@ -292,7 +300,30 @@ Deno.serve(async (req) => {
         );
       }
 
-      if (shouldOverflow) {
+      if (shouldOverflow && offerVoicemailChoice && !overflowChoice && ivrCfg?.voicemail_enabled) {
+        const choiceUrl = `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${
+          encodeURIComponent(callSid)
+        }&From=${encodeURIComponent(from)}&ContactName=${
+          encodeURIComponent(contactName)
+        }&ContactType=${encodeURIComponent(contactType)}&Digit=${
+          encodeURIComponent(digit)
+        }&OverflowChoice=menu`;
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather numDigits="1" timeout="4" action="${escapeXml(choiceUrl)}" method="POST">
+    <Say voice="Polly.Joanna">We missed you. Press 1 to leave us a voicemail, or stay on the line and we will connect you to our answering service.</Say>
+  </Gather>
+  <Redirect method="POST">${escapeXml(choiceUrl)}</Redirect>
+</Response>`,
+          {
+            headers: { ...corsHeaders, "Content-Type": "text/xml" },
+            status: 200,
+          },
+        );
+      }
+
+      if (shouldOverflow && !callerChoseVoicemail) {
         console.log(
           `📞 OVERFLOW: ${dialCallStatus} → routing to ${overflowLabel} at ${overflowNumber}`,
         );
@@ -344,7 +375,7 @@ Deno.serve(async (req) => {
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="30" answerOnBridge="true" callerId="${
+  <Dial timeout="${answeringServiceRingSeconds}" answerOnBridge="true" callerId="${
             escapeXml(twilioNumber)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(overflowStatusCallback)
