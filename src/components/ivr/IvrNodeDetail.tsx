@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SmsTemplatePicker, type SmsTemplateOption } from "@/components/SmsTemplatePicker";
 import { TimePicker, DayPicker, AudioUploadField, DAYS } from "./IvrEditorComponents";
 import type { IvrConfig, IvrMenuOption } from "@/hooks/useIvrConfig";
+import { supabase } from "@/integrations/supabase/client";
 
 /** Textarea with local state + debounced auto-save. Shows a tiny ✓ on save. */
 function DebouncedTextarea({ value, onSave, placeholder, className }: {
@@ -127,6 +128,24 @@ function routingDepartmentKeyForOption(option: IvrMenuOptionWithRoutingKey): str
   return ROUTING_DEPARTMENT_OPTIONS.some((routingOption) => routingOption.value === explicit)
     ? explicit
     : keyFromLegacyLabel(option.label);
+}
+
+type ForwardingNumber = {
+  id: string;
+  department_key: string;
+  label: string;
+  phone_number: string;
+  enabled: boolean;
+  priority: number;
+};
+
+function normalizePhoneInput(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("+")) return trimmed;
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return trimmed;
 }
 
 function TemplateBindingCard({
@@ -240,6 +259,74 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
   onDelete: () => void;
   profiles: { id: string; full_name: string }[];
 }) {
+  const departmentKey = routingDepartmentKeyForOption(option);
+  const [forwardingNumbers, setForwardingNumbers] = useState<ForwardingNumber[]>([]);
+  const [newForwardLabel, setNewForwardLabel] = useState("");
+  const [newForwardPhone, setNewForwardPhone] = useState("");
+
+  const loadForwardingNumbers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("department_forwarding_numbers" as any)
+      .select("*")
+      .eq("department_key", departmentKey)
+      .order("priority", { ascending: true });
+    if (error) {
+      console.error("Forwarding number load error:", error);
+      return;
+    }
+    setForwardingNumbers((data || []) as unknown as ForwardingNumber[]);
+  }, [departmentKey]);
+
+  useEffect(() => {
+    void loadForwardingNumbers();
+  }, [loadForwardingNumbers]);
+
+  const addForwardingNumber = async () => {
+    const phone = normalizePhoneInput(newForwardPhone);
+    if (!phone) return;
+    const nextPriority = forwardingNumbers.length > 0
+      ? Math.max(...forwardingNumbers.map((row) => row.priority || 100)) + 1
+      : 1;
+    const { error } = await supabase.from("department_forwarding_numbers" as any).insert({
+      department_key: departmentKey,
+      label: newForwardLabel.trim() || "Cell",
+      phone_number: phone,
+      enabled: true,
+      priority: nextPriority,
+    } as any);
+    if (error) {
+      console.error("Forwarding number add error:", error);
+      return;
+    }
+    setNewForwardLabel("");
+    setNewForwardPhone("");
+    void loadForwardingNumbers();
+  };
+
+  const patchForwardingNumber = async (id: string, patch: Partial<ForwardingNumber>) => {
+    const { error } = await supabase
+      .from("department_forwarding_numbers" as any)
+      .update(patch as any)
+      .eq("id", id);
+    if (error) {
+      console.error("Forwarding number update error:", error);
+      return;
+    }
+    void loadForwardingNumbers();
+  };
+
+  const deleteForwardingNumber = async (id: string) => {
+    const { error } = await supabase
+      .from("department_forwarding_numbers" as any)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      console.error("Forwarding number delete error:", error);
+      return;
+    }
+    void loadForwardingNumbers();
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -275,6 +362,62 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-2 p-3 rounded-lg bg-primary/5 border border-primary/15">
+        <Label className="text-xs font-semibold flex items-center gap-1.5">
+          <PhoneForwarded className="h-3 w-3" /> Inbound Forwarding Numbers
+        </Label>
+        <p className="text-[10px] text-muted-foreground">
+          Calls for this department ring these real cell numbers through Twilio. The browser phone is not required for inbound calls.
+        </p>
+        <div className="space-y-2">
+          {forwardingNumbers.map((row) => (
+            <div key={row.id} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+              <Input
+                defaultValue={row.label || ""}
+                onBlur={(e) => patchForwardingNumber(row.id, { label: e.target.value })}
+                className="h-8 text-xs"
+                placeholder="Label"
+              />
+              <Input
+                defaultValue={row.phone_number || ""}
+                onBlur={(e) => patchForwardingNumber(row.id, { phone_number: normalizePhoneInput(e.target.value) })}
+                className="h-8 text-xs font-mono"
+                placeholder="+12105551234"
+              />
+              <Switch
+                checked={row.enabled}
+                onCheckedChange={(enabled) => patchForwardingNumber(row.id, { enabled })}
+              />
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteForwardingNumber(row.id)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          {forwardingNumbers.length === 0 && (
+            <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3">
+              No cell numbers configured. Until one is added, this department falls back to the older softphone/overflow path.
+            </p>
+          )}
+        </div>
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <Input
+            value={newForwardLabel}
+            onChange={(e) => setNewForwardLabel(e.target.value)}
+            className="h-8 text-xs"
+            placeholder="Clint cell"
+          />
+          <Input
+            value={newForwardPhone}
+            onChange={(e) => setNewForwardPhone(e.target.value)}
+            className="h-8 text-xs font-mono"
+            placeholder="+12105551234"
+          />
+          <Button type="button" size="sm" className="h-8" onClick={addForwardingNumber} disabled={!newForwardPhone.trim()}>
+            Add
+          </Button>
+        </div>
       </div>
 
       {option.action_type !== "forward_client" && (

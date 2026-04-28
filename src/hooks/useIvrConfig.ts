@@ -58,6 +58,9 @@ export type IvrMenuOption = {
   dept_no_vm_missed_call_sms_enabled: boolean;
   dept_post_call_sms: string | null;
   dept_post_call_sms_enabled: boolean;
+  inbound_route_mode?: string;
+  ring_strategy?: string;
+  ring_timeout_seconds?: number | null;
 };
 
 export function useIvrConfig() {

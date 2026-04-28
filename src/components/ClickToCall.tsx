@@ -1,10 +1,8 @@
 import { Phone } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { formatPhone } from "@/lib/formatters";
 import { toE164 } from "@/lib/formatters";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -41,10 +39,7 @@ export function ClickToCall({
   children,
   showIcon = true,
 }: ClickToCallProps) {
-  const softphone = useSoftphoneContext();
   const { startCallSession } = useCopilotPanel();
-  const navigate = useNavigate();
-  const telephony = useTelephonyMode();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,12 +48,8 @@ export function ClickToCall({
     // Universal Twilio normalization — every path gets E.164 (or raw if non-US)
     const e164 = toE164(phone) || phone;
 
-    // ALWAYS use the in-app popup dialer (SoftphoneStrip).
-    softphone.setDialNumber(e164);
-    softphone.setPendingJobId(jobId || null);
-    softphone.setPendingCustomerId?.(customerId || null);
-
     startCallSession(e164, contactName);
+    openPhoneConsole(e164);
   };
 
   return (

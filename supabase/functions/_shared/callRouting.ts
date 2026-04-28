@@ -14,6 +14,14 @@ import { logSystemTrace } from "./systemTrace.ts";
 export const DEPARTMENT_ROUTING_KEYS = ["sales", "service", "billing", "general"] as const;
 export type DepartmentRoutingKey = typeof DEPARTMENT_ROUTING_KEYS[number];
 
+export type DepartmentForwardingNumber = {
+  id: string;
+  department_key: string;
+  label: string | null;
+  phone_number: string;
+  priority: number | null;
+};
+
 function escapeXmlSafe(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -69,6 +77,60 @@ export function fallbackRoutingDepartmentsForIvrOption(option: {
     normalizeRoutingDepartmentValue(option.label),
   ];
   return Array.from(new Set(fallbacks.filter((value) => value && value !== primary)));
+}
+
+export function normalizeE164Phone(phone: string | null | undefined): string {
+  const value = (phone || "").trim();
+  if (!value) return "";
+  if (value.startsWith("+")) return value;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return "";
+}
+
+export async function fetchDepartmentForwardingNumbers(
+  supabase: any,
+  department: string,
+  fallbackDepartments: string[] = [],
+): Promise<DepartmentForwardingNumber[]> {
+  const requestedDepartment = normalizeRoutingDepartmentValue(department);
+  const candidates = Array.from(new Set([
+    requestedDepartment,
+    ...fallbackDepartments.map(normalizeRoutingDepartmentValue),
+  ].filter(Boolean)));
+
+  for (const candidate of candidates) {
+    try {
+      const { data, error } = await supabase
+        .from("department_forwarding_numbers")
+        .select("id, department_key, label, phone_number, priority")
+        .eq("department_key", candidate)
+        .eq("enabled", true)
+        .order("priority", { ascending: true });
+
+      if (error) {
+        console.warn(`[callRouting] forwarding number lookup failed for ${candidate}:`, error.message || error);
+        continue;
+      }
+
+      const rows = ((data || []) as DepartmentForwardingNumber[])
+        .map((row) => ({ ...row, phone_number: normalizeE164Phone(row.phone_number) }))
+        .filter((row) => row.phone_number);
+
+      if (rows.length > 0) return rows;
+    } catch (e) {
+      console.warn(`[callRouting] forwarding number lookup threw for ${candidate}:`, e);
+    }
+  }
+
+  return [];
+}
+
+export function buildNumberTags(numbers: DepartmentForwardingNumber[]): string {
+  return numbers
+    .map((row) => `<Number>${escapeXmlSafe(row.phone_number)}</Number>`)
+    .join("\n    ");
 }
 
 /** Fast check: is this user (by employee name) currently on a live call? */

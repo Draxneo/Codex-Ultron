@@ -43,6 +43,7 @@ import { sendToMain, isElectron } from "@/lib/electron";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DeviceFrame } from "@/components/DeviceFrame";
 import { VIEW_AS_DEVICES } from "@/lib/viewAsDevices";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -144,7 +145,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
               if (isElectron()) {
                 sendToMain("pop-out-phone");
               } else {
-                if (!open) setOpen(true);
+                openPhoneConsole();
               }
             }}
             className={cn(

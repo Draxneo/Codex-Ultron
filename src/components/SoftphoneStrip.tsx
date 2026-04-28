@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useSoftphoneContext } from "./SoftphoneProvider";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { playDtmfTone } from "@/lib/softphoneAudio";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanySetting } from "@/lib/companySettings";
@@ -45,6 +46,8 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
   const [showDialpad, setShowDialpad] = useState(false);
 
   const telephony = useTelephonyMode();
+  const ownsWebphone = typeof window !== "undefined"
+    && (window.location.pathname === "/phone-console" || new URLSearchParams(window.location.search).get("view") === "softphone");
 
   // Consume pending dial number from ClickToCall
   useEffect(() => {
@@ -235,6 +238,11 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
     // Trigger Copilot customer lookup before dialing
     const resolvedName = softphone.callerInfo?.name;
     startCallSession(dialInput, resolvedName);
+    if (!ownsWebphone) {
+      openPhoneConsole(e164);
+      setDialInput("");
+      return;
+    }
     softphone.dial(e164);
     setDialInput("");
   };
@@ -508,11 +516,14 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
         {(softphone.status === "offline" || softphone.status === "error") && !hasIncoming && (
           <button
-            onClick={softphone.initialize}
+            onClick={() => {
+              if (ownsWebphone) softphone.initialize();
+              else openPhoneConsole(dialInput.trim() || undefined);
+            }}
             className="w-full h-9 rounded-lg bg-accent text-accent-foreground flex items-center justify-center gap-1.5 text-xs font-medium hover:bg-[hsl(var(--warm))] transition-colors active:scale-[0.98]"
           >
             <Wifi className="h-3.5 w-3.5" />
-            {softphone.status === "error" ? "Reconnect Softphone" : "Connect Softphone"}
+            {ownsWebphone ? (softphone.status === "error" ? "Reconnect Softphone" : "Connect Softphone") : "Open Phone Console"}
           </button>
         )}
 

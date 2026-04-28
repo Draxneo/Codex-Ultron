@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getCompanySetting } from "@/lib/companySettings";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 
 const DIAL_KEYS: { key: string; sub?: string }[][] = [
   [{ key: "1", sub: "" }, { key: "2", sub: "ABC" }, { key: "3", sub: "DEF" }],
@@ -57,7 +58,7 @@ function MobileDialPad() {
     if (!dialInput.trim()) return;
     const digits = dialInput.replace(/\D/g, "");
     const e164 = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}` : `+${digits}`;
-    softphone.dial(e164);
+    openPhoneConsole(e164);
     setDialInput("");
   };
 
@@ -180,11 +181,11 @@ function MobileDialPad() {
       {/* Connect button if offline */}
       {isOffline && (
         <button
-          onClick={softphone.initialize}
+          onClick={() => openPhoneConsole(dialInput.trim() || undefined)}
           className="w-full h-11 rounded-xl bg-accent text-accent-foreground flex items-center justify-center gap-2 text-sm font-medium hover:bg-accent/90 transition-colors active:scale-[0.98]"
         >
           <Wifi className="h-4 w-4" />
-          Connect Softphone
+          Open Phone Console
         </button>
       )}
 

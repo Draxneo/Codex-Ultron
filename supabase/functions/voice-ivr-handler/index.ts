@@ -6,7 +6,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 import {
   buildDepartmentDialList,
   buildClientTags,
+  buildNumberTags,
   fallbackRoutingDepartmentsForIvrOption,
+  fetchDepartmentForwardingNumbers,
   isUserBusy,
   resolveIvrRoutingDepartmentKey,
 } from "../_shared/callRouting.ts";
@@ -518,6 +520,44 @@ Deno.serve(async (req) => {
 
     // forward_client — build list of Client identities to ring
     const twilioNumber = getTwilioCallerId() || from;
+
+    const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys);
+    if (forwardingNumbers.length > 0) {
+      const numberTags = buildNumberTags(forwardingNumbers);
+      const timeout = Math.max(10, Math.min(60, (option as any).ring_timeout_seconds || dialTimeout));
+      console.log(`[ivr-handler] dept "${option.label}" -> cell forwarding (${forwardingNumbers.length} numbers)`);
+      await logSystemTrace({
+        sourceType: "voice",
+        sourceName: "voice-ivr-handler",
+        eventKind: "route_selected",
+        summary: `${queueRetry ? "Queued caller released to" : "Call forwarding to"} ${option.label} cell numbers`,
+        reason: "department_cell_forwarding",
+        severity: "info",
+        traceGroup: callSid,
+        entityType: "call",
+        entityId: callSid,
+        callSid,
+        metadata: {
+          digit,
+          label: option.label,
+          dept_key: deptKey,
+          route_type: "cell_forwarding",
+          forwarding_count: forwardingNumbers.length,
+          forwarding_labels: forwardingNumbers.map((row) => row.label || "Cell"),
+          queue_retry: queueRetry,
+        },
+      });
+      return new Response(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  ${streamTwiml}
+  <Dial timeout="${timeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(twilioNumber)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+    ${numberTags}
+  </Dial>
+</Response>`,
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+      );
+    }
 
     // ── Check if "Away from Desk" forwarding is active + within THIS department's hours ──
     const { data: fwdRows } = await supabase

@@ -26,6 +26,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
     return "inbox";
   }
   if (pathname.startsWith("/calls")) return "phone";
+  if (pathname.startsWith("/phone-console")) return "phone";
   if (pathname.startsWith("/sms")) return "sms";
   if (pathname.startsWith("/team")) return "chat";
   if (pathname.startsWith("/customers")) return "customers";

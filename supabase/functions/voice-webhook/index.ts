@@ -7,6 +7,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 import {
   buildClientTags,
   buildDepartmentDialList,
+  buildNumberTags,
+  fetchDepartmentForwardingNumbers,
   isUserBusy,
 } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
@@ -742,6 +744,53 @@ Deno.serve(async (req) => {
             escapeXml(voicemailUrl)
           }" callerId="${
             escapeXml(dialCallerId)
+          }" record="record-from-answer-dual" recordingStatusCallback="${
+            escapeXml(statusCallbackUrl)
+          }" recordingStatusCallbackEvent="completed" statusCallback="${
+            escapeXml(statusCallbackUrl)
+          }" statusCallbackEvent="initiated ringing answered completed">
+    ${numberTags}
+  </Dial>
+</Response>`,
+          {
+            headers: { ...corsHeaders, "Content-Type": "text/xml" },
+            status: 200,
+          },
+        );
+      }
+
+      const generalForwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, "general");
+      if (generalForwardingNumbers.length > 0) {
+        console.log(`[voice-webhook] No-IVR path: forwarding to ${generalForwardingNumbers.length} general cell number(s)`);
+        await logSystemTrace({
+          sourceType: "voice",
+          sourceName: "voice-webhook",
+          eventKind: "route_selected",
+          summary: "Direct inbound call forwarding to general cell numbers",
+          reason: "general_cell_forwarding",
+          severity: "info",
+          traceGroup: callSid,
+          entityType: "call",
+          entityId: callSid,
+          callSid,
+          metadata: {
+            department: "general",
+            route_type: "cell_forwarding",
+            forwarding_count: generalForwardingNumbers.length,
+            forwarding_labels: generalForwardingNumbers.map((row) => row.label || "Cell"),
+            queue_retry: queueRetry,
+          },
+        });
+        const numberTags = buildNumberTags(generalForwardingNumbers);
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  ${streamTwiml}
+  ${greetingTwiml(config.greeting_audio_url, config.greeting_text)}
+  <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
+            escapeXml(voicemailUrl)
+          }" callerId="${
+            escapeXml(getTwilioCallerId() || to)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(statusCallbackUrl)
           }" recordingStatusCallbackEvent="completed" statusCallback="${
