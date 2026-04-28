@@ -205,9 +205,11 @@ export function EquipmentCatalogBrowser({ onAddToCart, compact, initialBrand, ma
               </div>
             ) : (
               <div className={
-                viewMode === "grid"
-                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-                  : "space-y-2"
+                compact
+                  ? "grid grid-cols-1 gap-3"
+                  : viewMode === "grid"
+                    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                    : "space-y-2"
               }>
                 {sorted.map(matchup => (
                   <EquipmentProductCard

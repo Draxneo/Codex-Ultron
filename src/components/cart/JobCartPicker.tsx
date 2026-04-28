@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -116,15 +115,15 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto px-3 pt-3 pb-24">
+        <div className="flex-1 overflow-y-auto px-3 pt-3 pb-28">
           <TabsContent value="equipment" className="mt-0">
-            <EquipmentCatalogBrowser onAddToCart={handleAddEquipment} compact={isMobile} />
+            <EquipmentCatalogBrowser onAddToCart={handleAddEquipment} compact={isMobile} maxHeight={isMobile ? "max-h-none" : undefined} />
           </TabsContent>
           <TabsContent value="repairs" className="mt-0">
-            <RepairCatalogBrowser onAddToCart={handleAddRepair} compact={isMobile} />
+            <RepairCatalogBrowser onAddToCart={handleAddRepair} compact={isMobile} maxHeight={isMobile ? "max-h-none" : undefined} />
           </TabsContent>
           <TabsContent value="parts" className="mt-0">
-            <PartsPickerGrid disabled={!permissions.canEditItems} onAdd={(p) => addItem.mutate({
+            <PartsPickerGrid compact={isMobile} disabled={!permissions.canEditItems} onAdd={(p) => addItem.mutate({
               kind: "part",
               source_id: p.id,
               name: p.name,
@@ -155,7 +154,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
       </Tabs>
 
       {/* Sticky bottom strip */}
-      <div className="absolute inset-x-0 bottom-0 bg-background border-t shadow-lg p-3 flex items-center gap-3 z-10">
+      <div className="absolute inset-x-0 bottom-0 bg-background border-t shadow-lg p-3 z-10">
         <div className="flex items-center gap-2 flex-1">
           <ShoppingCart className="h-5 w-5 text-primary" />
           <div>
@@ -163,31 +162,34 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
             <p className="text-xs text-muted-foreground">${(cart?.total || 0).toFixed(2)}</p>
           </div>
         </div>
-        <Button variant="outline" className="h-11" onClick={() => { onOpenChange(false); onOpenCart?.(); }}>
-          Review
-        </Button>
-        <Button className="h-11" onClick={() => { onOpenChange(false); onOpenCart?.(); }} disabled={itemCount === 0}>
-          <Send className="h-4 w-4 mr-1" /> Review & Send
-        </Button>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button variant="outline" className="h-10" onClick={() => { onOpenChange(false); onOpenCart?.(); }}>
+            Review
+          </Button>
+          <Button className="h-10" onClick={() => { onOpenChange(false); onOpenCart?.(); }} disabled={itemCount === 0}>
+            <Send className="h-4 w-4 mr-1" /> Send
+          </Button>
+        </div>
       </div>
     </div>
   );
 
   if (isMobile) {
+    if (!open) return null;
+
     return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="h-[92vh]">
-          <DrawerHeader className="pb-2">
-            <DrawerTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Customer Cart</span>
-              <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-7 w-7">
-                <X className="h-4 w-4" />
-              </Button>
-            </DrawerTitle>
-          </DrawerHeader>
-          <div className="relative flex-1 min-h-0">{body}</div>
-        </DrawerContent>
-      </Drawer>
+      <div className="mt-3 overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
+          <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+            <ShoppingCart className="h-4 w-4 shrink-0" />
+            <span className="truncate">Add to Customer Cart</span>
+          </h3>
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-8 w-8 shrink-0">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="relative h-[min(640px,calc(100vh-8rem))] min-h-[460px]">{body}</div>
+      </div>
     );
   }
 
@@ -203,7 +205,15 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   );
 }
 
-function PartsPickerGrid({ onAdd, disabled = false }: { onAdd: (p: { id: string; name: string; description: string | null; unit_price: number }) => void; disabled?: boolean }) {
+function PartsPickerGrid({
+  onAdd,
+  disabled = false,
+  compact = false,
+}: {
+  onAdd: (p: { id: string; name: string; description: string | null; unit_price: number }) => void;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
   const { parts, isLoading } = usePartsCatalog();
   const [q, setQ] = useState("");
 
@@ -218,7 +228,7 @@ function PartsPickerGrid({ onAdd, disabled = false }: { onAdd: (p: { id: string;
   return (
     <div className="space-y-3">
       <Input placeholder="Search parts..." value={q} onChange={(e) => setQ(e.target.value)} className="h-9 text-sm" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className={compact ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"}>
         {filtered.map((p) => {
           const firstNum = p.supply_house_numbers[0];
           const cost = firstNum?.unit_cost || 0;
