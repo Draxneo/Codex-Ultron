@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
 import { useJobCart, type JobCartItem, type NewCartItem } from "@/hooks/useJobCart";
+import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -139,6 +140,7 @@ export function TechJarvisPushToTalk({
   const transcriptRef = useRef<string>("");
   const { announce } = useAnnouncer();
   const { addItem } = useJobCart(jobId);
+  const { employeeId } = useEffectiveAuth();
 
   const askJarvis = useCallback(
     async (text: string) => {
@@ -147,7 +149,31 @@ export function TechJarvisPushToTalk({
       setLastQuestion(question);
       setProposedCartActions([]);
       setThinking(true);
+      let transcriptId: string | null = null;
       try {
+        const { data: transcriptRow, error: transcriptError } = await (supabase as any)
+          .from("job_transcripts")
+          .insert({
+            job_id: jobId,
+            technician_id: employeeId || null,
+            transcript_text: question,
+            source: "tech_voice",
+            metadata: {
+              job_number: jobNumber || null,
+              customer_name: customerName || null,
+              workflow: "tech_jarvis_cart",
+            },
+          })
+          .select("id")
+          .single();
+
+        if (transcriptError) {
+          console.warn("[TechJarvisPushToTalk] Could not save tech transcript", transcriptError);
+          toast.warning("JARVIS will still answer, but this voice note did not save to the job.");
+        } else {
+          transcriptId = transcriptRow?.id || null;
+        }
+
         const pageCtx = [
           `Active job: ${jobNumber || jobId}${customerName ? ` for ${customerName}` : ""}.`,
           `Job ID: ${jobId}.`,
@@ -165,8 +191,27 @@ export function TechJarvisPushToTalk({
         });
         if (error) throw error;
         const reply: string = data?.reply || "No response.";
+        const suggestedItems = parseJarvisCartSuggestions(reply);
         setLastReply(reply);
-        setProposedCartActions(parseJarvisCartSuggestions(reply));
+        setProposedCartActions(suggestedItems);
+        if (transcriptId) {
+          await (supabase as any)
+            .from("job_transcripts")
+            .update({
+              ai_processed_at: new Date().toISOString(),
+              ai_response: reply,
+              suggested_items: suggestedItems.map((item) => ({
+                name: item.name,
+                description: item.description,
+                unit_price: item.unitPrice,
+                quantity: item.quantity,
+                kind: item.kind,
+                tier: item.tier,
+                source_line: item.sourceLine,
+              })),
+            })
+            .eq("id", transcriptId);
+        }
         announce(reply);
       } catch (e: any) {
         toast.error(e?.message || "JARVIS failed to respond");
@@ -174,7 +219,7 @@ export function TechJarvisPushToTalk({
         setThinking(false);
       }
     },
-    [jobId, jobNumber, customerName, announce],
+    [jobId, jobNumber, customerName, employeeId, announce],
   );
 
   const addProposedAction = useCallback(
