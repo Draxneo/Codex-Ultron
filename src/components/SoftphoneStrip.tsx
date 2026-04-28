@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSoftphoneContext } from "./SoftphoneProvider";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
-import { playDtmfTone, startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
+import { playDtmfTone } from "@/lib/softphoneAudio";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanySetting } from "@/lib/companySettings";
@@ -59,11 +59,6 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
     queryKey: ["company_settings", "softphone_dial_tones"],
     queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
   });
-  const { data: ringtoneSetting } = useQuery({
-    queryKey: ["company_settings", "softphone_ringtone"],
-    queryFn: () => getCompanySetting("softphone_ringtone", "classic"),
-  });
-
   const dialTonesEnabled = dialTonesSetting !== "false";
   const isActive = ["connecting", "ringing", "on-call"].includes(softphone.status);
   const hasIncoming = softphone.status === "ringing" && !!softphone.incomingCall;
@@ -204,21 +199,6 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
     };
   }, [sendQuery]);
 
-  // Ringtone
-  useEffect(() => {
-    if (softphone.status === "ringing" && softphone.incomingCall) {
-      const rid = ringtoneSetting || "classic";
-      let customUrl: string | undefined;
-      if (isCustomRingtone(rid)) {
-        const fileName = rid.replace("custom:", "");
-        customUrl = supabase.storage.from("ringtones").getPublicUrl(fileName).data.publicUrl;
-      }
-      startRingtone(rid, customUrl);
-    } else {
-      stopRingtone();
-    }
-    return () => stopRingtone();
-  }, [softphone.status, softphone.incomingCall, ringtoneSetting]);
 
   // Call-waiting toast removed — 2nd inbound calls are now auto-rejected by
   // the softphone hooks (and routed by the server to a fallback employee or

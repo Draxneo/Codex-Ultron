@@ -36,10 +36,7 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { MobileCallScreen } from "@/components/MobileCallScreen";
-import { startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getCompanySetting } from "@/lib/companySettings";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -141,28 +138,6 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
 
   // Pre-warm haptics on mount so first tap is instant
   useEffect(() => { triggerLightHaptic().catch(() => {}); }, []);
-
-  // Ringtone setting
-  const { data: ringtoneSetting } = useQuery({
-    queryKey: ["company_settings", "softphone_ringtone"],
-    queryFn: () => getCompanySetting("softphone_ringtone", "classic"),
-  });
-
-  // Ringtone playback for incoming calls
-  useEffect(() => {
-    if (softphone.status === "ringing" && softphone.incomingCall) {
-      const rid = ringtoneSetting || "classic";
-      let customUrl: string | undefined;
-      if (isCustomRingtone(rid)) {
-        const fileName = rid.replace("custom:", "");
-        customUrl = supabase.storage.from("ringtones").getPublicUrl(fileName).data.publicUrl;
-      }
-      startRingtone(rid, customUrl);
-    } else {
-      stopRingtone();
-    }
-    return () => stopRingtone();
-  }, [softphone.status, softphone.incomingCall, ringtoneSetting]);
 
   const isOnCall = softphone.status === "on-call";
   const isConnecting = softphone.status === "connecting";

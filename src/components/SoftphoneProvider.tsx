@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useSoftphone } from "@/hooks/useSoftphone";
 import { useNativeSoftphone } from "@/hooks/useNativeSoftphone";
 import { useCapacitor } from "@/hooks/useCapacitor";
@@ -9,6 +10,9 @@ import { useKeepAwake } from "@/hooks/useKeepAwake";
 import { useCallForegroundService } from "@/hooks/useCallForegroundService";
 import { setOnCall } from "@/lib/callStateBus";
 import { sendToMain } from "@/lib/electron";
+import { supabase } from "@/integrations/supabase/client";
+import { getCompanySetting } from "@/lib/companySettings";
+import { startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
 
 // Statuses where the user is engaged on (or about to be engaged on) a call.
 // Suppresses voice announcements (JARVIS) and notification toasts so nothing
@@ -65,6 +69,33 @@ const disabledSoftphoneValue: SoftphoneContextType = {
 
 const SoftphoneContext = createContext<SoftphoneContextType | null>(null);
 
+function SoftphoneRingtoneController({ softphone }: { softphone: SoftphoneContextType }) {
+  const { data: ringtoneSetting } = useQuery({
+    queryKey: ["company_settings", "softphone_ringtone"],
+    queryFn: () => getCompanySetting("softphone_ringtone", "classic"),
+  });
+
+  useEffect(() => {
+    const isIncomingRing = softphone.status === "ringing" && !!softphone.incomingCall;
+    if (!isIncomingRing) {
+      stopRingtone();
+      return;
+    }
+
+    const ringtoneId = ringtoneSetting || "classic";
+    let customUrl: string | undefined;
+    if (isCustomRingtone(ringtoneId)) {
+      const fileName = ringtoneId.replace("custom:", "");
+      customUrl = supabase.storage.from("ringtones").getPublicUrl(fileName).data.publicUrl;
+    }
+
+    startRingtone(ringtoneId, customUrl);
+    return () => stopRingtone();
+  }, [softphone.status, softphone.incomingCall, ringtoneSetting]);
+
+  return null;
+}
+
 function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
   const { isNative, platform } = useCapacitor();
 
@@ -109,7 +140,12 @@ function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
         },
       };
 
-  return <SoftphoneContext.Provider value={value}>{children}</SoftphoneContext.Provider>;
+  return (
+    <SoftphoneContext.Provider value={value}>
+      <SoftphoneRingtoneController softphone={value} />
+      {children}
+    </SoftphoneContext.Provider>
+  );
 }
 
 export function SoftphoneProvider({ children }: { children: ReactNode }) {
