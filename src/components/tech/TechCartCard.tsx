@@ -47,6 +47,7 @@ interface Props {
   customerPhone: string | null;
   customerName: string | null;
   bare?: boolean;
+  focused?: boolean;
 }
 
 const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
@@ -58,7 +59,7 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
 
 const money = (value: number) => `$${Number(value || 0).toFixed(2)}`;
 
-export function TechCartCard({ jobId, customerId, customerPhone, customerName, bare = false }: Props) {
+export function TechCartCard({ jobId, customerId, customerPhone, customerName, bare = false, focused = false }: Props) {
   const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -118,6 +119,126 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       </div>
     </div>
   );
+
+  const renderFocusedCart = () => (
+    <>
+      <div className="space-y-3">
+        <Card className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer cart</p>
+              <h2 className="mt-1 text-xl font-bold text-foreground">{money(total)}</h2>
+              <p className="text-sm text-muted-foreground">
+                {itemCount} option{itemCount !== 1 ? "s" : ""} for {customerName || "this customer"}
+              </p>
+            </div>
+            <Badge className={cn("border", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button className="h-14 gap-2 text-sm" onClick={() => setPickerOpen(true)} disabled={!permissions.canEditItems}>
+            <Plus className="h-4 w-4" /> Add Option
+          </Button>
+          <Button variant="outline" className="h-14 gap-2 text-sm" onClick={handlePresent} disabled={!presentLink}>
+            <Eye className="h-4 w-4" /> Preview
+          </Button>
+        </div>
+
+        {items.length === 0 ? (
+          <Card className="p-6 text-center">
+            <ShoppingCart className="mx-auto mb-2 h-10 w-10 text-muted-foreground/35" />
+            <p className="text-sm font-semibold text-foreground">No customer options yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Add a system, repair, part, or custom item.</p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {items.map((item) => {
+              const Icon = KIND_ICON[item.kind] || Package;
+              return (
+                <Card key={item.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                      <Icon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-tight text-foreground">{item.name}</p>
+                      {item.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>}
+                      <p className="mt-2 text-xs text-muted-foreground">Qty {item.quantity} - {money(Number(item.unit_price))}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold tabular-nums text-foreground">{money(Number(item.total_price))}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="mt-1 h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeItem.mutate(item.id)}
+                        disabled={!permissions.canEditItems}
+                        aria-label="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {customOpen && (
+          <Card className="p-3 space-y-2">
+            <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Custom item name" />
+            <Input value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} type="number" inputMode="decimal" placeholder="Price" />
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => setCustomOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddCustom} disabled={!customName.trim() || !customPrice}>Add</Button>
+            </div>
+          </Card>
+        )}
+
+        <Button variant="outline" className="h-12 w-full gap-2" onClick={() => setCustomOpen((v) => !v)} disabled={!permissions.canEditItems}>
+          <Sparkles className="h-4 w-4" /> Add Custom Item
+        </Button>
+
+        <Card className="p-3 space-y-3">
+          {renderSendGuard(permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Payment link" : "Estimate link")}
+          <Button
+            className="h-14 w-full gap-2 text-base"
+            onClick={handleSend}
+            disabled={sendDisabled || itemCount === 0 || (!permissions.canSendForApproval && !permissions.canSendPaymentLink)}
+          >
+            <Send className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Send Payment Link" : "Send to Customer"}
+          </Button>
+          <Button variant="outline" className="h-12 w-full gap-2" onClick={handleCollectPayment} disabled={!publicLink || !statusInfo.canCollectNow}>
+            <CreditCard className="h-4 w-4" /> Collect Payment
+          </Button>
+        </Card>
+      </div>
+
+      <JobCartPicker
+        jobId={jobId}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onOpenCart={() => setDrawerOpen(true)}
+        customerPhone={customerPhone}
+        customerName={customerName}
+      />
+      <JobCartDrawer
+        jobId={jobId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onAddMore={() => {
+          setDrawerOpen(false);
+          setPickerOpen(true);
+        }}
+        customerPhone={customerPhone}
+        customerName={customerName}
+      />
+    </>
+  );
+
+  if (focused) return renderFocusedCart();
 
   const renderActionRow = () => {
     if (itemCount === 0) {

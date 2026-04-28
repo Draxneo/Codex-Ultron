@@ -33,10 +33,10 @@ import { TechServicePlansCard } from "@/components/tech/TechServicePlansCard";
 import { TechScheduleCard } from "@/components/tech/TechScheduleCard";
 import { TechAttachmentsCard } from "@/components/tech/TechAttachmentsCard";
 import { TechIntegrationRow } from "@/components/tech/TechIntegrationRow";
-import { TechCartCard } from "@/components/tech/TechCartCard";
 import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
+import { useJobCart } from "@/hooks/useJobCart";
 
 export default function TechJobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +45,7 @@ export default function TechJobDetail() {
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const { data: customerJobs } = useCustomerJobs(job?.customer_id || undefined);
+  const { cart, itemCount, isLoading: cartLoading } = useJobCart(id!);
 
   const scrollToSection = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -98,7 +99,7 @@ export default function TechJobDetail() {
   const employeeName = job.assigned_to || null;
 
   return (
-    <div className="flex flex-col min-h-full bg-muted/20 pb-4">
+    <div className="flex flex-col min-h-full bg-muted/20 pb-24">
       <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-background/95 border-b border-border backdrop-blur">
         <Button
           variant="ghost"
@@ -180,25 +181,7 @@ export default function TechJobDetail() {
             customerName={customerName}
             bare
             onOpenPhotos={() => scrollToSection("tech-photos")}
-            onOpenCart={() => scrollToSection("tech-cart")}
-          />
-        </TechCollapsibleCard>
-
-        <TechCollapsibleCard
-          icon={ShoppingCart}
-          title="Cart"
-          iconBg="bg-amber-500/10"
-          iconColor="text-amber-500"
-          collapsible={false}
-          id="tech-cart"
-          className="scroll-mt-16"
-        >
-          <TechCartCard
-            jobId={id!}
-            customerId={job.customer_id || null}
-            customerPhone={customerPhone}
-            customerName={customerName}
-            bare
+            onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
           />
         </TechCollapsibleCard>
 
@@ -275,6 +258,21 @@ export default function TechJobDetail() {
           </div>
         </TechCollapsibleCard>
       </main>
+
+      <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-2xl px-3">
+        <Button
+          className="h-14 w-full justify-between rounded-lg shadow-lg"
+          onClick={() => navigate(`/tech/jobs/${id}/cart`)}
+        >
+          <span className="flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5" />
+            View Cart
+          </span>
+          <span className="text-sm font-semibold">
+            {cartLoading ? "Loading" : `${itemCount} · $${Number(cart?.total || 0).toFixed(2)}`}
+          </span>
+        </Button>
+      </div>
     </div>
   );
 }

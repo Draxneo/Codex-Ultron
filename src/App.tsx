@@ -34,6 +34,7 @@ import Dashboard from "./pages/Index";
 
 import TechMySchedule from "./pages/TechMySchedule";
 import TechJobDetail from "./pages/TechJobDetail";
+import TechJobCart from "./pages/TechJobCart";
 import TechCustomerDetail from "./pages/TechCustomerDetail";
 import Jobs from "./pages/Jobs";
 import JobDetail from "./pages/JobDetail";
@@ -469,6 +470,7 @@ function AppRouter() {
         <Route path="/tech" element={<ProtectedRoute><TechMySchedule /></ProtectedRoute>} />
         
         <Route path="/tech/jobs/:id" element={<ProtectedRoute><TechJobDetail /></ProtectedRoute>} />
+        <Route path="/tech/jobs/:id/cart" element={<ProtectedRoute><TechJobCart /></ProtectedRoute>} />
         <Route path="/tech/customers/:id" element={<ProtectedRoute><TechCustomerDetail /></ProtectedRoute>} />
         <Route path="/copilot" element={<ProtectedRoute><CopilotPage /></ProtectedRoute>} />
         <Route path="/inbox" element={<ProtectedRoute><InboxRedirectComponent /></ProtectedRoute>} />

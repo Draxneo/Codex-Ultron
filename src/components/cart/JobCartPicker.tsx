@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, X, Zap, Wrench, Package, Plus, Send } from "lucide-react";
+import { ShoppingCart, X, Zap, Wrench, Package, Plus, Send, type LucideIcon } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
 import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
@@ -17,6 +17,8 @@ import type { EquipmentMatchup } from "@/hooks/useEquipmentMatchups";
 import type { RepairCatalogItem } from "@/components/RepairProductCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+
+type MobileAddMode = "menu" | "equipment" | "repairs" | "parts" | "custom";
 
 interface Props {
   jobId: string;
@@ -51,6 +53,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
   const [customDesc, setCustomDesc] = useState("");
+  const [mobileMode, setMobileMode] = useState<MobileAddMode>("menu");
 
   const handleAddEquipment = (m: EquipmentMatchup) => {
     if (!permissions.canEditItems) return;
@@ -114,7 +117,92 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     setCustomDesc("");
   };
 
-  const body = (
+  const mobileBody = (
+    <div className="flex h-full flex-col">
+      {mobileMode === "menu" ? (
+        <div className="flex-1 overflow-y-auto p-3 pb-24">
+          {!permissions.canEditItems && (
+            <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              {permissions.lockedReason || "This estimate cannot be edited."}
+            </div>
+          )}
+          <div className="space-y-2">
+            <MobileAddChoice
+              icon={Zap}
+              title="Add System"
+              description="Brand, tonnage, type, tier, location."
+              onClick={() => setMobileMode("equipment")}
+              disabled={!permissions.canEditItems}
+            />
+            <MobileAddChoice
+              icon={Wrench}
+              title="Add Repair"
+              description="Common repair items and services."
+              onClick={() => setMobileMode("repairs")}
+              disabled={!permissions.canEditItems}
+            />
+            <MobileAddChoice
+              icon={Package}
+              title="Add Part"
+              description="Parts, accessories, and add-ons."
+              onClick={() => setMobileMode("parts")}
+              disabled={!permissions.canEditItems}
+            />
+            <MobileAddChoice
+              icon={Plus}
+              title="Custom Item"
+              description="One-off price or job-specific option."
+              onClick={() => setMobileMode("custom")}
+              disabled={!permissions.canEditItems}
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setMobileMode("menu")}>
+              Back
+            </Button>
+            <p className="text-sm font-semibold">
+              {mobileMode === "equipment" ? "Add System" : mobileMode === "repairs" ? "Add Repair" : mobileMode === "parts" ? "Add Part" : "Custom Item"}
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-24">
+            {mobileMode === "equipment" && <GuidedEquipmentPicker onAdd={handleAddEquipment} disabled={!permissions.canEditItems} />}
+            {mobileMode === "repairs" && <RepairCatalogBrowser onAddToCart={handleAddRepair} compact maxHeight="max-h-none" />}
+            {mobileMode === "parts" && <PartsPickerGrid compact disabled={!permissions.canEditItems} onAdd={(p) => addItem.mutate({
+              kind: "part",
+              source_id: p.id,
+              name: p.name,
+              description: p.description,
+              unit_price: p.unit_price,
+            })} />}
+            {mobileMode === "custom" && (
+              <Card className="p-4 space-y-3">
+                <div>
+                  <Label htmlFor="mobile-custom-name">Item Name</Label>
+                  <Input id="mobile-custom-name" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. Diagnostic Fee" />
+                </div>
+                <div>
+                  <Label htmlFor="mobile-custom-desc">Description (optional)</Label>
+                  <Input id="mobile-custom-desc" value={customDesc} onChange={(e) => setCustomDesc(e.target.value)} placeholder="What's this for?" />
+                </div>
+                <div>
+                  <Label htmlFor="mobile-custom-price">Price ($)</Label>
+                  <Input id="mobile-custom-price" type="number" inputMode="decimal" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder="0.00" />
+                </div>
+                <Button onClick={handleAddCustom} className="w-full h-11" disabled={!permissions.canEditItems || !customName.trim() || !customPrice}>
+                  <Plus className="h-4 w-4 mr-1" /> Add to Cart
+                </Button>
+              </Card>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const body = isMobile ? mobileBody : (
     <div className="flex flex-col h-full">
       <Tabs defaultValue="equipment" className="flex-1 flex flex-col min-h-0">
         {!permissions.canEditItems && (
@@ -228,6 +316,38 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
         <div className="relative flex-1 min-h-0">{body}</div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MobileAddChoice({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  disabled,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center gap-3 rounded-lg border bg-background p-3 text-left shadow-sm transition active:scale-[0.99] disabled:opacity-50"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span>
+      </span>
+      <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 
