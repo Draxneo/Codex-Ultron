@@ -32,6 +32,9 @@ export default function TechJobDetail() {
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const { data: customerJobs } = useCustomerJobs(job?.customer_id || undefined);
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   if (isLoading) {
     return (
@@ -118,7 +121,33 @@ export default function TechJobDetail() {
       </div>
 
       {/* Card stack */}
-      <main className="px-3 pt-3 space-y-3 max-w-2xl mx-auto w-full">
+      <main className="px-3 pt-3 flex flex-col gap-3 max-w-2xl mx-auto w-full">
+        <Card className="overflow-hidden border-primary/20 bg-primary/5">
+          <div className="p-4 space-y-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Tech workflow</p>
+              <h1 className="text-xl font-bold text-foreground">Pictures. Talk. Cart.</h1>
+              <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                Snap what you see, tell JARVIS the diagnosis, then build the customer options and send the link.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Button type="button" className="h-16 flex-col gap-1" onClick={() => scrollToSection("tech-photos")}>
+                <ImagePlus className="h-5 w-5" />
+                <span className="text-xs">Photos</span>
+              </Button>
+              <Button type="button" className="h-16 flex-col gap-1 bg-purple-600 hover:bg-purple-700" onClick={() => scrollToSection("tech-jarvis")}>
+                <Mic className="h-5 w-5" />
+                <span className="text-xs">Talk</span>
+              </Button>
+              <Button type="button" className="h-16 flex-col gap-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => scrollToSection("tech-cart")}>
+                <ShoppingCart className="h-5 w-5" />
+                <span className="text-xs">Cart</span>
+              </Button>
+            </div>
+          </div>
+        </Card>
+
         {/* 1. Status card */}
         <TechStatusCard
           jobId={id!}
@@ -143,6 +172,7 @@ export default function TechJobDetail() {
           iconBg="bg-sky-500/10"
           iconColor="text-sky-500"
           collapsible={false}
+          className="order-7"
         >
           <TechWeatherCard
             jobId={id!}
@@ -166,7 +196,7 @@ export default function TechJobDetail() {
         </TechCollapsibleCard>
 
         {/* 3. Customer card — always visible */}
-        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false}>
+        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false} className="order-6">
           <TechCustomerCard
             customerId={job.customer_id || null}
             customerName={customerName}
@@ -187,6 +217,7 @@ export default function TechJobDetail() {
           iconBg="bg-emerald-500/10"
           iconColor="text-emerald-500"
           defaultOpen={false}
+          className="order-8"
         >
           <TechServicePlansCard customerId={job.customer_id || null} bare />
         </TechCollapsibleCard>
@@ -197,6 +228,7 @@ export default function TechJobDetail() {
           title="Schedule"
           iconBg="bg-indigo-500/10"
           iconColor="text-indigo-500"
+          className="order-9"
         >
           <TechScheduleCard
             jobId={id!}
@@ -216,6 +248,8 @@ export default function TechJobDetail() {
           iconBg="bg-amber-500/10"
           iconColor="text-amber-500"
           collapsible={false}
+          id="tech-cart"
+          className="order-5 scroll-mt-24"
         >
           <TechCartCard jobId={id!} customerPhone={customerPhone} customerName={customerName} bare />
         </TechCollapsibleCard>
@@ -227,6 +261,8 @@ export default function TechJobDetail() {
           iconBg="bg-rose-500/10"
           iconColor="text-rose-500"
           collapsible={false}
+          id="tech-photos"
+          className="order-3 scroll-mt-24"
         >
           <TechAttachmentsCard
             jobId={id!}
@@ -244,8 +280,17 @@ export default function TechJobDetail() {
           iconBg="bg-purple-500/10"
           iconColor="text-purple-500"
           collapsible={false}
+          id="tech-jarvis"
+          className="order-4 scroll-mt-24"
         >
-          <TechJarvisPushToTalk jobId={id!} jobNumber={jobNumber} customerName={customerName} bare />
+          <TechJarvisPushToTalk
+            jobId={id!}
+            jobNumber={jobNumber}
+            customerName={customerName}
+            bare
+            onOpenPhotos={() => scrollToSection("tech-photos")}
+            onOpenCart={() => scrollToSection("tech-cart")}
+          />
         </TechCollapsibleCard>
 
         {/* 8. Integrations */}
@@ -255,6 +300,7 @@ export default function TechJobDetail() {
           iconBg="bg-slate-500/10"
           iconColor="text-slate-500"
           defaultOpen={false}
+          className="order-10"
         >
           <div>
             <TechIntegrationRow

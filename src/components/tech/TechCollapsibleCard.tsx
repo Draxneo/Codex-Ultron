@@ -17,6 +17,7 @@ interface Props {
   defaultOpen?: boolean;
   children: ReactNode;
   className?: string;
+  id?: string;
   /** When false, the body is always shown (header still rendered, no chevron). */
   collapsible?: boolean;
 }
@@ -30,12 +31,13 @@ export function TechCollapsibleCard({
   defaultOpen = true,
   children,
   className,
+  id,
   collapsible = true,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <Card className={cn("overflow-hidden", className)}>
+    <Card id={id} className={cn("overflow-hidden", className)}>
       <div className="flex items-center gap-2 px-4 h-12 border-b border-border bg-card">
         <button
           type="button"

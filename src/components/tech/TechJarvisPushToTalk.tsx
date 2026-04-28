@@ -1,16 +1,14 @@
 /**
- * TechJarvisPushToTalk — Press-and-hold mic button that streams the
- * technician's voice to the existing `ai-task-agent` orchestrator with
- * the current job pinned as page context.
+ * TechJarvisPushToTalk - field-first voice assistant for tech jobs.
  *
- * Replaces the legacy "Estimate / Line Items / Job Inputs / Job Fields …"
- * accordion stack on the tech job detail. Techs don't need office process
- * scaffolding — they need to ask JARVIS a question hands-free.
+ * The tech workflow is intentionally simple:
+ * take pictures, talk to JARVIS, build/send the customer cart.
  */
 
 import { useState, useCallback, useRef } from "react";
-import { Mic, Loader2, Sparkles, Volume2 } from "lucide-react";
+import { Camera, Loader2, Mic, ShoppingCart, Sparkles, Volume2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,9 +21,18 @@ interface Props {
   customerName?: string | null;
   /** Render without outer Card chrome (used inside TechCollapsibleCard) */
   bare?: boolean;
+  onOpenCart?: () => void;
+  onOpenPhotos?: () => void;
 }
 
-export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = false }: Props) {
+export function TechJarvisPushToTalk({
+  jobId,
+  jobNumber,
+  customerName,
+  bare = false,
+  onOpenCart,
+  onOpenPhotos,
+}: Props) {
   const [thinking, setThinking] = useState(false);
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
@@ -39,7 +46,13 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
       setLastQuestion(question);
       setThinking(true);
       try {
-        const pageCtx = `Active job: ${jobNumber || jobId}${customerName ? ` for ${customerName}` : ""}. Job ID: ${jobId}.`;
+        const pageCtx = [
+          `Active job: ${jobNumber || jobId}${customerName ? ` for ${customerName}` : ""}.`,
+          `Job ID: ${jobId}.`,
+          "Tech workflow: photos plus voice notes should become repair/replacement recommendations, cart options, and a customer-ready approval/payment link.",
+          "If the tech describes options, respond with clear cart item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved.",
+        ].join(" ");
+
         const { data, error } = await supabase.functions.invoke("ai-task-agent", {
           body: {
             mode: "chat",
@@ -57,7 +70,7 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
         setThinking(false);
       }
     },
-    [jobId, jobNumber, customerName, announce]
+    [jobId, jobNumber, customerName, announce],
   );
 
   const { isRecording, loading, start, stop } = useVoiceToText({
@@ -69,7 +82,6 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
   const onPressStart = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
-      // Capture the pointer so we keep getting events even if finger drifts off the button
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
@@ -78,7 +90,7 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
       transcriptRef.current = "";
       start();
     },
-    [start]
+    [start],
   );
 
   const onPressEnd = useCallback(
@@ -91,20 +103,19 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
       }
       if (!isRecording) return;
       await stop();
-      // Wait briefly for transcript callback to populate
       setTimeout(() => {
         const text = transcriptRef.current;
         if (text) askJarvis(text);
       }, 350);
     },
-    [isRecording, stop, askJarvis]
+    [isRecording, stop, askJarvis],
   );
 
   const busy = loading || thinking;
   const active = isRecording;
 
   const inner = (
-    <div className="flex flex-col items-center gap-3 p-4">
+    <div className="flex flex-col items-center gap-4 p-4">
       {!bare && (
         <div className="flex items-center gap-2 self-start">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -113,6 +124,14 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
         </div>
       )}
 
+      <div className="w-full rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+        <p className="text-sm font-semibold text-foreground">Tell JARVIS what you found.</p>
+        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+          Talk through the diagnosis, repair choices, equipment options, and anything the customer asked.
+          JARVIS should help turn that into cart options and a customer-ready link.
+        </p>
+      </div>
+
       <button
         type="button"
         onPointerDown={onPressStart}
@@ -120,35 +139,40 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
         onPointerCancel={onPressEnd}
         disabled={busy && !active}
         className={cn(
-          "relative h-24 w-24 rounded-full flex items-center justify-center transition-all select-none touch-none",
-          "shadow-lg active:scale-95",
+          "relative h-32 w-32 rounded-full flex items-center justify-center transition-all select-none touch-none",
+          "shadow-xl active:scale-95",
           active
             ? "bg-destructive text-destructive-foreground scale-110 ring-4 ring-destructive/30 animate-pulse"
             : "bg-primary text-primary-foreground hover:bg-primary/90",
-          busy && !active && "opacity-60"
+          busy && !active && "opacity-60",
         )}
         aria-label="Hold to talk to JARVIS"
       >
-        {thinking ? (
-          <Loader2 className="h-9 w-9 animate-spin" />
-        ) : active ? (
-          <Mic className="h-10 w-10" />
-        ) : loading ? (
-          <Loader2 className="h-9 w-9 animate-spin" />
+        {thinking || loading ? (
+          <Loader2 className="h-12 w-12 animate-spin" />
         ) : (
-          <Mic className="h-10 w-10" />
+          <Mic className="h-14 w-14" />
         )}
       </button>
 
-      <p className="text-[11px] text-muted-foreground h-4">
+      <p className="text-sm font-medium text-muted-foreground h-5">
         {active
-          ? "Listening… release to send"
+          ? "Listening... release to send"
           : thinking
-            ? "JARVIS is thinking…"
+            ? "JARVIS is thinking..."
             : loading
-              ? "Transcribing…"
+              ? "Transcribing..."
               : "Press and hold the mic"}
       </p>
+
+      <div className="grid grid-cols-2 gap-2 w-full">
+        <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenPhotos}>
+          <Camera className="h-4 w-4" /> Add photos
+        </Button>
+        <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenCart}>
+          <ShoppingCart className="h-4 w-4" /> Open cart
+        </Button>
+      </div>
 
       {lastQuestion && (
         <div className="w-full pt-2 border-t border-border space-y-2">
@@ -161,6 +185,14 @@ export function TechJarvisPushToTalk({ jobId, jobNumber, customerName, bare = fa
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">JARVIS</p>
               </div>
               <p className="text-xs text-foreground whitespace-pre-wrap">{lastReply}</p>
+              <div className="flex gap-2 pt-1">
+                <Button type="button" size="sm" className="h-9 gap-1.5" onClick={onOpenCart}>
+                  <ShoppingCart className="h-3.5 w-3.5" /> Build cart
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5" onClick={onOpenPhotos}>
+                  <Camera className="h-3.5 w-3.5" /> Add more photos
+                </Button>
+              </div>
             </>
           )}
         </div>

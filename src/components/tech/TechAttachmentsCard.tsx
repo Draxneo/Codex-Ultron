@@ -209,17 +209,24 @@ export function TechAttachmentsCard({
         </Link>
       </div>
 
+      <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
+        <p className="text-sm font-semibold text-foreground">Capture what JARVIS needs.</p>
+        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+          Snap the unit, model plate, failed part, readings, and the area around the repair before you talk through the options.
+        </p>
+      </div>
+
       <div className="flex gap-2">
         <Button
           variant="outline"
           size="sm"
-          className="flex-1"
+          className="flex-1 h-12"
           onClick={() => uploadRef.current?.click()}
           disabled={uploading}
         >
           <Upload className="h-4 w-4 mr-1.5" /> Upload
         </Button>
-        <Button size="sm" className="flex-1" onClick={() => cameraRef.current?.click()} disabled={uploading}>
+        <Button size="sm" className="flex-1 h-12" onClick={() => cameraRef.current?.click()} disabled={uploading}>
           <Camera className="h-4 w-4 mr-1.5" /> Camera
         </Button>
       </div>
