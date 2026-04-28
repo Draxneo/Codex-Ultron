@@ -10,7 +10,7 @@ import {
   Package, CreditCard, Brain, ChevronRight, ChevronLeft, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
-  BookOpen,
+  BookOpen, Database,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
@@ -68,6 +68,7 @@ import { ApiUsageHourlyChart } from "@/components/ApiUsageHourlyChart";
 import { ClickToCall } from "@/components/ClickToCall";
 import HcpCustomerSyncButton from "@/components/HcpCustomerSyncButton";
 import { PaysheetPanel } from "@/components/PaysheetPanel";
+import { CustomerDataTools } from "@/components/admin/CustomerDataTools";
 
 // ─── Webhook URLs ───
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hcp-webhook`;
@@ -1080,6 +1081,7 @@ const ADMIN_SECTIONS = [
   { key: "company", label: "Company Settings", icon: Settings2 },
   { key: "voice", label: "Voice & Phone", icon: Phone },
   { key: "payments", label: "Payments & Invoicing", icon: CreditCard },
+  { key: "data", label: "Data Tools", icon: Database },
   { key: "dev", label: "Dev / Ops", icon: Activity },
   { key: "tools", label: "Tools", icon: Package },
   { key: "reports", label: "Dashboard & Reports", icon: BarChart3 },
@@ -1122,6 +1124,8 @@ function AdminSectionContent({ section }: { section: string }) {
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
+    case "data":
+      return <CustomerDataTools />;
     case "dev":
       return <DevOpsCenter />;
     case "jarvis":
