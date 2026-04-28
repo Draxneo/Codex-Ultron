@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SmsTemplatePicker, type SmsTemplateOption } from "@/components/SmsTemplatePicker";
 import { TimePicker, DayPicker, AudioUploadField, DAYS } from "./IvrEditorComponents";
 import type { IvrConfig, IvrMenuOption } from "@/hooks/useIvrConfig";
@@ -329,11 +330,26 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Department Name</Label>
-          <DebouncedInput value={option.label} onSave={(v) => onSaveSilent({ digit: option.digit, label: v })} className="text-sm" />
+      <div className="rounded-xl border bg-muted/20 p-3">
+        <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+          <div className="min-w-0">
+            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Department</Label>
+            <DebouncedInput value={option.label} onSave={(v) => onSaveSilent({ digit: option.digit, label: v })} className="mt-1 h-10 text-lg font-semibold" />
+          </div>
+          <Badge variant="outline" className="mt-5 font-mono">Press {option.digit}</Badge>
         </div>
+      </div>
+
+      <Tabs defaultValue="routing" className="space-y-4">
+        <TabsList className="grid h-auto grid-cols-4 rounded-xl bg-muted/60 p-1">
+          <TabsTrigger value="routing" className="text-xs">Routing</TabsTrigger>
+          <TabsTrigger value="hours" className="text-xs">Hours</TabsTrigger>
+          <TabsTrigger value="sms" className="text-xs">SMS</TabsTrigger>
+          <TabsTrigger value="audio" className="text-xs">Audio</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="routing" className="m-0 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Action</Label>
           <Select value={option.action_type} onValueChange={(v) => onSave({ digit: option.digit, action_type: v })}>
@@ -345,33 +361,32 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Routing Key</Label>
+          <Select
+            value={routingDepartmentKeyForOption(option)}
+            onValueChange={(v) => onSave({ digit: option.digit, routing_department_key: v })}
+          >
+            <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ROUTING_DEPARTMENT_OPTIONS.map((routingOption) => (
+                <SelectItem key={routingOption.value} value={routingOption.value}>
+                  {routingOption.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="space-y-1">
-        <Label className="text-xs">Routing Key</Label>
-        <Select
-          value={routingDepartmentKeyForOption(option)}
-          onValueChange={(v) => onSave({ digit: option.digit, routing_department_key: v })}
-        >
-          <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {ROUTING_DEPARTMENT_OPTIONS.map((routingOption) => (
-              <SelectItem key={routingOption.value} value={routingOption.value}>
-                {routingOption.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2 p-3 rounded-lg bg-primary/5 border border-primary/15">
+      <div className="space-y-3 p-3 rounded-xl bg-primary/5 border border-primary/15">
         <Label className="text-xs font-semibold flex items-center gap-1.5">
-          <PhoneForwarded className="h-3 w-3" /> Inbound Forwarding Numbers
+          <PhoneForwarded className="h-3 w-3" /> Inbound Cell Forwarding
         </Label>
         <p className="text-[10px] text-muted-foreground">
           Calls for this department ring these real cell numbers through Twilio. The browser phone is not required for inbound calls.
         </p>
-        <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-background/70 p-3">
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-background/70 p-3">
           <div className="space-y-1">
             <Label className="text-xs">Inbound route mode</Label>
             <Select
@@ -386,7 +401,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 col-span-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Ring timeout before fallback</Label>
               <Badge variant="outline" className="text-xs font-mono">
@@ -472,7 +487,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
       )}
 
       {option.action_type === "forward_client" && (
-        <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border/50">
+        <div className="space-y-2 p-3 rounded-xl bg-muted/30 border border-border/50">
           <Label className="text-xs font-semibold flex items-center gap-1.5">
             <Users className="h-3 w-3" /> Assigned Team Members
           </Label>
@@ -511,10 +526,11 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         </div>
       )}
 
-      <Separator />
+        </TabsContent>
 
+        <TabsContent value="hours" className="m-0 space-y-4">
       {/* Department Hours */}
-      <div className="space-y-3">
+      <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
         <div>
           <Label className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Department Hours</Label>
           <p className="text-xs text-muted-foreground">When this department is available to take calls</p>
@@ -558,8 +574,9 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         </div>
       </div>
 
-      <Separator />
+        </TabsContent>
 
+        <TabsContent value="audio" className="m-0 space-y-4">
       <AudioUploadField
         label="Missed Call Voicemail (During Hours)"
         audioUrl={option.dept_vm_audio_url || null}
@@ -580,6 +597,9 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         bucketPath={`dept-${option.digit}`}
       />
 
+        </TabsContent>
+
+        <TabsContent value="sms" className="m-0 space-y-4">
       <TemplateBindingCard
         title="After-Hours Auto-Reply SMS"
         description="Pick a governed template for this department, then keep the resolved body here as the legacy-safe preview/fallback."
@@ -610,7 +630,8 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         })}
       />
 
-      <Separator />
+        </TabsContent>
+      </Tabs>
 
       <Button variant="destructive" size="sm" className="w-full" onClick={onDelete}>
         Delete Department
@@ -846,7 +867,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
     : "Incoming Call";
 
   return (
-    <div className="w-96 border-l bg-card flex flex-col h-full">
+    <div className="w-[30rem] min-w-[30rem] border-l bg-card flex flex-col h-full">
       <div className="p-4 border-b flex items-center justify-between shrink-0">
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate">{nodeTitle}</p>
@@ -856,7 +877,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
           <X className="h-4 w-4" />
         </Button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="ivr-editor-scroll flex-1 overflow-y-auto p-4">
         {nodeType === "greeting" && (
           <GreetingEditor config={config} onUpdateConfig={onUpdateConfig} />
         )}
