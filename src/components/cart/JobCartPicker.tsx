@@ -163,11 +163,11 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
             <p className="text-xs text-muted-foreground">${(cart?.total || 0).toFixed(2)}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { onOpenChange(false); onOpenCart?.(); }}>
+        <Button variant="outline" className="h-11" onClick={() => { onOpenChange(false); onOpenCart?.(); }}>
           Review
         </Button>
-        <Button size="sm" onClick={() => { onOpenChange(false); onOpenCart?.(); }} disabled={itemCount === 0}>
-          <Send className="h-4 w-4 mr-1" /> Send
+        <Button className="h-11" onClick={() => { onOpenChange(false); onOpenCart?.(); }} disabled={itemCount === 0}>
+          <Send className="h-4 w-4 mr-1" /> Review & Send
         </Button>
       </div>
     </div>

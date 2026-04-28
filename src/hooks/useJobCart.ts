@@ -186,34 +186,38 @@ export function useJobCart(jobId: string | undefined) {
       if (!permissions.canSendForApproval && !permissions.canSendPaymentLink) {
         throw new Error(permissions.lockedReason || "This estimate cannot be sent.");
       }
+      if (!phone) {
+        throw new Error("Customer phone number is missing. Add a phone number or copy the link instead.");
+      }
       const link = `${window.location.origin}/cart/${cartQuery.data.public_token}`;
+
+      // Send SMS via centralized pipeline
+      const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
+      const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "estimate";
+      const estimateLabel = cartQuery.data.estimate_number ? ` ${cartQuery.data.estimate_number}` : "";
+      const { sendSmsImpl } = await import("@/hooks/useSendSms");
+      await sendSmsImpl({
+        to: phone,
+        body: `${greeting}here's your ${linkLabel}${estimateLabel} from Carnes and Sons Air Conditioning: ${link}`,
+        jobId,
+        contactName: customerName || null,
+        contactType: "customer",
+        source: "job_cart_send",
+        silent: true,
+      });
+
       if (permissions.canSendForApproval) {
-        await (supabase as any)
+        const { error } = await (supabase as any)
           .from("job_carts")
           .update({ status: "sent", sent_at: new Date().toISOString() })
           .eq("id", cartQuery.data.id);
+        if (error) throw error;
       }
-      // Send SMS via centralized pipeline
-      if (phone) {
-        const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
-        const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "estimate";
-        const estimateLabel = cartQuery.data.estimate_number ? ` ${cartQuery.data.estimate_number}` : "";
-        const { sendSmsImpl } = await import("@/hooks/useSendSms");
-        await sendSmsImpl({
-          to: phone,
-          body: `${greeting}here's your ${linkLabel}${estimateLabel} from Carnes and Sons Air Conditioning: ${link}`,
-          jobId,
-          contactName: customerName || null,
-          contactType: "customer",
-          source: "job_cart_send",
-          silent: true,
-        });
-      }
-      return link;
+      return { link, linkLabel };
     },
-    onSuccess: (link) => {
+    onSuccess: ({ link, linkLabel }) => {
       queryClient.invalidateQueries({ queryKey: ["job_cart", jobId] });
-      toast.success("Estimate sent to customer", { description: link });
+      toast.success(`${linkLabel === "payment link" ? "Payment link" : "Estimate"} sent to customer`, { description: link });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send"),
   });

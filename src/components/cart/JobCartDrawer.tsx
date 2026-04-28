@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Trash2, Plus, Minus, Send, Copy, ExternalLink, Package, Wrench, Zap, Sparkles } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, Send, Copy, ExternalLink, Package, Wrench, Zap, Sparkles, AlertCircle, Presentation, CreditCard } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
@@ -37,9 +37,13 @@ const KIND_COLOR: Record<JobCartItem["kind"], string> = {
 
 export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerName, customerPhone }: Props) {
   const isMobile = useIsMobile();
-  const { cart, items, itemCount, updateItem, removeItem, sendToCustomer, publicLink } = useJobCart(jobId);
+  const { cart, items, itemCount, updateItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const statusInfo = getJobCartStatus(cart, itemCount);
   const permissions = getJobCartPermissions(cart, itemCount);
+  const total = Number(cart?.total || 0);
+  const canSend = permissions.canSendForApproval || permissions.canSendPaymentLink;
+  const sendDisabled = !canSend || sendToCustomer.isPending || !customerPhone;
+  const customerFirstName = customerName?.split(" ")[0] || "the customer";
 
   const copyLink = () => {
     if (!publicLink) return;
@@ -128,27 +132,49 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
         <div className="space-y-0.5 text-sm">
           <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>${Number(cart?.subtotal || 0).toFixed(2)}</span></div>
           <div className="flex justify-between text-muted-foreground"><span>Tax ({((cart?.tax_rate || 0) * 100).toFixed(2)}%)</span><span>${Number(cart?.tax_amount || 0).toFixed(2)}</span></div>
-          <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>${Number(cart?.total || 0).toFixed(2)}</span></div>
+          <div className="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span>${total.toFixed(2)}</span></div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={onAddMore} disabled={!permissions.canEditItems}>
-            <Plus className="h-4 w-4 mr-1" /> Add
-          </Button>
-          <Button variant="outline" size="sm" onClick={copyLink} disabled={!publicLink}>
-            <Copy className="h-4 w-4" />
-          </Button>
-          {publicLink && (
-            <Button variant="outline" size="sm" asChild>
-              <a href={publicLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a>
+        <div className={cn(
+          "flex items-start gap-2 rounded-xl border px-3 py-2 text-xs",
+          customerPhone ? "bg-muted/40 text-muted-foreground" : "bg-destructive/5 text-destructive border-destructive/30",
+        )}>
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            {customerPhone
+              ? `Sending texts ${customerFirstName} a private link with these ${itemCount} item${itemCount !== 1 ? "s" : ""} and the $${total.toFixed(2)} total.`
+              : "Customer phone is missing. Copy or present the link, or add a phone number before sending SMS."}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {permissions.canEditItems && (
+            <Button variant="outline" className="h-12" onClick={onAddMore}>
+              <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
           )}
+          <Button variant="outline" className="h-12" onClick={copyLink} disabled={!publicLink}>
+            <Copy className="h-4 w-4 mr-1" /> Copy
+          </Button>
+          <Button variant="outline" className="h-12" onClick={() => presentLink && window.open(presentLink, "_blank", "noopener")} disabled={!presentLink}>
+            <Presentation className="h-4 w-4 mr-1" /> Present
+          </Button>
+          {statusInfo.canCollectNow && (
+            <Button className="h-12" onClick={() => publicLink && window.open(publicLink, "_blank", "noopener")} disabled={!publicLink}>
+              <CreditCard className="h-4 w-4 mr-1" /> Collect
+            </Button>
+          )}
+          {publicLink && (
+            <Button variant="outline" className="h-12" asChild>
+              <a href={publicLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1" /> Open</a>
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2">
           <Button
-            size="sm"
-            className="flex-1"
-            disabled={(!permissions.canSendForApproval && !permissions.canSendPaymentLink) || sendToCustomer.isPending}
+            className="h-14 flex-1 text-base"
+            disabled={sendDisabled}
             onClick={() => sendToCustomer.mutate({ phone: customerPhone, customerName })}
           >
-            <Send className="h-4 w-4 mr-1" /> {sendToCustomer.isPending ? "Sending..." : permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Send Payment Link" : "Send to Customer"}
+            <Send className="h-5 w-5 mr-2" /> {sendToCustomer.isPending ? "Sending..." : permissions.canSendPaymentLink && !permissions.canSendForApproval ? "Send Payment Link" : "Send to Customer"}
           </Button>
         </div>
       </div>

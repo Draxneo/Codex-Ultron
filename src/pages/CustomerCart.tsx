@@ -200,6 +200,26 @@ export default function CustomerCart() {
           </div>
         )}
 
+        {canEditCart && (
+          <Card className="p-4 bg-primary/5 border-primary/20">
+            <p className="text-sm font-semibold">Choose the path that works best for you.</p>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
+              <div className="rounded-lg bg-background/80 border px-3 py-2">
+                <p className="font-semibold text-foreground">Approve</p>
+                <p>Reserve the repair or install scope.</p>
+              </div>
+              <div className="rounded-lg bg-background/80 border px-3 py-2">
+                <p className="font-semibold text-foreground">Pay</p>
+                <p>Check out now or after completion if offered.</p>
+              </div>
+              <div className="rounded-lg bg-background/80 border px-3 py-2">
+                <p className="font-semibold text-foreground">Finance</p>
+                <p>Apply for financing before work starts.</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Items */}
         <Card className="overflow-hidden">
           <div className="px-4 py-3 border-b bg-muted/40 flex items-center justify-between gap-2">

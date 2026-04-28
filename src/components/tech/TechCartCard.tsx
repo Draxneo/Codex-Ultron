@@ -25,6 +25,9 @@ import {
   CreditCard,
   RefreshCw,
   CheckCircle2,
+  AlertCircle,
+  Eye,
+  MessageSquareText,
 } from "lucide-react";
 import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
 import { JobCartPicker } from "@/components/cart/JobCartPicker";
@@ -63,6 +66,9 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const lastViewedAt = (cart as any)?.last_viewed_at;
   const statusInfo = getJobCartStatus(cart, itemCount);
   const permissions = getJobCartPermissions(cart, itemCount);
+  const customerFirstName = customerName?.split(" ")[0] || "the customer";
+  const customerTarget = customerPhone || "No customer phone";
+  const sendDisabled = sendToCustomer.isPending || !customerPhone;
 
   const handleAddCustom = () => {
     const price = parseFloat(customPrice);
@@ -87,58 +93,89 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   };
 
   // ── Status-driven action row ──────────────────────────────────────
+  const renderSendGuard = (label = "SMS link") => (
+    <div className={cn(
+      "flex items-start gap-2 rounded-xl border px-3 py-2 text-xs",
+      customerPhone ? "bg-emerald-500/5 border-emerald-500/20 text-muted-foreground" : "bg-destructive/5 border-destructive/30 text-destructive",
+    )}>
+      {customerPhone ? <MessageSquareText className="mt-0.5 h-4 w-4 text-emerald-600" /> : <AlertCircle className="mt-0.5 h-4 w-4" />}
+      <div className="leading-snug">
+        <p className="font-semibold text-foreground">
+          {customerPhone ? `${label} will go to ${customerFirstName}` : "Add a customer phone before sending"}
+        </p>
+        <p>{customerPhone ? customerTarget : "You can still present or copy the link, but SMS cannot send yet."}</p>
+      </div>
+    </div>
+  );
+
   const renderActionRow = () => {
     if (itemCount === 0) {
       return (
-        <p className="text-[11px] text-muted-foreground italic">Add options, then send the customer cart for approval.</p>
+        <div className="flex items-start gap-2 rounded-xl bg-muted/50 px-3 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 text-amber-600" />
+          <div>
+            <p className="text-sm font-semibold">Start with at least one option.</p>
+            <p className="text-xs text-muted-foreground">Add a repair, part, equipment package, or custom item. Nothing is sent until you tap send.</p>
+          </div>
+        </div>
       );
     }
 
     if (status === "paid") {
       return (
-        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 h-8 px-3">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Paid - ${total.toFixed(2)}
-        </Badge>
+        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3">
+          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 h-9 px-3 text-sm">
+            <CheckCircle2 className="h-4 w-4" /> Paid - ${total.toFixed(2)}
+          </Badge>
+          <p className="mt-2 text-xs text-muted-foreground">This customer cart is locked because payment was collected.</p>
+        </div>
       );
     }
 
     if (status === "approved") {
       return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={cn("gap-1.5 h-8 px-3", cartToneClasses(statusInfo.tone))}>
-            <CheckCircle2 className="h-3.5 w-3.5" /> {statusInfo.label}
-          </Badge>
-          {statusInfo.canCollectNow && (
-            <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleCollectPayment} disabled={!publicLink}>
-              <CreditCard className="h-3.5 w-3.5" /> Collect Payment
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <Badge className={cn("gap-1.5 h-9 px-3 text-sm border", cartToneClasses(statusInfo.tone))}>
+              <CheckCircle2 className="h-4 w-4" /> {statusInfo.label}
+            </Badge>
+            <p className="flex-1 text-xs text-muted-foreground leading-snug">{statusInfo.detail}</p>
+          </div>
+          {statusInfo.canSendPaymentLink && renderSendGuard("Payment link")}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {statusInfo.canCollectNow && (
+              <Button className="h-14 text-sm gap-2" onClick={handleCollectPayment} disabled={!publicLink}>
+                <CreditCard className="h-5 w-5" /> Collect Payment
+              </Button>
+            )}
+            {statusInfo.canSendPaymentLink && (
+              <Button
+                variant="outline"
+                className="h-14 text-sm gap-2"
+                onClick={handleSend}
+                disabled={sendDisabled}
+              >
+                <Send className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Send Payment Link"}
+              </Button>
+            )}
+            <Button variant="outline" className="h-14 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+              <Presentation className="h-5 w-5" /> Present
             </Button>
-          )}
-          {statusInfo.canSendPaymentLink && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs gap-1.5"
-              onClick={handleSend}
-              disabled={sendToCustomer.isPending || !customerPhone}
-            >
-              <Send className="h-3.5 w-3.5" /> Send Payment Link
-            </Button>
-          )}
-          <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
-            <Presentation className="h-3.5 w-3.5" /> Present
-          </Button>
+          </div>
         </div>
       );
     }
 
     if (status === "declined") {
       return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="destructive" className="gap-1.5 h-8 px-3">
-            <X className="h-3.5 w-3.5" /> Declined
+        <div className="space-y-3">
+          <Badge variant="destructive" className="gap-1.5 h-9 px-3 text-sm">
+            <X className="h-4 w-4" /> Declined
           </Badge>
-          <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleSend} disabled={sendToCustomer.isPending}>
-            <RefreshCw className="h-3.5 w-3.5" /> Revise & Resend
+          <p className="text-xs text-muted-foreground">Revise the customer options, then resend when the customer is ready.</p>
+          {renderSendGuard("Revised estimate")}
+          <Button className="h-14 w-full text-sm gap-2" onClick={handleSend} disabled={sendDisabled}>
+            <RefreshCw className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Revise & Resend"}
           </Button>
         </div>
       );
@@ -150,40 +187,55 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
         ? `Viewed ${formatDistanceToNow(new Date(lastViewedAt || firstViewedAt))} ago`
         : "Sent - waiting";
       return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary" className="gap-1.5 h-8 px-3 text-xs">
-            <Check className="h-3.5 w-3.5" /> {pillText}
-          </Badge>
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <Badge variant="secondary" className="gap-1.5 h-9 px-3 text-sm">
+              {viewed ? <Eye className="h-4 w-4" /> : <Check className="h-4 w-4" />} {pillText}
+            </Badge>
+            <p className="flex-1 text-xs text-muted-foreground leading-snug">
+              {viewed ? "Customer has opened the link. Present it in person or resend if they cannot find it." : "Customer has the link. Waiting for them to open and choose an option."}
+            </p>
+          </div>
+          {renderSendGuard("Estimate link")}
+          <div className="grid grid-cols-2 gap-2">
           <Button
-            size="sm"
             variant="outline"
-            className="h-8 text-xs gap-1.5"
+            className="h-14 text-sm gap-2"
             onClick={handleSend}
-            disabled={sendToCustomer.isPending || !customerPhone}
+            disabled={sendDisabled}
           >
-            <RefreshCw className="h-3.5 w-3.5" /> Resend
+            <RefreshCw className="h-5 w-5" /> {sendToCustomer.isPending ? "Sending..." : "Resend"}
           </Button>
-          <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
-            <Presentation className="h-3.5 w-3.5" /> Present
+          <Button className="h-14 text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+            <Presentation className="h-5 w-5" /> Present
           </Button>
+          </div>
         </div>
       );
     }
 
     // draft (with items)
     return (
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="space-y-3">
+        <div className="flex items-start gap-2">
+          <Badge className={cn("gap-1.5 h-9 px-3 text-sm border", cartToneClasses(statusInfo.tone))}>
+            <ShoppingCart className="h-4 w-4" /> Ready to send
+          </Badge>
+          <p className="flex-1 text-xs text-muted-foreground leading-snug">
+            Customer will receive a private link to review, approve, pay now, choose financing, or approve scope only.
+          </p>
+        </div>
+        {renderSendGuard("Estimate link")}
         <Button
-          size="sm"
-          className="h-11 text-sm gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+          className="h-16 w-full text-base gap-2 bg-amber-500 hover:bg-amber-600 text-white"
           onClick={handleSend}
-          disabled={sendToCustomer.isPending || !customerPhone}
+          disabled={sendDisabled}
         >
-          <Send className="h-3.5 w-3.5" />
+          <Send className="h-5 w-5" />
           {sendToCustomer.isPending ? "Sending..." : "Send Cart for Approval"}
         </Button>
-        <Button size="sm" variant="outline" className="h-9 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
-          <Presentation className="h-3.5 w-3.5" /> Present
+        <Button variant="outline" className="h-12 w-full text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
+          <Presentation className="h-4 w-4" /> Present on this phone first
         </Button>
       </div>
     );
@@ -243,34 +295,40 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
 
       {/* Items */}
       {items.length > 0 ? (
-        <ul className="divide-y divide-border">
-          {items.map((item) => {
-            const Icon = KIND_ICON[item.kind] || Package;
-            return (
-              <li key={item.id} className="flex items-center gap-3 px-4 py-2.5">
-                <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    qty {item.quantity} - ${Number(item.unit_price).toFixed(2)}
+        <div>
+          <div className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer will see</p>
+            <p className="text-xs font-bold">${total.toFixed(2)}</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {items.map((item) => {
+              const Icon = KIND_ICON[item.kind] || Package;
+              return (
+                <li key={item.id} className="flex items-center gap-3 px-4 py-3">
+                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      qty {item.quantity} - ${Number(item.unit_price).toFixed(2)}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground tabular-nums">
+                    ${Number(item.total_price).toFixed(2)}
                   </p>
-                </div>
-                <p className="text-sm font-semibold text-foreground tabular-nums">
-                  ${Number(item.total_price).toFixed(2)}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => removeItem.mutate(item.id)}
-                  className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground active:bg-muted"
-                  aria-label="Remove"
-                  disabled={status === "approved" || status === "paid"}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                  <button
+                    type="button"
+                    onClick={() => removeItem.mutate(item.id)}
+                    className="h-9 w-9 rounded-md flex items-center justify-center text-muted-foreground active:bg-muted"
+                    aria-label="Remove"
+                    disabled={status === "approved" || status === "paid"}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : (
         <div className="px-4 py-6 text-center">
           <p className="text-xs text-muted-foreground">No items yet. Add from pricebook or create custom.</p>
