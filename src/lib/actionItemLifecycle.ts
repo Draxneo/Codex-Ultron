@@ -32,17 +32,15 @@ export async function resolveActionItem({
   jobId,
   activityDetails,
 }: ResolveActionItemInput) {
-  const resolvedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("action_items" as any)
-    .update({
-      status,
-      resolved_at: resolvedAt,
-      resolved_by: userId || null,
-    })
-    .eq("id", id);
+  const { data, error } = await supabase.rpc("resolve_action_item_once" as any, {
+    p_id: id,
+    p_status: status,
+  });
 
   if (error) throw error;
+  if (data && !(data as any).ok) {
+    throw new Error((data as any).reason || "That card is already handled.");
+  }
 
   if (title || activityDetails) {
     await supabase.from("activity_log").insert({

@@ -4,7 +4,7 @@
  * Includes inline tech proposal review panel and unmatched invoice review queue.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAttentionData } from "@/hooks/useAttentionData";
 import { supabase } from "@/integrations/supabase/client";
 import { BotMessageSquare, Sparkles, Loader2, Check, RotateCcw, ChevronLeft, FileQuestion, X, AlertTriangle, Bot, MessageSquareText, ArrowRight } from "lucide-react";
@@ -18,6 +18,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { ActionItemCards } from "./ActionItemCards";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 import { ReminderBatchCard } from "./ReminderBatchCard";
 import { PendingSmsCard } from "./PendingSmsCard";
@@ -122,9 +123,9 @@ function TechProposalReviewPanel({ onBack }: { onBack: () => void }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    (async () => {
+  const loadProposals = useCallback(async () => {
       const { data } = await supabase
         .from("estimate_reviews")
         .select("*, employees(name), jobs(customer_name, address)")
@@ -140,20 +141,43 @@ function TechProposalReviewPanel({ onBack }: { onBack: () => void }) {
       }));
       setProposals(enriched);
       setLoading(false);
-    })();
+  }, [loadProposals]);
+
+  useEffect(() => {
+    loadProposals();
+  }, [loadProposals]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("tech-proposal-review-sync")
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "estimate_reviews" },
+        () => loadProposals()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleAction = async (proposal: TechProposal, status: "approved" | "revision_requested") => {
     setActionId(proposal.id);
     try {
-      await supabase
+      const { data, error } = await supabase
         .from("estimate_reviews")
         .update({
           status,
           admin_notes: notes[proposal.id] || null,
           reviewed_at: new Date().toISOString(),
+          reviewed_by: user?.id || null,
         })
-        .eq("id", proposal.id);
+        .eq("id", proposal.id)
+        .eq("status", "pending_review")
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("This proposal was already handled by someone else.");
 
       await supabase.from("activity_log").insert({
         action: status === "approved" ? "estimate_approved" : "estimate_revision_requested",
@@ -277,6 +301,14 @@ function UnmatchedInvoiceReviewPanel({ onBack }: { onBack: () => void }) {
   const [actionId, setActionId] = useState<string | null>(null);
   const [selectedJobs, setSelectedJobs] = useState<Record<string, string>>({});
 
+  useRealtimeInvalidation(
+    [
+      { table: "job_invoices", queryKeys: [["unmatched_invoices"], ["hud_attention_counts"], ["job_invoices"]] },
+      { table: "jobs", queryKeys: [["todays_open_jobs"]] },
+    ],
+    "unmatched-invoice-review-sync"
+  );
+
   const { data: pendingInvoices, isLoading } = useQuery({
     queryKey: ["unmatched_invoices"],
     queryFn: async () => {
@@ -313,13 +345,19 @@ function UnmatchedInvoiceReviewPanel({ onBack }: { onBack: () => void }) {
     }
     setActionId(invoiceId);
     try {
-      await supabase.from("job_invoices").update({
+      const { data, error } = await supabase.from("job_invoices").update({
         job_id: jobId,
         match_status: "confirmed",
         match_confidence: "manual",
         reviewed_by: user?.id || null,
         reviewed_at: new Date().toISOString(),
-      } as any).eq("id", invoiceId);
+      } as any)
+        .eq("id", invoiceId)
+        .eq("match_status", "pending_review")
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("This invoice was already handled by someone else.");
       toast({ title: "Invoice attached to job" });
       qc.invalidateQueries({ queryKey: ["unmatched_invoices"] });
       qc.invalidateQueries({ queryKey: ["job_invoices"] });
@@ -332,11 +370,17 @@ function UnmatchedInvoiceReviewPanel({ onBack }: { onBack: () => void }) {
   const handleDismiss = async (invoiceId: string) => {
     setActionId(invoiceId);
     try {
-      await supabase.from("job_invoices").update({
+      const { data, error } = await supabase.from("job_invoices").update({
         match_status: "rejected",
         reviewed_by: user?.id || null,
         reviewed_at: new Date().toISOString(),
-      } as any).eq("id", invoiceId);
+      } as any)
+        .eq("id", invoiceId)
+        .eq("match_status", "pending_review")
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("This invoice was already handled by someone else.");
       toast({ title: "Invoice dismissed" });
       qc.invalidateQueries({ queryKey: ["unmatched_invoices"] });
       

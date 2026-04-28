@@ -313,6 +313,8 @@ export function useAttentionData() {
       { table: "sms_log", queryKeys: [["hud_attention_counts"]] },
       { table: "jobs", queryKeys: [["hud_attention_counts"]] },
       { table: "action_items", queryKeys: [["hud_attention_counts"]] },
+      { table: "estimate_reviews", queryKeys: [["hud_attention_counts"]] },
+      { table: "job_invoices", queryKeys: [["hud_attention_counts"], ["unmatched_invoices"]] },
     ],
     "hud-realtime-sync"
   );

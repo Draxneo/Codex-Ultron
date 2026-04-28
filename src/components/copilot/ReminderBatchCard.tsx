@@ -8,7 +8,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   ACTION_ITEM_STATUS,
   invalidateActionItemQueues,
+  resolveActionItem,
 } from "@/lib/actionItemLifecycle";
+import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
 
 interface ReminderPreview {
   jobId: string;
@@ -23,6 +25,7 @@ export function ReminderBatchCard() {
   const [sending, setSending] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const sharedTasks = useSharedActionItemTasks("reminder-batch-shared-action-item-tasks");
 
   // One-time stale cleanup: mark any pending reminder_batch items older than today as dismissed
   useEffect(() => {
@@ -69,17 +72,20 @@ export function ReminderBatchCard() {
   const handleSendAll = async () => {
     setSending(true);
     try {
+      const claimed = await sharedTasks.claimActionItem({ id: actionItem.id });
+      if (!claimed.ok) throw new Error(claimed.reason || "This reminder batch is already being handled.");
+
       const jobIds = previews.map((p) => p.jobId);
       const { error } = await supabase.functions.invoke("send-job-reminders", {
         body: { batch_job_ids: jobIds },
       });
       if (error) throw error;
 
-      // Mark the action item as accepted
-      await supabase.from("action_items").update({
+      await resolveActionItem({
+        id: actionItem.id,
         status: ACTION_ITEM_STATUS.accepted,
-        resolved_at: new Date().toISOString(),
-      }).eq("id", actionItem.id);
+        title: "Appointment reminder batch",
+      });
 
       toast({ title: "Reminders Sent", description: `${previews.length} appointment reminders sent.` });
       qc.invalidateQueries({ queryKey: ["reminder_batch_card"] });
@@ -93,10 +99,11 @@ export function ReminderBatchCard() {
   const handleDismiss = async () => {
     setDismissing(true);
     try {
-      await supabase.from("action_items").update({
+      await resolveActionItem({
+        id: actionItem.id,
         status: ACTION_ITEM_STATUS.dismissed,
-        resolved_at: new Date().toISOString(),
-      }).eq("id", actionItem.id);
+        title: "Appointment reminder batch",
+      });
       qc.invalidateQueries({ queryKey: ["reminder_batch_card"] });
       invalidateActionItemQueues(qc);
     } catch (e: any) {

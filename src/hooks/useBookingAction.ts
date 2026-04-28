@@ -13,7 +13,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { invalidateActionItemQueues } from "@/lib/actionItemLifecycle";
+import {
+  ACTION_ITEM_STATUS,
+  invalidateActionItemQueues,
+  resolveActionItem,
+} from "@/lib/actionItemLifecycle";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -145,6 +149,14 @@ export function useBookingAction() {
         };
 
         setState(action_item_id, { phase: "syncing", result });
+
+        await resolveActionItem({
+          id: action_item_id,
+          status: ACTION_ITEM_STATUS.accepted,
+          userId: user?.id,
+          title: `Booked ${result.type || "job"} ${result.job_number || result.job_id || ""}`.trim(),
+          jobId: result.job_id,
+        });
 
         const refNum = result.job_number || result.job_id;
         toast.success(

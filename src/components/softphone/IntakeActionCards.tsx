@@ -16,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { NewCustomerDialog } from "@/components/NewCustomerDialog";
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { useBookingAction } from "@/hooks/useBookingAction";
+import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 import {
   ACTION_ITEM_STATUS,
   invalidateActionItemQueues,
@@ -58,6 +60,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
   const { book, getState, reset } = useBookingAction();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const sharedTasks = useSharedActionItemTasks("intake-shared-action-item-tasks");
 
   // Normalize phone for matching
   const normalizedPhone = phoneNumber?.replace(/\D/g, "").slice(-10) || "";
@@ -92,14 +95,26 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
       .channel("intake-booking-intents")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "action_items" },
+        { event: "*", schema: "public", table: "action_items" },
         (payload: any) => {
+          if (payload.eventType === "DELETE") {
+            const id = payload.old?.id;
+            if (id) setIntents((prev) => prev.filter((a) => a.id !== id));
+            return;
+          }
+
           const row = payload.new;
+          if (row?.status !== ACTION_ITEM_STATUS.pending) {
+            setIntents((prev) => prev.filter((a) => a.id !== row?.id));
+            return;
+          }
           if (row?.status !== ACTION_ITEM_STATUS.pending || !BOOKING_CATEGORIES.includes(row.category)) return;
           const rowDigits = (row.customer_phone || "").replace(/\D/g, "").slice(-10);
           if (normalizedPhone && rowDigits === normalizedPhone) {
             setIntents((prev) => {
-              if (prev.some((a) => a.id === row.id)) return prev;
+              if (prev.some((a) => a.id === row.id)) {
+                return prev.map((a) => (a.id === row.id ? mapRow(row) : a));
+              }
               return [mapRow(row), ...prev].slice(0, 5);
             });
           }
@@ -123,6 +138,12 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
   });
 
   const handleBookIt = async (intent: BookingIntent) => {
+    const claimed = await sharedTasks.claimActionItem(intent);
+    if (!claimed.ok) {
+      toast.error(claimed.reason || "This card is already being handled.");
+      return;
+    }
+
     const result = await book({
       action_item_id: intent.id,
       metadata: {
@@ -151,6 +172,12 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
   };
 
   const handleDismiss = async (intent: BookingIntent) => {
+    const claimed = await sharedTasks.claimActionItem(intent);
+    if (!claimed.ok) {
+      toast.error(claimed.reason || "This card is already being handled.");
+      return;
+    }
+
     await resolveActionItem({
       id: intent.id,
       status: ACTION_ITEM_STATUS.dismissed,
@@ -185,6 +212,8 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
             const isFailed = phase === "failed";
             const propertyOptions = Array.isArray(m.property_options) ? m.property_options : [];
             const selectedProperty = propertySelections[intent.id];
+            const claimState = sharedTasks.getClaimState(intent);
+            const isClaimedByOther = claimState.isClaimedByOther;
             const needsPropertySelection =
               !!m.requires_property_selection && propertyOptions.length > 0 && !selectedProperty;
 
@@ -207,7 +236,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                     onClick={() => handleDismiss(intent)}
                     className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     aria-label="Dismiss"
-                    disabled={isWorking}
+                    disabled={isWorking || isClaimedByOther}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -269,7 +298,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                             variant={active ? "default" : "outline"}
                             className="h-auto justify-start gap-1.5 whitespace-normal py-1.5 text-left text-[10px]"
                             onClick={() => setPropertySelections((prev) => ({ ...prev, [intent.id]: property }))}
-                            disabled={isWorking || isDone}
+                            disabled={isWorking || isDone || isClaimedByOther}
                           >
                             <MapPin className="h-3 w-3 shrink-0" />
                             <span className="min-w-0">
@@ -287,7 +316,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId }: Intak
                   size="sm"
                   className="w-full gap-1.5 h-8 text-xs bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))]"
                   onClick={() => handleBookIt(intent)}
-                  disabled={isWorking || isDone || needsPropertySelection}
+                  disabled={isWorking || isDone || isClaimedByOther || needsPropertySelection}
                 >
                   {isWorking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}

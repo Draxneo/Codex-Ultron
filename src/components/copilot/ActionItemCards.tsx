@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useBookingAction } from "@/hooks/useBookingAction";
+import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
 import { format } from "date-fns";
 import {
   ChevronLeft, Loader2, Check, X, MapPin, UserCheck,
@@ -58,6 +59,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const softphone = useSoftphoneContext();
   const { book, getState } = useBookingAction();
+  const sharedTasks = useSharedActionItemTasks();
   const [actionId, setActionId] = useState<string | null>(null);
   const [trainPhone, setTrainPhone] = useState<{ phone: string; name?: string } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -86,6 +88,11 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
     const draft = (replyDrafts[item.id] ?? (item.metadata as any)?.suggested_reply ?? "").trim();
     if (!phone || !draft) {
       toast({ title: "Nothing to send", description: "Reply is empty — tap 'Draft with AI' or type one.", variant: "destructive" });
+      return;
+    }
+    const claimed = await sharedTasks.claimActionItem(item);
+    if (!claimed.ok) {
+      toast({ title: "Card already in use", description: claimed.reason || "Try refreshing the queue.", variant: "destructive" });
       return;
     }
     setSendingId(item.id);
@@ -142,6 +149,10 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         if ((metadata as any).requires_property_selection && !(metadata as any).address_id) {
           throw new Error("Choose the service property before booking.");
         }
+        const claimed = await sharedTasks.claimActionItem(item);
+        if (!claimed.ok) {
+          throw new Error(claimed.reason || "This card is already being handled.");
+        }
         const result = await book({
           action_item_id: item.id,
           metadata,
@@ -184,6 +195,10 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
               .eq("id", item.id);
             if (updateErr) throw updateErr;
           }
+        }
+        const claimed = await sharedTasks.claimActionItem(item);
+        if (!claimed.ok) {
+          throw new Error(claimed.reason || "This card is already being handled.");
         }
         const { data, error } = await supabase.functions.invoke("ai-task-agent", {
           body: {
@@ -269,6 +284,8 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
             itemMetadata.requires_property_selection &&
             propertyOptions.length > 0;
           const selectedProperty = propertySelections[item.id];
+          const claimState = sharedTasks.getClaimState(item);
+          const isClaimedByOther = claimState.isClaimedByOther;
 
           return (
             <div key={item.id} className={`rounded-lg border p-3 space-y-2 ${priorityClass}`}>
@@ -283,6 +300,11 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {isClaimedByOther && (
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">
+                      {claimState.label}
+                    </Badge>
+                  )}
                   <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
                   <span className="text-[10px] text-muted-foreground">
                     {format(new Date(item.created_at), "h:mm a")}
@@ -328,7 +350,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                           variant={active ? "default" : "outline"}
                           className="h-auto justify-start gap-2 whitespace-normal py-2 text-left"
                           onClick={() => setPropertySelections((prev) => ({ ...prev, [item.id]: property }))}
-                          disabled={actionId === item.id}
+                          disabled={actionId === item.id || isClaimedByOther}
                         >
                           <MapPin className="h-3 w-3 shrink-0" />
                           <span className="min-w-0">
@@ -351,7 +373,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                     value={editableApprovalText}
                     onChange={(e) => setReplyDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
                     className="min-h-[70px] text-xs bg-background"
-                    disabled={actionId === item.id}
+                    disabled={actionId === item.id || isClaimedByOther}
                   />
                 </div>
               )}
@@ -373,7 +395,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         variant="ghost"
                         className="h-6 px-2 text-[10px] gap-1"
                         onClick={() => handleDraftReply(item)}
-                        disabled={isDrafting || isSending}
+                        disabled={isDrafting || isSending || isClaimedByOther}
                       >
                         {isDrafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                         {hasDraft ? "Re-draft with AI" : "Draft with AI"}
@@ -384,13 +406,13 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                       onChange={(e) => setReplyDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
                       placeholder="Tap 'Draft with AI' to generate a reply, or type your own…"
                       className="min-h-[60px] text-xs bg-background"
-                      disabled={isSending || isDrafting}
+                      disabled={isSending || isDrafting || isClaimedByOther}
                     />
                     <Button
                       size="sm"
                       className="w-full"
                       onClick={() => handleSendReply(item)}
-                      disabled={isSending || isDrafting || actionId === item.id || !hasDraft}
+                      disabled={isSending || isDrafting || actionId === item.id || isClaimedByOther || !hasDraft}
                     >
                       {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                       Send Reply to Customer
@@ -437,7 +459,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 const bs = getState(item.id);
                 const isWorking = bs.phase === "resolving" || bs.phase === "booking" || bs.phase === "syncing";
                 const isBookingItem = item.category === "new_appointment";
-                const isBusy = actionId === item.id || isWorking;
+                const isBusy = actionId === item.id || isWorking || isClaimedByOther;
                 const phone = getActionItemPhone(item);
                 const closeAsAccepted = () => handleAction(item, ACTION_ITEM_STATUS.accepted);
                 const closeAsDismissed = () => handleAction(item, ACTION_ITEM_STATUS.dismissed);
@@ -457,7 +479,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         size="sm"
                         className="flex-1"
                         onClick={callPhone}
-                        disabled={actionId === item.id}
+                        disabled={isBusy || !phone}
                       >
                         <Phone className="h-3 w-3" /> Call Back
                       </Button>
@@ -466,7 +488,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         variant="secondary"
                         className="flex-1"
                         onClick={textPhone}
-                        disabled={actionId === item.id}
+                        disabled={isBusy || !phone}
                       >
                         <MessageSquare className="h-3 w-3" /> Text
                       </Button>
@@ -476,7 +498,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                           variant="outline"
                           title="Train JARVIS who this is"
                           onClick={() => setTrainPhone({ phone: trainablePhone, name: (item.metadata as any)?.customer_name })}
-                          disabled={actionId === item.id}
+                          disabled={isBusy}
                         >
                           <Brain className="h-3 w-3" />
                         </Button>
@@ -485,7 +507,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         size="sm"
                         variant="outline"
                         onClick={closeAsDismissed}
-                        disabled={actionId === item.id}
+                        disabled={isBusy}
                       >
                         <X className="h-3 w-3" />
                       </Button>

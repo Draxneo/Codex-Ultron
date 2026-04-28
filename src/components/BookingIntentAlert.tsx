@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { useBookingAction } from "@/hooks/useBookingAction";
+import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
+import { toast } from "sonner";
 import {
   ACTION_ITEM_STATUS,
   invalidateActionItemQueues,
@@ -63,9 +65,14 @@ export function BookingIntentAlert() {
   const qc = useQueryClient();
   const { open: copilotOpen } = useCopilotPanel();
   const { book, getState, reset } = useBookingAction();
+  const sharedTasks = useSharedActionItemTasks("booking-alert-shared-action-item-tasks");
   const copilotOpenRef = useRef(copilotOpen);
   const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
   copilotOpenRef.current = copilotOpen;
+
+  const dismiss = useCallback((id: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
   // Subscribe to new booking-intent action_items
   useEffect(() => {
@@ -74,12 +81,23 @@ export function BookingIntentAlert() {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "action_items",
         },
         async (payload: any) => {
+          if (payload.eventType === "DELETE") {
+            const id = payload.old?.id;
+            if (id) dismiss(id);
+            return;
+          }
+
           const row = payload.new;
+          if (row?.status !== ACTION_ITEM_STATUS.pending) {
+            if (row?.id) dismiss(row.id);
+            return;
+          }
+
           if (row?.status === ACTION_ITEM_STATUS.pending && BOOKING_CATEGORIES.includes(row.category)) {
             const isSmsSource = row.source === "sms";
             if (isSmsSource && copilotOpenRef.current) {
@@ -118,7 +136,19 @@ export function BookingIntentAlert() {
             }
 
             setAlerts((prev) => {
-              if (prev.some((a) => a.id === row.id)) return prev;
+              if (prev.some((a) => a.id === row.id)) {
+                return prev.map((a) => (a.id === row.id ? {
+                  id: row.id,
+                  title: row.title,
+                  description: row.description,
+                  category: row.category,
+                  source: row.source || "jarvis",
+                  priority: row.priority || "normal",
+                  customer_phone: row.customer_phone,
+                  metadata: row.metadata,
+                  created_at: row.created_at,
+                } : a));
+              }
               return [
                 {
                   id: row.id,
@@ -142,14 +172,16 @@ export function BookingIntentAlert() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  const dismiss = useCallback((id: string) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+  }, [dismiss]);
 
   const handleBookIt = useCallback(
     async (alert: BookingAlert) => {
+      const claimed = await sharedTasks.claimActionItem(alert);
+      if (!claimed.ok) {
+        toast.error(claimed.reason || "This card is already being handled.");
+        return;
+      }
+
       const result = await book({
         action_item_id: alert.id,
         metadata: {
@@ -177,11 +209,17 @@ export function BookingIntentAlert() {
         }, 2500);
       }
     },
-    [book, dismiss, propertySelections, reset]
+    [book, dismiss, propertySelections, reset, sharedTasks]
   );
 
   const handleDismiss = useCallback(
     async (alert: BookingAlert) => {
+      const claimed = await sharedTasks.claimActionItem(alert);
+      if (!claimed.ok) {
+        toast.error(claimed.reason || "This card is already being handled.");
+        return;
+      }
+
       await resolveActionItem({
         id: alert.id,
         status: ACTION_ITEM_STATUS.dismissed,
@@ -198,7 +236,7 @@ export function BookingIntentAlert() {
       });
       reset(alert.id);
     },
-    [user, qc, dismiss, reset]
+    [user, qc, dismiss, reset, sharedTasks]
   );
 
   if (alerts.length === 0) return null;
@@ -216,6 +254,8 @@ export function BookingIntentAlert() {
         const phone = m.customer_phone || m.phone || alert.customer_phone;
         const propertyOptions = Array.isArray(m.property_options) ? m.property_options : [];
         const selectedProperty = propertySelections[alert.id];
+        const claimState = sharedTasks.getClaimState(alert);
+        const isClaimedByOther = claimState.isClaimedByOther;
         const needsPropertySelection =
           !!m.requires_property_selection && propertyOptions.length > 0 && !selectedProperty;
 
@@ -243,6 +283,7 @@ export function BookingIntentAlert() {
               <button
                 onClick={() => handleDismiss(alert)}
                 className="text-muted-foreground/60 hover:text-foreground p-0.5 shrink-0"
+                disabled={isWorking || isClaimedByOther}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -333,7 +374,7 @@ export function BookingIntentAlert() {
                         variant={active ? "default" : "outline"}
                         className="h-auto justify-start gap-2 whitespace-normal py-2 text-left"
                         onClick={() => setPropertySelections((prev) => ({ ...prev, [alert.id]: property }))}
-                        disabled={isWorking || isDone}
+                        disabled={isWorking || isDone || isClaimedByOther}
                       >
                         <MapPin className="h-3 w-3 shrink-0" />
                         <span className="min-w-0">
@@ -352,7 +393,7 @@ export function BookingIntentAlert() {
               size="sm"
               className="w-full gap-2 bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))]"
               onClick={() => handleBookIt(alert)}
-              disabled={isWorking || isDone || needsPropertySelection}
+              disabled={isWorking || isDone || isClaimedByOther || needsPropertySelection}
             >
               {phase === "resolving" && (<><Loader2 className="h-4 w-4 animate-spin" />Resolving customer…</>)}
               {phase === "booking" && (<><Loader2 className="h-4 w-4 animate-spin" />Booking...</>)}
