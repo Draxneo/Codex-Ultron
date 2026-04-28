@@ -112,6 +112,41 @@ export function useUpdateEstimateStatus() {
   });
 }
 
+export function useUpdateEstimate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Record<string, any>;
+    }) => {
+      const { data, error } = await supabase
+        .from("estimates" as any)
+        .update(updates as any)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as unknown as Estimate;
+    },
+    onSuccess: (data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["estimates", vars.id] });
+      queryClient.invalidateQueries({ queryKey: ["attention-data"] });
+      if ((data as any)?.customer_id) {
+        queryClient.invalidateQueries({ queryKey: ["customer-overview", (data as any).customer_id] });
+      }
+      toast.success("Estimate updated");
+    },
+    onError: (err: any) => {
+      toast.error("Error updating estimate", { description: err.message });
+    },
+  });
+}
+
 /** Create a job from a won estimate, carrying over all customer data + context */
 async function createJobFromEstimate(estimateId: string) {
   // Fetch estimate data

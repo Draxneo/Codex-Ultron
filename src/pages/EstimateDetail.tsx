@@ -53,6 +53,7 @@ import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_SHORT_NAME } from "@/lib/companyD
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechCustomerCard } from "@/components/tech/TechCustomerCard";
 import { EstimateCartStatus } from "@/components/EstimateCartStatus";
+import { EstimateEditDialog } from "@/components/estimate/EstimateEditDialog";
 
 interface EstimateReview {
   id: string;
@@ -554,6 +555,7 @@ export default function EstimateDetail() {
         number={estimate.estimate_number}
         status={status}
         hcpUrl={estimate.hcp_id ? `https://pro.housecallpro.com/app/estimates/${estimate.hcp_id}` : null}
+        actions={<EstimateEditDialog estimate={estimate} />}
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-4">
