@@ -26,6 +26,20 @@ const KIND_COLOR: Record<JobCartItem["kind"], string> = {
   custom: "bg-violet-500 text-white",
 };
 
+const TRUST_POINTS = [
+  { title: "All-Inclusive Pricing", body: "Permits, standard materials, labor, startup, and cleanup are included so the price is clear." },
+  { title: "Registered Warranty", body: "We help register the equipment and keep the warranty details with your customer record." },
+  { title: "Rebate Packet Help", body: "We gather the AHRI certificate, model information, photos, permit details, and invoice paperwork." },
+];
+
+const INSTALL_INCLUDED = [
+  "Matched indoor and outdoor equipment",
+  "New disconnect, whip, pad, and sealed connections as needed",
+  "Drain safety, startup testing, and refrigerant verification",
+  "Old equipment removal and jobsite cleanup",
+  "Thermostat setup and homeowner walkthrough",
+];
+
 interface CartView {
   cart: JobCart;
   items: JobCartItem[];
@@ -138,6 +152,9 @@ export default function CustomerCart() {
 
   const { cart, items, job, company, pricing } = data;
   const total = Number(cart.total);
+  const equipmentItems = items.filter((item) => item.kind === "equipment");
+  const primaryEquipment = equipmentItems[0] || null;
+  const primaryMeta = (primaryEquipment?.metadata || {}) as Record<string, any>;
   const hasActionableCart = items.length > 0 && total > 0;
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
@@ -148,7 +165,7 @@ export default function CustomerCart() {
   const canPayCart = hasActionableCart && !isPaid && !isDeclined && (!isApproved || isPayAfterCompletion);
 
   // System-purchase pricing framing — shows the same A/B/C stack the tech showed in person
-  const hasEquipment = items.some((i) => i.kind === "equipment");
+  const hasEquipment = equipmentItems.length > 0;
   const showPaymentStack = total >= 1500;
   const monthly36 = Number((cart as any).financing_monthly_36 ?? pricing?.financing?.monthly_36 ?? calcMonthly36(total) ?? 0);
   const monthly120 = Number((cart as any).financing_monthly_120 ?? pricing?.financing?.monthly_120 ?? calcMonthly120(total) ?? 0);
@@ -237,9 +254,71 @@ export default function CustomerCart() {
               {job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Here's Estimate {cart.estimate_number || ""} from {job?.assigned_to || "your tech"}. Review the options and choose how you'd like to proceed.
+              {primaryEquipment
+                ? `Here is your ${primaryMeta.brand || ""} ${primaryMeta.tonnage ? `${primaryMeta.tonnage}-ton` : ""} comfort proposal from ${job?.assigned_to || "your tech"}.`
+                : `Here's Estimate ${cart.estimate_number || ""} from ${job?.assigned_to || "your tech"}. Review the options and choose how you'd like to proceed.`}
             </p>
           </div>
+        )}
+
+        {primaryEquipment && (
+          <Card className="overflow-hidden border-primary/20 bg-background">
+            {primaryEquipment.image_url && (
+              <div className="h-44 w-full overflow-hidden bg-muted">
+                <img src={primaryEquipment.image_url} alt="" className="h-full w-full object-cover" />
+              </div>
+            )}
+            <div className="p-4 space-y-4">
+              <div className="space-y-2">
+                <Badge className="w-fit bg-primary/10 text-primary border-primary/25" variant="outline">
+                  Your Custom Quote
+                </Badge>
+                <div>
+                  <h2 className="text-2xl font-bold leading-tight">{primaryEquipment.name}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {primaryEquipment.description || "Built around comfort, reliability, efficiency, and peace of mind."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {buildBenefitCards(primaryEquipment).map((benefit) => {
+                  const Icon = benefit.icon;
+                  return (
+                    <div key={benefit.title} className="rounded-lg border bg-muted/20 p-3">
+                      <Icon className="h-4 w-4 text-primary" />
+                      <p className="mt-2 text-sm font-semibold leading-tight">{benefit.title}</p>
+                      <p className="mt-1 text-xs leading-snug text-muted-foreground">{benefit.body}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {buildSpecChips(primaryEquipment).map((spec) => (
+                  <div key={spec.label} className="rounded-md bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{spec.label}</p>
+                    <p className="mt-0.5 text-sm font-bold text-foreground">{spec.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {Number(primaryMeta.early_rebate || primaryMeta.burnout_rebate || 0) > 0 && (
+                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3">
+                  <div className="flex items-start gap-3">
+                    <BadgePercent className="mt-0.5 h-5 w-5 text-emerald-700 dark:text-emerald-400" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Estimated CPS Energy rebate</p>
+                      <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                        This matchup may qualify for up to {formatMoney(Math.max(Number(primaryMeta.early_rebate || 0), Number(primaryMeta.burnout_rebate || 0)))} depending on CPS approval and replacement type.
+                      </p>
+                      {primaryMeta.cps_rebate_tier && <p className="mt-1 text-[11px] font-medium text-emerald-800 dark:text-emerald-300">{primaryMeta.cps_rebate_tier}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
         )}
 
         {canEditCart && (
@@ -350,6 +429,7 @@ export default function CustomerCart() {
               </div>
             ) : items.map((item) => {
               const Icon = KIND_ICON[item.kind];
+              const itemMeta = (item.metadata || {}) as Record<string, any>;
               return (
                 <div key={item.id} className="p-3 flex gap-3 items-center">
                   {item.image_url ? (
@@ -362,7 +442,11 @@ export default function CustomerCart() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm leading-tight">{item.name}</p>
                     {item.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>}
-                    <p className="text-xs text-muted-foreground mt-1">Qty {Number(item.quantity)}</p>
+                    {item.kind === "equipment" && itemMeta.model_summary ? (
+                      <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">Models: {itemMeta.model_summary}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">Qty {Number(item.quantity)}</p>
+                    )}
                   </div>
                   <p className="font-bold text-sm shrink-0">${Number(item.total_price).toFixed(2)}</p>
                 </div>
@@ -423,15 +507,53 @@ export default function CustomerCart() {
 
         {/* Rebate paperwork assistance — only when there's real system equipment */}
         {canEditCart && hasEquipment && (
-          <Card className="p-3 flex items-start gap-3 bg-primary/5 border-primary/20">
-            <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-            <div className="text-xs leading-snug">
-              <p className="font-semibold text-foreground">We handle the rebate paperwork.</p>
-              <p className="text-muted-foreground mt-0.5">
-                Our team gathers and submits all CPS Energy and manufacturer rebate documents on your behalf — no forms for you to chase.
-              </p>
-            </div>
-          </Card>
+          <div className="space-y-4">
+            <Card className="p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-foreground">Your protection</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Manufacturer parts warranty registration support, standard labor coverage, and Comfort Club maintenance guidance are included in the proposal path.</p>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {TRUST_POINTS.map((point) => (
+                  <div key={point.title} className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-sm font-semibold leading-tight">{point.title}</p>
+                    <p className="mt-1 text-xs leading-snug text-muted-foreground">{point.body}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <div className="flex items-start gap-3">
+                <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-foreground">What is included</p>
+                  <p className="mt-1 text-sm text-muted-foreground">All-inclusive install pricing means the important details are handled before the system is turned over to you.</p>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {INSTALL_INCLUDED.map((item) => (
+                  <div key={item} className="flex items-start gap-2 rounded-md bg-muted/20 px-3 py-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    <p className="text-sm leading-snug">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-3 flex items-start gap-3 bg-primary/5 border-primary/20">
+              <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <div className="text-xs leading-snug">
+                <p className="font-semibold text-foreground">We prepare the rebate packet.</p>
+                <p className="text-muted-foreground mt-0.5">
+                  We provide AHRI information, equipment details, installation invoice details, and the supporting documents needed for CPS Energy review. Rebates are subject to CPS approval.
+                </p>
+              </div>
+            </Card>
+          </div>
         )}
 
         {/* CTAs */}
@@ -475,4 +597,60 @@ export default function CustomerCart() {
       </main>
     </div>
   );
+}
+
+function formatMoney(value: number) {
+  return `$${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
+function buildBenefitCards(item: JobCartItem) {
+  const meta = (item.metadata || {}) as Record<string, any>;
+  const salesPositioning = Array.isArray(meta.sales_positioning) ? meta.sales_positioning : [];
+  const featureBenefits = normalizePublicFeatures(meta.features_benefits);
+  const merged = [...salesPositioning, ...featureBenefits.map((feature) => ({ title: "Comfort feature", body: feature.text }))];
+  const fallback = [
+    { title: "Comfort", body: "Built to keep the home cooler, less humid, and more consistent." },
+    { title: "Reliability", body: "Matched equipment with documented AHRI performance." },
+    { title: "Peace of mind", body: "Warranty support, clean installation, and follow-up care." },
+    { title: "Efficiency", body: meta.seer2 ? `${meta.seer2} SEER2 performance helps reduce wasted energy.` : "Modern equipment helps reduce wasted energy." },
+  ];
+  return (merged.length > 0 ? merged : fallback).slice(0, 4).map((benefit, index) => ({
+    title: benefit.title || fallback[index]?.title || "Comfort",
+    body: benefit.body || benefit.text || fallback[index]?.body || "",
+    icon: [Sparkles, ShieldCheck, CheckCircle2, Zap][index] || Sparkles,
+  }));
+}
+
+function normalizePublicFeatures(features: unknown): Array<{ text: string }> {
+  if (!features) return [];
+  if (Array.isArray(features)) {
+    return features
+      .map((feature) => {
+        if (typeof feature === "string") return { text: feature };
+        if (feature && typeof feature === "object" && "text" in feature) return { text: String((feature as any).text) };
+        return null;
+      })
+      .filter((feature): feature is { text: string } => !!feature?.text);
+  }
+  if (typeof features === "string") {
+    return features.split(/\n|;|\|/).map((text) => ({ text: text.trim() })).filter((feature) => feature.text);
+  }
+  return [];
+}
+
+function buildSpecChips(item: JobCartItem) {
+  const meta = (item.metadata || {}) as Record<string, any>;
+  const specs = [
+    { label: "SEER2", value: meta.seer2 },
+    { label: "EER2", value: meta.eer2 },
+    { label: "HSPF2", value: meta.hspf2 },
+    { label: "AFUE", value: meta.afue ? `${meta.afue}%` : null },
+    { label: "AHRI", value: meta.ahri_number },
+    { label: "Install", value: meta.location_label || meta.application },
+  ].filter((spec) => spec.value !== null && spec.value !== undefined && spec.value !== "");
+
+  return specs.length > 0 ? specs.slice(0, 6) : [
+    { label: "System", value: meta.system_type_label || item.kind },
+    { label: "Brand", value: meta.brand || "Matched" },
+  ];
 }

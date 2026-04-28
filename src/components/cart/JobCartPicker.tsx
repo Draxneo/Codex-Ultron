@@ -57,23 +57,49 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
 
   const handleAddEquipment = (m: EquipmentMatchup) => {
     if (!permissions.canEditItems) return;
+    const systemLabel = SYSTEM_TYPE_LABELS[m.system_type || ""] || m.system_type || "System";
+    const locationLabel = systemLocationLabel(m.application);
+    const benefitSummary = buildEquipmentBenefitSummary(m);
     addItem.mutate({
       kind: "equipment",
       source_id: m.id,
-      name: `${m.brand} ${m.tonnage ? `${m.tonnage}T` : ""} ${m.tier || ""} ${SYSTEM_TYPE_LABELS[m.system_type || ""] || m.system_type || "System"}`.replace(/\s+/g, " ").trim(),
-      description: m.condenser_model + (m.furnace_model ? ` + ${m.furnace_model}` : "") + (m.coil_model ? ` + ${m.coil_model}` : ""),
+      name: `${m.brand} ${m.tonnage ? `${m.tonnage}T` : ""} ${m.tier || ""} ${systemLabel}`.replace(/\s+/g, " ").trim(),
+      description: benefitSummary,
+      image_url: m.image_url || null,
       unit_price: m.total_price || 0,
       metadata: {
         ahri_number: m.ahri_number,
         seer2: m.seer2,
+        eer2: m.eer2,
+        hspf2: m.hspf2,
+        cooling_cap: m.cooling_cap,
+        afue: m.afue,
         tonnage: m.tonnage,
         brand: m.brand,
         system_type: m.system_type,
+        system_type_label: systemLabel,
         tier: m.tier,
         application: m.application,
+        location_label: locationLabel,
         condenser_model: m.condenser_model,
         furnace_model: m.furnace_model,
         coil_model: m.coil_model,
+        heat_kit: m.heat_kit,
+        ahri_certificate_path: m.ahri_certificate_path,
+        factory_rebate_price: m.factory_rebate_price,
+        monthly_payment: m.monthly_payment,
+        monthly_payment_120: m.monthly_payment_120,
+        cps_tonnage: m.cps_tonnage,
+        early_rebate: m.early_rebate,
+        burnout_rebate: m.burnout_rebate,
+        cps_rebate_tier: m.cps_rebate_tier,
+        features_benefits: normalizeFeatureBenefits(m.features_benefits),
+        sales_positioning: buildEquipmentSalesPositioning(m),
+        model_summary: [
+          m.condenser_model,
+          m.furnace_model,
+          m.coil_model,
+        ].filter(Boolean).join(" + "),
       },
     });
   };
@@ -579,6 +605,74 @@ function OptionStep({
 
 function unique<T>(values: T[]): T[] {
   return Array.from(new Set(values));
+}
+
+function normalizeFeatureBenefits(features: EquipmentMatchup["features_benefits"]): Array<{ icon?: string; text: string }> {
+  if (!features) return [];
+  if (Array.isArray(features)) {
+    return features
+      .map((feature) => typeof feature === "string" ? { text: feature } : feature)
+      .filter((feature) => feature?.text);
+  }
+  if (typeof features === "string") {
+    try {
+      const parsed = JSON.parse(features);
+      if (Array.isArray(parsed)) return normalizeFeatureBenefits(parsed as any);
+    } catch {
+      return features
+        .split(/\n|;|\|/)
+        .map((text) => ({ text: text.trim() }))
+        .filter((feature) => feature.text);
+    }
+  }
+  return [];
+}
+
+function systemLocationLabel(application: string | null) {
+  if (!application) return "installed for your home";
+  if (application.toLowerCase().includes("horizontal")) return "attic or horizontal installation";
+  if (application.toLowerCase().includes("vertical")) return "closet or vertical installation";
+  if (application.toLowerCase().includes("multi")) return "attic or closet installation";
+  return `${application} installation`;
+}
+
+function buildEquipmentBenefitSummary(m: EquipmentMatchup) {
+  const tier = (m.tier || "").toLowerCase();
+  const type = SYSTEM_TYPE_LABELS[m.system_type || ""] || "comfort system";
+  if (tier.includes("best") || tier.includes("ultimate")) {
+    return `Premium ${type.toLowerCase()} focused on quieter comfort, humidity control, efficiency, and long-term peace of mind.`;
+  }
+  if (tier.includes("better") || tier.includes("performance")) {
+    return `Balanced ${type.toLowerCase()} for stronger comfort, dependable efficiency, and a quieter home.`;
+  }
+  return `Reliable ${type.toLowerCase()} replacement with clean installation, warranty protection, and improved comfort.`;
+}
+
+function buildEquipmentSalesPositioning(m: EquipmentMatchup) {
+  const tier = (m.tier || "").toLowerCase();
+  const base = [
+    { title: "Comfort", body: "Sized and matched to cool evenly and help the home feel less humid." },
+    { title: "Reliability", body: "Matched indoor and outdoor equipment with documented AHRI performance." },
+    { title: "Peace of mind", body: "Includes registration support, install cleanup, and warranty documentation." },
+    { title: "Efficiency", body: m.seer2 ? `${m.seer2} SEER2 efficiency helps reduce wasted energy compared with older equipment.` : "Modern equipment helps reduce wasted energy compared with older systems." },
+  ];
+
+  if (tier.includes("best") || tier.includes("ultimate")) {
+    return [
+      { title: "Quiet confidence", body: "Premium comfort profile for quieter operation and smoother temperature control." },
+      { title: "Humidity control", body: "Built to help the home feel comfortable without overcooling." },
+      ...base.slice(1),
+    ];
+  }
+
+  if (tier.includes("better") || tier.includes("performance")) {
+    return [
+      { title: "Balanced comfort", body: "A strong everyday choice for comfort, efficiency, and reliability." },
+      ...base.slice(1),
+    ];
+  }
+
+  return base;
 }
 
 function preferBestOrientation(matchups: EquipmentMatchup[], acceptedApplications: string[]) {
