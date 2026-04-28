@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 type CustomerFallback = {
   id: string;
@@ -133,6 +134,54 @@ export function useJob(id: string) {
         .maybeSingle();
 
       return mergeLinkedCustomer(data, customer as CustomerFallback | null);
+    },
+  });
+}
+
+export function useUpdateJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+      activityDetails,
+    }: {
+      id: string;
+      updates: Record<string, any>;
+      activityDetails?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("jobs")
+        .update(updates as any)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      if (activityDetails) {
+        await supabase.from("activity_log").insert({
+          job_id: id,
+          action: "job_updated",
+          performed_by: "Office",
+          details: activityDetails,
+        } as any);
+      }
+
+      return data;
+    },
+    onSuccess: (data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", vars.id] });
+      queryClient.invalidateQueries({ queryKey: ["attention-data"] });
+      queryClient.invalidateQueries({ queryKey: ["activity_log"] });
+      if ((data as any)?.customer_id) {
+        queryClient.invalidateQueries({ queryKey: ["customer-overview", (data as any).customer_id] });
+      }
+      toast({ title: "Job updated" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error updating job", description: err.message, variant: "destructive" });
     },
   });
 }

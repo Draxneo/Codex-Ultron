@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, ExternalLink } from "lucide-react";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
 import { HcpStatusBadge } from "@/components/HcpStatusBadge";
+import { cn } from "@/lib/utils";
 
 type WorkEntityType = "job" | "estimate";
 
@@ -13,6 +14,7 @@ interface WorkOrderHeaderProps {
   number?: string | null;
   status?: string | null;
   hcpUrl?: string | null;
+  actions?: React.ReactNode;
 }
 
 export function WorkOrderHeader({
@@ -23,6 +25,7 @@ export function WorkOrderHeader({
   number,
   status,
   hcpUrl,
+  actions,
 }: WorkOrderHeaderProps) {
   const label = entityType === "estimate" ? "Estimate" : "Job";
   const plural = entityType === "estimate" ? "Estimates" : "Jobs";
@@ -53,12 +56,13 @@ export function WorkOrderHeader({
         <h1 className="min-w-0 break-words text-2xl font-bold leading-tight">{label} for {customerName}</h1>
         <JobStatusBadge status={status || "new"} entityType={entityType} />
         {entity?.hcp_status && <HcpStatusBadge status={entity.hcp_status} />}
+        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         {hcpUrl && (
           <a
             href={hcpUrl}
             target="_blank"
             rel="noopener"
-            className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline"
+            className={cn("flex items-center gap-1 text-xs text-primary hover:underline", !actions && "ml-auto")}
           >
             <ExternalLink className="h-3.5 w-3.5" /> HCP source
           </a>

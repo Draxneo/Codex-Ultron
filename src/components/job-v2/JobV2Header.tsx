@@ -1,4 +1,5 @@
 import { WorkOrderHeader } from "@/components/work/WorkOrderHeader";
+import { JobEditDialog } from "./JobEditDialog";
 
 interface Props {
   job: any;
@@ -17,6 +18,7 @@ export function JobV2Header({ job, customerName, customerId }: Props) {
       number={jobNumber}
       status={job?.status || "new"}
       hcpUrl={job?.hcp_id ? `https://pro.housecallpro.com/app/jobs/${job.hcp_id}` : null}
+      actions={<JobEditDialog job={job} />}
     />
   );
 }

@@ -6,15 +6,17 @@ import { ClickToCall } from "@/components/ClickToCall";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
+import { CustomerEditDialog } from "./CustomerEditDialog";
 
 interface Props {
   customerId: string;
   fullName: string;
   outstandingBalance: number;
   primaryPhone?: string | null;
+  customer?: any;
 }
 
-export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, primaryPhone }: Props) {
+export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, primaryPhone, customer }: Props) {
   const { sendQuery } = useCopilotPanel();
   const navigate = useNavigate();
   const telephony = useTelephonyMode();
@@ -44,6 +46,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
           </div>
 
           <div className="flex items-center gap-2">
+            {customer && <CustomerEditDialog customer={customer} />}
             {outstandingBalance > 0 && (
               <Button size="sm" variant="default">
                 Take payment

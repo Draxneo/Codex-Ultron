@@ -168,9 +168,12 @@ export function useUpdateCustomer() {
       if (error) throw error;
       return data as Customer;
     },
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["customers", vars.id] });
       qc.invalidateQueries({ queryKey: ["customer_names"] });
+      qc.invalidateQueries({ queryKey: ["customer-overview", vars.id] });
+      qc.invalidateQueries({ queryKey: ["customer-activity-feed", vars.id] });
       toast({ title: "Customer updated" });
     },
     onError: (err: any) => {

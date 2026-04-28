@@ -66,6 +66,7 @@ export default function CustomerDetail() {
         fullName={fullName}
         outstandingBalance={Number(overview.outstanding_balance || 0)}
         primaryPhone={c.phone || c.mobile_phone}
+        customer={c}
       />
 
       <Tabs value={tab} onValueChange={setTab}>
