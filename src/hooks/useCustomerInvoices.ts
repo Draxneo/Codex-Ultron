@@ -85,6 +85,78 @@ export function useCreateCustomerInvoice() {
   });
 }
 
+export function useUpdateCustomerInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+      jobId,
+      items,
+      taxRate,
+      notes,
+      status,
+    }: {
+      invoiceId: string;
+      jobId: string;
+      items: InvoiceItem[];
+      taxRate: number;
+      notes?: string | null;
+      status: string;
+    }) => {
+      const validItems = items.filter((item) => item.description.trim());
+      const subtotal = validItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+      const taxAmount = subtotal * (taxRate / 100);
+      const total = subtotal + taxAmount;
+      const now = new Date().toISOString();
+
+      const updates: Record<string, any> = {
+        subtotal,
+        tax_rate: taxRate,
+        tax_amount: taxAmount,
+        total,
+        notes: notes || null,
+        status,
+        updated_at: now,
+      };
+      if (status === "paid") updates.paid_at = now;
+      if (status !== "paid") updates.paid_at = null;
+
+      const { error } = await supabase
+        .from("customer_invoices")
+        .update(updates)
+        .eq("id", invoiceId);
+      if (error) throw error;
+
+      const { error: deleteError } = await supabase
+        .from("customer_invoice_items")
+        .delete()
+        .eq("invoice_id", invoiceId);
+      if (deleteError) throw deleteError;
+
+      if (validItems.length > 0) {
+        const { error: itemsError } = await supabase.from("customer_invoice_items").insert(
+          validItems.map((item, idx) => ({
+            invoice_id: invoiceId,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.quantity * item.unit_price,
+            sort_order: idx,
+          })),
+        );
+        if (itemsError) throw itemsError;
+      }
+
+      return { invoiceId, jobId };
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["customer_invoices", vars.jobId] });
+      qc.invalidateQueries({ queryKey: ["jobs", vars.jobId] });
+      qc.invalidateQueries({ queryKey: ["activity_log"] });
+    },
+  });
+}
+
 export function useUpdateInvoiceStatus() {
   const qc = useQueryClient();
   return useMutation({

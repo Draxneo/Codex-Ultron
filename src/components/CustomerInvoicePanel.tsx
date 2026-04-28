@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Plus, Trash2, Send, DollarSign, Check, FileText, CreditCard, Copy, Link } from "lucide-react";
+import { Plus, Trash2, Send, DollarSign, Check, FileText, CreditCard, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCustomerInvoices, useCreateCustomerInvoice, useUpdateInvoiceStatus, type InvoiceItem } from "@/hooks/useCustomerInvoices";
+import { useCustomerInvoices, useCreateCustomerInvoice, useUpdateCustomerInvoice, useUpdateInvoiceStatus, type InvoiceItem } from "@/hooks/useCustomerInvoices";
 import { usePaymentPlanRules, getMaxInstallments } from "@/hooks/usePaymentPlanRules";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -31,14 +31,20 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
   const { data: invoices, isLoading } = useCustomerInvoices(jobId);
   const { data: rules } = usePaymentPlanRules();
   const createInvoice = useCreateCustomerInvoice();
+  const updateInvoice = useUpdateCustomerInvoice();
   const updateStatus = useUpdateInvoiceStatus();
 
   const [creating, setCreating] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([
     { description: "", quantity: 1, unit_price: 0, total: 0, sort_order: 0 },
   ]);
   const [taxRate, setTaxRate] = useState(8.25);
   const [notes, setNotes] = useState("");
+  const [editItems, setEditItems] = useState<InvoiceItem[]>([]);
+  const [editTaxRate, setEditTaxRate] = useState(8.25);
+  const [editNotes, setEditNotes] = useState("");
+  const [editStatus, setEditStatus] = useState("draft");
   const [sending, setSending] = useState<string | null>(null);
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
@@ -52,6 +58,60 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
     (updated[idx] as any)[field] = value;
     updated[idx].total = updated[idx].quantity * updated[idx].unit_price;
     setItems(updated);
+  };
+
+  const editSubtotal = editItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const editTaxAmount = editSubtotal * (editTaxRate / 100);
+  const editTotal = editSubtotal + editTaxAmount;
+
+  const openEditInvoice = (invoice: any) => {
+    setEditingInvoice(invoice);
+    setEditTaxRate(Number(invoice.tax_rate || 0));
+    setEditNotes(invoice.notes || "");
+    setEditStatus(invoice.status || "draft");
+    setEditItems(
+      (invoice.customer_invoice_items || []).map((item: any, index: number) => ({
+        id: item.id,
+        description: item.description || "",
+        quantity: Number(item.quantity || 1),
+        unit_price: Number(item.unit_price || 0),
+        total: Number(item.total || 0),
+        sort_order: item.sort_order ?? index,
+      })),
+    );
+  };
+
+  const addEditItem = () => setEditItems([...editItems, { description: "", quantity: 1, unit_price: 0, total: 0, sort_order: editItems.length }]);
+  const removeEditItem = (idx: number) => setEditItems(editItems.filter((_, i) => i !== idx));
+  const updateEditItem = (idx: number, field: string, value: any) => {
+    const updated = [...editItems];
+    (updated[idx] as any)[field] = value;
+    updated[idx].total = updated[idx].quantity * updated[idx].unit_price;
+    setEditItems(updated);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingInvoice) return;
+    const validItems = editItems.filter((i) => i.description.trim());
+    if (validItems.length === 0) {
+      toast({ title: "Add at least one line item", variant: "destructive" });
+      return;
+    }
+    await updateInvoice.mutateAsync({
+      invoiceId: editingInvoice.id,
+      jobId,
+      items: validItems,
+      taxRate: editTaxRate,
+      notes: editNotes,
+      status: editStatus,
+    });
+    await supabase.from("activity_log").insert({
+      job_id: jobId,
+      action: "invoice_updated",
+      details: `Invoice ${editingInvoice.invoice_number || editingInvoice.id.slice(0, 8)} edited`,
+    });
+    toast({ title: "Invoice updated" });
+    setEditingInvoice(null);
   };
 
   const handleCreate = async () => {
@@ -267,6 +327,11 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
                 </div>
               </div>
               {inv.notes && <p className="text-xs text-muted-foreground italic">{inv.notes}</p>}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => openEditInvoice(inv)}>
+                  <Pencil className="h-3 w-3 mr-1" /> Edit
+                </Button>
+              </div>
               {inv.status !== "paid" && inv.status !== "void" && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {payOptions.length === 1 ? (
@@ -383,6 +448,108 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
             <Button variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={createInvoice.isPending}>
               {createInvoice.isPending ? "Creating..." : "Create Invoice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Invoice Dialog */}
+      <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label className="text-xs">Status</Label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="void">Void</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Line Items</Label>
+              {editItems.map((item, idx) => (
+                <div key={`${item.id || "new"}-${idx}`} className="flex gap-2 items-start">
+                  <Input
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={(e) => updateEditItem(idx, "description", e.target.value)}
+                    className="flex-1 h-9 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Qty"
+                    value={item.quantity || ""}
+                    onChange={(e) => updateEditItem(idx, "quantity", Number(e.target.value))}
+                    className="w-16 h-9 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Price"
+                    value={item.unit_price || ""}
+                    onChange={(e) => updateEditItem(idx, "unit_price", Number(e.target.value))}
+                    className="w-24 h-9 text-sm"
+                  />
+                  <span className="text-sm font-medium pt-2 w-20 text-right">{fmt(item.quantity * item.unit_price)}</span>
+                  {editItems.length > 1 && (
+                    <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => removeEditItem(idx)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button size="sm" variant="ghost" className="text-xs" onClick={addEditItem}>
+                <Plus className="h-3 w-3 mr-1" /> Add Line
+              </Button>
+            </div>
+
+            <div className="flex gap-4">
+              <div>
+                <Label className="text-xs">Tax Rate (%)</Label>
+                <Input
+                  type="number"
+                  value={editTaxRate}
+                  onChange={(e) => setEditTaxRate(Number(e.target.value))}
+                  className="w-24 h-9 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Notes</Label>
+              <Input
+                placeholder="Optional notes..."
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+
+            <div className="border-t pt-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal</span><span>{fmt(editSubtotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Tax ({editTaxRate}%)</span><span>{fmt(editTaxAmount)}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold">
+                <span>Total</span><span>{fmt(editTotal)}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingInvoice(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={updateInvoice.isPending}>
+              {updateInvoice.isPending ? "Saving..." : "Save Invoice"}
             </Button>
           </DialogFooter>
         </DialogContent>
