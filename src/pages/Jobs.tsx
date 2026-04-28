@@ -18,6 +18,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useSupplyHouseLocations } from "@/hooks/useSupplyHouseLocations";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { getUsHolidayName } from "@/lib/usHolidays";
 import { useTechFormRealtime } from "@/hooks/useTechFormRealtime";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
@@ -803,6 +804,9 @@ const Jobs = () => {
                 >
                   <span className="text-[10px] uppercase">{format(day, "EEE")}</span>
                   <span className="text-sm font-bold">{format(day, "d")}</span>
+                  {calSettings.showHolidays && getUsHolidayName(day) && (
+                    <span className="text-[9px] leading-none max-w-16 truncate">{getUsHolidayName(day)}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -822,6 +826,8 @@ const Jobs = () => {
               routeOrders={dispatchRouteOrders}
               visibleFields={calSettings.visibleFields}
               cardDensity={calSettings.cardDensity}
+              businessHoursOnly={calSettings.businessHoursOnly}
+              showHolidays={calSettings.showHolidays}
             />
           </div>
         )}

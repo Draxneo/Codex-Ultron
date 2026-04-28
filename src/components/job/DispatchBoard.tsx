@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { Clock, Phone, Car } from "lucide-react";
+import { Clock, Phone, Car, MapPin } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { AddressLink } from "@/components/AddressLink";
-import { CustomerCard } from "@/components/CustomerCard";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +13,8 @@ import { useCustomerEnrichment } from "@/hooks/useCustomerEnrichment";
 import { CustomerStatusBadges, getAvatarColor } from "@/components/CustomerStatusBadges";
 import { useTechStatusMap } from "@/hooks/useTechStatusMap";
 import { TechStatusBadge } from "@/components/TechStatusBadge";
+import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
+import { getUsHolidayName } from "@/lib/usHolidays";
 
 interface BoardItem {
   id: string;
@@ -86,12 +87,13 @@ function getRoleColor(role: string | null): { avatar: string; accent: string } {
   };
 }
 
-const START_HOUR = 7;
-const END_HOUR = 19;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
+const DEFAULT_START_HOUR = 6;
+const DEFAULT_END_HOUR = 21;
+const BUSINESS_START_HOUR = 7;
+const BUSINESS_END_HOUR = 19;
 
-function hourToPct(h: number) {
-  return Math.max(0, Math.min(100, ((h - START_HOUR) / TOTAL_HOURS) * 100));
+function hourToPct(h: number, startHour: number, totalHours: number) {
+  return Math.max(0, Math.min(100, ((h - startHour) / totalHours) * 100));
 }
 
 function getStartEnd(item: BoardItem) {
@@ -147,15 +149,15 @@ function layoutSubRows(items: { item: BoardItem; startH: number; endH: number }[
   return { laid: result, totalSubRows: Math.max(subRows.length, 1) };
 }
 
-type CardDensity = "compact" | "comfortable" | "expanded";
-
 interface DispatchBoardProps {
   dayItems: BoardItem[];
   employees: any[] | undefined;
   onItemClick: (item: BoardItem) => void;
   routeOrders: Map<string, { order: number; travelMin: number | null; fromLabel: string | null }>;
-  visibleFields?: { travelTime?: boolean; customerTags?: boolean };
+  visibleFields?: CalendarVisibleFields;
   cardDensity?: CardDensity;
+  businessHoursOnly?: boolean;
+  showHolidays?: boolean;
 }
 
 const DENSITY_CONFIG: Record<CardDensity, { minWidth: number; cardHeight: number; cardHeightRich: number }> = {
@@ -166,11 +168,86 @@ const DENSITY_CONFIG: Record<CardDensity, { minWidth: number; cardHeight: number
 
 const EMPTY_ROW_HEIGHT = 48;
 
-export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, visibleFields, cardDensity = "comfortable" }: DispatchBoardProps) {
+function getDisplayNumber(item: BoardItem) {
+  if (item.item_type === "estimate") return item.estimate_number ? `#${item.estimate_number}` : null;
+  return item.job_number || item.hcp_job_number ? `#${item.job_number || item.hcp_job_number}` : null;
+}
+
+function getDisplayAmount(item: BoardItem) {
+  const amount = item.amount ?? item.total_amount ?? item.total ?? item.invoice_total ?? null;
+  return amount == null ? null : `$${Number(amount).toLocaleString()}`;
+}
+
+function getCustomerShape(item: BoardItem) {
+  const nameParts = (item.customer_name || "Unknown").split(/\s+/);
+  return {
+    first_name: nameParts[0] || null,
+    last_name: nameParts.slice(1).join(" ") || null,
+    phone: item.customer_phone || null,
+    address: item.address || null,
+  };
+}
+
+function DispatchCustomerBlock({
+  item,
+  enrichment,
+  visibleFields,
+  compact = false,
+}: {
+  item: BoardItem;
+  enrichment: any;
+  visibleFields?: CalendarVisibleFields;
+  compact?: boolean;
+}) {
+  const customer = getCustomerShape(item);
+  const initials = `${customer.first_name?.[0] || ""}${customer.last_name?.[0] || ""}`.toUpperCase() || "?";
+  const contactName = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "Unknown";
+  const zip = item.address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || null;
+  const street = (item.address || "").split(",")[0]?.trim() || item.address;
+  const address = visibleFields?.zip && zip ? `${street}, ${zip}` : street;
+
+  return (
+    <div className={cn("space-y-0.5", compact && "space-y-0")}>
+      {visibleFields?.customer !== false && (
+        <div className="flex items-center gap-1.5">
+          <div className={cn("rounded-full flex items-center justify-center font-bold shrink-0 h-6 w-6 text-[9px]", getAvatarColor(visibleFields?.customerTags !== false ? enrichment : undefined))}>
+            {initials}
+          </div>
+          <span className="text-[13px] font-bold text-foreground leading-tight break-words">
+            {contactName}
+          </span>
+        </div>
+      )}
+      {visibleFields?.customerTags !== false && (
+        <CustomerStatusBadges enrichment={enrichment} className={visibleFields?.customer === false ? "" : "ml-7"} />
+      )}
+      {visibleFields?.street !== false && address && (
+        <div className={visibleFields?.customer === false ? "" : "ml-7"}>
+          <AddressLink address={address} className="text-[11px] text-foreground/70 font-medium" iconClassName="h-3 w-3" />
+        </div>
+      )}
+      {visibleFields?.phone && item.customer_phone && (
+        <div className={cn("flex items-center gap-1", visibleFields?.customer === false ? "" : "ml-7")}>
+          <ClickToCall
+            phone={item.customer_phone}
+            contactName={contactName}
+            className="text-[11px] text-foreground/70 font-medium"
+            iconClassName="h-3 w-3"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, visibleFields, cardDensity = "comfortable", businessHoursOnly = false, showHolidays = false }: DispatchBoardProps) {
   const queryClient = useQueryClient();
   const { data: enrichmentMap } = useCustomerEnrichment();
   const techStatusMap = useTechStatusMap();
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+  const startHour = businessHoursOnly ? BUSINESS_START_HOUR : DEFAULT_START_HOUR;
+  const endHour = businessHoursOnly ? BUSINESS_END_HOUR : DEFAULT_END_HOUR;
+  const totalHours = endHour - startHour;
+  const hours = Array.from({ length: totalHours }, (_, i) => startHour + i);
 
   // Group items by tech, compute sub-row layouts
   const techRows = useMemo(() => {
@@ -298,7 +375,7 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
             <div
               key={hour}
               className="absolute top-0 h-full border-l border-white/10 flex items-center"
-              style={{ left: `${hourToPct(hour)}%` }}
+              style={{ left: `${hourToPct(hour, startHour, totalHours)}%` }}
             >
               <span className="text-[10px] text-white/70 pl-1 whitespace-nowrap font-medium">
                 {hour === 0 ? "12am" : hour < 12 ? `${hour}am` : hour === 12 ? "12pm" : `${hour - 12}pm`}
@@ -319,7 +396,11 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
 
         const dc = DENSITY_CONFIG[cardDensity];
         const allItems = [...laid.map(l => l.item), ...untimedItems];
-        const hasRichContent = allItems.some(i => i.address || i.customer_phone);
+        const hasRichContent = allItems.some(i =>
+          (visibleFields?.street !== false && i.address)
+          || (visibleFields?.phone && i.customer_phone)
+          || (visibleFields?.description !== false && i.description)
+        );
         const cardHeight = hasRichContent ? dc.cardHeightRich : dc.cardHeight;
 
         // Row height: empty rows are slim, otherwise scale by sub-rows
@@ -385,7 +466,7 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                 <div
                   key={hour}
                   className="absolute top-0 h-full border-l border-border/20"
-                  style={{ left: `${hourToPct(hour)}%` }}
+                  style={{ left: `${hourToPct(hour, startHour, totalHours)}%` }}
                 />
               ))}
 
@@ -394,14 +475,9 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                 <div className="relative flex flex-wrap gap-1.5 p-1 z-10">
                   {untimedItems.map(item => {
                     const enrichment = item.customer_id ? enrichmentMap?.get(item.customer_id) : undefined;
-                    const nameParts = (item.customer_name || "Unknown").split(/\s+/);
-                    const custObj = {
-                      first_name: nameParts[0] || null,
-                      last_name: nameParts.slice(1).join(" ") || null,
-                      phone: item.customer_phone || null,
-                      address: item.address || null,
-                    };
                     const ro = routeOrders.get(item.id);
+                    const number = getDisplayNumber(item);
+                    const amount = getDisplayAmount(item);
                     return (
                       <div
                         key={item.id}
@@ -421,30 +497,32 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
-                            {ro && (
+                            {ro && visibleFields?.travelTime !== false && (
                               <span className="w-4 h-4 rounded-full bg-foreground/80 text-background text-[9px] font-bold flex items-center justify-center shrink-0">
                                 {ro.order}
                               </span>
                             )}
-                            <span className={cn(
+                            {visibleFields?.customerTags !== false && <span className={cn(
                               "shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
                               cardSolidColors[item.job_type || "service"]
                             )}>
                               {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV"}
-                            </span>
-                            <span className="text-[11px] text-foreground/80 font-semibold truncate">
-                              {item.item_type === "estimate" && item.estimate_number && `#${item.estimate_number}`}
-                              {item.item_type === "job" && (item.job_number || item.hcp_job_number) && `#${item.job_number || item.hcp_job_number}`}
-                            </span>
-                            <Badge variant="outline" className="ml-auto text-[9px] px-1 py-0 border-amber-300 text-amber-600 bg-amber-50">
+                            </span>}
+                            {number && visibleFields?.jobNumber !== false && (
+                              <span className="text-[11px] text-foreground/80 font-semibold truncate">{number}</span>
+                            )}
+                            {amount && visibleFields?.amount && (
+                              <span className="text-[11px] text-foreground/80 font-semibold truncate">{amount}</span>
+                            )}
+                            {visibleFields?.arrivalWindow !== false && <Badge variant="outline" className="ml-auto text-[9px] px-1 py-0 border-amber-300 text-amber-600 bg-amber-50">
                               No Time Set
-                            </Badge>
+                            </Badge>}
                           </div>
                           {cardDensity !== "compact" && (
-                            <CustomerCard variant="dispatch" customer={custObj} enrichment={visibleFields?.customerTags !== false ? enrichment : undefined} />
+                            <DispatchCustomerBlock item={item} enrichment={enrichment} visibleFields={visibleFields} />
                           )}
                           {cardDensity === "compact" && (
-                            <span className="text-[11px] font-medium text-foreground/80 truncate">{item.customer_name || "Unknown"}</span>
+                            <DispatchCustomerBlock item={item} enrichment={enrichment} visibleFields={visibleFields} compact />
                           )}
                           {cardDensity !== "compact" && (
                             <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
@@ -467,10 +545,10 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                               })()}
                             </div>
                           )}
-                          {cardDensity === "expanded" && item.address && (
+                          {cardDensity === "expanded" && item.address && visibleFields?.street !== false && (
                             <div className="text-[10px] text-muted-foreground truncate">📍 {item.address}</div>
                           )}
-                          {cardDensity === "expanded" && item.description && (
+                          {cardDensity === "expanded" && item.description && visibleFields?.description !== false && (
                             <div className="text-[10px] text-muted-foreground truncate">📝 {item.description}</div>
                           )}
                         </div>
@@ -482,11 +560,14 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
 
               {/* Timed job cards */}
               {laid.map(({ item, startH, endH, subRow }) => {
-                const leftPct = hourToPct(startH);
-                const widthPct = ((endH - startH) / TOTAL_HOURS) * 100;
+                const leftPct = hourToPct(startH, startHour, totalHours);
+                const widthPct = ((endH - startH) / totalHours) * 100;
                 const timeRange = formatTimeRange(item);
                 const topOffset = (untimedItems.length > 0 ? 28 : 0) + subRow * cardHeight;
                 const ro = routeOrders.get(item.id);
+                const number = getDisplayNumber(item);
+                const amount = getDisplayAmount(item);
+                const enrichment = item.customer_id ? enrichmentMap?.get(item.customer_id) : undefined;
 
                 return (
                   <div
@@ -514,22 +595,24 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                       )}
                       {/* Row 1: Route order + Type badge + number + time */}
                       <div className="flex items-center gap-1.5">
-                        {ro && (
+                        {ro && visibleFields?.travelTime !== false && (
                           <span className="w-4 h-4 rounded-full bg-foreground/80 text-background text-[9px] font-bold flex items-center justify-center shrink-0">
                             {ro.order}
                           </span>
                         )}
-                        <span className={cn(
+                        {visibleFields?.customerTags !== false && <span className={cn(
                           "shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
                           cardSolidColors[item.job_type || "service"]
                         )}>
                           {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV"}
-                        </span>
-                        <span className="text-[11px] text-foreground/80 font-semibold truncate">
-                          {item.item_type === "estimate" && item.estimate_number && `#${item.estimate_number}`}
-                          {item.item_type === "job" && (item.job_number || item.hcp_job_number) && `#${item.job_number || item.hcp_job_number}`}
-                        </span>
-                        {timeRange && (
+                        </span>}
+                        {number && visibleFields?.jobNumber !== false && (
+                          <span className="text-[11px] text-foreground/80 font-semibold truncate">{number}</span>
+                        )}
+                        {amount && visibleFields?.amount && (
+                          <span className="text-[11px] text-foreground/80 font-semibold truncate">{amount}</span>
+                        )}
+                        {timeRange && visibleFields?.arrivalWindow !== false && (
                           <span className="ml-auto flex items-center gap-0.5 text-[11px] text-foreground/70 font-semibold shrink-0">
                             <Clock className="h-3 w-3" />
                             {timeRange}
@@ -538,31 +621,17 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                       </div>
 
                       {/* Row 2: Customer */}
-                      {cardDensity !== "compact" ? (() => {
-                        const enrichment = item.customer_id ? enrichmentMap?.get(item.customer_id) : undefined;
-                        const nameParts = (item.customer_name || "Unknown").split(/\s+/);
-                        const custObj = {
-                          first_name: nameParts[0] || null,
-                          last_name: nameParts.slice(1).join(" ") || null,
-                          phone: item.customer_phone || null,
-                          address: item.address || null,
-                        };
-                        return (
-                          <CustomerCard
-                            variant="dispatch"
-                            customer={custObj}
-                            enrichment={visibleFields?.customerTags !== false ? enrichment : undefined}
-                          />
-                        );
-                      })() : (
-                        <span className="text-[11px] font-medium text-foreground/80 truncate">{item.customer_name || "Unknown"}</span>
+                      {cardDensity !== "compact" ? (
+                        <DispatchCustomerBlock item={item} enrichment={enrichment} visibleFields={visibleFields} />
+                      ) : (
+                        <DispatchCustomerBlock item={item} enrichment={enrichment} visibleFields={visibleFields} compact />
                       )}
 
                       {/* Row 3: Address + Description (expanded only) */}
-                      {cardDensity === "expanded" && item.address && (
+                      {cardDensity === "expanded" && item.address && visibleFields?.street !== false && (
                         <div className="text-[10px] text-muted-foreground truncate">📍 {item.address}</div>
                       )}
-                      {cardDensity === "expanded" && item.description && (
+                      {cardDensity === "expanded" && item.description && visibleFields?.description !== false && (
                         <div className="text-[10px] text-muted-foreground truncate">📝 {item.description}</div>
                       )}
 
