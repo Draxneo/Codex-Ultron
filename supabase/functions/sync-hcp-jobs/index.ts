@@ -65,6 +65,20 @@ function optionalText(value: unknown) {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 
+function asBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asInteger(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+function startOfCentralDate(dateText: string) {
+  return new Date(`${dateText}T00:00:00-05:00`).toISOString();
+}
+
 async function upsertEstimateCustomers(supabase: SupabaseClientLike, estimates: Array<Record<string, unknown>>) {
   const customerMap = new Map<string, Record<string, unknown>>();
   for (const est of estimates) {
@@ -198,6 +212,7 @@ Deno.serve(async (req) => {
     // Cron trigger: lightweight sync (last 3 hours only, no line items, no attachments)
     // Manual trigger: full 4-week sync with all side effects
     const isCron = body.source === "cron";
+    const isBridge = body.source === "bridge" || body.source === "bridge-cron";
     const now = new Date();
 
     let scheduledUrl: string;
@@ -207,7 +222,29 @@ Deno.serve(async (req) => {
     let syncEstimates: boolean;
     let autoCloseStale: boolean;
 
-    if (isCron) {
+    let bridgeStartIso = "";
+    let bridgeEndIso = "";
+
+    if (isBridge) {
+      const startDate = typeof body.start_date === "string" && body.start_date
+        ? body.start_date
+        : "2026-04-27";
+      const daysAhead = asInteger(body.days_ahead, 90, 1, 365);
+      bridgeStartIso = typeof body.scheduled_start_min === "string" && body.scheduled_start_min
+        ? new Date(body.scheduled_start_min).toISOString()
+        : startOfCentralDate(startDate);
+      bridgeEndIso = typeof body.scheduled_start_max === "string" && body.scheduled_start_max
+        ? new Date(body.scheduled_start_max).toISOString()
+        : new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
+
+      scheduledUrl = `https://api.housecallpro.com/jobs?scheduled_start_min=${bridgeStartIso}&scheduled_start_max=${bridgeEndIso}`;
+      maxJobPages = asInteger(body.max_pages, body.source === "bridge-cron" ? 4 : 10, 1, 25);
+      syncLineItems = asBoolean(body.sync_line_items, false);
+      syncAttachments = asBoolean(body.sync_attachments, false);
+      syncEstimates = asBoolean(body.sync_estimates, true);
+      autoCloseStale = false;
+      console.log(`[HCP_BRIDGE] Scheduled sync from ${bridgeStartIso} to ${bridgeEndIso}; no stale auto-close`);
+    } else if (isCron) {
       // Lightweight: only last 3 hours of changes — but DO sync estimates so they stay fresh
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
       scheduledUrl = `https://api.housecallpro.com/jobs?sort_direction=desc&sort_by=updated_at&page_size=200`;
@@ -234,7 +271,7 @@ Deno.serve(async (req) => {
     const allHcpJobs = await fetchHcpJobs(hcpApiKey, scheduledUrl, maxJobPages);
 
     // 1b. Also pull unscheduled / needs-scheduling jobs (only on full sync)
-    if (!isCron) {
+    if (!isCron && !isBridge) {
       try {
         const unschedUrl = `https://api.housecallpro.com/jobs?work_status[]=needs%20scheduling&work_status[]=scheduled`;
         const unschedJobs = await fetchHcpJobs(hcpApiKey, unschedUrl, 3);
@@ -556,7 +593,21 @@ Deno.serve(async (req) => {
       try {
         const allEstimates: any[] = [];
 
-        if (isCron) {
+        if (isBridge) {
+          const estScheduledUrl = `https://api.housecallpro.com/estimates?sort_direction=desc&page_size=200&scheduled_start_min=${bridgeStartIso}&scheduled_start_max=${bridgeEndIso}`;
+          const maxEstimatePages = asInteger(body.max_estimate_pages, body.source === "bridge-cron" ? 4 : 10, 1, 25);
+          for (let page = 1; page <= maxEstimatePages; page++) {
+            const res = await fetch(`${estScheduledUrl}&page=${page}`, {
+              headers: { "Authorization": `Token ${hcpApiKey}`, "Accept": "application/json" },
+            });
+            if (!res.ok) { console.log("[HCP_BRIDGE] Estimate sync error:", res.status); break; }
+            const data = await res.json();
+            const ests = data.estimates || [];
+            allEstimates.push(...ests);
+            if (ests.length < 200 || page >= (data.total_pages || 1)) break;
+          }
+          console.log(`[HCP_BRIDGE] Pulled ${allEstimates.length} scheduled estimates`);
+        } else if (isCron) {
           // Fast path: just the most recently updated estimates (catches new + edited)
           const recentUrl = `https://api.housecallpro.com/estimates?sort_direction=desc&sort_by=updated_at&page_size=100&page=1`;
           const res = await fetch(recentUrl, {
@@ -755,7 +806,9 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ 
-      mode: isCron ? "cron" : "full",
+      mode: isBridge ? body.source : isCron ? "cron" : "full",
+      window_start: bridgeStartIso || null,
+      window_end: bridgeEndIso || null,
       synced: allHcpJobs.length, 
       new_jobs: toInsert.length,
       updated_jobs: actualUpdates,
