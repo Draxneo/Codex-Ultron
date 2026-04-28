@@ -424,7 +424,7 @@ export default function TechFormPublic() {
 
       setLoading(false);
     });
-  }, [token]);
+  }, [isDemo, token]);
 
   const visibleFields = fields.filter(f => {
     if (!f.condition) return true;
@@ -498,7 +498,7 @@ export default function TechFormPublic() {
       setFieldStatuses(prev => ({ ...prev, [fieldId]: "error" }));
       queueSave(fieldId, val);
     }
-  }, [techFormId, queueSave, fields, job]);
+  }, [techFormId, isDemo, queueSave, fields, job]);
 
   const handleTextChange = (fieldId: string, val: string) => {
     const newValues = { ...values, [fieldId]: val };

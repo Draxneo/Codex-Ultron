@@ -165,7 +165,6 @@ Deno.serve(async (req) => {
     // Use waitUntil to run in background so the function doesn't time out
     const resultPromise = processSync();
 
-    // @ts-ignore - EdgeRuntime.waitUntil available in Supabase Edge Functions
     if (typeof (globalThis as any).EdgeRuntime !== "undefined" && (globalThis as any).EdgeRuntime.waitUntil) {
       (globalThis as any).EdgeRuntime.waitUntil(resultPromise.catch((err: any) => console.error("Background sync error:", err)));
       return new Response(JSON.stringify({ ok: true, message: "Sync started in background" }), {

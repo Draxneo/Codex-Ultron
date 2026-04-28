@@ -154,7 +154,7 @@ serve(async (req) => {
         .eq("customer_id", customer_id)
         .order("end_date", { ascending: false });
 
-      let visitsByAgreement: Record<string, number> = {};
+      const visitsByAgreement: Record<string, number> = {};
       const hasActivePlan = agreements?.some(a => a.status === "active");
 
       if (agreements?.length) {

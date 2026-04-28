@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
     const screenshot = res.screenshot;
     let fields: Array<Record<string, unknown>> = [];
-    let labels: Array<{ forId: string; text: string }> = [];
+    const labels: Array<{ forId: string; text: string }> = [];
 
     // Use interact to dynamically extract form fields via AI prompt
     if (res.scrapeId) {

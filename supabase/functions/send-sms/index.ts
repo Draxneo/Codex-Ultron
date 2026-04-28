@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
         await supabase
           .from("action_items")
           .update({
-            status: "resolved",
+            status: "dismissed",
             resolved_at: new Date().toISOString(),
             metadata: { resolved_reason: "outbound_sms_sent", source: sourceFunction, sms_log_id: smsLogId },
           })

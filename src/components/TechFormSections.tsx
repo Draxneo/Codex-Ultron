@@ -241,7 +241,7 @@ export function TechFormSections({
         });
       return { key: sec.key, total, completed, requiredComplete, allComplete: completed === total };
     });
-  }, [sections, fieldStatuses, uploadedPhotos, values, isPhotoFieldComplete]);
+  }, [sections, fieldStatuses, values, isPhotoFieldComplete]);
 
   /* ── Active section = first with incomplete required fields ── */
   const autoActiveIndex = sectionCompletion.findIndex(s => !s.requiredComplete);
@@ -264,7 +264,7 @@ export function TechFormSections({
       }
     }
     prevCompletion.current = sectionCompletion;
-  }, [sectionCompletion]);
+  }, [expandedIndex, sectionCompletion]);
 
   /* ── Overall progress across all sections ── */
   const totalFields = useMemo(() => sectionCompletion.reduce((s, c) => s + c.total, 0), [sectionCompletion]);
@@ -797,7 +797,7 @@ function TempDifferentialField({ fieldId, allValues, onTextChange }: {
     if (deltaT !== null) {
       onTextChange(`${fieldId}_delta_t`, deltaT.toFixed(1));
     }
-  }, [deltaT, fieldId]);
+  }, [deltaT, fieldId, onTextChange]);
 
   const getColor = (dt: number) => {
     if (dt >= 16 && dt <= 22) return "emerald";

@@ -76,6 +76,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
   const registeredRef = useRef(false);
   const activeCallSidRef = useRef<string | null>(null);
   const incomingCallSidRef = useRef<string | null>(null);
+  const refreshRegistrationRef = useRef<((reason: string) => Promise<boolean>) | null>(null);
   // Current user's employee name — written to call_log.answered_by on accept so
   // server-side isUserBusy() can correctly skip this user when routing the next
   // inbound call. See useSoftphone.ts for full rationale.
@@ -292,7 +293,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
   const scheduleTokenRefresh = useCallback(() => {
     clearTokenRefreshTimer();
     tokenRefreshTimerRef.current = setTimeout(() => {
-      void refreshRegistration("50-minute timer");
+      void refreshRegistrationRef.current?.("50-minute timer");
     }, 50 * 60 * 1000);
   }, [clearTokenRefreshTimer]);
 
@@ -316,6 +317,10 @@ export function useNativeSoftphone(enabled: boolean = true) {
       return false;
     }
   }, [dispatchLifecycle, fetchToken, scheduleTokenRefresh]);
+
+  useEffect(() => {
+    refreshRegistrationRef.current = refreshRegistration;
+  }, [refreshRegistration]);
 
   const attachPluginListeners = useCallback(async (plugin: any) => {
     if (listenersRegisteredRef.current) return;
@@ -380,13 +385,13 @@ export function useNativeSoftphone(enabled: boolean = true) {
         call: buildNativeCallRecord(data, "inbound", from),
       });
       if (inviteTransition.effects.includes("reject_duplicate_inbound")) {
-        try { if (callSid) await plugin.rejectCall({ callSid }); } catch {}
+        try { if (callSid) await plugin.rejectCall({ callSid }); } catch { /* noop */ }
         return;
       }
       setState((s) => {
         // Defensive guard: state may have flipped to on-call during the await
         if (s.status === "on-call" || s.status === "connecting" || s.status === "ringing" || s.incomingCall) {
-          try { plugin.rejectCall({ callSid }); } catch {}
+          try { plugin.rejectCall({ callSid }); } catch { /* noop */ }
           return s;
         }
         incomingCallSidRef.current = callSid;
@@ -434,7 +439,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
           setAudioDeviceLabel(bt ? deviceName.replace(/bluetooth_?/i, "").trim() || "Bluetooth" : spk ? "Speaker" : "Earpiece");
           console.log("[NativeSoftphone] audio device on connect:", deviceName);
         });
-      } catch {}
+      } catch { /* noop */ }
 
       const possibleSids = [data?.callSid, data?.parentCallSid].filter(Boolean);
       if (possibleSids.length > 0) {
@@ -679,7 +684,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       } else if (event === "SIGNED_OUT") {
         clearRegistrationTimeout();
         clearRegistrationRetries();
-        try { getPlugin()?.logout?.(); } catch {}
+        try { getPlugin()?.logout?.(); } catch { /* noop */ }
         initializingRef.current = false;
         registeredRef.current = false;
         activeCallSidRef.current = null;
@@ -770,7 +775,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     const resolvedName = contactName || await resolveCallerName(normalizedNumber);
     const resolvedJobId = jobId || pendingJobId;
     if (pendingJobId) setPendingJobId(null);
-    let resolvedCustomerIdInitial = customerId || pendingCustomerId;
+    const resolvedCustomerIdInitial = customerId || pendingCustomerId;
     if (pendingCustomerId) setPendingCustomerId(null);
 
     let resolvedCustomerId: string | null = resolvedCustomerIdInitial ?? null;
@@ -878,7 +883,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     // Immediately move to "connecting" so the ringtone stops before the SDK fires callConnected
     dispatchLifecycle({ type: "LOCAL_ACCEPT" });
     setState((s) => ({ ...s, status: "connecting" as SoftphoneStatus, incomingCall: null }));
-    try { await plugin.acceptCall({ callSid: incomingCallSidRef.current }); } catch {}
+    try { await plugin.acceptCall({ callSid: incomingCallSidRef.current }); } catch { /* noop */ }
   }, [dispatchLifecycle]);
 
   const rejectCall = useCallback(async () => {
@@ -898,14 +903,14 @@ export function useNativeSoftphone(enabled: boolean = true) {
         });
       incomingCallSidRef.current = null;
       setState((s) => ({ ...s, incomingCall: null, status: "ready" }));
-    } catch {}
+    } catch { /* noop */ }
   }, [dispatchLifecycle]);
 
   const hangUp = useCallback(async () => {
     const plugin = getPlugin();
     if (!plugin) return;
     dispatchLifecycle({ type: "LOCAL_HANGUP" });
-    try { await plugin.endCall({ callSid: activeCallSidRef.current || undefined }); } catch {}
+    try { await plugin.endCall({ callSid: activeCallSidRef.current || undefined }); } catch { /* noop */ }
     activeCallSidRef.current = null;
     stopTimer();
     setIsSpeaker(false);
@@ -923,7 +928,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     try {
       await plugin.muteCall({ muted: newMuted });
       setState((s) => ({ ...s, isMuted: newMuted }));
-    } catch {}
+    } catch { /* noop */ }
   }, [state.isMuted]);
 
   // Hold removed — native softphone uses direct dial, no conference participant.
@@ -957,7 +962,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
         try {
           const list = await plugin.getAvailableAudioDevices();
           console.log("[NativeSoftphone] available audio devices:", list, "| selected:", deviceName);
-        } catch {}
+        } catch { /* noop */ }
       }
     } catch (e) {
       console.warn("[NativeSoftphone] refreshAudioDevice failed:", e);
@@ -1008,12 +1013,12 @@ export function useNativeSoftphone(enabled: boolean = true) {
   const sendDigit = useCallback(async (digit: string) => {
     const plugin = getPlugin();
     if (!plugin?.sendDigits) return;
-    try { await plugin.sendDigits({ digits: digit }); } catch {}
+    try { await plugin.sendDigits({ digits: digit }); } catch { /* noop */ }
   }, []);
 
-  const acceptWaitingCall = useCallback(async () => {}, []);
+  const acceptWaitingCall = useCallback(async () => { /* noop */ }, []);
 
-  const dismissWaitingCall = useCallback(async () => {}, []);
+  const dismissWaitingCall = useCallback(async () => { /* noop */ }, []);
 
   const [pendingDialNumber, setPendingDialNumber] = useState<string | null>(null);
   const setDialNumber = useCallback((number: string) => setPendingDialNumber(number), []);
@@ -1041,7 +1046,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
           console.log("[NativeSoftphone] Call answered on another device — clearing ringing");
           const plugin = getPlugin();
           if (plugin && incomingCallSidRef.current) {
-            try { plugin.rejectCall({ callSid: incomingCallSidRef.current }); } catch {}
+            try { plugin.rejectCall({ callSid: incomingCallSidRef.current }); } catch { /* noop */ }
           }
           incomingCallSidRef.current = null;
           setState((s) => ({
@@ -1087,7 +1092,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
         const { LocalNotifications } = await import("@capacitor/local-notifications");
         await LocalNotifications.cancel({ notifications: [{ id: 9999 }] });
         console.log("[NativeSoftphone] Cancelled lingering notification 9999");
-      } catch {}
+      } catch { /* noop */ }
     })();
   }, [stopTimer]);
 
@@ -1189,7 +1194,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       }
       listenerHandlesRef.current = [];
       listenersRegisteredRef.current = false;
-      try { getPlugin()?.logout?.(); } catch {}
+      try { getPlugin()?.logout?.(); } catch { /* noop */ }
     };
   }, [clearRegistrationRetries, clearRegistrationTimeout, stopTimer]);
 
@@ -1199,7 +1204,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     ...state, isSpeaker, isBluetooth, audioDeviceLabel, pendingDialNumber,
     initialize,
     // No-op on native — Electron-specific recovery hook
-    recoverIfNeeded: async () => {},
+    recoverIfNeeded: async () => { /* noop */ },
       dial, hangUp, toggleMute, toggleSpeaker,
     acceptCall, rejectCall, sendDigit,
     acceptWaitingCall, dismissWaitingCall,

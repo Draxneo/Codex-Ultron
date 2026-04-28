@@ -198,7 +198,11 @@ export function MobileDispatchList({ dayItems, employees, routeOrders, cardDensi
   const toggleCollapse = (name: string) => {
     setCollapsed(prev => {
       const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
       return next;
     });
   };

@@ -66,7 +66,7 @@ export function CallPanel({ hideBots = false }: { hideBots?: boolean } = {}) {
     const groups = groupByDay(
       list,
       (c) => c.lastCall.created_at,
-      (c) => (c.lastCall as any).day_ct,
+      (c) => (c.lastCall as { day_ct?: string | null }).day_ct,
     );
     return groups.map((group) => (
       <div key={group.key} className="space-y-1.5">

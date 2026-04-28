@@ -25,7 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { formatCurrency, formatPhone } from "@/lib/formatters";
 
-type RecordType = "job" | "estimate" | "invoice";
+type RecordType = "job" | "estimate" | "invoice" | "customer";
 
 type DocumentLineItem = {
   id: string;
@@ -78,7 +78,11 @@ type RecordDocumentData = {
 };
 
 function isRecordType(type: string | undefined): type is RecordType {
-  return type === "job" || type === "estimate" || type === "invoice";
+  return type === "job" || type === "estimate" || type === "invoice" || type === "customer";
+}
+
+function shortId(value: string | null | undefined) {
+  return value ? value.slice(0, 8) : "unknown";
 }
 
 function dateLabel(value: string | null | undefined, pattern = "MMM d, yyyy") {
@@ -331,7 +335,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
   if (!estimate) throw new Error("Estimate not found");
 
   const customer = await fetchCustomer(estimate.customer_id);
-  const [lineItemsRes, convertedJobRes, inferredJobsRes, explicitConvertedJobRes, explicitConvertedInvoiceRes, notes, attachments] = await Promise.all([
+  const [lineItemsRes, estimateLinkedJobRes, explicitConvertedJobRes, explicitConvertedInvoiceRes, inferredJobsRes, notes, attachments] = await Promise.all([
     supabase
       .from("estimate_line_items" as any)
       .select("*")
@@ -376,7 +380,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
   let lineItems = normalizeEstimateItems(lineItemsRes.data as any[]);
   const convertedJob =
     explicitConvertedJobRes.data ||
-    convertedJobRes.data ||
+    estimateLinkedJobRes.data ||
     ((inferredJobsRes.data || []) as any[]).find((job) => {
       const jobAddress = String(job.address || "").toLowerCase();
       const estimateAddress = String(estimate.address || "").toLowerCase();
@@ -414,7 +418,7 @@ async function fetchEstimateDocument(id: string): Promise<RecordDocumentData> {
       : null,
     truthInvoice
       ? {
-          label: `Invoice #${(truthInvoice as any).invoice_number || (truthInvoice as any).id.slice(0, 8)}`,
+          label: `Invoice #${(truthInvoice as any).invoice_number || shortId((truthInvoice as any).id)}`,
           href: `/records/invoice/${(truthInvoice as any).id}`,
           meta: `detail truth - ${formatCurrency(numberValue((truthInvoice as any).total))}`,
         }
@@ -516,10 +520,76 @@ async function fetchInvoiceDocument(id: string): Promise<RecordDocumentData> {
   };
 }
 
+async function fetchCustomerDocument(id: string): Promise<RecordDocumentData> {
+  const customer = await fetchCustomer(id);
+  if (!customer) throw new Error("Customer not found");
+
+  const [jobsRes, invoicesRes, notes] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select("id, job_number, hcp_job_number, status, scheduled_date")
+      .eq("customer_id", id)
+      .order("scheduled_date", { ascending: false, nullsFirst: false })
+      .limit(12),
+    supabase
+      .from("customer_invoices")
+      .select("id, invoice_number, status, total, jobs!customer_invoices_job_id_fkey(customer_id)")
+      .eq("jobs.customer_id", id)
+      .order("created_at", { ascending: false })
+      .limit(12),
+    fetchNotes(id, id),
+  ]);
+
+  const related = [
+    ...((jobsRes.data || []) as any[]).map((job) => ({
+      label: `Job #${job.job_number || job.hcp_job_number || shortId(job.id)}`,
+      href: `/records/job/${job.id}`,
+      meta: job.status || "job",
+    })),
+    ...((invoicesRes.data || []) as any[]).map((invoice) => ({
+      label: `Invoice #${invoice.invoice_number || shortId(invoice.id)}`,
+      href: `/records/invoice/${invoice.id}`,
+      meta: `${invoice.status || "invoice"} - ${formatCurrency(numberValue(invoice.total))}`,
+    })),
+  ];
+
+  return {
+    type: "customer",
+    id,
+    title: "Customer",
+    number: shortId(id),
+    status: null,
+    description: null,
+    createdAt: null,
+    scheduledDate: null,
+    arrivalStart: null,
+    arrivalEnd: null,
+    assignedTo: null,
+    customer: {
+      id,
+      name: customerNameFrom(null, customer),
+      phone: customer.phone || null,
+      email: customer.email || null,
+      address: addressFrom(null, customer),
+    },
+    sourcePage: `/customers/${id}`,
+    hcpUrl: null,
+    lineItems: [],
+    subtotal: 0,
+    taxAmount: 0,
+    total: 0,
+    notes,
+    attachments: [],
+    related,
+    detailSourceLabel: "Customer profile",
+  };
+}
+
 async function fetchRecordDocument(type: RecordType, id: string) {
   if (type === "job") return fetchJobDocument(id);
   if (type === "estimate") return fetchEstimateDocument(id);
-  return fetchInvoiceDocument(id);
+  if (type === "invoice") return fetchInvoiceDocument(id);
+  return fetchCustomerDocument(id);
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string | null }) {

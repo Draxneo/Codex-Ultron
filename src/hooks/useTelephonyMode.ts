@@ -120,6 +120,6 @@ export function useTelephonyMode() {
       openCallHistory,
       openHome,
     }),
-    [baseUrl, getLaunchTargets, getSurfaceLaunchTargets, openCall, openSms, openNewSms, openMessages, openVoicemail, openCallHistory, openHome],
+    [baseUrl, enabled, getLaunchTargets, getSurfaceLaunchTargets, openCall, openSms, openNewSms, openMessages, openVoicemail, openCallHistory, openHome],
   );
 }

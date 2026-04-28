@@ -81,6 +81,18 @@ export default function CustomerCart() {
 
   const handlePay = async (method: "stripe" | "cash" | "financing" | "approve" | "contact" | "decline") => {
     if (!data) return;
+    const hasActionableCart = data.items.length > 0 && Number(data.cart.total) > 0;
+    if (!hasActionableCart) {
+      toast.error("This estimate does not have any approved items yet. Please call the office before approving or paying.");
+      return;
+    }
+    const confirmText: Partial<Record<typeof method, string>> = {
+      cash: "Approve this estimate and pay cash on visit?",
+      approve: "Approve this estimate scope?",
+      contact: "Send a question/request callback for this estimate?",
+      decline: "Decline this estimate?",
+    };
+    if (confirmText[method] && !window.confirm(confirmText[method])) return;
     setPaying(method);
     try {
       const { data: result, error } = await supabase.functions.invoke("cart-checkout", {
@@ -125,17 +137,18 @@ export default function CustomerCart() {
   }
 
   const { cart, items, job, company, pricing } = data;
+  const total = Number(cart.total);
+  const hasActionableCart = items.length > 0 && total > 0;
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
   const isDeclined = cart.status === "declined";
   const isPayAfterCompletion = (cart as any).payment_timing === "pay_after_completion";
   const isFinancing = (cart as any).payment_timing === "financing" || cart.payment_method === "financing";
   const canEditCart = !isPaid && !isApproved && !isDeclined;
-  const canPayCart = !isPaid && !isDeclined && (!isApproved || isPayAfterCompletion);
+  const canPayCart = hasActionableCart && !isPaid && !isDeclined && (!isApproved || isPayAfterCompletion);
 
   // System-purchase pricing framing — shows the same A/B/C stack the tech showed in person
   const hasEquipment = items.some((i) => i.kind === "equipment");
-  const total = Number(cart.total);
   const showPaymentStack = total >= 1500;
   const monthly36 = Number((cart as any).financing_monthly_36 ?? pricing?.financing?.monthly_36 ?? calcMonthly36(total) ?? 0);
   const monthly120 = Number((cart as any).financing_monthly_120 ?? pricing?.financing?.monthly_120 ?? calcMonthly120(total) ?? 0);
@@ -330,7 +343,12 @@ export default function CustomerCart() {
             )}
           </div>
           <div className="divide-y">
-            {items.map((item) => {
+            {items.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-sm font-semibold text-foreground">No estimate items are ready yet.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Please call the office before approving or paying this estimate.</p>
+              </div>
+            ) : items.map((item) => {
               const Icon = KIND_ICON[item.kind];
               return (
                 <div key={item.id} className="p-3 flex gap-3 items-center">

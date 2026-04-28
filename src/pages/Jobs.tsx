@@ -1,6 +1,6 @@
 import { useState, useMemo, lazy, Suspense, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Plus, Rows3, CalendarOff, CalendarRange, ListChecks, Palette, ArrowLeft, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Plus, Rows3, CalendarOff, CalendarRange, ListChecks, Palette, ArrowLeft, AlertTriangle, Route } from "lucide-react";
 import { DispatchBoard } from "@/components/job/DispatchBoard";
 import { WeekCalendarBoard } from "@/components/job/WeekCalendarBoard";
 import { DayCalendarBoard } from "@/components/job/DayCalendarBoard";
@@ -28,6 +28,7 @@ const JobsMapView = lazy(() => import("@/components/JobsMapView"));
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { NewEstimateDialog } from "@/components/NewEstimateDialog";
 import { CalendarSettings, useCalendarSettings } from "@/components/job/CalendarSettings";
+import { MorningRouteOptimizerDialog } from "@/components/job/MorningRouteOptimizerDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,8 @@ import {
   eachDayOfInterval,
   isSameDay,
   isToday,
+  isSameMonth,
+  isSameYear,
   parseISO,
 } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,6 +62,14 @@ const jobTypeBorderColors: Record<string, string> = {
 };
 
 type FilterType = "all" | "estimate" | "install" | "service" | "maintenance";
+
+function formatWeekRange(day: Date) {
+  const start = startOfWeek(day, { weekStartsOn: 0 });
+  const end = endOfWeek(day, { weekStartsOn: 0 });
+  if (isSameMonth(start, end)) return `${format(start, "MMMM d")}-${format(end, "d, yyyy")}`;
+  if (isSameYear(start, end)) return `${format(start, "MMM d")}-${format(end, "MMM d, yyyy")}`;
+  return `${format(start, "MMM d, yyyy")}-${format(end, "MMM d, yyyy")}`;
+}
 
 interface BoardItem {
   id: string;
@@ -101,6 +112,8 @@ const FILTERS: { value: FilterType; label: string }[] = [
   { value: "maintenance", label: "Maint" },
 ];
 
+const DONE_STATUSES = ["done", "invoiced", "canceled", "completed"];
+
 const Jobs = () => {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -123,6 +136,7 @@ const Jobs = () => {
   const [newEstimateOpen, setNewEstimateOpen] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [routeOptimizerOpen, setRouteOptimizerOpen] = useState(false);
   useTechFormRealtime();
   const { data: followUpJobs = [] } = useFollowUpJobs();
 
@@ -138,9 +152,8 @@ const Jobs = () => {
       setTypeFilter(typeParam);
     }
   }, [typeParam]);
-  const doneStatuses = ["done", "invoiced", "canceled", "completed"];
   const queueCount = useMemo(() => {
-    const unschedCount = (jobs || []).filter(j => !j.scheduled_date && !doneStatuses.includes(j.status?.toLowerCase?.() ?? "")).length;
+    const unschedCount = (jobs || []).filter(j => !j.scheduled_date && !DONE_STATUSES.includes(j.status?.toLowerCase?.() ?? "")).length;
     const unschedIds = new Set((jobs || []).filter(j => !j.scheduled_date).map(j => j.id));
     const fuCount = followUpJobs.filter(j => !unschedIds.has(j.id)).length;
     return unschedCount + fuCount;
@@ -477,7 +490,7 @@ const Jobs = () => {
               </Button>
             </div>
             <span className="text-xs font-semibold text-foreground">
-              {format(startOfWeek(currentDay, { weekStartsOn: 0 }), "MMMM d")}–{format(endOfWeek(currentDay, { weekStartsOn: 0 }), "d, yyyy")}
+              {formatWeekRange(currentDay)}
             </span>
             {!isToday(currentDay) && (
               <Button variant="ghost" size="sm" className="text-xs h-6 px-2" onClick={goToToday}>Today</Button>
@@ -631,7 +644,7 @@ const Jobs = () => {
               <ChevronRight className="h-4 w-4" />
             </Button>
             <span className="text-sm font-semibold whitespace-nowrap">
-              {format(startOfWeek(currentDay, { weekStartsOn: 0 }), "MMMM d")}–{format(endOfWeek(currentDay, { weekStartsOn: 0 }), "d, yyyy")}
+              {formatWeekRange(currentDay)}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -814,10 +827,20 @@ const Jobs = () => {
             </div>
 
             {/* Board header */}
-            <div className="flex items-center px-4 py-1 border-b shrink-0 bg-card gap-1">
+            <div className="flex items-center px-4 py-1 border-b shrink-0 bg-card gap-2">
               <div className="flex items-center gap-1.5 text-xs h-8 px-3 rounded-md font-medium bg-primary text-primary-foreground">
                 <CalendarDays className="h-3.5 w-3.5" /> Board
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => setRouteOptimizerOpen(true)}
+              >
+                <Route className="h-3.5 w-3.5" />
+                Optimize Today&apos;s Routes
+              </Button>
             </div>
 
             {/* Dispatch Board */}
@@ -830,6 +853,14 @@ const Jobs = () => {
               cardDensity={calSettings.cardDensity}
               businessHoursOnly={calSettings.businessHoursOnly}
               showHolidays={calSettings.showHolidays}
+            />
+            <MorningRouteOptimizerDialog
+              open={routeOptimizerOpen}
+              onOpenChange={setRouteOptimizerOpen}
+              date={currentDateStr}
+              items={currentDayItems}
+              employees={employees}
+              routeOrders={dispatchRouteOrders}
             />
           </div>
         )}

@@ -11,7 +11,7 @@ verify_jwt = false
 
 
 [functions.ai-task-agent]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ahri-lookup]
 verify_jwt = false
@@ -54,6 +54,9 @@ verify_jwt = false
 
 [functions.backfill-created-at]
 verify_jwt = false
+
+[functions.backfill-install-agreements]
+verify_jwt = true
 
 [functions.stripe-checkout]
 verify_jwt = false
@@ -143,7 +146,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.customer-actions]
-verify_jwt = false
+verify_jwt = true
 
 [functions.auto-apply-permit]
 verify_jwt = false
@@ -180,4 +183,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.jarvis-context-builder]
-verify_jwt = false
+verify_jwt = true
+
+[functions.jarvis-suggest-actions]
+verify_jwt = true

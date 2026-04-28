@@ -8,7 +8,7 @@ interface Props {
   /** call_log.status */
   status: string;
   /** call_log.extracted_data — may contain overflow_to + overflow_reason */
-  extractedData: Record<string, any> | null | undefined;
+  extractedData: Record<string, unknown> | null | undefined;
   className?: string;
   size?: "sm" | "xs";
 }

@@ -11,7 +11,15 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   call_summary: <Phone className="h-3.5 w-3.5 text-primary" />,
 };
 
-function ActivityItem({ entry }: { entry: any }) {
+type ActivityEntry = {
+  id: string;
+  action: string;
+  created_at: string | null;
+  performed_by?: string | null;
+  details?: string | null;
+};
+
+function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const icon = ACTION_ICONS[entry.action] || <Activity className="h-3.5 w-3.5 text-muted-foreground" />;
   const time = entry.created_at
     ? formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })

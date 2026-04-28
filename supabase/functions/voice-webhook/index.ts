@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
     let sigValid = false;
-    let signatureAcceptedBy = "twilio_signature";
+    const signatureAcceptedBy = "twilio_signature";
     try {
       sigValid = await validateTwilioSignature(req, formData);
     } catch (sigErr) {
@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
     const externalPhone = isInbound ? from : to;
 
     // FIXED: was loading all 2000 customers into memory — now single targeted DB query
-    let { contactName, contactType } = await resolveContact(
+    const { contactName, contactType } = await resolveContact(
       supabase,
       externalPhone,
     );

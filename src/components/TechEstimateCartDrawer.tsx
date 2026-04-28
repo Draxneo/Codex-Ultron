@@ -35,6 +35,28 @@ interface TierData {
 
 type CartType = "repair" | "new_system" | null;
 
+const normalizeBenefits = (benefits: unknown): { icon: string; text: string }[] => {
+  if (Array.isArray(benefits)) {
+    return benefits
+      .map((benefit: any) => {
+        if (typeof benefit === "string") return { icon: "check", text: benefit };
+        if (benefit?.text) return { icon: benefit.icon || "check", text: String(benefit.text) };
+        return null;
+      })
+      .filter(Boolean) as { icon: string; text: string }[];
+  }
+
+  if (typeof benefits === "string" && benefits.trim()) {
+    return benefits
+      .split(/\r?\n|[;•]/)
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .map((text) => ({ icon: "check", text }));
+  }
+
+  return [];
+};
+
 const REPAIR_TIERS = [
   {
     key: "critical",
@@ -163,7 +185,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
         brand: equip.brand,
         tonnage: equip.tonnage,
         monthly_payment: equip.monthly_payment,
-        features_benefits: equip.features_benefits || null,
+        features_benefits: normalizeBenefits(equip.features_benefits),
       },
     }));
     setActiveTier(null);

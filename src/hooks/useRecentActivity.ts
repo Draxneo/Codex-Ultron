@@ -56,7 +56,7 @@ export function useRecentActivity(limit = 8) {
       for (const c of calls.data ?? []) if (c.phone_number) phoneSet.add(c.phone_number);
       for (const s of sms.data ?? []) if (s.phone_number) phoneSet.add(s.phone_number);
 
-      let phoneToAddress = new Map<string, string>();
+      const phoneToAddress = new Map<string, string>();
       if (phoneSet.size) {
         const { data: custs } = await supabase
           .from("customers")

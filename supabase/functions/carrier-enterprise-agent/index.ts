@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }, apiKey);
 
       let results: any[] = [];
-      try { results = JSON.parse(searchResult.result || "[]"); } catch {}
+      try { results = JSON.parse(searchResult.result || "[]"); } catch { /* ignore malformed search JSON */ }
 
       return new Response(
         JSON.stringify({ success: true, results, scrapeId }),
@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       }, apiKey);
 
       let pricing: any = {};
-      try { pricing = JSON.parse(priceResult.result || "{}"); } catch {}
+      try { pricing = JSON.parse(priceResult.result || "{}"); } catch { /* ignore malformed pricing JSON */ }
 
       return new Response(
         JSON.stringify({ success: true, pricing }),
@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
       }, apiKey);
 
       let ordersData = { authFail: false, orders: [] as any[] };
-      try { ordersData = JSON.parse(ordersResult.result || "{}"); } catch {}
+      try { ordersData = JSON.parse(ordersResult.result || "{}"); } catch { /* ignore malformed order JSON */ }
 
       // Match POs to jobs
       const matchedOrders: any[] = [];
@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
       }, apiKey);
 
       let lineItems: any[] = [];
-      try { lineItems = JSON.parse(detailResult.result || "[]"); } catch {}
+      try { lineItems = JSON.parse(detailResult.result || "[]"); } catch { /* ignore malformed line item JSON */ }
 
       // Store line items
       for (const item of lineItems) {
@@ -530,7 +530,7 @@ Deno.serve(async (req) => {
     // ACTION: get_suggestions
     // =============================================
     if (action === "get_suggestions") {
-      let { job_id, job_type: jt, system_type: st, orientation: ori } = body;
+      const { job_id, job_type: jt, system_type: st, orientation: ori } = body;
       if (job_id && (!jt || !st)) {
         const { data: job } = await sb.from("jobs").select("job_type, system_type, orientation").eq("id", job_id).single();
         if (job) { jt = jt || job.job_type; st = st || job.system_type; ori = ori || job.orientation; }

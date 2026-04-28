@@ -138,6 +138,7 @@ export function TechJarvisPushToTalk({
   const [proposedCartActions, setProposedCartActions] = useState<ProposedCartAction[]>([]);
   const [addingSuggestionId, setAddingSuggestionId] = useState<string | null>(null);
   const transcriptRef = useRef<string>("");
+  const sendTranscriptWhenReadyRef = useRef(false);
   const { announce } = useAnnouncer();
   const { addItem } = useJobCart(jobId);
   const { employeeId } = useEffectiveAuth();
@@ -259,6 +260,10 @@ export function TechJarvisPushToTalk({
   const { isRecording, loading, start, stop } = useVoiceToText({
     onTranscript: (t) => {
       transcriptRef.current = t;
+      if (sendTranscriptWhenReadyRef.current && t.trim()) {
+        sendTranscriptWhenReadyRef.current = false;
+        askJarvis(t);
+      }
     },
   });
 
@@ -271,6 +276,7 @@ export function TechJarvisPushToTalk({
         /* noop */
       }
       transcriptRef.current = "";
+      sendTranscriptWhenReadyRef.current = true;
       start();
     },
     [start],
@@ -286,12 +292,8 @@ export function TechJarvisPushToTalk({
       }
       if (!isRecording) return;
       await stop();
-      setTimeout(() => {
-        const text = transcriptRef.current;
-        if (text) askJarvis(text);
-      }, 350);
     },
-    [isRecording, stop, askJarvis],
+    [isRecording, stop],
   );
 
   const busy = loading || thinking;

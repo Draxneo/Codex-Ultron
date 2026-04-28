@@ -46,12 +46,25 @@ async function buildBatchForDate(sb: any, targetDate: string) {
 
   const { data: emps } = await sb
     .from("employees")
-    .select("id, name")
-    .in("name", Array.from(names));
+    .select("id, name, is_active")
+    .eq("is_active", true);
 
+  const normalizedAssigned = Array.from(names).map((name) => normalizeName(name));
   return (emps || [])
+    .filter((e: any) => {
+      const empName = normalizeName(e.name);
+      return normalizedAssigned.some((assigned) => assigned === empName || assigned.includes(empName) || empName.includes(assigned));
+    })
     .filter((e: any) => e.id)
     .map((e: any) => ({ employee_id: e.id, date: targetDate }));
+}
+
+function normalizeName(value: string | null | undefined): string {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 serve(async (req) => {

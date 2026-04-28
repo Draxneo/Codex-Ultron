@@ -50,10 +50,10 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
             osc.start();
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
             osc.stop(ctx.currentTime + 0.3);
-          } catch {}
+          } catch { /* noop */ }
 
           // Stop current recognition before triggering mic recording
-          try { recognition.stop(); } catch {}
+          try { recognition.stop(); } catch { /* noop */ }
           recognitionRef.current = null;
 
           onWake();
@@ -108,7 +108,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
   const restart = useCallback(() => {
     // Always create a fresh instance
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
+      try { recognitionRef.current.abort(); } catch { /* noop */ }
       recognitionRef.current = null;
     }
     const recognition = createRecognition();
@@ -125,7 +125,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
   const stopListening = useCallback(() => {
     cooldownRef.current = false;
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
+      try { recognitionRef.current.abort(); } catch { /* noop */ }
       recognitionRef.current = null;
     }
     setListening(false);
@@ -139,7 +139,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
       stopListening();
     }
     return () => stopListening();
-  }, [enabled, supported]);
+  }, [enabled, supported, restart, stopListening]);
 
   return { listening, supported };
 }

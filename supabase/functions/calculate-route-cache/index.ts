@@ -44,6 +44,26 @@ function normalizeAddress(value: string | null | undefined) {
   return (value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function normalizeName(value: string | null | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function assignedToEmployee(assignedTo: string | null | undefined, employeeName: string | null | undefined) {
+  const assigned = normalizeName(assignedTo);
+  const employee = normalizeName(employeeName);
+  if (!assigned || !employee) return false;
+  return assigned === employee || assigned.includes(employee) || employee.includes(assigned);
+}
+
+function isActiveScheduleStatus(value: string | null | undefined) {
+  const status = normalizeName(value);
+  return !["canceled", "cancelled", "lost", "deleted", "void"].includes(status);
+}
+
 function buildExpectedLegs({
   employeeId,
   date,
@@ -172,16 +192,18 @@ async function processRoute(sb: any, employeeId: string, date: string, force = f
 
   if (!emp) throw new Error(`Employee ${employeeId} not found`);
 
-  // Get jobs for this tech on this date
+  // Get jobs for this tech on this date. Pull the day first, then do tolerant
+  // employee matching in code so HCP-era names and local employee names do not
+  // leave travel times blank.
   const { data: jobs } = await sb
     .from("jobs")
-    .select("id, customer_id, hcp_job_number, customer_name, address, arrival_start, arrival_end, job_type, status")
+    .select("id, customer_id, hcp_job_number, customer_name, address, arrival_start, arrival_end, job_type, status, assigned_to")
     .eq("scheduled_date", date)
-    .ilike("assigned_to", `%${emp.name}%`)
-    .not("status", "in", '("canceled")')
     .order("arrival_start");
 
-  const sortedJobs = (jobs || []).sort((a: any, b: any) => {
+  const sortedJobs = (jobs || [])
+    .filter((job: any) => assignedToEmployee(job.assigned_to, emp.name) && isActiveScheduleStatus(job.status))
+    .sort((a: any, b: any) => {
     if (a.arrival_start && b.arrival_start) return a.arrival_start.localeCompare(b.arrival_start);
     if (a.arrival_start) return -1;
     if (b.arrival_start) return 1;
@@ -191,13 +213,17 @@ async function processRoute(sb: any, employeeId: string, date: string, force = f
   // Also get estimates
   const { data: estimates } = await sb
     .from("estimates")
-    .select("id, customer_id, estimate_number, customer_name, address, arrival_start, arrival_end, status")
+    .select("id, customer_id, estimate_number, customer_name, address, arrival_start, arrival_end, status, work_status, assigned_to")
     .eq("scheduled_date", date)
-    .ilike("assigned_to", `%${emp.name}%`)
-    .not("status", "in", '("canceled")')
     .order("arrival_start");
 
-  const sortedEstimates = (estimates || []).sort((a: any, b: any) => {
+  const sortedEstimates = (estimates || [])
+    .filter((estimate: any) => (
+      assignedToEmployee(estimate.assigned_to, emp.name)
+      && isActiveScheduleStatus(estimate.status)
+      && isActiveScheduleStatus(estimate.work_status)
+    ))
+    .sort((a: any, b: any) => {
     if (a.arrival_start && b.arrival_start) return a.arrival_start.localeCompare(b.arrival_start);
     if (a.arrival_start) return -1;
     if (b.arrival_start) return 1;

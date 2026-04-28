@@ -6,7 +6,7 @@
  */
 
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, MoreVertical, Phone, MessageSquare, Radio, Navigation, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Phone, MessageSquare, Radio, Navigation, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun, DollarSign } from "lucide-react";
 import { useJob } from "@/hooks/useJobs";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
@@ -26,6 +26,7 @@ import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
 import { Card } from "@/components/ui/card";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 const DISPATCH_LINE = "+12106005091";
 
@@ -112,6 +113,30 @@ export default function TechJobDetail() {
     void sendOMW({ jobId: id!, customerPhone, customerName, jobAddress: customerAddress, employeeName, employeeId: employeeId || null });
   };
 
+  const jarvisJobContext = {
+    id: id!,
+    source: "tech_job_detail",
+    record_type: "job",
+    customer_id: job.customer_id,
+    customer_name: customerName,
+    customer_phone: customerPhone,
+    customer_email: customerEmail,
+    address: customerAddress,
+    job_number: jobNumber,
+    job_type: job.job_type,
+    status: job.status,
+    assigned_to: job.assigned_to,
+    scheduled_date: job.scheduled_date,
+    arrival_start: (job as any).arrival_start,
+    arrival_end: (job as any).arrival_end,
+    description: job.description,
+    suggested_actions: [
+      "Summarize the job for the technician",
+      "Help turn diagnosis notes into a repair cart",
+      "Draft a customer SMS for technician approval",
+    ],
+  };
+
   return (
     <div className="flex flex-col min-h-full bg-background pb-36">
       {/* Sticky header */}
@@ -128,9 +153,7 @@ export default function TechJobDetail() {
         <div className="flex-1 text-center">
           <p className="text-sm font-semibold text-foreground">Job {jobNumber}</p>
         </div>
-        <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="More">
-          <MoreVertical className="h-5 w-5" />
-        </Button>
+        <div className="w-9" />
       </header>
 
       {/* Sticky action bar */}
@@ -142,6 +165,14 @@ export default function TechJobDetail() {
         <ActionPill icon={ImagePlus} label="Photos" onClick={() => scrollToSection("tech-photos")} />
         <ActionPill icon={Mic} label="JARVIS" onClick={() => scrollToSection("tech-jarvis")} />
         <ActionPill icon={ShoppingCart} label="Cart" onClick={() => scrollToSection("tech-cart")} />
+        <AskJarvisButton
+          contextType="job"
+          contextId={id!}
+          label="Ask"
+          context={jarvisJobContext}
+          variant="ghost"
+          className="h-8 shrink-0 rounded-lg px-2 text-[11px]"
+        />
         {job.hcp_id && (
           <a
             href={`https://pro.housecallpro.com/app/jobs/${job.hcp_id}`}
@@ -306,6 +337,7 @@ export default function TechJobDetail() {
         >
           <TechAttachmentsCard
             jobId={id!}
+            hcpId={(job as any).hcp_id || null}
             customerPhone={customerPhone}
             jobNumber={jobNumber}
             techName={job.assigned_to || null}

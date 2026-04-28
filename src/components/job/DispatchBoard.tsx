@@ -15,6 +15,7 @@ import { useTechStatusMap } from "@/hooks/useTechStatusMap";
 import { TechStatusBadge } from "@/components/TechStatusBadge";
 import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
 import { getUsHolidayName } from "@/lib/usHolidays";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 interface BoardItem {
   id: string;
@@ -77,6 +78,30 @@ const roleRowAccent: Record<string, string> = {
   sales_tech: "border-l-[3px] border-l-purple-500",
   admin: "border-l-[3px] border-l-[hsl(var(--sky))]",
 };
+
+function getJarvisCardContext(item: BoardItem, source: string, routeOrder?: { order: number; travelMin: number | null; fromLabel: string | null }) {
+  return {
+    id: item.id,
+    source,
+    record_type: item.item_type,
+    customer_id: item.customer_id,
+    customer_name: item.customer_name,
+    customer_phone: item.customer_phone,
+    address: item.address,
+    description: item.description,
+    assigned_to: item.assigned_to,
+    scheduled_date: item.scheduled_date,
+    arrival_start: item.arrival_start,
+    arrival_end: item.arrival_end,
+    job_type: item.job_type,
+    status: item.status || item.work_status,
+    job_number: item.job_number || item.hcp_job_number,
+    estimate_number: item.estimate_number,
+    route_order: routeOrder?.order,
+    travel_minutes: routeOrder?.travelMin,
+    travel_from: routeOrder?.fromLabel,
+  };
+}
 
 function getRoleColor(role: string | null): { avatar: string; accent: string } {
   if (!role) return { avatar: "bg-muted text-muted-foreground", accent: "" };
@@ -485,11 +510,20 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                         onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
                         onClick={() => onItemClick(item)}
                         className={cn(
-                          `rounded-md cursor-pointer shadow-sm hover:shadow-lg transition-shadow overflow-hidden max-w-[340px]`,
+                          `relative rounded-md cursor-pointer shadow-sm hover:shadow-lg transition-shadow overflow-hidden max-w-[340px]`,
                           cardBgColors[item.job_type || "service"] || "bg-card border",
                         )}
                         style={{ minWidth: `${dc.minWidth}px` }}
                       >
+                        <AskJarvisButton
+                          contextType={item.item_type === "estimate" ? "estimate" : "job"}
+                          contextId={item.id}
+                          label={`Ask JARVIS about ${item.customer_name || number || item.item_type}`}
+                          context={getJarvisCardContext(item, "day_dispatch_untimed_card", ro)}
+                          iconOnly
+                          variant="secondary"
+                          className="absolute right-1 top-1 z-20 h-7 w-7 bg-background/85 shadow-sm hover:bg-background"
+                        />
                         <div className="px-2.5 py-2 flex flex-col gap-1">
                           {!item.assigned_to && (
                             <div className="bg-destructive text-destructive-foreground text-[9px] font-bold text-center py-0.5 rounded animate-pulse-fast mb-0.5">
@@ -586,6 +620,15 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                       height: `${cardHeight - 8}px`,
                     }}
                   >
+                    <AskJarvisButton
+                      contextType={item.item_type === "estimate" ? "estimate" : "job"}
+                      contextId={item.id}
+                      label={`Ask JARVIS about ${item.customer_name || number || item.item_type}`}
+                      context={getJarvisCardContext(item, "day_dispatch_timed_card", ro)}
+                      iconOnly
+                      variant="secondary"
+                      className="absolute right-1 top-1 z-20 h-7 w-7 bg-background/85 shadow-sm hover:bg-background"
+                    />
                     <div className="px-2.5 py-2 flex flex-col justify-between gap-1">
                       {/* No tech warning */}
                       {!item.assigned_to && (

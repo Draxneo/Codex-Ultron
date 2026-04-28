@@ -72,6 +72,7 @@ serve(async (req) => {
     // Score and rank slots
     const slots: Array<{
       date: string;
+      display_date?: string;
       time: string;
       tech: string;
       travel_min: number;
@@ -161,7 +162,7 @@ serve(async (req) => {
 
     const formattedSlots = topSlots.map(s => ({
       ...s,
-      date: formatDate(s.date),
+      display_date: formatDate(s.date),
     }));
 
     return new Response(JSON.stringify({ slots: formattedSlots }), {

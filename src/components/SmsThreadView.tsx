@@ -26,6 +26,7 @@ import { SMS_CONVERSATION_STATUS_LABELS, type SmsConversation, type SmsConversat
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { openDispatchWorkspace } from "@/lib/dispatchWorkspace";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 const INITIAL_MSG_COUNT = 10;
 const LOAD_MORE_COUNT = 20;
@@ -80,21 +81,12 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
   const [pendingFiles, setPendingFiles] = useState<{ file: File; preview?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  // Reset visible count when switching conversations
-  useEffect(() => {
-    if (conversation?.phoneNumber !== prevConvoPhone.current) {
-      prevConvoPhone.current = conversation?.phoneNumber ?? null;
-      setVisibleCount(INITIAL_MSG_COUNT);
-      requestAnimationFrame(() => bodyInputRef.current?.focus?.());
-    }
-  }, [conversation?.phoneNumber]);
-
   // Mark as read
   useEffect(() => {
     if (conversation && conversation.unreadCount > 0) {
       onMarkRead(conversation.phoneNumber);
     }
-  }, [conversation?.phoneNumber, conversation?.unreadCount]);
+  }, [conversation, onMarkRead]);
 
   // Slice messages to only show visibleCount from the end
   const allMessages = conversation?.messages ?? [];
@@ -198,6 +190,15 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
     rejectPolish,
     cancelPolish,
   } = composer;
+
+  // Reset visible count when switching conversations
+  useEffect(() => {
+    if (conversation?.phoneNumber !== prevConvoPhone.current) {
+      prevConvoPhone.current = conversation?.phoneNumber ?? null;
+      setVisibleCount(INITIAL_MSG_COUNT);
+      requestAnimationFrame(() => bodyInputRef.current?.focus?.());
+    }
+  }, [bodyInputRef, conversation?.phoneNumber]);
 
   // Wrapper: if user has only attachments (no text), bypass the polish flow.
   const handleSend = async () => {
@@ -426,6 +427,34 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                   Schedule
                 </Button>
               )}
+
+              <AskJarvisButton
+                contextType="sms"
+                contextId={conversation.phoneNumber}
+                label="Ask JARVIS"
+                context={{
+                  source: "sms_thread",
+                  phone: conversation.phoneNumber,
+                  customer_id: callerLookup.data?.id || null,
+                  customer_name: conversation.contactName || headerName,
+                  customer_phone: conversation.phoneNumber,
+                  contact_type: conversation.contactType,
+                  status: conversation.status,
+                  unread_count: conversation.unreadCount,
+                  job_id: conversation.latestJobId || null,
+                  job_context: conversation.jobContext || null,
+                  estimate_context: conversation.estimateContext || null,
+                  last_message: conversation.lastMessage?.body || null,
+                  last_message_at: conversation.lastMessage?.created_at || null,
+                  suggested_actions: [
+                    "Summarize this SMS thread",
+                    "Identify whether this needs a reply, job update, estimate update, or customer note",
+                    "Draft a response for human approval",
+                  ],
+                }}
+                variant="outline"
+                className="h-8 gap-1.5 text-xs"
+              />
             </div>
           </div>
         )}

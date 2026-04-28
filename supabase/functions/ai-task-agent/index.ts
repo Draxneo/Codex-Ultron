@@ -492,7 +492,7 @@ async function getChatContext(sb: any) {
   // Get job info for job-linked channels
   const jobLinkedChannels = channels.filter((c: any) => c.job_id);
   const jobIds = jobLinkedChannels.map((c: any) => c.job_id);
-  let jobMap: Record<string, any> = {};
+  const jobMap: Record<string, any> = {};
   if (jobIds.length > 0) {
     const { data: jobs } = await sb.from("jobs")
       .select("id, hcp_job_number, customer_name, job_type, status, scheduled_date, assigned_to")
@@ -705,7 +705,7 @@ async function getMaintenancePlansContext(sb: any) {
 
   // Get perk usage summaries
   const activeIds = agreements.filter((a: any) => a.status === "active").map((a: any) => a.id);
-  let perkSummaries: Record<string, { count: number; totalDiscount: number }> = {};
+  const perkSummaries: Record<string, { count: number; totalDiscount: number }> = {};
   if (activeIds.length > 0) {
     const { data: perks } = await sb.from("plan_perk_usage")
       .select("agreement_id, perk_type, applied_discount")
@@ -718,7 +718,7 @@ async function getMaintenancePlansContext(sb: any) {
   }
 
   // Get visit counts
-  let visitCounts: Record<string, number> = {};
+  const visitCounts: Record<string, number> = {};
   if (activeIds.length > 0) {
     const { data: visits } = await sb.from("agreement_visits")
       .select("agreement_id")
@@ -1975,7 +1975,7 @@ async function executeToolCall(
           .replace(/\b(circle)\b/g, "cir")
           .replace(/\b(terrace)\b/g, "ter")
           .replace(/\b(parkway)\b/g, "pkwy")
-          .replace(/[^\x00-\x7F]+/g, " ")
+          .replace(/[\u0080-\uFFFF]+/g, " ")
           .replace(/[^a-z0-9\s]/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -2545,7 +2545,7 @@ function buildCustomerLookupContext(preflightLookup: any): string {
       const address = [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(", ");
       return `- ${name}${phones ? ` | ${phones}` : ""}${customer.email ? ` | ${customer.email}` : ""}${address ? ` | ${address}` : ""}`;
     });
-    return `\n\nSERVER-VERIFIED CUSTOMER LOOKUP (latest user message):\nSearch args: ${searchArgs}\nRESULT: FOUND ${preflightLookup.count} CRM match(es). This lookup ran before the model responded and is authoritative. If a customer is listed here, NEVER say \"no record found\".\n${rows.join("\n")}`;
+    return `\n\nSERVER-VERIFIED CUSTOMER LOOKUP (latest user message):\nSearch args: ${searchArgs}\nRESULT: FOUND ${preflightLookup.count} CRM match(es). This lookup ran before the model responded and is authoritative. If a customer is listed here, NEVER say "no record found".\n${rows.join("\n")}`;
   }
 
   return `\n\nSERVER-VERIFIED CUSTOMER LOOKUP (latest user message):\nSearch args: ${searchArgs}\nRESULT: NO CRM MATCH FOUND from the preflight lookup. If you state that no record exists, only do so after honoring this lookup result and/or calling search_customer.`;
@@ -2817,7 +2817,7 @@ serve(async (req) => {
         // For on-site techs, enrich with job/customer context
         const arrivalEvents = events.filter((e: any) => e.event_type === "job_arrival" || e.event_type === "estimate_arrival");
         const jobRefIds = arrivalEvents.map((e: any) => e.location_ref_id).filter(Boolean);
-        let jobCtxMap: Record<string, any> = {};
+        const jobCtxMap: Record<string, any> = {};
         if (jobRefIds.length > 0) {
           const { data: jobs } = await sb.from("jobs").select("id, customer_name, customer_id, address, job_type, hcp_job_number, job_number").in("id", jobRefIds);
           const { data: ests } = await sb.from("estimates").select("id, customer_name, customer_id, address, estimate_number").in("id", jobRefIds);
@@ -3270,7 +3270,7 @@ TOOL ROUTING RULES (follow strictly)
       );
     }
 
-    let currentAiData = await aiResponse.json();
+    const currentAiData = await aiResponse.json();
     const mainUsage = currentAiData.usage;
     const mainTokens = (mainUsage?.prompt_tokens || 0) + (mainUsage?.completion_tokens || 0);
     const mainInputTokens = mainUsage?.prompt_tokens || 0;
@@ -3287,7 +3287,7 @@ TOOL ROUTING RULES (follow strictly)
       metadata: { model: requestedModel, mode: callerMode || "chat" },
     });
     let currentMessage = currentAiData.choices?.[0]?.message;
-    let allToolActions: any[] = [];
+    const allToolActions: any[] = [];
     let loopMessages = [...messages];
     let toolRounds = 0;
     const MAX_TOOL_ROUNDS = 5;
@@ -3381,7 +3381,7 @@ TOOL ROUTING RULES (follow strictly)
     if (allToolActions.length > 0) {
       const rawReply = currentMessage?.content || "Action completed.";
       const reply = rawReply
-        .replace(/\[BOOKING_INTENT:\{[^\}]*\}\]/g, '')
+        .replace(/\[BOOKING_INTENT:\{[^}]*}\]/g, '')
         .replace(/\[confirm:(yes|no)\]/g, '')
         .replace(/\[INTAKE_PASTE\]/g, '')
         .trim() || "Action completed.";
@@ -3394,7 +3394,7 @@ TOOL ROUTING RULES (follow strictly)
 
     const rawBriefing = currentMessage?.content || "No response generated.";
     const briefing = rawBriefing
-      .replace(/\[BOOKING_INTENT:\{[^\}]*\}\]/g, '')
+      .replace(/\[BOOKING_INTENT:\{[^}]*}\]/g, '')
       .replace(/\[confirm:(yes|no)\]/g, '')
       .replace(/\[INTAKE_PASTE\]/g, '')
       .trim() || "No response generated.";

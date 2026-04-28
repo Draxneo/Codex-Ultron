@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseAdmin();
 
     let lineItemName = "Payment";
-    let metadata: Record<string, string> = { type };
+    const metadata: Record<string, string> = { type };
 
     if (type === "invoice" && invoice_id) {
       const { data: invoice } = await supabase

@@ -248,7 +248,7 @@ Deno.serve(async (req) => {
       const sb = getSupabaseAdmin();
       const body = await (err as any);
       // Best-effort error logging
-    } catch (_) {}
+    } catch (_) { /* best-effort logging only */ }
 
     return new Response(
       JSON.stringify({ error: (err as Error).message }),

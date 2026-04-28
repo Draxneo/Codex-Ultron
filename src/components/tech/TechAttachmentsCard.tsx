@@ -34,6 +34,7 @@ const UPLOAD_ACCEPT = "image/*,video/*,application/pdf";
 
 interface TechAttachmentsCardProps {
   jobId: string;
+  hcpId?: string | null;
   customerPhone?: string | null;
   jobNumber?: string | null;
   techName?: string | null;
@@ -42,6 +43,7 @@ interface TechAttachmentsCardProps {
 
 export function TechAttachmentsCard({
   jobId,
+  hcpId,
   customerPhone,
   jobNumber,
   techName,
@@ -50,7 +52,7 @@ export function TechAttachmentsCard({
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  const { data: attachments = [], isLoading } = useJobAttachments(jobId);
+  const { data: attachments = [], isLoading } = useJobAttachments(hcpId || undefined, jobId);
 
   const [uploading, setUploading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -84,8 +86,8 @@ export function TechAttachmentsCard({
   };
 
   const refreshAttachments = async () => {
-    await (supabase as any).from("job_attachment_cache").delete().eq("hcp_id", jobId);
-    queryClient.invalidateQueries({ queryKey: ["job-attachments", jobId] });
+    if (hcpId) await (supabase as any).from("job_attachment_cache").delete().eq("hcp_id", hcpId);
+    queryClient.invalidateQueries({ queryKey: ["job-attachments", hcpId || null, jobId] });
   };
 
   const handleFiles = async (files: FileList | null) => {

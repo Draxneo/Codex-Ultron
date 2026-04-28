@@ -17,7 +17,7 @@ export async function cancelCallNotification() {
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
     await LocalNotifications.cancel({ notifications: [{ id: CALL_NOTIFICATION_ID }] });
-  } catch {}
+  } catch { /* noop */ }
 }
 
 export function useIncomingCallNotification(

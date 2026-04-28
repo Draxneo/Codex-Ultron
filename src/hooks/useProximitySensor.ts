@@ -33,7 +33,7 @@ export function useProximitySensor(enabled: boolean) {
       try {
         await wakeLockRef.current?.release();
         wakeLockRef.current = null;
-      } catch {}
+      } catch { /* noop */ }
     };
 
     // Try ProximitySensor (Chromium Generic Sensor API)
@@ -62,7 +62,7 @@ export function useProximitySensor(enabled: boolean) {
 
     return () => {
       active = false;
-      try { sensor?.stop(); } catch { }
+      try { sensor?.stop(); } catch { /* noop */ }
       releaseWakeLock();
     };
   }, [enabled, isNative, platform]);

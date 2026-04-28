@@ -7,67 +7,97 @@ export interface HcpAttachment {
   url: string;
   file_type: string;
   created_at?: string;
+  file_path?: string;
+  path?: string;
+  hidden_from_tech_share?: boolean;
 }
 
 /**
- * Fetches job attachments with DB-level caching.
- * First checks job_attachment_cache table; if miss, calls HCP API
- * via edge function and stores result for future instant loads.
+ * Fetches job attachments from our local job_attachments table and, when an
+ * HCP id is available, merges in cached/imported HCP attachments.
  */
-export function useJobAttachments(hcpId: string | undefined) {
+export function useJobAttachments(hcpId: string | undefined, jobId?: string) {
   return useQuery({
-    queryKey: ["job-attachments", hcpId],
+    queryKey: ["job-attachments", hcpId || null, jobId || null],
     queryFn: async () => {
-      // 1. Check DB cache first
-      const { data: cached } = await (supabase
-        .from("job_attachment_cache" as any)
-        .select("attachments")
-        .eq("hcp_id", hcpId!)
-        .maybeSingle() as any);
-
       const normalize = (raw: any): HcpAttachment[] => {
         if (!raw) return [];
         if (Array.isArray(raw)) return raw as HcpAttachment[];
         if (typeof raw === "string") {
-          try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
         }
         return [];
       };
 
-      // Ensure every attachment has a usable .url — fall back to public URL
-      // for fresh tech-uploaded photos that only have a file_path.
       const ensureUrl = (list: HcpAttachment[]): HcpAttachment[] =>
-        list.map((a: any) => {
-          if (a.url) return a;
-          const path = a.file_path || a.path;
-          if (!path) return a;
-          const { data: pub } = supabase.storage.from("job-photos").getPublicUrl(path);
-          return { ...a, url: pub.publicUrl };
+        list.map((attachment: any) => {
+          if (attachment.url) return attachment;
+          const path = attachment.file_path || attachment.path;
+          if (!path) return attachment;
+          const { data: publicUrl } = supabase.storage.from("job-photos").getPublicUrl(path);
+          return { ...attachment, path, url: publicUrl.publicUrl };
         });
 
+      const localResult = jobId
+        ? await (supabase as any)
+          .from("job_attachments")
+          .select("id,file_name,file_path,file_type,created_at,hidden_from_tech_share")
+          .eq("job_id", jobId)
+          .order("created_at", { ascending: false })
+        : { data: [], error: null };
+
+      if (localResult.error) throw localResult.error;
+
+      const localAttachments = ensureUrl((localResult.data || []).map((row: any) => ({
+        ...row,
+        path: row.file_path,
+      })));
+
+      if (!hcpId) return localAttachments;
+
+      const mergeAttachments = (remoteAttachments: HcpAttachment[]) => {
+        const seen = new Set<string>();
+        return [...localAttachments, ...remoteAttachments].filter((attachment: any) => {
+          const key = attachment.id || attachment.hcp_attachment_id || attachment.url || attachment.file_path || attachment.path;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      };
+
+      const { data: cached } = await (supabase
+        .from("job_attachment_cache" as any)
+        .select("attachments")
+        .eq("hcp_id", hcpId)
+        .maybeSingle() as any);
+
       if ((cached as any)?.attachments) {
-        return ensureUrl(normalize((cached as any).attachments));
+        return mergeAttachments(ensureUrl(normalize((cached as any).attachments)));
       }
 
-      // 2. Cache miss — fetch from HCP API via edge function
       const { data, error } = await supabase.functions.invoke("fetch-job-attachments", {
         body: { hcp_id: hcpId },
       });
       if (error) throw error;
-      const attachments = ensureUrl(normalize(data?.attachments));
 
-      // 3. Store in DB cache for next time (fire-and-forget) — store as JSONB object, not stringified
+      const remoteAttachments = ensureUrl(normalize(data?.attachments));
+
       supabase
         .from("job_attachment_cache" as any)
         .upsert(
-          { hcp_id: hcpId, attachments: attachments as any, fetched_at: new Date().toISOString() } as any,
-          { onConflict: "hcp_id" }
+          { hcp_id: hcpId, attachments: remoteAttachments as any, fetched_at: new Date().toISOString() } as any,
+          { onConflict: "hcp_id" },
         )
         .then(() => {});
 
-      return attachments;
+      return mergeAttachments(remoteAttachments);
     },
-    enabled: !!hcpId,
-    staleTime: 30 * 60 * 1000, // 30 min — attachments don't change
+    enabled: !!hcpId || !!jobId,
+    staleTime: 30 * 60 * 1000,
   });
 }

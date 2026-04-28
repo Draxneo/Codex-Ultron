@@ -40,8 +40,9 @@ export function CatalogImageUpload({ currentUrl, bucket, folder, onUploaded, cla
         .getPublicUrl(path);
 
       onUploaded(publicUrl);
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unable to upload image";
+      toast({ title: "Upload failed", description: message, variant: "destructive" });
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";

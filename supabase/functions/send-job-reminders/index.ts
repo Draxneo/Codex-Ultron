@@ -47,7 +47,7 @@ async function sendReminderForJob(
   }
 
   let smsData: any = {};
-  try { smsData = typeof smsResult.data === "string" ? JSON.parse(smsResult.data) : smsResult.data || {}; } catch {}
+  try { smsData = typeof smsResult.data === "string" ? JSON.parse(smsResult.data) : smsResult.data || {}; } catch { /* ignore malformed SMS response */ }
   const wasBlocked = smsData?.queued === true || smsData?.blocked === true;
 
   if (!wasBlocked) {
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       if (smsResult.error) throw smsResult.error;
 
       let smsData: any = {};
-      try { smsData = typeof smsResult.data === "string" ? JSON.parse(smsResult.data) : smsResult.data || {}; } catch {}
+      try { smsData = typeof smsResult.data === "string" ? JSON.parse(smsResult.data) : smsResult.data || {}; } catch { /* ignore malformed SMS response */ }
       const wasBlocked = smsData?.queued === true || smsData?.blocked === true;
 
       if (!wasBlocked) {

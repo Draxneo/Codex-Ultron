@@ -82,7 +82,7 @@ export function SmsContactCard({ conversation, isExpanded, onToggle, sending, on
     if (isExpanded && unreadCount > 0) {
       onMarkRead(phoneNumber);
     }
-  }, [isExpanded, phoneNumber, unreadCount]);
+  }, [isExpanded, onMarkRead, phoneNumber, unreadCount]);
 
   const totalCount = messages.length;
   const startIdx = Math.max(0, totalCount - visibleCount);

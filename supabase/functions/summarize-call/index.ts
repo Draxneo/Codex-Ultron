@@ -561,7 +561,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
       if (!hcpId && extracted.address && extracted.address.length > 5) {
         const normAddr = extracted.address
           .toLowerCase()
-          .replace(/[.,#\-]/g, " ")
+          .replace(/[.,#-]/g, " ")
           .replace(/\b(apt|suite|ste|unit|bldg|building|fl|floor)\b.*$/i, "")
           .replace(/\s+/g, " ")
           .trim();
@@ -578,7 +578,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
           .limit(300);
 
         const addrJobMatch = (addrJobs || []).find((j: any) =>
-          j.address && j.address.toLowerCase().replace(/[.,#\-]/g, " ").replace(/\s+/g, " ").trim().includes(addrPrefix)
+          j.address && j.address.toLowerCase().replace(/[.,#-]/g, " ").replace(/\s+/g, " ").trim().includes(addrPrefix)
         );
         if (addrJobMatch?.hcp_id) {
           hcpId = addrJobMatch.hcp_id;
@@ -596,7 +596,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
             .limit(300);
 
           const addrEstMatch = (addrEsts || []).find((e: any) =>
-            e.address && e.address.toLowerCase().replace(/[.,#\-]/g, " ").replace(/\s+/g, " ").trim().includes(addrPrefix)
+            e.address && e.address.toLowerCase().replace(/[.,#-]/g, " ").replace(/\s+/g, " ").trim().includes(addrPrefix)
           );
           if (addrEstMatch?.hcp_id) {
             hcpId = addrEstMatch.hcp_id;
@@ -770,8 +770,8 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
 
     // Disabled for JARVIS 2.0: post-call booking drafts were too eager and could
     // fire before existing-job/estimate and multi-property checks ran.
-    if (
-      false &&
+    // eslint-disable-next-line no-constant-condition, no-constant-binary-expression
+    if (false &&
       !isEmployeeCall &&
       aiDraftOn &&
       extracted.service_type &&

@@ -169,9 +169,14 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
             </p>
             <div className="grid grid-cols-3 md:grid-cols-5 gap-1">
               {group.cards.map(({ label, icon, section, color, bg }) => (
-                <div key={section} onClick={() => onNavigateSection(section)}>
+                <button
+                  key={section}
+                  type="button"
+                  className="w-full text-left"
+                  onClick={() => onNavigateSection(section)}
+                >
                   <IconTile icon={icon} label={label} color={color} bg={bg} />
-                </div>
+                </button>
               ))}
             </div>
           </div>

@@ -115,7 +115,7 @@ export function useDesktopNotifications() {
             notify(`📱 New SMS from ${sender}`, msg.body?.slice(0, 120) || "New message", `sms-${msg.id}`, { icon: '📱' });
             const enabled = await smsAlertRef();
             if (enabled) {
-              try { playSmsAlert(); } catch {}
+              try { playSmsAlert(); } catch { /* noop */ }
             }
           }
         },

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -150,9 +150,9 @@ export default function Agreements() {
     return "active";
   };
 
-  const customerName = (customerId: string) => {
+  const customerName = useCallback((customerId: string) => {
     return customerNames.get(customerId)?.name || "Unknown";
-  };
+  }, [customerNames]);
 
   // Categorize agreements
   const categorized = useMemo(() => {
@@ -196,7 +196,7 @@ export default function Agreements() {
     );
 
     return { sortedKeys, groups, past };
-  }, [filtered, customerNames]);
+  }, [filtered, customerName]);
 
   const statusBadge = (a: ServiceAgreement) => {
     const s = getStatus(a);
@@ -224,7 +224,7 @@ export default function Agreements() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate("/catalog")}>
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => navigate("/payments")}>
               <Crown className="h-4 w-4 mr-1" /> Plan Templates
             </Button>
             <Button size="sm" className="text-xs bg-[hsl(var(--complete))] text-white hover:bg-[hsl(var(--complete))]/90" onClick={() => setCreating(true)}>
@@ -328,7 +328,10 @@ export default function Agreements() {
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>New Comfort Club Member</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>New Comfort Club Member</DialogTitle>
+            <DialogDescription>Add a customer to a maintenance agreement and choose their plan details.</DialogDescription>
+          </DialogHeader>
           <AgreementForm onSave={handleCreate} customerNames={customerNames} />
         </DialogContent>
       </Dialog>

@@ -429,7 +429,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     if (disabled) return;
     fetchMessages();
 
-    let channel = supabase
+    const channel = supabase
       .channel("sms_log_realtime")
       .on(
         "postgres_changes",
@@ -487,7 +487,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       clearInterval(heartbeat);
       supabase.removeChannel(channel);
     };
-  }, [fetchMessages, role, techPhoneFilter, disabled]);
+  }, [fetchMessages, role, setThreadStatus, techPhoneFilter, disabled]);
 
   // Resolve a phone number to a contact via DB fields first, then client-side lookup
   const resolveContact = useCallback(

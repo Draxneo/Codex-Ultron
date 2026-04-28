@@ -49,7 +49,7 @@ export default function Leads() {
     queryFn: async () => {
       let q = supabase
         .from("leads")
-        .select("*, customers!leads_customer_id_fkey(id, first_name, last_name)")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -58,7 +58,21 @@ export default function Leads() {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      const rows = data || [];
+      const customerIds = Array.from(new Set(rows.map((lead: any) => lead.customer_id).filter(Boolean)));
+      if (customerIds.length === 0) return rows;
+
+      const { data: customers, error: customerError } = await supabase
+        .from("customers")
+        .select("id, first_name, last_name")
+        .in("id", customerIds);
+      if (customerError) return rows;
+
+      const customerMap = new Map((customers || []).map((customer: any) => [customer.id, customer]));
+      return rows.map((lead: any) => ({
+        ...lead,
+        customers: lead.customer_id ? customerMap.get(lead.customer_id) || null : null,
+      }));
     },
   });
 

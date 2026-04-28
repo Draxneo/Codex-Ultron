@@ -43,7 +43,7 @@ export function useCallForegroundService(isRegistered: boolean, isOnCall: boolea
 
       // Stop existing service before changing mode
       if (currentModeRef.current !== "off") {
-        try { await plugin.stopForegroundService(); } catch {}
+        try { await plugin.stopForegroundService(); } catch { /* noop */ }
       }
 
       if (targetMode === "off") {
@@ -72,7 +72,7 @@ export function useCallForegroundService(isRegistered: boolean, isOnCall: boolea
         if (currentModeRef.current === "off") return;
         const plugin = await getPlugin();
         if (!plugin) return;
-        try { await plugin.stopForegroundService(); } catch {}
+        try { await plugin.stopForegroundService(); } catch { /* noop */ }
         currentModeRef.current = "off";
       };
       stop();

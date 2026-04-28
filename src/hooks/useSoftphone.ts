@@ -62,7 +62,6 @@ function callDebug(tag: string, data: Record<string, any> = {}) {
   const ts = new Date().toISOString();
   const elapsedMs = _callStartedAt ? Date.now() - _callStartedAt : null;
   const enriched = { ...data, elapsedMs };
-  // eslint-disable-next-line no-console
   console.log(`[CallDebug ${ts}] ${tag}`, enriched);
   CALL_DEBUG_BUFFER.push({ ts, tag, data: enriched });
   if (CALL_DEBUG_BUFFER.length > CALL_DEBUG_MAX) CALL_DEBUG_BUFFER.shift();
@@ -72,7 +71,6 @@ function markCallStart() { _callStartedAt = Date.now(); callDebug("call.start.ma
 function markCallEnd() { _callStartedAt = null; }
 if (typeof window !== "undefined") {
   (window as any).__callDebugLog = () => {
-    // eslint-disable-next-line no-console
     console.table(CALL_DEBUG_BUFFER);
     return CALL_DEBUG_BUFFER;
   };
@@ -676,8 +674,8 @@ export function useSoftphone(enabled: boolean = true) {
       if (deviceRef.current) {
         const staleDevice = deviceRef.current;
         deviceRef.current = null;
-        try { (staleDevice as any).removeAllListeners?.(); } catch {}
-        try { staleDevice.destroy(); } catch {}
+        try { (staleDevice as any).removeAllListeners?.(); } catch { /* noop */ }
+        try { staleDevice.destroy(); } catch { /* noop */ }
       }
 
       const device = new Device(token, {
@@ -717,13 +715,13 @@ export function useSoftphone(enabled: boolean = true) {
               console.warn("[Softphone] Token expired — fetching fresh token + re-registering");
               const refreshed = await refreshDeviceToken("expired token", d);
               if (!refreshed) throw new Error("Unable to refresh voice token");
-              try { d.unregister(); } catch {}
+              try { d.unregister(); } catch { /* noop */ }
               await d.register();
               scheduleTokenRefresh(d);
               setState((s) => ({ ...s, status: "ready", error: null }));
             } catch (refreshErr: any) {
               console.error("[Softphone] Token refresh recovery failed:", refreshErr);
-              try { d.destroy(); } catch {}
+              try { d.destroy(); } catch { /* noop */ }
               deviceRef.current = null;
               setState((s) => ({ ...s, status: "offline", error: refreshErr?.message || msg }));
             }
@@ -774,7 +772,7 @@ export function useSoftphone(enabled: boolean = true) {
             currentStatus,
             existingIncomingSid: incomingCallSidRef.current,
           });
-          try { call.reject(); } catch {}
+          try { call.reject(); } catch { /* noop */ }
           return;
         }
 
@@ -783,7 +781,7 @@ export function useSoftphone(enabled: boolean = true) {
         setState((s) => {
           // Defensive guard: if state changed mid-await to on-call, reject here too
           if (s.status === "on-call" || s.status === "connecting" || s.status === "ringing" || s.incomingCall) {
-            try { call.reject(); } catch {}
+            try { call.reject(); } catch { /* noop */ }
             return s;
           }
 
@@ -911,7 +909,7 @@ export function useSoftphone(enabled: boolean = true) {
     } finally {
       initializingRef.current = false;
     }
-  }, [buildCallRecord, clearTokenRefreshTimer, dispatchLifecycle, ensureMicPermission, refreshDeviceToken, resolveCallerName, safeRegisterDevice, scheduleTokenRefresh, startSafetyTimer, telephony, wireCallEndHandlers]);
+  }, [buildCallRecord, clearSafetyTimer, clearTokenRefreshTimer, dispatchLifecycle, ensureMicPermission, fetchToken, getDeviceLifecycleState, refreshDeviceToken, resolveCallerName, safeRegisterDevice, scheduleTokenRefresh, startSafetyTimer, startTimer, telephony, wireCallEndHandlers]);
 
   // On Electron pop-out: listen for dial-number IPC from the main window
   // (dial ref isn't available yet — we use dialRef to avoid circular dependency)
@@ -962,7 +960,7 @@ export function useSoftphone(enabled: boolean = true) {
 
     const unsubscribe = onPowerResume(() => {
       console.log("[Softphone] Power resume — re-warming audio + re-registering Twilio Device");
-      try { warmAudioContext(); } catch {}
+      try { warmAudioContext(); } catch { /* noop */ }
       const device = deviceRef.current;
       if (!device) {
         if (!initializingRef.current) initialize();
@@ -981,7 +979,7 @@ export function useSoftphone(enabled: boolean = true) {
     });
 
     return unsubscribe;
-  }, [initialize, isElectronMainWindow, enabled]);
+  }, [enabled, initialize, isElectronMainWindow, refreshDeviceToken, safeRegisterDevice]);
 
   // ── Registration heartbeat ──
   // The Twilio Device WebSocket can silently drop (network blip, idle disconnect,
@@ -1012,7 +1010,7 @@ export function useSoftphone(enabled: boolean = true) {
           void safeRegisterDevice(device, "heartbeat").then((ok) => {
             callDebug("heartbeat.re-register.result", { ok, inCall });
             if (ok) return;
-            try { device.destroy(); } catch {}
+            try { device.destroy(); } catch { /* noop */ }
             if (deviceRef.current === device) {
               deviceRef.current = null;
             }
@@ -1043,7 +1041,7 @@ export function useSoftphone(enabled: boolean = true) {
 
     try {
       // Always safe: re-warm audio context (browser may have suspended it)
-      try { warmAudioContext(); } catch {}
+      try { warmAudioContext(); } catch { /* noop */ }
 
       // Read latest status from the ref-backed setState — never tear down
       // the Device while a call is in flight.
@@ -1080,12 +1078,12 @@ export function useSoftphone(enabled: boolean = true) {
       if (devState !== "registered") {
         console.log(`[Softphone recover] Device state="${devState}" — re-registering`);
         try {
-          try { await device.unregister(); } catch {}
+          try { await device.unregister(); } catch { /* noop */ }
           await safeRegisterDevice(device, "recoverIfNeeded");
           setState((s) => ({ ...s, status: "ready", error: null }));
         } catch (err) {
           console.error("[Softphone recover] Re-register failed, full re-init:", err);
-          try { device.destroy(); } catch {}
+          try { device.destroy(); } catch { /* noop */ }
           deviceRef.current = null;
           if (!initializingRef.current) await initialize();
         }
@@ -1191,7 +1189,7 @@ export function useSoftphone(enabled: boolean = true) {
               .from("estimates").select("customer_id").eq("id", resolvedJobId).maybeSingle();
             resolvedCustomerId = estRow?.customer_id ?? null;
           }
-        } catch {}
+        } catch { /* noop */ }
       }
 
       try {
@@ -1438,7 +1436,7 @@ export function useSoftphone(enabled: boolean = true) {
         const newStatus = payload.new?.status;
         if (newStatus === "in-progress" && !localAnsweredRef.current) {
           console.log("[Softphone] Call answered on another device — clearing ringing");
-          try { state.incomingCall?.reject(); } catch {}
+          try { state.incomingCall?.reject(); } catch { /* noop */ }
           incomingCallSidRef.current = null;
           clearSafetyTimer();
           sendToMain('call-status-change', 'ready');
@@ -1466,15 +1464,15 @@ export function useSoftphone(enabled: boolean = true) {
       if (deviceRef.current) {
         const device = deviceRef.current;
         deviceRef.current = null;
-        try { (device as any).removeAllListeners?.(); } catch {}
-        try { device.destroy(); } catch {}
+        try { (device as any).removeAllListeners?.(); } catch { /* noop */ }
+        try { device.destroy(); } catch { /* noop */ }
       }
     };
   }, [stopTimer, clearSafetyTimer, clearTokenRefreshTimer]);
 
-  const acceptWaitingCall = useCallback(() => {}, []);
+  const acceptWaitingCall = useCallback(() => { /* noop */ }, []);
 
-  const dismissWaitingCall = useCallback(() => {}, []);
+  const dismissWaitingCall = useCallback(() => { /* noop */ }, []);
 
   // Set a number to preload into the dialer UI.
   // On Electron main window, the popout window is the actual softphone — we

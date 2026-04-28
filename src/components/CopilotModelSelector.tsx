@@ -27,7 +27,9 @@ export function getSelectedModel(): string {
     if (cached && VALID_MODEL_IDS.has(cached)) return cached;
     // Clear stale/invalid model from cache
     if (cached) localStorage.removeItem("copilot_model_cache");
-  } catch {}
+  } catch {
+    // localStorage may be unavailable in private or embedded contexts.
+  }
   return "gpt-5-mini";
 }
 
@@ -36,7 +38,11 @@ export function CopilotModelSelector() {
 
   // Keep a localStorage cache for the synchronous getSelectedModel() getter
   useEffect(() => {
-    try { localStorage.setItem("copilot_model_cache", preferred_model); } catch {}
+    try {
+      localStorage.setItem("copilot_model_cache", preferred_model);
+    } catch {
+      // localStorage may be unavailable in private or embedded contexts.
+    }
   }, [preferred_model]);
 
   const selected = MODEL_OPTIONS.find((m) => m.id === preferred_model);

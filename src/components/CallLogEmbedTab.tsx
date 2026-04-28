@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { PhoneIncoming, PhoneOutgoing, PhoneOff, Phone, ExternalLink, Brain, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +57,7 @@ function toE164(phone: string): string {
 export function CustomerCallsTab({ phones, customerId }: { phones: string[]; customerId?: string }) {
   const [calls, setCalls] = useState<CallRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const normalizedPhones = useMemo(() => phones.map(normalizeLast10).filter(Boolean), [phones]);
 
   useEffect(() => {
     const fetchCalls = async () => {
@@ -76,8 +77,7 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
       }
 
       // Fallback: phone number matching
-      const normalized = phones.map(normalizeLast10).filter(Boolean);
-      if (normalized.length === 0) { setCalls([]); setLoading(false); return; }
+      if (normalizedPhones.length === 0) { setCalls([]); setLoading(false); return; }
 
       const { data, error } = await supabase
         .from("call_log")
@@ -89,7 +89,7 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
         setCalls([]);
       } else {
         const filtered = (data || []).filter((row: any) =>
-          normalized.includes(normalizeLast10(row.phone_number))
+          normalizedPhones.includes(normalizeLast10(row.phone_number))
         );
         setCalls(filtered as CallRow[]);
       }
@@ -97,7 +97,7 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
     };
 
     fetchCalls();
-  }, [phones.join(","), customerId]);
+  }, [normalizedPhones, customerId]);
 
   if (loading) return <div className="space-y-2 p-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>;
   if (!calls.length) return <p className="text-center text-muted-foreground py-8">No call records on file</p>;

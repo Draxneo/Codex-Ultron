@@ -64,7 +64,7 @@ serve(async (req) => {
       : [source];
 
     // For incremental mode, find the latest embedded_at per source
-    let lastEmbeddedMap: Record<string, string | null> = {};
+    const lastEmbeddedMap: Record<string, string | null> = {};
     if (mode === "incremental") {
       for (const src of sources) {
         const { data: latest } = await sb

@@ -56,6 +56,8 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
   custom: Sparkles,
 };
 
+const money = (value: number) => `$${Number(value || 0).toFixed(2)}`;
+
 export function TechCartCard({ jobId, customerId, customerPhone, customerName, bare = false }: Props) {
   const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -134,7 +136,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       return (
         <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3">
           <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 h-9 px-3 text-sm">
-            <CheckCircle2 className="h-4 w-4" /> Paid - ${total.toFixed(2)}
+            <CheckCircle2 className="h-4 w-4" /> Paid - {money(total)}
           </Badge>
           <p className="mt-2 text-xs text-muted-foreground">This customer cart is locked because payment was collected.</p>
         </div>
@@ -280,7 +282,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
                   <p className="text-sm font-semibold text-foreground">Comfort Club member</p>
                   {savings > 0 && (
                     <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-                      -${savings.toFixed(2)}
+                      -{money(savings)}
                     </Badge>
                   )}
                 </div>
@@ -289,7 +291,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
                 </p>
                 {savings > 0 && (
                   <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                    {memberInfo.savingsLabel}: ${savings.toFixed(2)}
+                    {memberInfo.savingsLabel}: {money(savings)}
                   </p>
                 )}
                 {visiblePerks.length > 0 && (
@@ -352,7 +354,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground leading-tight">{cart?.estimate_number || "Customer Cart"}</p>
             <p className="text-xs text-muted-foreground leading-tight">
-              {itemCount} item{itemCount !== 1 ? "s" : ""} - ${total.toFixed(2)}
+              {itemCount} item{itemCount !== 1 ? "s" : ""} - {money(total)}
             </p>
           </div>
         </div>
@@ -363,7 +365,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground">Customer options</p>
             <p className="text-xs text-muted-foreground">
-              {itemCount} item{itemCount !== 1 ? "s" : ""} - ${total.toFixed(2)}
+              {itemCount} item{itemCount !== 1 ? "s" : ""} - {money(total)}
             </p>
           </div>
           <Button
@@ -401,7 +403,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         <div>
           <div className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer will see</p>
-            <p className="text-xs font-bold">${total.toFixed(2)}</p>
+            <p className="text-xs font-bold">{money(total)}</p>
           </div>
           <ul className="divide-y divide-border">
             {items.map((item) => {
@@ -412,11 +414,11 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      qty {item.quantity} - ${Number(item.unit_price).toFixed(2)}
+                      qty {item.quantity} - {money(Number(item.unit_price))}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-foreground tabular-nums">
-                    ${Number(item.total_price).toFixed(2)}
+                    {money(Number(item.total_price))}
                   </p>
                   <button
                     type="button"

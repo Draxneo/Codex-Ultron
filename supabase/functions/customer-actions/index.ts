@@ -283,7 +283,7 @@ serve(async (req) => {
       const requestedModel = body.model || await getTaskModel(sb, "customer_parsing");
       const parsed = await parseCustomerSMS(body.text, openaiApiKey, requestedModel);
 
-      let existingMatches: any[] = [];
+      const existingMatches: any[] = [];
       const addressSearch = `${parsed.street}`.trim();
       if (addressSearch) {
         const addrResults = await searchLocalCustomers(addressSearch, sb);

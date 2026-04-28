@@ -46,7 +46,7 @@ export function useMediaPauseOnCall(status: CallStatus) {
         oscRef.current?.stop();
         oscRef.current?.disconnect();
         ctxRef.current.close();
-      } catch {}
+      } catch { /* noop */ }
       ctxRef.current = null;
       oscRef.current = null;
       console.log("[MediaPause] Audio focus released — external media can resume");
@@ -59,7 +59,7 @@ export function useMediaPauseOnCall(status: CallStatus) {
           oscRef.current?.stop();
           oscRef.current?.disconnect();
           ctxRef.current.close();
-        } catch {}
+        } catch { /* noop */ }
         ctxRef.current = null;
         oscRef.current = null;
       }

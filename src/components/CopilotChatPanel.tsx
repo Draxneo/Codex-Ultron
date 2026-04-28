@@ -36,6 +36,18 @@ interface ActiveContext {
   contactName: string;
 }
 
+type ChatImageContent = {
+  type: "image_url";
+  image_url: { url: string };
+};
+
+type ChatTextContent = {
+  type: "text";
+  text: string;
+};
+
+type ChatApiContent = string | Array<ChatTextContent | ChatImageContent>;
+
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { MediaViewer } from "@/components/ui/media-viewer";
@@ -637,7 +649,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
   };
 
   const sendMessage = async (overrideText?: string) => {
-    let text = (overrideText ?? input).trim();
+    const text = (overrideText ?? input).trim();
     const imageToSend = pastedImage;
     if ((!text && !imageToSend) || chatLoading || isReadOnly) return;
     setInput("");
@@ -646,7 +658,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
     await ensureActiveSession();
 
     // Build user message content — multimodal if image attached
-    let userContent: any = text || "What do you see in this image?";
+    let userContent: ChatApiContent = text || "What do you see in this image?";
     let imageUrl: string | null = null;
 
     if (imageToSend) {

@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 /**
  * TechFormSnapAndTalk — "Snap & Talk" tech form renderer.
  *

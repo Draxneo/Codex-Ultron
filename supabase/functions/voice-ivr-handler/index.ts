@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     const formData = await req.text();
     const params = new URLSearchParams(formData);
     let sigValid = false;
-    let signatureAcceptedBy = "twilio_signature";
+    const signatureAcceptedBy = "twilio_signature";
     try {
       sigValid = await validateTwilioSignature(req, formData);
     } catch (sigErr) {
@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
             }
           })();
           // EdgeRuntime keeps the worker alive long enough for background tasks
-          try { (globalThis as any).EdgeRuntime?.waitUntil?.(bgTasks); } catch {}
+          try { (globalThis as any).EdgeRuntime?.waitUntil?.(bgTasks); } catch { /* waitUntil may be unavailable */ }
 
           return new Response(
             overflowDialTwiml("after_hours"),

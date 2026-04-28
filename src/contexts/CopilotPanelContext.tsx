@@ -1,17 +1,23 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+type JarvisRecord = Record<string, unknown>;
+
+function textValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 /**
  * JarvisContextPayload — structured data returned by `jarvis-context-builder`.
  * Sent to `ai-task-agent` via `body.jarvis_context` so the agent can answer
  * without redoing search_customer / lookup history.
  */
 export interface JarvisContextPayload {
-  trigger: "call" | "sms" | "voicemail";
+  trigger: "call" | "sms" | "voicemail" | "job" | "estimate" | "customer" | "dispatch_card" | "phone" | "crm";
   built_at: string;
-  contact: any;
-  artifact: any;
-  recent_history: { jobs: any[]; calls: any[]; sms: any[] };
+  contact: JarvisRecord | null;
+  artifact: JarvisRecord;
+  recent_history: { jobs: JarvisRecord[]; calls: JarvisRecord[]; sms: JarvisRecord[] };
   suggested_actions: string[];
 }
 
@@ -32,6 +38,13 @@ interface CopilotPanelState {
   consumePendingSmsSession: () => { phone: string; contactName?: string } | null;
   startVoicemailSession: (voicemailId: string, phone: string, contactName?: string) => void;
   consumePendingVoicemailSession: () => { voicemailId: string; phone: string; contactName?: string } | null;
+  startRecordSession: (args: {
+    contextType: JarvisContextPayload["trigger"];
+    contextId?: string | null;
+    label?: string;
+    prompt?: string;
+    context?: JarvisRecord;
+  }) => void;
   /** Bumps on every start*Session / sendQuery so effects can re-fire */
   pendingVersion: number;
 }
@@ -51,6 +64,7 @@ const CopilotPanelContext = createContext<CopilotPanelState>({
   consumePendingSmsSession: () => null,
   startVoicemailSession: () => {},
   consumePendingVoicemailSession: () => null,
+  startRecordSession: () => {},
   pendingVersion: 0,
 });
 
@@ -95,7 +109,7 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
    * the result so the chat panel sends it with the first user message.
    * The panel opens immediately — no await needed.
    */
-  const fetchContext = useCallback(async (args: Record<string, any>) => {
+  const fetchContext = useCallback(async (args: JarvisRecord) => {
     try {
       const { data, error } = await supabase.functions.invoke("jarvis-context-builder", { body: args });
       if (!error && data && !data.error) {
@@ -150,6 +164,47 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
     return v;
   }, []);
 
+  const startRecordSession = useCallback((args: {
+    contextType: JarvisContextPayload["trigger"];
+    contextId?: string | null;
+    label?: string;
+    prompt?: string;
+    context?: JarvisRecord;
+  }) => {
+    const context = args.context || {};
+    const label = args.label || textValue(context.title) || textValue(context.customer_name) || args.contextId || args.contextType;
+    pendingContextRef.current = {
+      trigger: args.contextType,
+      built_at: new Date().toISOString(),
+      contact: (context.contact as JarvisRecord | undefined) || {
+        id: context.customer_id || null,
+        name: context.customer_name || context.customerName || null,
+        phone: context.customer_phone || context.phone || null,
+        address: context.address || null,
+      },
+      artifact: {
+        id: args.contextId || context.id || null,
+        type: args.contextType,
+        label,
+        ...context,
+      },
+      recent_history: {
+        jobs: Array.isArray(context.recent_jobs) ? context.recent_jobs as JarvisRecord[] : [],
+        calls: Array.isArray(context.recent_calls) ? context.recent_calls as JarvisRecord[] : [],
+        sms: Array.isArray(context.recent_sms) ? context.recent_sms as JarvisRecord[] : [],
+      },
+      suggested_actions: Array.isArray(context.suggested_actions) ? context.suggested_actions.map(String) : [
+        "Summarize this record",
+        "Tell me the next best action",
+        "Draft any needed customer or team message for human approval",
+      ],
+    };
+    pendingQueryRef.current = args.prompt ||
+      `Use the attached ${args.contextType} context for ${label}. Summarize what matters, tell me what's next, and suggest any action that needs human approval.`;
+    setPendingVersion((v) => v + 1);
+    setOpen(true);
+  }, []);
+
   // Cmd+K / Ctrl+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -170,6 +225,7 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
       startCallSession, consumePendingCallSession, activeCallPreview,
       startSmsSession, consumePendingSmsSession,
       startVoicemailSession, consumePendingVoicemailSession,
+      startRecordSession,
       pendingVersion,
     }}>
       {children}

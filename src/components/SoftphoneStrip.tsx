@@ -270,6 +270,17 @@ interface SoftphoneStripProps {
 
 export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: SoftphoneStripProps) {
   const softphone = useSoftphoneContext();
+  const {
+    activeCall,
+    callDuration,
+    callerInfo,
+    consumeDialNumber,
+    dial,
+    incomingCall,
+    pendingDialNumber,
+    sendDigit,
+    status,
+  } = softphone;
   const { startCallSession, sendQuery } = useCopilotPanel();
   const [expanded, setExpanded] = useState(alwaysExpanded);
   const [dialInput, setDialInput] = useState("");
@@ -282,25 +293,25 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
   // Consume pending dial number from ClickToCall
   useEffect(() => {
-    if (softphone.pendingDialNumber) {
-      setDialInput(softphone.pendingDialNumber);
+    if (pendingDialNumber) {
+      setDialInput(pendingDialNumber);
       setExpanded(true);
-      softphone.consumeDialNumber();
+      consumeDialNumber();
     }
-  }, [softphone.pendingDialNumber]);
+  }, [consumeDialNumber, pendingDialNumber]);
 
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],
     queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
   });
   const dialTonesEnabled = dialTonesSetting !== "false";
-  const isActive = ["connecting", "ringing", "on-call"].includes(softphone.status);
-  const hasIncoming = softphone.status === "ringing" && !!softphone.incomingCall;
-  const isOnCall = softphone.status === "on-call";
-  const isConnecting = softphone.status === "connecting";
-  const isReady = softphone.status === "ready" || softphone.status === "registering";
+  const isActive = ["connecting", "ringing", "on-call"].includes(status);
+  const hasIncoming = status === "ringing" && !!incomingCall;
+  const isOnCall = status === "on-call";
+  const isConnecting = status === "connecting";
+  const isReady = status === "ready" || status === "registering";
 
-  const { liveTranscript, transcriptEndRef, liveTranscriptionEnabled } = useLiveTranscript(softphone.activeCall, isOnCall);
+  const { liveTranscript, transcriptEndRef, liveTranscriptionEnabled } = useLiveTranscript(activeCall, isOnCall);
 
   // Track which call we've already screen-popped to avoid re-firing
   const screenPoppedCallRef = useRef<string | null>(null);
@@ -317,17 +328,17 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
   // ── Screen Pop + Copilot auto-launch on incoming ring ──
   useEffect(() => {
-    if (!hasIncoming || !softphone.incomingCall) return;
+    if (!hasIncoming || !incomingCall) return;
 
-    const callSid = (softphone.incomingCall as any)?.parameters?.CallSid || "";
-    const callKey = callSid || softphone.callerInfo?.number || "unknown";
+    const callSid = (incomingCall as any)?.parameters?.CallSid || "";
+    const callKey = callSid || callerInfo?.number || "unknown";
 
     // Only fire once per unique incoming call
     if (screenPoppedCallRef.current === callKey) return;
     screenPoppedCallRef.current = callKey;
 
-    const phone = softphone.callerInfo?.number || "";
-    const contactName = softphone.callerInfo?.name;
+    const phone = callerInfo?.number || "";
+    const contactName = callerInfo?.name;
 
     // 1) Electron: open/focus the phone pop-out window
     if (isElectron()) {
@@ -345,17 +356,17 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
     if (phone) {
       startCallSession(phone, contactName, callSid);
     }
-  }, [hasIncoming, softphone.incomingCall, softphone.callerInfo, telephony]);
+  }, [callerInfo, hasIncoming, incomingCall, startCallSession, telephony]);
 
   // ── Track caller info while on call so we can use it after hang-up ──
   useEffect(() => {
-    if (isOnCall && softphone.callerInfo?.number) {
+    if (isOnCall && callerInfo?.number) {
       lastCallInfoRef.current = {
-        phone: softphone.callerInfo.number,
-        name: softphone.callerInfo.name,
+        phone: callerInfo.number,
+        name: callerInfo.name,
       };
     }
-  }, [isOnCall, softphone.callerInfo]);
+  }, [callerInfo, isOnCall]);
 
   // ── Auto-trigger JARVIS post-call review when call ends (softphone calls) ──
   useEffect(() => {
@@ -442,9 +453,9 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
   // Push call context up to Copilot (include transcript)
   useEffect(() => {
-    if (isOnCall && softphone.callerInfo) {
-      const name = softphone.callerInfo.name || "Unknown";
-      const twilioSid = (softphone.activeCall as any)?.parameters?.CallSid || "";
+    if (isOnCall && callerInfo) {
+      const name = callerInfo.name || "Unknown";
+      const twilioSid = (activeCall as any)?.parameters?.CallSid || "";
       const transcriptText = liveTranscript
         .filter((t) => t.is_final)
         .map((t) => t.text)
@@ -456,32 +467,32 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
         ? `\n\nLive transcript so far:\n"${trimmedTranscript}"`
         : "";
       const sidCtx = twilioSid ? `\nActive call twilio_sid: ${twilioSid}` : "";
-      onCallContextChange?.(`Currently on a phone call with ${name} (${softphone.callerInfo.number}). Duration: ${formatDuration(softphone.callDuration)}.${sidCtx}${transcriptCtx}`);
+      onCallContextChange?.(`Currently on a phone call with ${name} (${callerInfo.number}). Duration: ${formatDuration(callDuration)}.${sidCtx}${transcriptCtx}`);
     } else if (!isActive) {
       onCallContextChange?.(null);
     }
-  }, [isOnCall, isActive, softphone.callerInfo, softphone.callDuration, onCallContextChange, liveTranscript]);
+  }, [activeCall, callDuration, callerInfo, isOnCall, isActive, onCallContextChange, liveTranscript]);
 
   const handleDial = () => {
     if (!dialInput.trim()) return;
     const digits = dialInput.replace(/\D/g, "");
     const e164 = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}` : `+${digits}`;
     // Trigger Copilot customer lookup before dialing
-    const resolvedName = softphone.callerInfo?.name;
+    const resolvedName = callerInfo?.name;
     startCallSession(dialInput, resolvedName);
     if (!ownsWebphone) {
       openPhoneConsole(e164);
       setDialInput("");
       return;
     }
-    softphone.dial(e164);
+    dial(e164);
     setDialInput("");
   };
 
   const handleDigitPress = (digit: string) => {
     if (dialTonesEnabled) playDtmfTone(digit);
-    if (isActive && softphone.activeCall) {
-      softphone.sendDigit(digit);
+    if (isActive && activeCall) {
+      sendDigit(digit);
     } else {
       setDialInput((prev) => prev + digit);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { ArrowDownLeft, ArrowUpRight, Phone, ExternalLink } from "lucide-react";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +27,8 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
   const [messages, setMessages] = useState<SmsRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const normalized = phones.map(normalizeLast10).filter(Boolean);
+  const normalized = useMemo(() => phones.map(normalizeLast10).filter(Boolean), [phones]);
+  const normalizedKey = normalized.join("_");
 
   const fetchSms = useCallback(async () => {
     if (normalized.length === 0) { setLoading(false); return; }
@@ -46,7 +47,7 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
       setMessages(filtered as SmsRow[]);
     }
     setLoading(false);
-  }, [phones.join(",")]);
+  }, [normalized]);
 
   useEffect(() => { fetchSms(); }, [fetchSms]);
 
@@ -54,7 +55,7 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
   useEffect(() => {
     if (normalized.length === 0) return;
     const channel = supabase
-      .channel("sms_embed_customer_" + normalized.join("_"))
+      .channel("sms_embed_customer_" + normalizedKey)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sms_log" }, (payload) => {
         const msg = payload.new as SmsRow;
         if (normalized.includes(normalizeLast10(msg.phone_number))) {
@@ -66,7 +67,7 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [phones.join(",")]);
+  }, [normalized, normalizedKey]);
 
   // Refetch on tab visibility change
   useEffect(() => {

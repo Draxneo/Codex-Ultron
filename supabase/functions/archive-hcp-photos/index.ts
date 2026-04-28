@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     const totalPages = Math.ceil((totalJobs || 0) / page_size);
     let archived = 0;
     let skipped = 0;
-    let errors: string[] = [];
+    const errors: string[] = [];
 
     for (const job of (jobs || [])) {
       try {

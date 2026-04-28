@@ -259,7 +259,7 @@ export default function TechDashboard() {
                 const e = job.arrival_end ? format(new Date(job.arrival_end), "h:mma").toLowerCase() : null;
                 timeRange = e ? `${s}-${e}` : s;
               }
-            } catch {}
+            } catch { /* noop */ }
 
             return (
               <div key={job.id} className="space-y-0">

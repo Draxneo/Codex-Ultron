@@ -37,9 +37,9 @@ export function useCertificateByToken(token: string | undefined) {
         .from("customer_certificates" as any)
         .select("*")
         .eq("token", token!)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as unknown as CustomerCertificate;
+      return data as unknown as CustomerCertificate | null;
     },
   });
 }

@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
           if (extraction.success && extraction.output) {
             const jsonMatch = extraction.output.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
-              try { fields = JSON.parse(jsonMatch[0]); } catch {}
+              try { fields = JSON.parse(jsonMatch[0]); } catch { /* ignore malformed extraction JSON */ }
             }
           }
           await stopInteract(res.scrapeId, apiKey);

@@ -12,6 +12,7 @@ import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { useHistoricalWeather } from "@/hooks/useHistoricalWeather";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { getUsHolidayName } from "@/lib/usHolidays";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 interface BoardItem {
   id: string;
@@ -440,15 +441,47 @@ function WeekCard({
     navigate(`/quick-quote?${params.toString()}`);
   };
 
+  const jarvisContext = {
+    id: item.id,
+    source: "week_dispatch_card",
+    record_type: item.item_type,
+    customer_id: item.customer_id,
+    customer_name: item.customer_name,
+    customer_phone: item.customer_phone,
+    address: item.address,
+    description: item.description,
+    assigned_to: item.assigned_to,
+    scheduled_date: item.scheduled_date,
+    arrival_start: item.arrival_start,
+    arrival_end: item.arrival_end,
+    job_type: item.job_type,
+    status: item.status || item.work_status,
+    job_number: item.job_number || item.hcp_job_number,
+    estimate_number: item.estimate_number,
+    route_order: routeInfo?.order,
+    travel_minutes: routeInfo?.travelMin,
+  };
+
   const cardContent = (
     <div
       onClick={() => bulkMode ? onToggleSelect?.(item.id) : onClick(item)}
       className={cn(
-        "h-full rounded-md cursor-pointer overflow-hidden flex flex-col transition-shadow hover:shadow-lg hover:brightness-110 border border-white/40 ring-1 ring-black/10 shadow-md",
+        "relative h-full rounded-md cursor-pointer overflow-hidden flex flex-col transition-shadow hover:shadow-lg hover:brightness-110 border border-white/40 ring-1 ring-black/10 shadow-md",
         selected && "ring-2 ring-white ring-offset-1 ring-offset-background"
       )}
       style={{ backgroundColor: techColor }}
     >
+      {!bulkMode && (
+        <AskJarvisButton
+          contextType={item.item_type === "estimate" ? "estimate" : "job"}
+          contextId={item.id}
+          label={`Ask JARVIS about ${item.customer_name || number || item.item_type}`}
+          context={jarvisContext}
+          iconOnly
+          variant="secondary"
+          className="absolute right-1 top-1 z-20 bg-white/25 text-white hover:bg-white/40 border-0"
+        />
+      )}
       <div className={cn("flex-1 min-w-0 px-1.5 py-1 flex flex-col gap-0.5 overflow-hidden", isTiny && "py-0.5")}>
         {/* Row 1: route order + checkbox/emoji + customer name + travel badge + initials */}
         <div className="flex items-center gap-1 min-w-0">

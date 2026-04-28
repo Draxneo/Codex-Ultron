@@ -54,7 +54,7 @@ export function useEstimates(showLost = false) {
         return data as unknown as Estimate[];
       }
 
-      let query = supabase
+      const query = supabase
         .from("estimates" as any)
         .select(ESTIMATE_LIST_FIELDS)
         .not("work_status", "in", '("won","lost","canceled")')
@@ -181,7 +181,7 @@ async function createJobFromEstimate(estimateId: string) {
   let customerId: string | null = est.customer_id || null;
   if (!customerId && (est.customer_phone || est.customer_email)) {
     // Try to find existing customer by phone or email
-    let custQuery = supabase.from("customers").select("id").limit(1);
+    const custQuery = supabase.from("customers").select("id").limit(1);
     if (est.customer_phone) {
       const normalized = est.customer_phone.replace(/\D/g, "").slice(-10);
       // Search by phone or mobile

@@ -64,7 +64,7 @@ export function EquipmentPickerCard({ initialOptions, onComplete, disabled }: Eq
       setOptions(brands);
       setLoading(false);
     })();
-  }, []);
+  }, [initialOptions?.length]);
 
   const handleSelect = async (value: string) => {
     if (disabled || completed) return;

@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Phone, Sparkles, MoreHorizontal, ArrowLeft, MessageSquare } from "lucide-react";
+import { ChevronRight, Phone, MoreHorizontal, ArrowLeft, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClickToCall } from "@/components/ClickToCall";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { CustomerEditDialog } from "./CustomerEditDialog";
 
@@ -17,7 +17,6 @@ interface Props {
 }
 
 export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, primaryPhone, customer }: Props) {
-  const { sendQuery } = useCopilotPanel();
   const navigate = useNavigate();
   const telephony = useTelephonyMode();
 
@@ -74,15 +73,21 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 Start SMS
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
-              onClick={() => sendQuery(`Tell me about customer ${fullName}`)}
-            >
-              <Sparkles className="h-4 w-4" />
-              Ask AI
-            </Button>
+            <AskJarvisButton
+              contextType="customer"
+              contextId={customerId}
+              label="Ask JARVIS"
+              context={{
+                id: customerId,
+                customer_id: customerId,
+                customer_name: fullName,
+                customer_phone: primaryPhone,
+                email: customer?.email,
+                address: customer?.address || [customer?.city, customer?.state, customer?.zip].filter(Boolean).join(", "),
+                outstanding_balance: outstandingBalance,
+                source: "customer_record",
+              }}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" className="px-2">

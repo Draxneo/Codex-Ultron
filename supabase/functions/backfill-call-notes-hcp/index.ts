@@ -16,7 +16,7 @@ const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 function normalizeAddress(addr: string): string {
   return addr
     .toLowerCase()
-    .replace(/[.,#\-]/g, " ")
+    .replace(/[.,#-]/g, " ")
     .replace(/\b(apt|suite|ste|unit|bldg|building|fl|floor)\b.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();

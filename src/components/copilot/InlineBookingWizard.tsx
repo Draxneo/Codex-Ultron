@@ -22,6 +22,7 @@ type SuggestedAction = {
 
 type ScheduleSlot = {
   date: string;
+  display_date?: string;
   time: string;
   tech: string;
   travel_min: number;
@@ -258,7 +259,7 @@ export function InlineBookingWizard({ action, onComplete, onCancel }: InlineBook
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium">📅 {slot.date} at {slot.time}</div>
+                            <div className="text-sm font-medium">📅 {slot.display_date || slot.date} at {slot.time}</div>
                             <div className="text-xs text-muted-foreground">
                               👷 {slot.tech} — {slot.travel_min} min from prev job
                             </div>
@@ -328,7 +329,7 @@ export function InlineBookingWizard({ action, onComplete, onCancel }: InlineBook
               <div>👤 {customerName}</div>
               {address && <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {address}</div>}
               {(selectedSlot || (customDate && customTime)) && (
-                <div>📅 {selectedSlot ? `${selectedSlot.date} at ${selectedSlot.time}` : `${customDate} at ${customTime}`}</div>
+                <div>📅 {selectedSlot ? `${selectedSlot.display_date || selectedSlot.date} at ${selectedSlot.time}` : `${customDate} at ${customTime}`}</div>
               )}
               {selectedSlot?.tech && <div>👷 {selectedSlot.tech}</div>}
               {description && <div>📝 {description}</div>}

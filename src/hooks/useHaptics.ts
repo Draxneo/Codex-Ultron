@@ -14,7 +14,7 @@ export function useHaptics() {
       const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
       const map = { light: ImpactStyle.Light, medium: ImpactStyle.Medium, heavy: ImpactStyle.Heavy };
       await Haptics.impact({ style: map[style] });
-    } catch {}
+    } catch { /* noop */ }
   }, [isNative]);
 
   const selection = useCallback(async () => {
@@ -24,7 +24,7 @@ export function useHaptics() {
       await Haptics.selectionStart();
       await Haptics.selectionChanged();
       await Haptics.selectionEnd();
-    } catch {}
+    } catch { /* noop */ }
   }, [isNative]);
 
   const notification = useCallback(async (type: "success" | "warning" | "error" = "success") => {
@@ -33,7 +33,7 @@ export function useHaptics() {
       const { Haptics, NotificationType } = await import("@capacitor/haptics");
       const map = { success: NotificationType.Success, warning: NotificationType.Warning, error: NotificationType.Error };
       await Haptics.notification({ type: map[type] });
-    } catch {}
+    } catch { /* noop */ }
   }, [isNative]);
 
   return { impact, selection, notification };

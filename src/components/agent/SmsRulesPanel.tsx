@@ -19,7 +19,7 @@ export function SmsRulesPanel() {
 
   useEffect(() => {
     if (smsRule) setEditContent(smsRule.content);
-  }, [smsRule?.content]);
+  }, [smsRule]);
 
   const handleSave = () => {
     if (!smsRule) return;

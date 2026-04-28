@@ -22,6 +22,7 @@ import { formatPhone } from "@/lib/formatters";
 import { SmsButton } from "@/components/SmsButton";
 import { UniversalMediaPlayer } from "@/components/media";
 import type { CallConversation, CallRow } from "@/hooks/useCallLog";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 interface Props {
   conversation: CallConversation;
@@ -180,7 +181,7 @@ export function CallContactCard({ conversation, isExpanded, onToggle, onMarkRead
         } as any).in("id", ids).then(() => {});
       }
     }
-  }, [resolvedName, contactName, callerLookup.data]);
+  }, [calls, resolvedName, contactName, callerLookup.data]);
 
   // Initials fallback when we have a name
   const initials = resolvedName
@@ -361,6 +362,33 @@ export function CallContactCard({ conversation, isExpanded, onToggle, onMarkRead
                 Profile
               </Link>
             )}
+
+            <AskJarvisButton
+              contextType="phone"
+              contextId={phoneNumber}
+              label="Ask JARVIS"
+              context={{
+                source: "call_history",
+                phone: phoneNumber,
+                customer_id: callerLookup.data?.id || null,
+                customer_name: resolvedName || displayName,
+                customer_phone: phoneNumber,
+                contact_type: resolvedType,
+                last_call_status: lastCall.status,
+                last_call_direction: lastCall.direction,
+                last_call_at: lastCall.created_at,
+                call_count: calls.length,
+                latest_summary: lastCall.ai_summary || null,
+                latest_transcription: lastCall.transcription || null,
+                suggested_actions: [
+                  "Summarize this call history",
+                  "Identify whether this should update a job, estimate, or customer note",
+                  "Suggest the next follow-up for human approval",
+                ],
+              }}
+              variant="outline"
+              className="h-auto px-3 py-1.5 text-xs"
+            />
           </div>
 
           {/* Call history list — grouped by CT day */}

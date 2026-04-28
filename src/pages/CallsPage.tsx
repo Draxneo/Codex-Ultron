@@ -24,16 +24,17 @@ const DIAL_KEYS: { key: string; sub?: string }[][] = [
 
 function MobileDialPad() {
   const softphone = useSoftphoneContext();
+  const { consumeDialNumber, pendingDialNumber } = softphone;
   const [dialInput, setDialInput] = useState("");
   const [showDialpad, setShowDialpad] = useState(true);
 
   // Consume pending dial number from ClickToCall
   useEffect(() => {
-    if (softphone.pendingDialNumber) {
-      setDialInput(softphone.pendingDialNumber);
-      softphone.consumeDialNumber();
+    if (pendingDialNumber) {
+      setDialInput(pendingDialNumber);
+      consumeDialNumber();
     }
-  }, [softphone.pendingDialNumber]);
+  }, [consumeDialNumber, pendingDialNumber]);
 
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],

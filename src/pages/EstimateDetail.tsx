@@ -54,6 +54,7 @@ import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechCustomerCard } from "@/components/tech/TechCustomerCard";
 import { EstimateCartStatus } from "@/components/EstimateCartStatus";
 import { EstimateEditDialog } from "@/components/estimate/EstimateEditDialog";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 
 interface EstimateReview {
   id: string;
@@ -83,6 +84,7 @@ function EstimateActionBar({
   latestPresentationToken,
   converting,
   onConvert,
+  jarvisContext,
 }: {
   estimate: any;
   estimateId: string;
@@ -93,6 +95,7 @@ function EstimateActionBar({
   latestPresentationToken?: string | null;
   converting: boolean;
   onConvert: () => void;
+  jarvisContext: Record<string, any>;
 }) {
   const navigate = useNavigate();
   const scheduleSub = estimate?.scheduled_date
@@ -180,6 +183,15 @@ function EstimateActionBar({
           <span className="text-xs font-semibold uppercase tracking-wide">Print</span>
           <span className="text-center text-[10px] leading-tight text-muted-foreground">Estimate</span>
         </button>
+        <AskJarvisButton
+          contextType="estimate"
+          contextId={estimateId}
+          label="Ask JARVIS"
+          context={jarvisContext}
+          variant="outline"
+          className={actionClass}
+          stopPropagation={false}
+        />
       </div>
     </Card>
   );
@@ -288,6 +300,30 @@ export default function EstimateDetail() {
   const status = estimateStatus;
   const reviewConfig = review ? (reviewStatusConfig[review.status] || reviewStatusConfig.pending_review) : null;
   const latestPresentationToken = presentations?.[0]?.token || null;
+  const jarvisEstimateContext = {
+    id,
+    source: "estimate_detail",
+    record_type: "estimate",
+    customer_id: estimate.customer_id,
+    customer_name: customerName,
+    customer_phone: customerPhone,
+    customer_email: customerEmail,
+    address: customerAddress,
+    estimate_number: estimate.estimate_number,
+    status,
+    assigned_to: estimate.assigned_to,
+    scheduled_date: estimate.scheduled_date,
+    arrival_start: (estimate as any).arrival_start,
+    arrival_end: (estimate as any).arrival_end,
+    description: estimate.description,
+    linked_job_id: linkedJobId,
+    latest_presentation_token: latestPresentationToken,
+    suggested_actions: [
+      "Summarize this estimate",
+      "Tell me what is needed to approve or convert it",
+      "Draft a customer follow-up SMS for human approval",
+    ],
+  };
 
   const handleConvert = async () => {
     setConvertingToJob(true);
@@ -488,10 +524,16 @@ export default function EstimateDetail() {
 
           <TechCollapsibleCard icon={Zap} title="Ask JARVIS" iconBg="bg-purple-500/10" iconColor="text-purple-500" collapsible={false}>
             <div className="p-4">
-              <Button className="h-14 w-full rounded-xl" onClick={() => navigate(`/copilot?estimate=${id}`)}>
-                <Zap className="h-5 w-5" />
-                Ask JARVIS about this estimate
-              </Button>
+              <AskJarvisButton
+                contextType="estimate"
+                contextId={id}
+                label="Ask JARVIS about this estimate"
+                context={jarvisEstimateContext}
+                variant="default"
+                size="lg"
+                className="h-14 w-full rounded-xl"
+                stopPropagation={false}
+              />
             </div>
           </TechCollapsibleCard>
         </main>
@@ -589,6 +631,7 @@ export default function EstimateDetail() {
               latestPresentationToken={latestPresentationToken}
               converting={convertingToJob || updateStatus.isPending}
               onConvert={handleConvert}
+              jarvisContext={jarvisEstimateContext}
             />
 
             <ExpectedItemsCard

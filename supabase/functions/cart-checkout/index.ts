@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseAdmin();
 
     // Load cart + items
-    let { data: cart, error: cartErr } = await supabase
+    const { data: cart, error: cartErr } = await supabase
       .from("job_carts")
       .select("*")
       .eq("public_token", cart_token)

@@ -8,24 +8,30 @@ import { createPhoneConsoleChannel, type PhoneConsoleMessage } from "@/lib/phone
 
 export default function PhoneConsole() {
   const softphone = useSoftphoneContext();
+  const {
+    error,
+    initialize,
+    setDialNumber,
+    status,
+  } = softphone;
   const [searchParams] = useSearchParams();
   const bootDialNumber = searchParams.get("dial") || "";
   const channelRef = useRef<BroadcastChannel | null>(null);
   const pendingDialRef = useRef<string | null>(bootDialNumber || null);
 
   const statusLabel = useMemo(() => {
-    if (softphone.status === "on-call") return "On call";
-    if (softphone.status === "ringing") return "Ringing";
-    if (softphone.status === "connecting") return "Connecting";
-    if (softphone.status === "ready") return "Ready";
-    if (softphone.status === "registering") return "Registering";
-    if (softphone.status === "error") return "Error";
+    if (status === "on-call") return "On call";
+    if (status === "ringing") return "Ringing";
+    if (status === "connecting") return "Connecting";
+    if (status === "ready") return "Ready";
+    if (status === "registering") return "Registering";
+    if (status === "error") return "Error";
     return "Offline";
-  }, [softphone.status]);
+  }, [status]);
 
   useEffect(() => {
-    void softphone.initialize();
-  }, [softphone.initialize]);
+    void initialize();
+  }, [initialize]);
 
   useEffect(() => {
     const channel = createPhoneConsoleChannel();
@@ -36,7 +42,7 @@ export default function PhoneConsole() {
       const message = event.data as PhoneConsoleMessage;
       if (message?.type === "dial" && message.number) {
         pendingDialRef.current = message.number;
-        softphone.setDialNumber(message.number);
+        setDialNumber(message.number);
       }
     };
 
@@ -44,21 +50,21 @@ export default function PhoneConsole() {
       channel.close();
       channelRef.current = null;
     };
-  }, [softphone.setDialNumber]);
+  }, [setDialNumber]);
 
   useEffect(() => {
     channelRef.current?.postMessage({
       type: "status",
-      status: softphone.status,
-      error: softphone.error,
+      status,
+      error,
     } satisfies PhoneConsoleMessage);
-  }, [softphone.status, softphone.error]);
+  }, [status, error]);
 
   useEffect(() => {
     if (bootDialNumber) {
-      softphone.setDialNumber(bootDialNumber);
+      setDialNumber(bootDialNumber);
     }
-  }, [bootDialNumber, softphone.setDialNumber]);
+  }, [bootDialNumber, setDialNumber]);
 
   return (
     <div className="h-screen w-screen bg-background flex flex-col overflow-hidden">
@@ -73,8 +79,8 @@ export default function PhoneConsole() {
               <p className="text-xs text-muted-foreground">Outbound webphone</p>
             </div>
           </div>
-          <Badge variant={softphone.status === "ready" || softphone.status === "on-call" ? "default" : "secondary"} className="gap-1">
-            {softphone.status === "offline" || softphone.status === "error" ? <WifiOff className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
+          <Badge variant={status === "ready" || status === "on-call" ? "default" : "secondary"} className="gap-1">
+            {status === "offline" || status === "error" ? <WifiOff className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
             {statusLabel}
           </Badge>
         </div>
