@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useLiveTranscript } from "@/hooks/useLiveTranscript";
 import { toast } from "@/hooks/use-toast";
 import {
   Phone, PhoneOff, PhoneIncoming, PhoneCall,
   Mic, MicOff, Keyboard, Delete, Wifi, WifiOff, User, ChevronDown, ChevronUp,
-  ExternalLink, Volume2, Bluetooth,
+  ExternalLink, Volume2, Bluetooth, MessageSquareText, BellRing, ArrowRight, Hash,
 } from "lucide-react";
 import { isElectron, isElectronMain, sendToMain } from "@/lib/electron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -18,6 +18,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanySetting } from "@/lib/companySettings";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -31,6 +34,233 @@ const DIAL_KEYS: { key: string; sub?: string }[][] = [
   [{ key: "7", sub: "PQRS" }, { key: "8", sub: "TUV" }, { key: "9", sub: "WXYZ" }],
   [{ key: "*" }, { key: "0", sub: "+" }, { key: "#" }],
 ];
+
+type TeamNotificationRow = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  related_entity_id: string | null;
+  created_at: string;
+};
+
+type TeamMessageRow = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  deleted_at: string | null;
+};
+
+type TeamConversationRow = {
+  id: string;
+  name: string | null;
+  type: "direct" | "room";
+};
+
+type EmployeeLite = {
+  profile_id: string | null;
+  name: string;
+};
+
+function timeAgo(value: string) {
+  const delta = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(delta) || delta < 0) return "now";
+  const minutes = Math.max(1, Math.floor(delta / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function TeamDispatchTextPanel() {
+  const { user } = useAuth();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["side-rail-team-notifications", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_notifications" as any)
+        .select("id, type, title, body, related_entity_id, created_at")
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (error) throw error;
+      return (data || []) as TeamNotificationRow[];
+    },
+    refetchInterval: 15000,
+  });
+
+  const { data: messages = [] } = useQuery({
+    queryKey: ["side-rail-team-messages"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_messages" as any)
+        .select("id, conversation_id, sender_id, body, created_at, deleted_at")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (error) throw error;
+      return (data || []) as TeamMessageRow[];
+    },
+    refetchInterval: 15000,
+  });
+
+  const conversationIds = useMemo(
+    () => Array.from(new Set(messages.map((message) => message.conversation_id).filter(Boolean))),
+    [messages]
+  );
+  const senderIds = useMemo(
+    () => Array.from(new Set(messages.map((message) => message.sender_id).filter(Boolean))),
+    [messages]
+  );
+
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["side-rail-team-conversations", conversationIds.join(",")],
+    enabled: conversationIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_conversations" as any)
+        .select("id, name, type")
+        .in("id", conversationIds);
+      if (error) throw error;
+      return (data || []) as TeamConversationRow[];
+    },
+  });
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["side-rail-team-message-senders", senderIds.join(",")],
+    enabled: senderIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("profile_id, name")
+        .in("profile_id", senderIds);
+      if (error) throw error;
+      return (data || []) as EmployeeLite[];
+    },
+  });
+
+  const markAllRead = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("team_notifications" as any)
+      .update({ read_at: new Date().toISOString() })
+      .is("read_at", null);
+    if (error) {
+      toast({ title: "Team alerts stayed unread", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Team alerts cleared" });
+  };
+
+  const conversationById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
+  const employeeByProfile = new Map(employees.map((employee) => [employee.profile_id, employee.name]));
+  const unreadCount = notifications.length;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-[#262933] bg-[#11131a] p-3">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff8b00]">
+              <MessageSquareText className="h-3.5 w-3.5" />
+              Employee Texts
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Team messages surface here so dispatch sees them without hunting.
+            </p>
+          </div>
+          {unreadCount > 0 && (
+            <Badge className="border border-[#ff3333]/40 bg-[#ff3333]/15 text-[#ffb3b3]">
+              {unreadCount} new
+            </Badge>
+          )}
+        </div>
+
+        {notifications.length > 0 && (
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Now alerts</span>
+              <button type="button" onClick={markAllRead} className="text-[10px] font-medium text-[#ffb84d] hover:text-[#ffd08a]">
+                Mark read
+              </button>
+            </div>
+            {notifications.slice(0, 3).map((notification) => (
+              <a
+                key={notification.id}
+                href="/team"
+                className="block rounded-lg border border-[#ff8b00]/30 bg-[#ff8b00]/10 px-3 py-2 text-left transition-colors hover:bg-[#ff8b00]/15"
+              >
+                <div className="flex items-center gap-2">
+                  <BellRing className="h-3.5 w-3.5 shrink-0 text-[#ff8b00]" />
+                  <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{notification.title}</p>
+                  <span className="text-[10px] text-muted-foreground">{timeAgo(notification.created_at)}</span>
+                </div>
+                {notification.body && (
+                  <p className="mt-1 line-clamp-2 pl-5 text-[11px] text-muted-foreground">{notification.body}</p>
+                )}
+              </a>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Latest from team</span>
+            <a href="/team" className="flex items-center gap-1 text-[10px] font-medium text-[#ffb84d] hover:text-[#ffd08a]">
+              Open <ArrowRight className="h-3 w-3" />
+            </a>
+          </div>
+
+          {messages.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[#262933] px-3 py-5 text-center">
+              <p className="text-xs font-medium text-foreground">No team texts yet</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">New employee messages will appear here.</p>
+            </div>
+          ) : (
+            messages.slice(0, 5).map((message) => {
+              const sender = employeeByProfile.get(message.sender_id) || (message.sender_id === user?.id ? "You" : "Team member");
+              const conversation = conversationById.get(message.conversation_id);
+              return (
+                <a
+                  key={message.id}
+                  href={`/team?conversation=${message.conversation_id}`}
+                  className="block rounded-lg border border-[#262933] bg-[#0d0e12] px-3 py-2 transition-colors hover:border-[#ff8b00]/40 hover:bg-[#151820]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[#ff8b00]" />
+                    <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{sender}</p>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(message.created_at)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Hash className="h-3 w-3" />
+                    <span className="truncate">{conversation?.name || (conversation?.type === "direct" ? "Direct message" : "Team")}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                    {message.body || "Attachment"}
+                  </p>
+                </a>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        onClick={() => openPhoneConsole()}
+        className="h-11 w-full gap-2 rounded-xl bg-[#ff9f00] text-[#0d0e12] hover:bg-[#ffb12b]"
+      >
+        <Wifi className="h-4 w-4" />
+        Open Phone Console
+      </Button>
+    </div>
+  );
+}
 
 interface SoftphoneStripProps {
   onCallContextChange?: (ctx: string | null) => void;
@@ -48,6 +278,7 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
   const telephony = useTelephonyMode();
   const ownsWebphone = typeof window !== "undefined"
     && (window.location.pathname === "/phone-console" || new URLSearchParams(window.location.search).get("view") === "softphone");
+  const showTeamMessagesPanel = !ownsWebphone && !alwaysExpanded && !isElectronMain();
 
   // Consume pending dial number from ClickToCall
   useEffect(() => {
@@ -437,8 +668,13 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
 
         {/* Live transcript moved to CSR intake popout window */}
 
+        {/* Team text monitor replaces the old embedded dialer in the main app. */}
+        {showTeamMessagesPanel && !isActive && !hasIncoming && (
+          <TeamDispatchTextPanel />
+        )}
+
         {/* Dial pad */}
-        {(!isActive || showDialpad) && (
+        {(!showTeamMessagesPanel || isActive) && (!isActive || showDialpad) && (
           <div className={cn("space-y-2 overflow-hidden", alwaysExpanded && "flex-1 min-h-0 flex flex-col") }>
             {!isActive && (
               <div className="relative">

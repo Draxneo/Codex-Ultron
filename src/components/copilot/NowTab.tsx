@@ -7,7 +7,7 @@
 import { useState, useEffect } from "react";
 import { useAttentionData } from "@/hooks/useAttentionData";
 import { supabase } from "@/integrations/supabase/client";
-import { BotMessageSquare, Sparkles, Loader2, Check, RotateCcw, ChevronLeft, FileQuestion, X, AlertTriangle, Bot } from "lucide-react";
+import { BotMessageSquare, Sparkles, Loader2, Check, RotateCcw, ChevronLeft, FileQuestion, X, AlertTriangle, Bot, MessageSquareText, ArrowRight } from "lucide-react";
 import { AttentionCard } from "./AttentionCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,85 @@ import { ActionItemCards } from "./ActionItemCards";
 
 import { ReminderBatchCard } from "./ReminderBatchCard";
 import { PendingSmsCard } from "./PendingSmsCard";
+
+type TeamNowNotification = {
+  id: string;
+  title: string;
+  body: string | null;
+  related_entity_id: string | null;
+  created_at: string;
+};
+
+function TeamMessagesNowCard() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["now-team-notifications", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_notifications" as any)
+        .select("id, title, body, related_entity_id, created_at")
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return (data || []) as TeamNowNotification[];
+    },
+    refetchInterval: 15000,
+  });
+
+  const markRead = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("team_notifications" as any)
+      .update({ read_at: new Date().toISOString() })
+      .is("read_at", null);
+    if (error) {
+      toast({ title: "Could not clear team alerts", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Team alerts cleared" });
+    qc.invalidateQueries({ queryKey: ["now-team-notifications", user.id] });
+    qc.invalidateQueries({ queryKey: ["side-rail-team-notifications", user.id] });
+  };
+
+  if (notifications.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-[#ff8b00]/30 bg-[#ff8b00]/10 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <MessageSquareText className="h-4 w-4 text-[#ff8b00]" />
+          <div>
+            <p className="text-xs font-semibold text-foreground">Employee texts</p>
+            <p className="text-[10px] text-muted-foreground">{notifications.length} unread team alert{notifications.length === 1 ? "" : "s"}</p>
+          </div>
+        </div>
+        <button type="button" onClick={markRead} className="text-[10px] font-medium text-[#ffb84d] hover:text-[#ffd08a]">
+          Mark read
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        {notifications.slice(0, 3).map((notification) => (
+          <a
+            key={notification.id}
+            href="/team"
+            className="block rounded-md border border-[#262933] bg-[#0d0e12]/80 px-2.5 py-2 hover:border-[#ff8b00]/40"
+          >
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{notification.title}</p>
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            </div>
+            {notification.body && <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{notification.body}</p>}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface TechProposal {
   id: string;
@@ -398,6 +477,9 @@ export function NowTab() {
 
       {/* Pending SMS approvals — inline HITL (replaces SMS Outbox) */}
       <PendingSmsCard />
+
+      {/* Employee/team texts — dispatch needs these in NOW, not hidden in chat */}
+      <TeamMessagesNowCard />
 
       {/* Error banner — nothing fails silently */}
       {hasErrors && queryErrors.length > 0 && (

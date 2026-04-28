@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
+  AlertCircle,
   Briefcase,
   Bell,
   CalendarDays,
@@ -11,6 +12,7 @@ import {
   Hash,
   Inbox,
   Link as LinkIcon,
+  MessageSquare,
   Mic,
   MicOff,
   Paperclip,
@@ -30,6 +32,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { MediaItem } from "@/components/media";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
@@ -133,7 +137,7 @@ const db = supabase as unknown as LooseSupabaseClient;
 const teamRpc = supabase as unknown as TeamPinRpcClient;
 const urlPattern = /(https?:\/\/[^\s]+)/g;
 const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
-const commonEmojis = ["👍", "🙏", "✅", "🔥", "🎉", "👀", "💡", "📌", "🚚", "🛠️", "📞", "⚠️"];
+const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389}", "\u{1F440}", "\u{1F4A1}", "\u{1F4CC}"];
 
 const quickAccessItems = [
   { label: "Jobs", href: "/jobs", icon: Briefcase },
@@ -202,6 +206,10 @@ function LinkifiedText({ text }: { text: string }) {
   );
 }
 
+function SidebarEmpty({ children }: { children: string }) {
+  return <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">{children}</p>;
+}
+
 export default function TeamCommunications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -215,7 +223,11 @@ export default function TeamCommunications() {
   const endRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { data: teamUsers = [] } = useQuery({
+  const {
+    data: teamUsers = [],
+    isLoading: teamUsersLoading,
+    isError: teamUsersError,
+  } = useQuery({
     queryKey: ["team-users"],
     enabled: !!user,
     queryFn: async () => {
@@ -238,7 +250,11 @@ export default function TeamCommunications() {
     return map;
   }, [teamUsers]);
 
-  const { data: conversations = [] } = useQuery({
+  const {
+    data: conversations = [],
+    isLoading: conversationsLoading,
+    isError: conversationsError,
+  } = useQuery({
     queryKey: ["team-conversations", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -253,7 +269,7 @@ export default function TeamCommunications() {
 
   const conversationIds = useMemo(() => conversations.map((conversation) => conversation.id), [conversations]);
 
-  const { data: members = [] } = useQuery({
+  const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ["team-conversation-members", conversationIds.join(",")],
     enabled: conversationIds.length > 0,
     queryFn: async () => {
@@ -277,7 +293,11 @@ export default function TeamCommunications() {
     }
   }, [conversations, selectedConversationId]);
 
-  const { data: messages = [] } = useQuery({
+  const {
+    data: messages = [],
+    isLoading: messagesLoading,
+    isError: messagesError,
+  } = useQuery({
     queryKey: ["team-messages", selectedConversation?.id],
     enabled: !!selectedConversation,
     queryFn: async () => {
@@ -691,14 +711,16 @@ export default function TeamCommunications() {
   const recentLinks = Array.from(
     new Set(messages.flatMap((message) => (message.deleted_at ? [] : extractUrls(message.body))))
   ).slice(-6);
+  const sidebarLoading = teamUsersLoading || conversationsLoading || membersLoading;
+  const pageHasError = teamUsersError || conversationsError;
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="h-[calc(100vh-3rem)] overflow-hidden bg-muted/25">
-        <div className="grid h-full grid-cols-[280px_minmax(0,1fr)_240px]">
-          <aside className="border-r bg-card/95">
-            <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="grid h-full grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[260px_minmax(0,1fr)_250px]">
+          <aside className="min-h-0 border-b bg-card/95 lg:border-b-0 lg:border-r">
+            <div className="flex h-14 items-center justify-between border-b px-3">
               <div>
                 <h1 className="text-base font-semibold">Chat</h1>
                 <p className="text-xs text-muted-foreground">Team messages and calls</p>
@@ -709,14 +731,18 @@ export default function TeamCommunications() {
               </Badge>
             </div>
 
-            <ScrollArea className="h-[calc(100vh-6.5rem)]">
-              <div className="space-y-5 p-3">
+            <ScrollArea className="h-44 lg:h-[calc(100vh-6.5rem)]">
+              <div className="grid gap-3 p-3 sm:grid-cols-3 lg:block lg:space-y-5">
                 <section>
                   <div className="mb-2 flex items-center justify-between px-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rooms</p>
                     <Hash className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                   <div className="space-y-1">
+                    {sidebarLoading &&
+                      Array.from({ length: 3 }).map((_, index) => (
+                        <Skeleton key={`room-loading-${index}`} className="h-9 rounded-md" />
+                      ))}
                     {roomConversations.map((conversation) => (
                       <button
                         key={conversation.id}
@@ -732,6 +758,9 @@ export default function TeamCommunications() {
                         <span className="truncate">{conversationTitle(conversation)}</span>
                       </button>
                     ))}
+                    {!sidebarLoading && roomConversations.length === 0 && (
+                      <SidebarEmpty>Create a room for dispatch notes, sales, or installs.</SidebarEmpty>
+                    )}
                   </div>
                   <div className="mt-2 flex gap-1.5">
                     <Input
@@ -760,6 +789,10 @@ export default function TeamCommunications() {
                     <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                   <div className="space-y-1">
+                    {sidebarLoading &&
+                      Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={`direct-loading-${index}`} className="h-10 rounded-md" />
+                      ))}
                     {availableDirectUsers.map((employee) => {
                       const conversation = directConversations.find((item) =>
                         members.some(
@@ -791,6 +824,9 @@ export default function TeamCommunications() {
                         </button>
                       );
                     })}
+                    {!sidebarLoading && availableDirectUsers.length === 0 && (
+                      <SidebarEmpty>No teammates with chat access are active yet.</SidebarEmpty>
+                    )}
                   </div>
                 </section>
 
@@ -827,8 +863,8 @@ export default function TeamCommunications() {
             </ScrollArea>
           </aside>
 
-          <section className="flex min-w-0 flex-col bg-background">
-            <header className="flex h-14 items-center justify-between border-b px-4">
+          <section className="flex min-h-0 min-w-0 flex-col bg-background">
+            <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   {selectedConversation?.type === "room" ? <Hash className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
@@ -854,18 +890,18 @@ export default function TeamCommunications() {
                   disabled={!selectedConversation || startCall.isPending}
                 >
                   <PhoneCall className="h-4 w-4" />
-                  Start Call
+                  <span className="hidden sm:inline">Start Call</span>
                 </Button>
               </div>
             </header>
 
             {activeCall && (
-              <div className="flex items-center justify-between gap-3 border-b bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100 sm:px-4">
                 <div className="min-w-0">
                   <p className="font-medium">Audio Call is active</p>
                   <p className="truncate text-xs opacity-80">{activeCall.call_url}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                   <Button size="sm" variant="secondary" onClick={() => joinCall.mutate(activeCall)}>
                     Join Call
                   </Button>
@@ -899,20 +935,44 @@ export default function TeamCommunications() {
             )}
 
             <ScrollArea className="flex-1">
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-5 py-5">
-                {messages.map((message) => {
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-3 py-4 sm:px-5 sm:py-5">
+                {pageHasError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Team chat could not load</AlertTitle>
+                    <AlertDescription>Refresh the page or try again after the connection recovers.</AlertDescription>
+                  </Alert>
+                )}
+                {messagesError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Messages could not load</AlertTitle>
+                    <AlertDescription>The room list is available, but this conversation did not return messages.</AlertDescription>
+                  </Alert>
+                )}
+                {messagesLoading &&
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <div key={`message-loading-${index}`} className={cn("flex gap-3", index % 2 === 1 && "flex-row-reverse")}>
+                      <Skeleton className="mt-1 h-8 w-8 rounded-full" />
+                      <div className={cn("w-2/3 space-y-2", index % 2 === 1 && "items-end")}>
+                        <Skeleton className="h-3 w-32" />
+                        <Skeleton className="h-16 rounded-lg" />
+                      </div>
+                    </div>
+                  ))}
+                {!messagesLoading && messages.map((message) => {
                   const sender = userByAuthId.get(message.sender_id);
                   const own = message.sender_id === user?.id;
                   const deleted = !!message.deleted_at;
                   return (
-                    <div id={`team-message-${message.id}`} key={message.id} className={cn("group flex gap-3 scroll-mt-6", own && "flex-row-reverse")}>
-                      <Avatar className="mt-1 h-8 w-8">
+                    <div id={`team-message-${message.id}`} key={message.id} className={cn("group flex gap-2 scroll-mt-6 sm:gap-3", own && "flex-row-reverse")}>
+                      <Avatar className="mt-1 hidden h-8 w-8 sm:flex">
                         <AvatarFallback className="text-xs">
                           {initials(sender?.name ?? (own ? "You" : "Team"))}
                         </AvatarFallback>
                       </Avatar>
-                      <div className={cn("min-w-0 max-w-[72%]", own && "text-right")}>
-                        <div className={cn("mb-1 flex items-center gap-2 text-xs text-muted-foreground", own && "justify-end")}>
+                      <div className={cn("min-w-0 max-w-[86%] sm:max-w-[76%]", own && "text-right")}>
+                        <div className={cn("mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground", own && "justify-end")}>
                           <span className="font-medium text-foreground">{own ? "You" : sender?.name ?? "Team member"}</span>
                           <span>{messageTime(message.created_at)}</span>
                           {message.edited_at && !deleted && <span>edited</span>}
@@ -920,7 +980,7 @@ export default function TeamCommunications() {
                         </div>
                         <div
                           className={cn(
-                            "rounded-lg border px-3 py-2 text-sm leading-relaxed shadow-sm",
+                            "rounded-lg border px-3 py-2 text-left text-sm leading-relaxed shadow-sm",
                             own ? "bg-primary text-primary-foreground" : "bg-card",
                             deleted && "italic text-muted-foreground"
                           )}
@@ -953,7 +1013,7 @@ export default function TeamCommunications() {
                           ) : deleted ? (
                             "Message deleted"
                           ) : (
-                            <div className="space-y-2 text-left">
+                            <div className="space-y-2 whitespace-pre-wrap break-words">
                               {message.body && <LinkifiedText text={message.body} />}
                               {(message.attachments ?? []).length > 0 && (
                                 <div className="flex flex-wrap gap-2">
@@ -961,7 +1021,7 @@ export default function TeamCommunications() {
                                     <div
                                       key={attachment.path || attachment.url}
                                       className={cn(
-                                        "max-w-64 rounded-md border bg-background/90 p-2 text-foreground",
+                                        "max-w-full rounded-md border bg-background/90 p-2 text-foreground sm:max-w-64",
                                         own && "bg-primary-foreground"
                                       )}
                                     >
@@ -980,7 +1040,7 @@ export default function TeamCommunications() {
                           )}
                         </div>
                         {!deleted && editingMessageId !== message.id && (
-                          <div className={cn("mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100", own && "justify-end")}>
+                          <div className={cn("mt-1 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100", own && "justify-end")}>
                             <Button
                               size="icon"
                               variant="ghost"
@@ -1021,17 +1081,20 @@ export default function TeamCommunications() {
                     </div>
                   );
                 })}
-                {messages.length === 0 && (
-                  <div className="py-16 text-center">
+                {!messagesLoading && !messagesError && messages.length === 0 && (
+                  <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 py-12 text-center">
+                    <div className="mb-3 rounded-full bg-background p-3 shadow-sm">
+                      <MessageSquare className="h-6 w-6 text-muted-foreground" />
+                    </div>
                     <p className="text-sm font-medium">No messages yet</p>
-                    <p className="text-sm text-muted-foreground">Start with a quick update or question.</p>
+                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">Start with a dispatch update, job handoff, or quick team question.</p>
                   </div>
                 )}
                 <div ref={endRef} />
               </div>
             </ScrollArea>
 
-            <footer className="border-t bg-card/80 p-3">
+            <footer className="border-t bg-card/90 p-2.5 sm:p-3">
               <div className="mx-auto max-w-4xl space-y-2">
                 {composer.preview && (
                   <GrammarPreview
@@ -1044,11 +1107,11 @@ export default function TeamCommunications() {
                   />
                 )}
                 {pendingAttachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto">
                     {pendingAttachments.map((attachment) => (
-                      <div key={attachment.path} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs">
+                      <div key={attachment.path} className="flex max-w-full items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs">
                         <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="max-w-44 truncate font-medium">{attachment.name}</span>
+                        <span className="max-w-36 truncate font-medium sm:max-w-44">{attachment.name}</span>
                         <span className="text-muted-foreground">{formatBytes(attachment.size)}</span>
                         <button
                           type="button"
@@ -1080,7 +1143,7 @@ export default function TeamCommunications() {
                   <Button
                     size="icon"
                     variant="outline"
-                    className="h-11 w-11 shrink-0"
+                    className="h-10 w-10 shrink-0 sm:h-11 sm:w-11"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!selectedConversation || uploadAttachments.isPending}
                     title="Attach files"
@@ -1088,8 +1151,8 @@ export default function TeamCommunications() {
                     <Paperclip className="h-4 w-4" />
                   </Button>
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex flex-wrap items-center gap-1">
-                      <Badge variant="secondary" className="gap-1 text-[11px]">
+                    <div className="mb-1 flex items-center gap-1 overflow-x-auto pb-0.5">
+                      <Badge variant="secondary" className="shrink-0 gap-1 text-[11px]">
                         <Sparkles className="h-3 w-3" />
                         Grammar assist
                       </Badge>
@@ -1097,7 +1160,7 @@ export default function TeamCommunications() {
                         <button
                           key={emoji}
                           type="button"
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-sm hover:bg-muted"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm hover:bg-muted"
                           onClick={() => setDraft((value) => `${value}${emoji}`)}
                           title={`Insert ${emoji}`}
                         >
@@ -1118,13 +1181,13 @@ export default function TeamCommunications() {
                         }
                       }}
                       placeholder="Message"
-                      className="max-h-36 min-h-11 resize-none"
+                      className="max-h-32 min-h-10 resize-none sm:min-h-11"
                       maxLength={4000}
                     />
                   </div>
                   <Button
                     size="icon"
-                    className="h-11 w-11 shrink-0"
+                    className="h-10 w-10 shrink-0 sm:h-11 sm:w-11"
                     disabled={
                       (!draft.trim() && pendingAttachments.length === 0) ||
                       sendMessage.isPending ||
@@ -1141,8 +1204,8 @@ export default function TeamCommunications() {
             </footer>
           </section>
 
-          <aside className="border-l bg-card/95">
-            <div className="flex h-14 items-center justify-between border-b px-4">
+          <aside className="hidden min-h-0 border-l bg-card/95 xl:block">
+            <div className="flex h-14 items-center justify-between border-b px-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 <p className="text-sm font-semibold">Members</p>
@@ -1154,8 +1217,12 @@ export default function TeamCommunications() {
               )}
             </div>
             <ScrollArea className="h-[calc(100vh-6.5rem)]">
-              <div className="space-y-5 p-4">
+              <div className="space-y-4 p-3">
                 <section className="space-y-2">
+                  {membersLoading &&
+                    Array.from({ length: 3 }).map((_, index) => (
+                      <Skeleton key={`member-loading-${index}`} className="h-10 rounded-md" />
+                    ))}
                   {selectedMembers.map((member) => (
                     <div key={member.profile_id} className="flex items-center gap-2 rounded-md px-1 py-1.5">
                       <Avatar className="h-8 w-8">
@@ -1167,6 +1234,9 @@ export default function TeamCommunications() {
                       </div>
                     </div>
                   ))}
+                  {!membersLoading && selectedMembers.length === 0 && (
+                    <SidebarEmpty>Select a room or direct message to see members.</SidebarEmpty>
+                  )}
                 </section>
 
                 <Separator />
@@ -1190,7 +1260,7 @@ export default function TeamCommunications() {
                         </p>
                       </button>
                     ))}
-                    {pinnedMessages.length === 0 && <p className="text-xs text-muted-foreground">No pinned messages</p>}
+                    {pinnedMessages.length === 0 && <SidebarEmpty>Pin key dispatch details so they stay easy to find.</SidebarEmpty>}
                   </div>
                 </section>
 
@@ -1268,9 +1338,7 @@ export default function TeamCommunications() {
                         {notification.body && <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>}
                       </div>
                     ))}
-                    {unreadNotifications.length === 0 && (
-                      <p className="text-xs text-muted-foreground">Nothing new</p>
-                    )}
+                    {unreadNotifications.length === 0 && <SidebarEmpty>Nothing new</SidebarEmpty>}
                   </div>
                 </section>
               </div>
