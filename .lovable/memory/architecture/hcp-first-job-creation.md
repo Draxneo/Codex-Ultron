@@ -1,18 +1,18 @@
 ---
-name: HCP-First Job Creation
-description: All job/estimate creation flows POST to HCP API first; local records created only via webhook.
+name: UltraOffice-First Job Creation
+description: New job/estimate creation writes to UltraOffice2.0 first. HCP remains transition-only for imports, history, and emergency comparison.
 type: feature
 ---
-## HCP-First Architecture
-All booking/creation flows (JARVIS action cards, CSR intake, Book It Now popups) call `create-hcp-job` edge function which:
-1. Resolves/creates HCP customer
-2. POSTs job or estimate to HCP API
-3. Sets schedule and dispatch on HCP
-4. Pushes AI-summarized context note
-5. Does NOT insert locally — waits for HCP webhook
+## UltraOffice-First Architecture
+All new booking/creation flows (JARVIS action cards, CSR intake, Book It Now popups, manual dispatch actions) should write to the UltraOffice2.0 database first:
+1. Resolve or create the local customer.
+2. Create the local job or estimate.
+3. Schedule and assign inside UltraOffice2.0.
+4. Add AI/customer context as local notes/action items.
+5. Let What's Next track the remaining human-in-the-loop work.
 
-The `hcp-webhook` function creates the local record and calls `finalize-job` with `skip_hcp: true` for side effects (chat channel, line items, workflow, activity log).
+HCP is transition-only. HCP import/sync functions may pull history or scheduled work while we finish cutover, but they should not be the default path for new work.
 
-**No local-first inserts for jobs/estimates.** HCP is always the source of truth for creation.
+**Do not build new HCP-first flows.** The source of truth is Supabase project `tqkqqjvddfrcxrxfvzvz`.
 
 Frontend components using this: `ActionItemCards`, `BookingIntentAlert`, `IntakeActionCards`.

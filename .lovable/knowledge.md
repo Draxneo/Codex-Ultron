@@ -95,7 +95,7 @@ All bugs from 2026-03-25 audit have been resolved as of 2026-03-26.
 
 | # | Bug | Status | Resolution |
 |---|-----|--------|------------|
-| 1 | `APP_BASE_URL` hardcoded to preview URL | ✅ Fixed | Both agents use `https://csultramode.lovable.app` |
+| 1 | `APP_BASE_URL` hardcoded to preview URL | ✅ Fixed | App URLs must use `https://codex-ultron.onrender.com`; Supabase URLs must use project `tqkqqjvddfrcxrxfvzvz` |
 | 2 | `repair_quote` key missing from `ai_model_config` | ✅ Fixed | Row exists in database |
 | 3 | `service_repair_items` table missing | ✅ Fixed | Table exists and is in use |
 | 4 | `invoicing-agent` not writing `invoice_sent_at` | ✅ Fixed | Stamps timestamp after invoice creation |
@@ -108,12 +108,13 @@ All bugs from 2026-03-25 audit have been resolved as of 2026-03-26.
 
 ## System Architecture
 
-### Data Flow: HCP → Database → UI
+### Data Flow: UltraOffice Database → UI, With Temporary HCP Bridge
 ```
-Housecall Pro (external)
-  └─ Webhook (real-time) → hcp-webhook edge function → customers + jobs/estimates tables
+UltraOffice2.0 Supabase (tqkqqjvddfrcxrxfvzvz)
+  └─ Native app actions write locally first for customers, jobs, estimates, invoices, SMS/calls
+  └─ Temporary HCP bridge imports scheduled jobs/estimates while we finish cutover
                               ↓
-                    Workflow engine tracks lifecycle via timestamp columns
+                    What's Next/action items track lifecycle
                               ↓
                     UI reads from database via hooks
 ```
@@ -147,7 +148,7 @@ Housecall Pro (external)
 | `hcp-webhook` | Real-time job/estimate events + customer upsert from HCP | HCP webhook |
 | `ai-task-agent` | **ORCHESTRATOR** — AI copilot with collapsed direct-tool architecture. Communications, scheduling, sales-docs tools are inline. External invokes for repair-quote, invoicing, supplyhouse, carrier-enterprise. | Copilot chat |
 | `email-agent` | **SPECIALIST** — Email search, thread reading, attachment extraction, brochure emails | Orchestrator invoke |
-| `invoicing-agent` | **SPECIALIST** — Invoice creation, Stripe payment links ⚠️ `APP_BASE_URL` must be `https://csultramode.lovable.app`; must write `invoice_sent_at` to `jobs` table after creating invoice | Orchestrator invoke |
+| `invoicing-agent` | **SPECIALIST** — Invoice creation, Stripe payment links. `APP_BASE_URL` must be `https://codex-ultron.onrender.com`; must write `invoice_sent_at` to `jobs` table after creating invoice | Orchestrator invoke |
 | `repair-quote-agent` | **SPECIALIST** — AI-powered tiered repair quotes with margin math ⚠️ must write a workflow timestamp to `jobs` after generating quote | Orchestrator invoke |
 | `supplyhouse-agent` | **SPECIALIST** — Browser automation for SupplyHouse.com parts search, cart, text support | Orchestrator invoke |
 | `carrier-enterprise-agent` | **SPECIALIST** — Browser automation for CarrierEnterprise.com parts/equipment search, orders import, pattern learning | Orchestrator invoke |

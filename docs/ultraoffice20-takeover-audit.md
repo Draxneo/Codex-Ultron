@@ -86,15 +86,15 @@ The export is not the same as a full admin database dump. Still missing or not g
 - Realtime/webhook provider settings outside code
 - Any external dashboards, like Twilio, Stripe, Google, Meta, HCP, Render, or Lovable config
 
-That is normal. It just means the next step is controlled staging, not wiping anything.
+That was normal during takeover. UltraOffice2.0 now has its canonical Supabase project, so this section is historical context rather than current setup instructions.
 
 ## Recommended Next Sequence
 
 1. Freeze this snapshot.
    Keep the current code zip, export folder, and inventory as the takeover baseline.
 
-2. Create a staging Supabase target.
-   Do not wipe the current project yet. Build a new UltraOffice2.0 staging database first.
+2. Create the UltraOffice2.0 Supabase target.
+   Completed: the canonical project is `tqkqqjvddfrcxrxfvzvz`.
 
 3. Import core tables first.
    Start with customers, addresses, jobs, estimates, invoices, invoice items, SMS, calls, employees, agreements, catalog/pricing, and IVR config.
@@ -116,4 +116,3 @@ That is normal. It just means the next step is controlled staging, not wiping an
 Do not wipe the current database.
 
 The best move is to build UltraOffice2.0 beside the old system first, import the clean business data into staging, and make the staging app prove it can run the daily workflow. Once it can handle schedule, customers, jobs, calls/SMS, estimates, and invoices without HCP as the center, then we plan the cutover.
-

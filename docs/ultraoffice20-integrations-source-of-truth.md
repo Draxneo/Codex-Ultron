@@ -1,6 +1,6 @@
 # UltraOffice2.0 Integrations Source Of Truth
 
-This is the current integration map for the staging rebuild. Do not store secrets in this document.
+This is the current integration map for UltraOffice2.0. Do not store secrets in this document.
 
 ## Live App
 
@@ -13,11 +13,11 @@ Render deploys from GitHub. Local commits pushed to `main` are expected to trigg
 
 ## Supabase
 
-- UltraOffice2.0 staging project ref: `tqkqqjvddfrcxrxfvzvz`
-- Core imported staging data: 29,942 rows
+- UltraOffice2.0 canonical project ref: `tqkqqjvddfrcxrxfvzvz`
+- Core imported data: 29,942 rows
 - Intentionally skipped noisy table: `api_usage_log`
 
-The staging app should use the staging Supabase URL and publishable key. Service-role keys must not be placed in frontend env files.
+The app should use the UltraOffice2.0 Supabase URL and publishable key. Service-role keys must not be placed in frontend env files.
 
 ## Environment Files
 
@@ -36,13 +36,13 @@ Run `npm run env:audit` after env changes.
 
 ## Auth
 
-The admin user for staging is `clint@carnesandsons.com`.
+The admin user for UltraOffice2.0 is `clint@carnesandsons.com`.
 
 Do not write passwords into docs, commits, screenshots, or logs.
 
 ## Twilio
 
-Only the test number currently points at the UltraOffice2.0 staging Supabase functions.
+Only the test number currently points at the UltraOffice2.0 Supabase functions.
 
 - Test number label: `LS NextDoor`
 - Test number: `+1 726-266-5800`
