@@ -22,6 +22,7 @@ import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/": { label: "Schedule", roles: null },
   "/inbox": { label: "Inbox", roles: null },
+  "/team": { label: "Chat", roles: null },
   "/customers": { label: "Customers", roles: null },
   "/copilot": { label: "JARVIS", roles: null },
   "/pay": { label: "Pay", roles: null },

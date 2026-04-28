@@ -15,6 +15,7 @@ const KEY_LABELS: Record<string, string> = {
   phone: "Phone",
   sms: "SMS",
   inbox: "Inbox",
+  chat: "Chat",
   customers: "CRM",
   copilot: "JARVIS",
   pay: "Pay",

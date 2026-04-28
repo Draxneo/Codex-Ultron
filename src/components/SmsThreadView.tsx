@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Loader2, ArrowDownLeft, ArrowUpRight, User, Wrench, LinkIcon, ArrowLeft, ChevronUp, CheckCheck, Clock, AlertCircle, Phone, Mail, MapPin, ExternalLink, Building2, Paperclip, X, FileText, File as FileIcon } from "lucide-react";
+import { Send, Loader2, ArrowDownLeft, ArrowUpRight, User, Wrench, LinkIcon, ArrowLeft, ChevronUp, CheckCheck, Clock, AlertCircle, Mail, MapPin, ExternalLink, Building2, Paperclip, X, FileText, File as FileIcon, CalendarDays, Search } from "lucide-react";
 import { toast } from "sonner";
 import { SmsForwardButton } from "@/components/sms/SmsForwardButton";
 import { InspectTwilioSmsButton } from "@/components/inbox/InspectTwilioSmsButton";
@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
 import { ClickToCall } from "@/components/ClickToCall";
-import { Link } from "react-router-dom";
 import { formatDateTimeUS, formatPhone, formatPhoneInput, toE164 } from "@/lib/formatters";
 import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
@@ -26,6 +25,7 @@ import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
 import { SMS_CONVERSATION_STATUS_LABELS, type SmsConversation, type SmsConversationStatus } from "@/hooks/useSmsLog";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { openDispatchWorkspace } from "@/lib/dispatchWorkspace";
 
 const INITIAL_MSG_COUNT = 10;
 const LOAD_MORE_COUNT = 20;
@@ -102,6 +102,19 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
   const startIdx = Math.max(0, totalCount - visibleCount);
   const visibleMessages = allMessages.slice(startIdx);
   const hasOlderLocal = startIdx > 0;
+  const isUnknownCustomer = !!conversation && conversation.contactType === "unknown" && !callerLookup.data?.id;
+  const scheduledDate = conversation?.jobContext?.scheduledDate || conversation?.estimateContext?.scheduledDate || null;
+  const schedulePath = scheduledDate ? `/?date=${encodeURIComponent(scheduledDate.slice(0, 10))}` : "/";
+  const showScheduleButton = !!conversation && !!(conversation.latestJobId || scheduledDate);
+  const headerName = isUnknownCustomer
+    ? "Unknown Customer"
+    : conversation?.contactName || formatPhone(conversation?.phoneNumber || "") || conversation?.phoneNumber;
+
+  const openWorkspace = (pathOrUrl: string) => (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openDispatchWorkspace(pathOrUrl);
+  };
 
   const handleLoadOlder = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -273,9 +286,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
         ) : conversation && (
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold truncate">
-                {conversation.contactName || formatPhone(conversation.phoneNumber) || conversation.phoneNumber}
-              </p>
+              <p className="text-sm font-semibold truncate">{headerName}</p>
               <Badge variant={conversation.contactType === "employee" ? "default" : conversation.contactType === "vendor" ? "outline" : "secondary"} className="text-[10px] h-5">
                 {conversation.contactType === "employee" ? (
                   <><Wrench className="h-3 w-3 mr-1" /> Tech</>
@@ -340,24 +351,6 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                 );
               })()}
 
-              {callerLookup.data?.id && (
-                <Link
-                  to={`/customers/${callerLookup.data.id}`}
-                  className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink className="h-3 w-3" /> Profile
-                </Link>
-              )}
-
-              {conversation.latestJobId && (
-                <Link to={`/jobs/${conversation.latestJobId}`} className="inline-flex items-center gap-1 rounded border bg-muted/40 px-2 py-1 text-[10px] text-primary hover:underline">
-                  <LinkIcon className="h-3 w-3" />
-                  {conversation.jobContext?.label || "View Job"}
-                  {conversation.jobContext?.status ? ` - ${conversation.jobContext.status}` : ""}
-                </Link>
-              )}
-
               {callerLookup.data?.hcp_customer_id && (
                 <a
                   href={`https://pro.housecallpro.com/app/customers/${callerLookup.data.hcp_customer_id}`}
@@ -369,6 +362,69 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                 >
                   <ExternalLink className="h-3 w-3" /> HCP
                 </a>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {callerLookup.data?.id ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={openWorkspace(`/customers/${callerLookup.data.id}`)}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  Customer
+                </Button>
+              ) : isUnknownCustomer ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={openWorkspace("/customers")}
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  Search Customer
+                </Button>
+              ) : null}
+
+              {conversation.latestJobId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={openWorkspace(`/jobs/${conversation.latestJobId}`)}
+                >
+                  <LinkIcon className="h-3.5 w-3.5" />
+                  {conversation.jobContext?.label || "Job"}
+                </Button>
+              )}
+
+              {conversation.estimateContext?.id && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={openWorkspace(`/estimates/${conversation.estimateContext.id}`)}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {conversation.estimateContext.label}
+                </Button>
+              )}
+
+              {showScheduleButton && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={openWorkspace(schedulePath)}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Schedule
+                </Button>
               )}
             </div>
           </div>

@@ -55,6 +55,7 @@ export type SmsConversation = {
   messages: SmsMessage[];
   latestJobId: string | null;
   jobContext: SmsJobContext | null;
+  estimateContext: SmsEstimateContext | null;
   toNumber?: string | null;
 };
 
@@ -65,6 +66,14 @@ type SmsThreadSetting = {
 };
 
 export type SmsJobContext = {
+  id: string;
+  label: string;
+  customerName: string | null;
+  scheduledDate: string | null;
+  status: string | null;
+};
+
+export type SmsEstimateContext = {
   id: string;
   label: string;
   customerName: string | null;
@@ -108,6 +117,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const [sending, setSending] = useState(false);
   const [contactMap, setContactMap] = useState<ContactLookupMap>({});
   const [jobContextMap, setJobContextMap] = useState<Record<string, SmsJobContext>>({});
+  const [estimateContextMap, setEstimateContextMap] = useState<Record<string, SmsEstimateContext>>({});
   const [threadSettings, setThreadSettings] = useState<Record<string, SmsThreadSetting>>({});
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -122,7 +132,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const [{ data: employees }, { data: customers }, { data: estimates }, { data: jobs }, { data: supplyHouses }, { data: vendorContacts }] = await Promise.all([
         supabase.from("employees").select("name, phone, is_active"),
         supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
-        supabase.from("estimates").select("customer_name, customer_phone").not("customer_phone", "is", null).not("customer_name", "is", null),
+        supabase.from("estimates").select("id, estimate_number, customer_name, customer_phone, scheduled_date, status, work_status").not("customer_phone", "is", null).not("customer_name", "is", null),
         supabase.from("jobs").select("id, customer_name, customer_phone, hcp_job_number, job_type, scheduled_date, status").not("customer_phone", "is", null).not("customer_name", "is", null),
         supabase.from("supply_houses").select("name, contact_phone, text_support_phone").not("contact_phone", "is", null),
         supabase.from("vendor_contacts").select("name, phone, supply_house_id, supply_houses(name)").not("phone", "is", null),
@@ -173,13 +183,26 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       }
 
       // Priority 6: estimates (leads not yet converted to customers)
+      const estimatesByPhone: Record<string, SmsEstimateContext> = {};
       for (const est of estimates || []) {
         if (!est.customer_name || !est.customer_phone) continue;
+        const estimateStatus = String(est.work_status || est.status || "").toLowerCase();
+        if (["won", "lost", "canceled", "cancelled"].includes(estimateStatus)) continue;
         addContactLookup(map, est.customer_phone, { name: est.customer_name, type: "customer" });
+        const key = normalizeLast10(est.customer_phone);
+        if (!key || estimatesByPhone[key]) continue;
+        estimatesByPhone[key] = {
+          id: est.id,
+          label: est.estimate_number ? `Estimate #${est.estimate_number}` : "Estimate",
+          customerName: est.customer_name,
+          scheduledDate: est.scheduled_date,
+          status: est.work_status || est.status || null,
+        };
       }
 
       setContactMap(map);
       setJobContextMap(jobsByPhone);
+      setEstimateContextMap(estimatesByPhone);
     };
 
     buildContactMap();
@@ -513,6 +536,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         unread > 0 || lastMsg.direction === "inbound" ? "needs_reply" : "waiting";
       const status = manualIsFresh ? setting!.conversation_status! : derivedStatus;
       const matchedJob = phoneLast10 ? jobContextMap[phoneLast10] || null : null;
+      const matchedEstimate = phoneLast10 ? estimateContextMap[phoneLast10] || null : null;
 
       return {
         phoneNumber: phone,
@@ -524,6 +548,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         messages: convoMsgs,
         latestJobId: latestJob || matchedJob?.id || null,
         jobContext: matchedJob,
+        estimateContext: matchedEstimate,
         toNumber: latestToNumber,
       };
     });
@@ -538,7 +563,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     });
 
     return convos;
-  }, [messages, resolveContact, threadSettings, jobContextMap]);
+  }, [messages, resolveContact, threadSettings, jobContextMap, estimateContextMap]);
 
   const queryClient = useQueryClient();
 

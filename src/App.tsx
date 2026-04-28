@@ -58,6 +58,7 @@ import Payments from "./pages/Payments";
 import SmsPage from "./pages/SmsPage";
 import CallsPage from "./pages/CallsPage";
 import InboxPage from "./pages/InboxPage";
+import TeamCommunications from "./pages/TeamCommunications";
 import Admin from "./pages/Admin";
 import SystemLog from "./pages/SystemLog";
 import ReferralPublic from "./pages/ReferralPublic";
@@ -471,6 +472,7 @@ function AppRouter() {
         <Route path="/tech/customers/:id" element={<ProtectedRoute><TechCustomerDetail /></ProtectedRoute>} />
         <Route path="/copilot" element={<ProtectedRoute><CopilotPage /></ProtectedRoute>} />
         <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+        <Route path="/team" element={<ProtectedRoute><TeamCommunications /></ProtectedRoute>} />
         <Route path="/email" element={<Navigate to="/inbox" replace />} />
         <Route path="/sms" element={<SmsRedirectComponent />} />
         <Route path="/phone" element={<PhoneRedirectComponent />} />

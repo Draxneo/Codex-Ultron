@@ -1,0 +1,907 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import {
+  Bell,
+  Check,
+  Edit3,
+  Hash,
+  Mic,
+  MicOff,
+  PhoneCall,
+  PhoneOff,
+  Plus,
+  Send,
+  Trash2,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { AppHeader } from "@/components/AppHeader";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
+import { cn } from "@/lib/utils";
+
+type ConversationType = "direct" | "room";
+
+type TeamConversation = {
+  id: string;
+  type: ConversationType;
+  name: string | null;
+  direct_pair_key: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+type TeamMember = {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  joined_at: string;
+};
+
+type TeamUser = {
+  id: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  profile_id: string | null;
+  is_active: boolean | null;
+};
+
+type TeamMessage = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+type TeamAudioCall = {
+  id: string;
+  conversation_id: string;
+  provider: "stub_link";
+  provider_call_id: string;
+  call_url: string;
+  created_by: string | null;
+  started_at: string;
+  ended_at: string | null;
+  created_at: string;
+};
+
+type TeamNotification = {
+  id: string;
+  type: "direct_message" | "room_message" | "audio_call_started";
+  title: string;
+  body: string | null;
+  related_entity_type: string;
+  related_entity_id: string;
+  read_at: string | null;
+  created_at: string;
+};
+
+const db = supabase as any;
+const urlPattern = /(https?:\/\/[^\s]+)/g;
+const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "T";
+}
+
+function messageTime(value: string) {
+  return formatDistanceToNow(new Date(value), { addSuffix: true });
+}
+
+function LinkifiedText({ text }: { text: string }) {
+  const pieces = text.split(urlPattern);
+  return (
+    <>
+      {pieces.map((piece, index) =>
+        isUrl(piece) ? (
+          <a
+            key={`${piece}-${index}`}
+            href={piece}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            {piece}
+          </a>
+        ) : (
+          <span key={`${piece}-${index}`}>{piece}</span>
+        )
+      )}
+    </>
+  );
+}
+
+export default function TeamCommunications() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [mutedCallIds, setMutedCallIds] = useState<Set<string>>(new Set());
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: teamUsers = [] } = useQuery({
+    queryKey: ["team-users"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("employees")
+        .select("id, name, role, email, profile_id, is_active")
+        .eq("is_active", true)
+        .not("profile_id", "is", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as TeamUser[];
+    },
+  });
+
+  const userByAuthId = useMemo(() => {
+    const map = new Map<string, TeamUser>();
+    for (const employee of teamUsers) {
+      if (employee.profile_id) map.set(employee.profile_id, employee);
+    }
+    return map;
+  }, [teamUsers]);
+
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["team-conversations", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("team_conversations")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as TeamConversation[];
+    },
+  });
+
+  const conversationIds = useMemo(() => conversations.map((conversation) => conversation.id), [conversations]);
+
+  const { data: members = [] } = useQuery({
+    queryKey: ["team-conversation-members", conversationIds.join(",")],
+    enabled: conversationIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("team_conversation_members")
+        .select("*")
+        .in("conversation_id", conversationIds);
+      if (error) throw error;
+      return (data ?? []) as TeamMember[];
+    },
+  });
+
+  const selectedConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null,
+    [conversations, selectedConversationId]
+  );
+
+  useEffect(() => {
+    if (!selectedConversationId && conversations[0]) {
+      setSelectedConversationId(conversations[0].id);
+    }
+  }, [conversations, selectedConversationId]);
+
+  const { data: messages = [] } = useQuery({
+    queryKey: ["team-messages", selectedConversation?.id],
+    enabled: !!selectedConversation,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("team_messages")
+        .select("*")
+        .eq("conversation_id", selectedConversation!.id)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as TeamMessage[];
+    },
+  });
+
+  const { data: calls = [] } = useQuery({
+    queryKey: ["team-audio-calls", conversationIds.join(",")],
+    enabled: conversationIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("team_audio_calls")
+        .select("*")
+        .in("conversation_id", conversationIds)
+        .order("started_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as TeamAudioCall[];
+    },
+  });
+
+  const activeCall = useMemo(
+    () => calls.find((call) => call.conversation_id === selectedConversation?.id && !call.ended_at) ?? null,
+    [calls, selectedConversation?.id]
+  );
+
+  const { data: unreadNotifications = [] } = useQuery({
+    queryKey: ["team-notifications", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("team_notifications")
+        .select("*")
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as TeamNotification[];
+    },
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`team-communications-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_messages" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["team-messages"] });
+        queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_audio_calls" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] });
+        queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_notifications" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, user]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length, selectedConversation?.id]);
+
+  const roomConversations = conversations.filter((conversation) => conversation.type === "room");
+  const directConversations = conversations.filter((conversation) => conversation.type === "direct");
+  const currentMemberIds = new Set(members.map((member) => member.user_id));
+  const availableDirectUsers = teamUsers.filter(
+    (employee) => employee.profile_id && employee.profile_id !== user?.id
+  );
+
+  const conversationTitle = (conversation: TeamConversation) => {
+    if (conversation.type === "room") return conversation.name || "Room";
+    const member = members.find(
+      (item) => item.conversation_id === conversation.id && item.user_id !== user?.id
+    );
+    return userByAuthId.get(member?.user_id ?? "")?.name ?? "Direct message";
+  };
+
+  const selectedMembers = members
+    .filter((member) => member.conversation_id === selectedConversation?.id)
+    .map((member) => userByAuthId.get(member.user_id))
+    .filter(Boolean) as TeamUser[];
+
+  const sendMessage = useMutation({
+    mutationFn: async () => {
+      if (!user || !selectedConversation) throw new Error("No conversation selected");
+      const body = draft.trim();
+      if (!body) return;
+      if (body.length > 4000) throw new Error("Message is too long");
+
+      const { error } = await db.from("team_messages").insert({
+        conversation_id: selectedConversation.id,
+        sender_id: user.id,
+        body,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setDraft("");
+      queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not send message"),
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: async () => {
+      if (!editingMessageId) return;
+      const body = editingText.trim();
+      if (!body) return;
+      const { error } = await db
+        .from("team_messages")
+        .update({ body, edited_at: new Date().toISOString() })
+        .eq("id", editingMessageId)
+        .eq("sender_id", user?.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingMessageId(null);
+      setEditingText("");
+      queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
+    },
+    onError: () => toast.error("Could not edit message"),
+  });
+
+  const deleteMessage = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await db
+        .from("team_messages")
+        .update({ body: "", deleted_at: new Date().toISOString() })
+        .eq("id", messageId)
+        .eq("sender_id", user?.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] }),
+    onError: () => toast.error("Could not delete message"),
+  });
+
+  const getOrCreateDirect = useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!user) throw new Error("Not signed in");
+      const directPairKey = [user.id, targetUserId].sort().join(":");
+      const { data: existing, error: existingError } = await db
+        .from("team_conversations")
+        .select("*")
+        .eq("direct_pair_key", directPairKey)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) return existing as TeamConversation;
+
+      const conversationId = crypto.randomUUID();
+      const { error: conversationError } = await db.from("team_conversations").insert({
+        id: conversationId,
+        type: "direct",
+        direct_pair_key: directPairKey,
+        created_by: user.id,
+      });
+      if (conversationError) throw conversationError;
+
+      const { error: membersError } = await db.from("team_conversation_members").insert([
+        { conversation_id: conversationId, user_id: user.id, role: "owner" },
+        { conversation_id: conversationId, user_id: targetUserId, role: "member" },
+      ]);
+      if (membersError) throw membersError;
+
+      return {
+        id: conversationId,
+        type: "direct",
+        name: null,
+        direct_pair_key: directPairKey,
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+      } as TeamConversation;
+    },
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ["team-conversations", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-conversation-members"] });
+      setSelectedConversationId(conversation.id);
+    },
+    onError: () => toast.error("Could not open direct message"),
+  });
+
+  const createRoom = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not signed in");
+      const name = newRoomName.trim();
+      if (!name) return null;
+      const conversationId = crypto.randomUUID();
+      const { error: conversationError } = await db.from("team_conversations").insert({
+        id: conversationId,
+        type: "room",
+        name,
+        created_by: user.id,
+      });
+      if (conversationError) throw conversationError;
+
+      const memberRows = [
+        { conversation_id: conversationId, user_id: user.id, role: "owner" },
+        ...availableDirectUsers
+          .map((employee) => employee.profile_id)
+          .filter(Boolean)
+          .map((profileId) => ({ conversation_id: conversationId, user_id: profileId, role: "member" })),
+      ];
+      const { error: membersError } = await db.from("team_conversation_members").insert(memberRows);
+      if (membersError) throw membersError;
+      return conversationId;
+    },
+    onSuccess: (conversationId) => {
+      setNewRoomName("");
+      queryClient.invalidateQueries({ queryKey: ["team-conversations", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-conversation-members"] });
+      if (conversationId) setSelectedConversationId(conversationId);
+    },
+    onError: () => toast.error("Could not create room"),
+  });
+
+  const startCall = useMutation({
+    mutationFn: async () => {
+      if (!user || !selectedConversation) throw new Error("No conversation selected");
+      const providerCall = await audioCallProvider.createCall({ conversationId: selectedConversation.id });
+      const callId = crypto.randomUUID();
+      const { error: callError } = await db.from("team_audio_calls").insert({
+        id: callId,
+        conversation_id: selectedConversation.id,
+        provider: providerCall.provider,
+        provider_call_id: providerCall.providerCallId,
+        call_url: providerCall.callUrl,
+        created_by: user.id,
+        started_at: providerCall.startedAt,
+      });
+      if (callError) throw callError;
+
+      const { error: messageError } = await db.from("team_messages").insert({
+        conversation_id: selectedConversation.id,
+        sender_id: user.id,
+        body: `Audio call started: ${providerCall.callUrl}`,
+      });
+      if (messageError) throw messageError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] });
+      queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
+    },
+    onError: () => toast.error("Could not start call"),
+  });
+
+  const joinCall = useMutation({
+    mutationFn: async (call: TeamAudioCall) => {
+      if (!user) throw new Error("Not signed in");
+      const providerCall: ProviderCall = {
+        provider: call.provider,
+        providerCallId: call.provider_call_id,
+        callUrl: call.call_url,
+        startedAt: call.started_at,
+        endedAt: call.ended_at,
+      };
+      await audioCallProvider.joinCall(providerCall);
+      const { error } = await db.from("team_audio_call_participants").insert({
+        audio_call_id: call.id,
+        user_id: user.id,
+        joined_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] }),
+    onError: () => toast.error("Could not join call"),
+  });
+
+  const leaveCall = useMutation({
+    mutationFn: async (call: TeamAudioCall) => {
+      const { error } = await db
+        .from("team_audio_call_participants")
+        .update({ left_at: new Date().toISOString() })
+        .eq("audio_call_id", call.id)
+        .eq("user_id", user?.id)
+        .is("left_at", null);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success("Left call"),
+    onError: () => toast.error("Could not leave call"),
+  });
+
+  const endCall = useMutation({
+    mutationFn: async (call: TeamAudioCall) => {
+      const providerCall: ProviderCall = {
+        provider: call.provider,
+        providerCallId: call.provider_call_id,
+        callUrl: call.call_url,
+        startedAt: call.started_at,
+        endedAt: call.ended_at,
+      };
+      const { endedAt } = await audioCallProvider.endCall(providerCall);
+      const { error } = await db.from("team_audio_calls").update({ ended_at: endedAt }).eq("id", call.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] }),
+    onError: () => toast.error("Could not end call"),
+  });
+
+  const markNotificationsRead = useMutation({
+    mutationFn: async () => {
+      const { error } = await db
+        .from("team_notifications")
+        .update({ read_at: new Date().toISOString() })
+        .is("read_at", null);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-notifications", user?.id] }),
+  });
+
+  return (
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <main className="h-[calc(100vh-3rem)] overflow-hidden bg-muted/25">
+        <div className="grid h-full grid-cols-[280px_minmax(0,1fr)_240px]">
+          <aside className="border-r bg-card/95">
+            <div className="flex h-14 items-center justify-between border-b px-4">
+              <div>
+                <h1 className="text-base font-semibold">Chat</h1>
+                <p className="text-xs text-muted-foreground">Team messages and calls</p>
+              </div>
+              <Badge variant={unreadNotifications.length ? "default" : "secondary"} className="gap-1">
+                <Bell className="h-3 w-3" />
+                {unreadNotifications.length}
+              </Badge>
+            </div>
+
+            <ScrollArea className="h-[calc(100vh-6.5rem)]">
+              <div className="space-y-5 p-3">
+                <section>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rooms</p>
+                    <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1">
+                    {roomConversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        onClick={() => setSelectedConversationId(conversation.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
+                          selectedConversation?.id === conversation.id
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-muted"
+                        )}
+                      >
+                        <Hash className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{conversationTitle(conversation)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    <Input
+                      value={newRoomName}
+                      onChange={(event) => setNewRoomName(event.target.value)}
+                      placeholder="New room"
+                      className="h-8 text-xs"
+                      maxLength={60}
+                    />
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="h-8 w-8"
+                      onClick={() => createRoom.mutate()}
+                      disabled={!newRoomName.trim() || createRoom.isPending}
+                      title="Create room"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </section>
+
+                <section>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct Messages</p>
+                    <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1">
+                    {availableDirectUsers.map((employee) => {
+                      const conversation = directConversations.find((item) =>
+                        members.some(
+                          (member) => member.conversation_id === item.id && member.user_id === employee.profile_id
+                        )
+                      );
+                      return (
+                        <button
+                          key={employee.profile_id}
+                          onClick={() =>
+                            conversation
+                              ? setSelectedConversationId(conversation.id)
+                              : getOrCreateDirect.mutate(employee.profile_id!)
+                          }
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
+                            selectedConversation?.id === conversation?.id
+                              ? "bg-primary/10 text-primary"
+                              : "hover:bg-muted"
+                          )}
+                        >
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="text-[11px]">{initials(employee.name)}</AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0 flex-1 truncate">{employee.name}</span>
+                          {currentMemberIds.has(employee.profile_id!) && (
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent Calls</p>
+                    <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1.5">
+                    {calls.slice(0, 5).map((call) => {
+                      const conversation = conversations.find((item) => item.id === call.conversation_id);
+                      return (
+                        <button
+                          key={call.id}
+                          onClick={() => setSelectedConversationId(call.conversation_id)}
+                          className="w-full rounded-md px-2.5 py-2 text-left text-xs hover:bg-muted"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate font-medium">
+                              {conversation ? conversationTitle(conversation) : "Audio Call"}
+                            </span>
+                            {!call.ended_at && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                          </div>
+                          <p className="text-muted-foreground">{messageTime(call.started_at)}</p>
+                        </button>
+                      );
+                    })}
+                    {calls.length === 0 && (
+                      <p className="px-2.5 py-2 text-xs text-muted-foreground">No recent calls</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </ScrollArea>
+          </aside>
+
+          <section className="flex min-w-0 flex-col bg-background">
+            <header className="flex h-14 items-center justify-between border-b px-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {selectedConversation?.type === "room" ? <Hash className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                  <h2 className="truncate text-sm font-semibold">
+                    {selectedConversation ? conversationTitle(selectedConversation) : "Team Room"}
+                  </h2>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedMembers.length} member{selectedMembers.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {activeCall && (
+                  <Badge variant="secondary" className="gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    Audio Call
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => startCall.mutate()}
+                  disabled={!selectedConversation || startCall.isPending}
+                >
+                  <PhoneCall className="h-4 w-4" />
+                  Start Call
+                </Button>
+              </div>
+            </header>
+
+            {activeCall && (
+              <div className="flex items-center justify-between gap-3 border-b bg-emerald-50 px-4 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
+                <div className="min-w-0">
+                  <p className="font-medium">Audio Call is active</p>
+                  <p className="truncate text-xs opacity-80">{activeCall.call_url}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button size="sm" variant="secondary" onClick={() => joinCall.mutate(activeCall)}>
+                    Join Call
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      setMutedCallIds((previous) => {
+                        const next = new Set(previous);
+                        next.has(activeCall.id) ? next.delete(activeCall.id) : next.add(activeCall.id);
+                        return next;
+                      })
+                    }
+                    title={mutedCallIds.has(activeCall.id) ? "Unmute" : "Mute"}
+                  >
+                    {mutedCallIds.has(activeCall.id) ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => leaveCall.mutate(activeCall)}>
+                    Leave
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => endCall.mutate(activeCall)} title="End call">
+                    <PhoneOff className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <ScrollArea className="flex-1">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-5 py-5">
+                {messages.map((message) => {
+                  const sender = userByAuthId.get(message.sender_id);
+                  const own = message.sender_id === user?.id;
+                  const deleted = !!message.deleted_at;
+                  return (
+                    <div key={message.id} className={cn("group flex gap-3", own && "flex-row-reverse")}>
+                      <Avatar className="mt-1 h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {initials(sender?.name ?? (own ? "You" : "Team"))}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className={cn("min-w-0 max-w-[72%]", own && "text-right")}>
+                        <div className={cn("mb-1 flex items-center gap-2 text-xs text-muted-foreground", own && "justify-end")}>
+                          <span className="font-medium text-foreground">{own ? "You" : sender?.name ?? "Team member"}</span>
+                          <span>{messageTime(message.created_at)}</span>
+                          {message.edited_at && !deleted && <span>edited</span>}
+                        </div>
+                        <div
+                          className={cn(
+                            "rounded-lg border px-3 py-2 text-sm leading-relaxed shadow-sm",
+                            own ? "bg-primary text-primary-foreground" : "bg-card",
+                            deleted && "italic text-muted-foreground"
+                          )}
+                        >
+                          {editingMessageId === message.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingText}
+                                onChange={(event) => setEditingText(event.target.value)}
+                                className="min-h-20 bg-background text-foreground"
+                                maxLength={4000}
+                              />
+                              <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => saveEdit.mutate()}>
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => {
+                                    setEditingMessageId(null);
+                                    setEditingText("");
+                                  }}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : deleted ? (
+                            "Message deleted"
+                          ) : (
+                            <LinkifiedText text={message.body} />
+                          )}
+                        </div>
+                        {own && !deleted && editingMessageId !== message.id && (
+                          <div className="mt-1 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                setEditingMessageId(message.id);
+                                setEditingText(message.body);
+                              }}
+                              title="Edit message"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => deleteMessage.mutate(message.id)}
+                              title="Delete message"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {messages.length === 0 && (
+                  <div className="py-16 text-center">
+                    <p className="text-sm font-medium">No messages yet</p>
+                    <p className="text-sm text-muted-foreground">Start with a quick update or question.</p>
+                  </div>
+                )}
+                <div ref={endRef} />
+              </div>
+            </ScrollArea>
+
+            <footer className="border-t bg-card/80 p-3">
+              <div className="mx-auto flex max-w-4xl items-end gap-2">
+                <Textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendMessage.mutate();
+                    }
+                  }}
+                  placeholder="Message"
+                  className="max-h-36 min-h-11 resize-none"
+                  maxLength={4000}
+                />
+                <Button
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                  disabled={!draft.trim() || sendMessage.isPending || !selectedConversation}
+                  onClick={() => sendMessage.mutate()}
+                  title="Send"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </footer>
+          </section>
+
+          <aside className="border-l bg-card/95">
+            <div className="flex h-14 items-center justify-between border-b px-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                <p className="text-sm font-semibold">Members</p>
+              </div>
+              {unreadNotifications.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => markNotificationsRead.mutate()}>
+                  Mark read
+                </Button>
+              )}
+            </div>
+            <ScrollArea className="h-[calc(100vh-6.5rem)]">
+              <div className="space-y-5 p-4">
+                <section className="space-y-2">
+                  {selectedMembers.map((member) => (
+                    <div key={member.profile_id} className="flex items-center gap-2 rounded-md px-1 py-1.5">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">{initials(member.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.role || "team"}</p>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+
+                <Separator />
+
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notifications</p>
+                  <div className="space-y-2">
+                    {unreadNotifications.map((notification) => (
+                      <div key={notification.id} className="rounded-md border bg-background px-3 py-2 text-xs">
+                        <p className="font-medium">{notification.title}</p>
+                        {notification.body && <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>}
+                      </div>
+                    ))}
+                    {unreadNotifications.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Nothing new</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </ScrollArea>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}
