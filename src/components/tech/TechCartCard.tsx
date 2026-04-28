@@ -97,7 +97,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
   };
 
   const handlePresent = () => {
-    if (presentLink) window.open(presentLink, "_blank", "noopener");
+    if (presentLink) window.location.assign(presentLink);
   };
 
   const handleCollectPayment = () => {
@@ -140,9 +140,18 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <Button className="h-14 gap-2 text-sm" onClick={() => setPickerOpen(true)} disabled={!permissions.canEditItems}>
             <Plus className="h-4 w-4" /> Add Option
           </Button>
-          <Button variant="outline" className="h-14 gap-2 text-sm" onClick={handlePresent} disabled={!presentLink}>
-            <Eye className="h-4 w-4" /> Preview
-          </Button>
+          {presentLink ? (
+            <a
+              href={presentLink}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Eye className="h-4 w-4" /> Preview
+            </a>
+          ) : (
+            <Button variant="outline" className="h-14 gap-2 text-sm" disabled>
+              <Eye className="h-4 w-4" /> Preview
+            </Button>
+          )}
         </div>
 
         {items.length === 0 ? (
