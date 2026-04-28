@@ -370,7 +370,7 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
     <div className="flex flex-col h-[calc(100vh-180px)] rounded-lg border bg-background overflow-hidden">
       {testMode && (
         <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm font-medium">
-          ⚠ Test Mode — incoming calls bypass greeting &amp; menu, ring direct to softphone
+          Test Mode - incoming calls bypass greeting and menu for direct routing tests
         </div>
       )}
       <div className="flex flex-1 overflow-hidden">
