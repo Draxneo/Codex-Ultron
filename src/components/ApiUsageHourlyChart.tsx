@@ -14,7 +14,7 @@ const SERVICE_LABELS: Record<string, string> = {
   twilio_voice: "Twilio Voice",
   deepgram: "Deepgram",
   openai_ai: "OpenAI / JARVIS",
-  lovable_ai: "OpenAI / JARVIS (legacy)",
+  elevenlabs_tts: "ElevenLabs",
   firecrawl: "Firecrawl",
 };
 
@@ -24,7 +24,7 @@ const SERVICE_COLORS: Record<string, string> = {
   twilio_voice: "#E91E63",
   deepgram: "#13EF93",
   openai_ai: "#8B5CF6",
-  lovable_ai: "#A78BFA",
+  elevenlabs_tts: "#F59E0B",
   firecrawl: "#F97316",
 };
 

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { geocodeToCoords, getDirections } from "../_shared/googleGeo.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { geocodeToCoords, getDirections } from "../_shared/googleGeo.ts";
+import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getCentralToday } from "../_shared/formatters.ts";
 
@@ -39,6 +40,60 @@ async function fetchCustomersByIds(sb: any, ids: string[]) {
   return new Map((data || []).map((customer: CustomerFallback) => [customer.id, customer]));
 }
 
+function normalizeAddress(value: string | null | undefined) {
+  return (value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function buildExpectedLegs({
+  employeeId,
+  date,
+  allItems,
+  startAddress,
+  startLabel,
+}: {
+  employeeId: string;
+  date: string;
+  allItems: any[];
+  startAddress: string | null | undefined;
+  startLabel: string;
+}) {
+  let previousAddress = startAddress || null;
+  let previousLabel = startLabel;
+
+  return allItems.map((item: any, i: number) => {
+    const leg = {
+      employee_id: employeeId,
+      scheduled_date: date,
+      leg_order: i,
+      from_address: previousAddress,
+      to_address: item.address || null,
+      from_job_id: i > 0 ? allItems[i - 1].id : null,
+      to_job_id: item.id,
+      from_label: previousLabel,
+    };
+
+    if (item.address) previousAddress = item.address;
+    previousLabel = item.customer_name || "Previous stop";
+    return leg;
+  });
+}
+
+function routeCacheStillMatches(existingRows: any[], expectedLegs: any[]) {
+  if (existingRows.length !== expectedLegs.length) return false;
+
+  for (const expected of expectedLegs) {
+    const actual = existingRows.find((row: any) => row.leg_order === expected.leg_order);
+    if (!actual) return false;
+    if (actual.to_job_id !== expected.to_job_id) return false;
+    if ((actual.from_job_id || null) !== (expected.from_job_id || null)) return false;
+    if (normalizeAddress(actual.from_address) !== normalizeAddress(expected.from_address)) return false;
+    if (normalizeAddress(actual.to_address) !== normalizeAddress(expected.to_address)) return false;
+    if (expected.to_address && actual.travel_minutes == null) return false;
+  }
+
+  return true;
+}
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -47,7 +102,7 @@ serve(async (req) => {
     const sb = getSupabaseAdmin();
 
     const body = await req.json();
-    const { employee_id, date, batch } = body;
+    const { employee_id, date, batch, force } = body;
 
     // Support batch mode: array of { employee_id, date }
     const tasks: { employee_id: string; date: string }[] = batch
@@ -82,8 +137,13 @@ serve(async (req) => {
 
     for (const task of filteredTasks) {
       try {
-        await processRoute(sb, task.employee_id, task.date);
-        results.push({ employee_id: task.employee_id, date: task.date, status: "ok" });
+        const processResult = await processRoute(sb, task.employee_id, task.date, force === true);
+        results.push({
+          employee_id: task.employee_id,
+          date: task.date,
+          status: "ok",
+          ...(processResult?.skipped ? { skipped: true, reason: processResult.reason } : {}),
+        });
       } catch (e) {
         console.error(`Error processing ${task.employee_id} / ${task.date}:`, e);
         results.push({ employee_id: task.employee_id, date: task.date, status: "error", error: String(e) });
@@ -102,7 +162,7 @@ serve(async (req) => {
   }
 });
 
-async function processRoute(sb: any, employeeId: string, date: string) {
+async function processRoute(sb: any, employeeId: string, date: string, force = false) {
   // Get employee info
   const { data: emp } = await sb
     .from("employees")
@@ -169,15 +229,6 @@ async function processRoute(sb: any, employeeId: string, date: string) {
     return 0;
   });
 
-  // Delete existing cache for this employee+date
-  await sb
-    .from("route_travel_cache")
-    .delete()
-    .eq("employee_id", employeeId)
-    .eq("scheduled_date", date);
-
-  if (allItems.length === 0) return;
-
   // Determine starting address: home_address → company office fallback → first job address
   let startAddress = emp.home_address;
   let startLabel = `${emp.name.split(" ")[0]}'s home`;
@@ -213,6 +264,45 @@ async function processRoute(sb: any, employeeId: string, date: string) {
       startLabel = "First stop";
     }
   }
+
+  if (allItems.length === 0) {
+    await sb
+      .from("route_travel_cache")
+      .delete()
+      .eq("employee_id", employeeId)
+      .eq("scheduled_date", date);
+    return { skipped: false };
+  }
+
+  const expectedLegs = buildExpectedLegs({
+    employeeId,
+    date,
+    allItems,
+    startAddress,
+    startLabel,
+  });
+
+  if (!force) {
+    const { data: existingRows, error: existingError } = await sb
+      .from("route_travel_cache")
+      .select("leg_order, from_address, to_address, from_job_id, to_job_id, travel_minutes")
+      .eq("employee_id", employeeId)
+      .eq("scheduled_date", date)
+      .order("leg_order");
+
+    if (existingError) {
+      console.warn("route_travel_cache read failed; recalculating:", existingError.message);
+    } else if (routeCacheStillMatches(existingRows || [], expectedLegs)) {
+      return { skipped: true, reason: "route cache already current" };
+    }
+  }
+
+  // Delete existing cache for this employee+date only after proving it is stale.
+  await sb
+    .from("route_travel_cache")
+    .delete()
+    .eq("employee_id", employeeId)
+    .eq("scheduled_date", date);
 
   // Calculate travel times sequentially
   const geocodeCache = new Map<string, [number, number] | null>();
@@ -286,4 +376,6 @@ async function processRoute(sb: any, employeeId: string, date: string) {
     });
     if (error) console.error("Upsert error:", error);
   }
+
+  return { skipped: false };
 }

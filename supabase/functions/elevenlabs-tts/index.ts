@@ -14,6 +14,7 @@
  * Returns: audio/mpeg
  */
 import { corsHeaders } from "../_shared/cors.ts";
+import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const DEFAULT_VOICE_ID = "u8GDilEiJPUbRk87Lcqs";
@@ -127,19 +128,33 @@ Deno.serve(async (req) => {
     // We need the full bytes (to upload AND return), so buffer the stream.
     const audioBytes = new Uint8Array(await upstream.arrayBuffer());
 
-    // 3) Fire-and-forget upload to cache (don't block the response on this).
-    admin.storage
+    // 3) Save the generated audio before returning so repeat voice lines are
+    // actually free, even when multiple clients request the same phrase.
+    const { error: uploadError } = await admin.storage
       .from(CACHE_BUCKET)
       .upload(cachePath, audioBytes, {
         contentType: "audio/mpeg",
         cacheControl: "31536000",
         upsert: false,
-      })
-      .then(({ error }) => {
-        if (error && !String(error.message).toLowerCase().includes("exists")) {
-          console.warn("[elevenlabs-tts] cache upload failed:", error.message);
-        }
       });
+    if (uploadError && !String(uploadError.message).toLowerCase().includes("exists")) {
+      console.warn("[elevenlabs-tts] cache upload failed:", uploadError.message);
+    }
+
+    await logApiUsage(admin, {
+      service: "elevenlabs_tts",
+      function_name: "elevenlabs-tts",
+      endpoint: "text-to-speech-stream",
+      // Approximate character-based estimate. Cache hits are not logged because
+      // they do not hit ElevenLabs.
+      estimated_cost_cents: Math.round(text.length * 0.003 * 10000) / 10000,
+      metadata: {
+        chars: text.length,
+        voice_id: voiceId,
+        model_id: modelId,
+        cache_path: cachePath,
+      },
+    });
 
     return new Response(audioBytes, {
       headers: {

@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { buildKeytermParamsSync } from "../_shared/deepgramKeyterms.ts";
+import { logApiUsage } from "../_shared/apiUsageLog.ts";
 
 Deno.serve(async (req) => {
   // This endpoint only handles WebSocket upgrades from Twilio <Stream>
@@ -23,6 +24,7 @@ Deno.serve(async (req) => {
   let streamSid = "";
   let callSid = "";
   let keytermParams = "";
+  let streamStartedAt = 0;
   // Diagnostic counters — logged on close so we know whether audio actually flowed
   let mediaInboundCount = 0;
   let mediaOutboundCount = 0;
@@ -113,6 +115,7 @@ Deno.serve(async (req) => {
         case "start": {
           streamSid = msg.start?.streamSid || "";
           callSid = msg.start?.callSid || "";
+          streamStartedAt = Date.now();
           console.log(`Twilio Stream started — SID: ${streamSid}, Call: ${callSid}, track: both_tracks`);
           // Load company name once for keyterm boosting (sync per-connection cost: 1 DB read)
           try {
@@ -127,9 +130,9 @@ Deno.serve(async (req) => {
             console.error("[live-transcribe] Failed to load keyterms:", err);
             keytermParams = buildKeytermParamsSync(null);
           }
-          // Create both Deepgram connections
-          dgInbound = connectDeepgram("caller");
-          dgOutbound = connectDeepgram("agent");
+          // Create Deepgram connections lazily on first media for each track.
+          // Some Twilio paths only stream inbound audio; opening an unused second
+          // Deepgram socket would be wasteful.
           break;
         }
 
@@ -138,7 +141,12 @@ Deno.serve(async (req) => {
           const track = msg.media?.track;
           if (track === "outbound") mediaOutboundCount++;
           else mediaInboundCount++;
-          const targetDg = track === "outbound" ? dgOutbound : dgInbound;
+          let targetDg = track === "outbound" ? dgOutbound : dgInbound;
+          if (!targetDg || targetDg.readyState === WebSocket.CLOSED) {
+            targetDg = connectDeepgram(track === "outbound" ? "agent" : "caller");
+            if (track === "outbound") dgOutbound = targetDg;
+            else dgInbound = targetDg;
+          }
           if (targetDg && targetDg.readyState === WebSocket.OPEN) {
             const audioBuffer = Uint8Array.from(atob(msg.media.payload), (c) =>
               c.charCodeAt(0)
@@ -149,6 +157,25 @@ Deno.serve(async (req) => {
         }
 
         case "stop":
+          if (streamStartedAt > 0 && (mediaInboundCount > 0 || mediaOutboundCount > 0)) {
+            const seconds = Math.max(1, Math.round((Date.now() - streamStartedAt) / 1000));
+            const activeTracks = (mediaInboundCount > 0 ? 1 : 0) + (mediaOutboundCount > 0 ? 1 : 0);
+            const estimatedCostCents = Math.round(seconds * Math.max(1, activeTracks) * 0.0072 * 10000) / 10000;
+            await logApiUsage(getSupabaseAdmin(), {
+              service: "deepgram",
+              function_name: "live-transcribe",
+              endpoint: "listen-stream",
+              estimated_cost_cents: estimatedCostCents,
+              metadata: {
+                seconds,
+                active_tracks: activeTracks,
+                stream_sid: streamSid,
+                call_sid: callSid,
+                media_inbound_count: mediaInboundCount,
+                media_outbound_count: mediaOutboundCount,
+              },
+            });
+          }
           console.log(
             `Twilio Stream stopped for call ${callSid} — media in/out: ${mediaInboundCount}/${mediaOutboundCount}, ` +
             `dg msgs in/out: ${dgMessagesInbound}/${dgMessagesOutbound}, ` +

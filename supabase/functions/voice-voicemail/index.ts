@@ -4,6 +4,7 @@ import { fetchRecordingWithAuth } from "../_shared/twilioRecording.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildKeytermParams } from "../_shared/deepgramKeyterms.ts";
+import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
@@ -89,6 +90,15 @@ async function transcribeRecording(
     }
 
     const dgData = await dgResp.json();
+    const estimatedSeconds = Math.max(1, Math.round(audioBytes.byteLength / 16000));
+    const deepgramCents = Math.round(estimatedSeconds * 0.0072 * 10000) / 10000;
+    await logApiUsage(sb, {
+      service: "deepgram",
+      function_name: "voice-voicemail",
+      endpoint: "listen-recording",
+      estimated_cost_cents: deepgramCents,
+      metadata: { seconds: estimatedSeconds },
+    });
     return dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript
       ?.trim() || null;
   } catch (err) {

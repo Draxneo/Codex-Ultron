@@ -76,13 +76,14 @@ async function getCachedGeocode(
   const lng = result.geometry.location.lng;
   const formattedAddress = result.formatted_address;
 
-  // Store in cache (fire-and-forget)
-  sb.from("geocode_cache")
+  // Store in cache before returning so concurrent page loads do not repeatedly
+  // miss the same address and call Google again.
+  const { error: cacheError } = await sb.from("geocode_cache")
     .upsert(
       { address_input: address.trim(), lat, lng, formatted_address: formattedAddress, source: "google" },
       { onConflict: "address_hash" }
-    )
-    .then(({ error }: { error: any }) => { if (error) console.error("geocode_cache insert error:", error); });
+    );
+  if (cacheError) console.error("geocode_cache insert error:", cacheError);
 
   return { lat, lng, formattedAddress };
 }
@@ -176,7 +177,7 @@ export async function getDirections(
 
   // Store in cache (fire-and-forget). DO NOT include route_hash — it's a generated column.
   // DB will compute it from md5(round coords) on insert. Use upsert on route_hash to dedupe.
-  sb.from("directions_cache")
+  const { error: cacheError } = await sb.from("directions_cache")
     .upsert(
       {
         origin_lat: Number(oLat),
@@ -188,8 +189,8 @@ export async function getDirections(
         duration_in_traffic_seconds: durationInTraffic,
       },
       { onConflict: "route_hash" }
-    )
-    .then(({ error }: { error: any }) => { if (error) console.error("directions_cache insert error:", error); });
+    );
+  if (cacheError) console.error("directions_cache insert error:", cacheError);
 
   return { duration, durationInTraffic, distance };
 }
@@ -265,14 +266,14 @@ export async function verifyAddressGoogle(
     const lat = result.geometry.location.lat;
     const lng = result.geometry.location.lng;
 
-    // Cache the result
+    // Cache the result before returning so repeat address checks are free.
     const sb = getSupabase();
-    sb.from("geocode_cache")
+    const { error: cacheError } = await sb.from("geocode_cache")
       .upsert(
         { address_input: query, lat, lng, formatted_address: result.formatted_address, source: "google" },
         { onConflict: "address_hash" }
-      )
-      .then(({ error }: { error: any }) => { if (error) console.error("geocode_cache insert error:", error); });
+      );
+    if (cacheError) console.error("geocode_cache insert error:", cacheError);
 
     return {
       standardized: result.formatted_address || query,

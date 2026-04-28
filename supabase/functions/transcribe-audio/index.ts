@@ -63,7 +63,13 @@ Deno.serve(async (req) => {
     // Log Deepgram usage — nova-3 is ~$0.0043/min = ~0.0072¢/sec, store with precision
     const estimatedSeconds = Math.max(1, Math.round((audioBytes as ArrayBuffer).byteLength / 16000));
     const deepgramCents = Math.round((estimatedSeconds * 0.0072) * 10000) / 10000;
-    logApiUsage(sb, { service: "deepgram", function_name: "transcribe-audio", endpoint: "listen", estimated_cost_cents: deepgramCents, metadata: { seconds: estimatedSeconds } });
+    await logApiUsage(sb, {
+      service: "deepgram",
+      function_name: "transcribe-audio",
+      endpoint: "listen",
+      estimated_cost_cents: deepgramCents,
+      metadata: { seconds: estimatedSeconds },
+    });
 
     return new Response(
       JSON.stringify({ transcription }),

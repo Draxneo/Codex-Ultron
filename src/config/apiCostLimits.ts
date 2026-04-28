@@ -76,6 +76,17 @@ export const API_COST_LIMITS: ApiServiceLimit[] = [
     baselineCalls: 20,         // transcribes every inbound call
   },
   {
+    service: "elevenlabs_tts",
+    label: "ElevenLabs (voice lines)",
+    dailyCostUsd: 2.0,
+    dailyCalls: 100,
+    expectedDailyCalls: "~0-20 cache misses; repeat voice lines should be served from storage",
+    costPerCall: "Approximate character-based estimate; cache hits cost $0",
+    notes: "Generated voice lines are stored in tts-cache and only cache misses are counted.",
+    expectedCallsPerJob: 0,
+    baselineCalls: 20,
+  },
+  {
     service: "firecrawl",
     label: "Firecrawl (scraping)",
     dailyCostUsd: 3.0,
