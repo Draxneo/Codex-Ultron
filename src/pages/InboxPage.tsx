@@ -26,7 +26,8 @@ const MOBILE_TABS: { key: InboxSection; label: string; icon: any }[] = [
 export default function InboxPage() {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
-  const sectionParam = (searchParams.get("section") as InboxSection) || "sms";
+  const rawSection = searchParams.get("section");
+  const sectionParam: InboxSection = rawSection === "calls" || rawSection === "voicemail" ? rawSection : "sms";
   const [activeSection, setActiveSection] = useState<InboxSection>(sectionParam);
 
   useEffect(() => { setActiveSection(sectionParam); }, [sectionParam]);
