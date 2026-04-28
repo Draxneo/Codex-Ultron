@@ -568,6 +568,8 @@ const Jobs = () => {
             dayItems={currentDayItems}
             employees={employees}
             routeOrders={dispatchRouteOrders}
+            cardDensity={calSettings.cardDensity}
+            visibleFields={calSettings.visibleFields}
           />
         )}
 

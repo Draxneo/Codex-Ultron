@@ -8,7 +8,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Clock, Car, ChevronDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CustomerCard } from "@/components/CustomerCard";
+import { AddressLink } from "@/components/AddressLink";
+import { ClickToCall } from "@/components/ClickToCall";
+import { CustomerStatusBadges, getAvatarColor } from "@/components/CustomerStatusBadges";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -16,6 +18,7 @@ import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { useCustomerEnrichment } from "@/hooks/useCustomerEnrichment";
 import { useTechStatusMap } from "@/hooks/useTechStatusMap";
 import { TechStatusBadge } from "@/components/TechStatusBadge";
+import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
 
 interface BoardItem {
   id: string;
@@ -74,14 +77,86 @@ interface Props {
   dayItems: BoardItem[];
   employees: any[] | undefined;
   routeOrders: Map<string, { order: number; travelMin: number | null; fromLabel: string | null }>;
+  cardDensity?: CardDensity;
+  visibleFields?: CalendarVisibleFields;
 }
 
-export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) {
+function getCustomerShape(item: BoardItem) {
+  const nameParts = (item.customer_name || "Unknown").trim().split(/\s+/);
+  return {
+    first_name: nameParts[0] || null,
+    last_name: nameParts.slice(1).join(" ") || null,
+    phone: item.customer_phone || null,
+    address: item.address || null,
+  };
+}
+
+function MobileCustomerBlock({
+  item,
+  enrichment,
+  visibleFields,
+  compact,
+}: {
+  item: BoardItem;
+  enrichment: any;
+  visibleFields?: CalendarVisibleFields;
+  compact: boolean;
+}) {
+  const customer = getCustomerShape(item);
+  const initials = `${customer.first_name?.[0] || ""}${customer.last_name?.[0] || ""}`.toUpperCase() || "?";
+  const contactName = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "Unknown";
+  const zip = item.address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || null;
+  const street = (item.address || "").split(",")[0]?.trim() || item.address;
+  const address = visibleFields?.zip && zip ? `${street}, ${zip}` : street;
+
+  const showCustomer = visibleFields?.customer !== false;
+  const showTags = visibleFields?.customerTags !== false;
+  const showStreet = !compact && visibleFields?.street !== false && address;
+  const showPhone = !compact && visibleFields?.phone && item.customer_phone;
+
+  if (!showCustomer && !showTags && !showStreet && !showPhone) return null;
+
+  return (
+    <div className="space-y-1">
+      {showCustomer && (
+        <div className="flex items-center gap-2">
+          <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0", getAvatarColor(showTags ? enrichment : undefined))}>
+            {initials}
+          </div>
+          <span className="text-sm font-bold text-foreground leading-tight break-words">
+            {contactName}
+          </span>
+        </div>
+      )}
+      {showTags && (
+        <CustomerStatusBadges enrichment={enrichment} className={showCustomer ? "ml-10" : ""} />
+      )}
+      {showStreet && (
+        <div className={showCustomer ? "ml-10" : ""}>
+          <AddressLink address={address} className="text-[11px] text-muted-foreground font-medium" iconClassName="h-3 w-3" />
+        </div>
+      )}
+      {showPhone && (
+        <div className={showCustomer ? "ml-10" : ""}>
+          <ClickToCall
+            phone={item.customer_phone!}
+            contactName={contactName}
+            className="text-[11px] text-muted-foreground font-medium"
+            iconClassName="h-3 w-3"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MobileDispatchList({ dayItems, employees, routeOrders, cardDensity = "comfortable", visibleFields }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: enrichmentMap } = useCustomerEnrichment();
   const techStatusMap = useTechStatusMap();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const isCompact = cardDensity === "compact";
 
   const techRows = useMemo(() => {
     const techOrder = ["Jonathan", "Cedric", "Clint", "Hector", "Juan", "App", "Tim K", "Matt", "Joshua", "Tim"];
@@ -221,19 +296,23 @@ export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) 
                     >
                       {/* Top row: route order, type badge, number, time */}
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        {ro && ro.order > 0 && (
+                        {visibleFields?.travelTime !== false && ro && ro.order > 0 && (
                           <span className="w-5 h-5 rounded-full bg-foreground/80 text-background text-[10px] font-bold flex items-center justify-center shrink-0">
                             {ro.order}
                           </span>
                         )}
-                        <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", typeBadgeColors[item.job_type || "service"])}>
-                          {typeLabel}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground font-semibold">
-                          {item.item_type === "estimate" && item.estimate_number && `#${item.estimate_number}`}
-                          {item.item_type === "job" && (item.job_number || item.hcp_job_number) && `#${item.job_number || item.hcp_job_number}`}
-                        </span>
-                        {time && (
+                        {visibleFields?.customerTags !== false && (
+                          <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", typeBadgeColors[item.job_type || "service"])}>
+                            {typeLabel}
+                          </span>
+                        )}
+                        {visibleFields?.jobNumber !== false && (
+                          <span className="text-[11px] text-muted-foreground font-semibold">
+                            {item.item_type === "estimate" && item.estimate_number && `#${item.estimate_number}`}
+                            {item.item_type === "job" && (item.job_number || item.hcp_job_number) && `#${item.job_number || item.hcp_job_number}`}
+                          </span>
+                        )}
+                        {visibleFields?.arrivalWindow !== false && time && (
                           <span className="ml-auto flex items-center gap-0.5 text-[11px] text-muted-foreground font-medium shrink-0">
                             <Clock className="h-3 w-3" />
                             {time}
@@ -244,20 +323,21 @@ export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) 
                       {/* Customer — unified card */}
                       {(() => {
                         const enrichment = item.customer_id ? enrichmentMap?.get(item.customer_id) : undefined;
-                        const nameParts = (item.customer_name || "Unknown").split(/\s+/);
                         return (
-                          <CustomerCard
-                            variant="dispatch"
-                            customer={{
-                              first_name: nameParts[0] || null,
-                              last_name: nameParts.slice(1).join(" ") || null,
-                              phone: item.customer_phone || null,
-                              address: item.address || null,
-                            }}
+                          <MobileCustomerBlock
+                            item={item}
                             enrichment={enrichment}
+                            visibleFields={visibleFields}
+                            compact={isCompact}
                           />
                         );
                       })()}
+
+                      {cardDensity === "expanded" && item.description && visibleFields?.description !== false && (
+                        <div className="mt-2 text-[11px] text-muted-foreground leading-snug line-clamp-2">
+                          {item.description}
+                        </div>
+                      )}
 
                       {/* Bottom row: stage badge, travel, task progress */}
                       <div className="flex items-center gap-2 flex-wrap">
@@ -271,7 +351,7 @@ export function MobileDispatchList({ dayItems, employees, routeOrders }: Props) 
                           </span>
                         )}
 
-                        {ro?.travelMin != null && (
+                        {visibleFields?.travelTime !== false && ro?.travelMin != null && (
                           <span className={cn(
                             "flex items-center gap-0.5 text-[10px] font-semibold",
                             ro.travelMin <= 10 ? "text-[hsl(var(--complete))]" : ro.travelMin <= 20 ? "text-amber-500" : "text-destructive"
