@@ -5,14 +5,17 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  CalendarClock,
   ClipboardCheck,
   FileText,
   Loader2,
   Printer,
   Send,
   Trash2,
+  User2,
   Zap,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { JobV2CustomerCard } from "@/components/job-v2/JobV2CustomerCard";
@@ -47,6 +50,9 @@ import { getExpectedJobItems } from "@/lib/expectedJobItems";
 import { paymentPreferenceLabel } from "@/lib/paymentOptions";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_SHORT_NAME } from "@/lib/companyDefaults";
+import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
+import { TechCustomerCard } from "@/components/tech/TechCustomerCard";
+import { EstimateCartStatus } from "@/components/EstimateCartStatus";
 
 interface EstimateReview {
   id: string;
@@ -178,6 +184,30 @@ function EstimateActionBar({
   );
 }
 
+function MobileActionPill({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 text-[11px] font-semibold text-foreground disabled:opacity-50 active:bg-muted"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
 export default function EstimateDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -275,6 +305,198 @@ export default function EstimateDetail() {
       setConvertingToJob(false);
     }
   };
+
+  if (isMobile) {
+    const estimateNumber = estimate.estimate_number || "-";
+    const jobCount = linkedJobId ? 1 : undefined;
+    const quoteParams = new URLSearchParams({ estimate_id: id });
+    if (customerName) quoteParams.set("customer_name", customerName);
+    if (customerPhone) quoteParams.set("customer_phone", customerPhone);
+    if (customerEmail) quoteParams.set("customer_email", customerEmail);
+    const presentationUrl = latestPresentationToken ? `/presentation/${latestPresentationToken}` : null;
+
+    return (
+      <div className="flex min-h-full flex-col bg-background pb-24">
+        <header className="sticky top-0 z-20 flex h-12 items-center border-b border-border bg-card px-2">
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)} aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1 text-center">
+            <p className="text-sm font-semibold text-foreground">Estimate {estimateNumber}</p>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" aria-label="More">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete estimate #{estimateNumber} for {customerName}. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep Estimate</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    try {
+                      await supabase.from("estimates").delete().eq("id", id);
+                      toast.success("Estimate deleted");
+                      navigate(-1);
+                    } catch (e: any) {
+                      toast.error("Delete failed: " + e.message);
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  {deleting ? "Deleting..." : "Delete Estimate"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </header>
+
+        <div className="sticky top-12 z-10 flex h-11 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2">
+          <MobileActionPill icon={Zap} label="Build" onClick={() => navigate(`/quick-quote?${quoteParams.toString()}`)} />
+          <MobileActionPill
+            icon={Send}
+            label="Send"
+            disabled={!customerPhone}
+            onClick={() => {
+              if (!customerPhone) return;
+              const firstName = String(customerName || "").split(" ")[0] || "there";
+              const body = presentationUrl
+                ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${window.location.origin}${presentationUrl}`
+                : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
+              navigate(`/inbox?section=sms&phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+            }}
+          />
+          <MobileActionPill icon={ArrowRight} label={linkedJobId ? "Job" : "Convert"} onClick={linkedJobId ? () => navigate(`/jobs/${linkedJobId}`) : handleConvert} />
+          {presentationUrl && <MobileActionPill icon={FileText} label="View" onClick={() => window.open(presentationUrl, "_blank", "noopener")} />}
+          {estimate.hcp_id && (
+            <a
+              href={`https://pro.housecallpro.com/app/estimates/${estimate.hcp_id}`}
+              target="_blank"
+              rel="noopener"
+              className="ml-auto flex h-8 items-center gap-1 rounded px-2 text-[11px] font-medium text-primary hover:bg-primary/10"
+            >
+              HCP
+            </a>
+          )}
+        </div>
+
+        <main className="mx-auto w-full max-w-2xl space-y-3 px-3 pt-3">
+          <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false}>
+            <TechCustomerCard
+              customerId={estimate.customer_id || null}
+              customerName={customerName}
+              customerPhone={customerPhone || null}
+              customerEmail={customerEmail || null}
+              address={customerAddress || null}
+              jobCount={jobCount}
+              hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
+              bare
+            />
+          </TechCollapsibleCard>
+
+          <TechCollapsibleCard icon={CalendarClock} title="Schedule" iconBg="bg-indigo-500/10" iconColor="text-indigo-500">
+            <div className="space-y-2.5 p-4 text-sm">
+              <div className="flex items-center gap-2 text-foreground">
+                <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                <span>{estimate.scheduled_date ? format(new Date(`${estimate.scheduled_date}T00:00:00`), "EEE, MMM d") : "Not scheduled"}</span>
+              </div>
+              {((estimate as any).arrival_start || (estimate as any).arrival_end) && (
+                <div className="flex items-center gap-2 text-foreground">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {(estimate as any).arrival_start ? format(new Date((estimate as any).arrival_start), "h:mm a") : ""}
+                    {(estimate as any).arrival_start && (estimate as any).arrival_end ? " - " : ""}
+                    {(estimate as any).arrival_end ? format(new Date((estimate as any).arrival_end), "h:mm a") : ""}
+                  </span>
+                </div>
+              )}
+              {estimate.assigned_to && (
+                <div className="flex items-center gap-2 text-foreground">
+                  <User2 className="h-4 w-4 text-muted-foreground" />
+                  <span>{estimate.assigned_to}</span>
+                </div>
+              )}
+            </div>
+          </TechCollapsibleCard>
+
+          <ExpectedItemsCard
+            items={expectedItems}
+            subtitle="Estimate flow: schedule, build options, send, approve, convert."
+            quickActions={(item) => {
+              if (item.key === "quote_built") {
+                return { label: "Build", run: () => navigate(`/quick-quote?${quoteParams.toString()}`) };
+              }
+              if (item.key === "customer_decision") {
+                return { label: "Won", busy: updateStatus.isPending, run: handleConvert };
+              }
+              return null;
+            }}
+          />
+
+          <EstimateCartStatus estimateId={id} customerPhone={customerPhone || undefined} customerName={customerName} />
+
+          <TechCollapsibleCard icon={FileText} title="Summary" iconBg="bg-slate-500/10" iconColor="text-slate-500" defaultOpen={false}>
+            <WorkSummaryCard description={estimate.description} />
+          </TechCollapsibleCard>
+
+          <TechCollapsibleCard icon={ClipboardCheck} title="Review" iconBg="bg-emerald-500/10" iconColor="text-emerald-500" defaultOpen={false}>
+            <div className="p-4">
+              {reviewLoading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : review ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">Submitted by {review.employee_name}</span>
+                    {reviewConfig && <Badge variant={reviewConfig.variant}>{reviewConfig.label}</Badge>}
+                  </div>
+                  {review.selected_tiers.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {review.selected_tiers.map((tier) => <Badge key={tier} variant="outline">{tier}</Badge>)}
+                    </div>
+                  )}
+                  {review.admin_notes && <p className="italic text-muted-foreground">"{review.admin_notes}"</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No estimate review submitted yet.</p>
+              )}
+            </div>
+          </TechCollapsibleCard>
+
+          <TechCollapsibleCard icon={FileText} title="Proposal" iconBg="bg-amber-500/10" iconColor="text-amber-500" defaultOpen={false}>
+            <div className="space-y-2 p-4">
+              {presentationUrl ? (
+                <Button className="w-full" onClick={() => window.open(presentationUrl, "_blank", "noopener")}>
+                  <FileText className="h-4 w-4" /> Open customer proposal
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">No customer proposal has been built yet.</p>
+              )}
+            </div>
+          </TechCollapsibleCard>
+
+          <TechCollapsibleCard icon={Zap} title="Ask JARVIS" iconBg="bg-purple-500/10" iconColor="text-purple-500" collapsible={false}>
+            <div className="p-4">
+              <Button className="h-14 w-full rounded-xl" onClick={() => navigate(`/copilot?estimate=${id}`)}>
+                <Zap className="h-5 w-5" />
+                Ask JARVIS about this estimate
+              </Button>
+            </div>
+          </TechCollapsibleCard>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">

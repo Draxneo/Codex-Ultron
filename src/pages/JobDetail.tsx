@@ -20,11 +20,14 @@ import { JobActivityFeed } from "@/components/ActivityFeed";
 import { PhotoLocationMap } from "@/components/PhotoLocationMap";
 import { JobPurchasesPanel } from "@/components/job/JobPurchasesPanel";
 import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
+import { useIsMobile } from "@/hooks/use-mobile";
+import TechJobDetail from "@/pages/TechJobDetail";
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -92,6 +95,10 @@ export default function JobDetail() {
   const scrollToInvoice = () => {
     invoiceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  if (isMobile) {
+    return <TechJobDetail />;
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">
