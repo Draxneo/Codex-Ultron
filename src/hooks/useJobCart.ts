@@ -30,6 +30,16 @@ export interface JobCart {
   view_count: number | null;
   discount_code: string | null;
   discount_amount: number | null;
+  repair_subtotal?: number | null;
+  discount_eligible_subtotal?: number | null;
+  cash_discount_percent?: number | null;
+  cash_discount_amount?: number | null;
+  comfort_club_discount_percent?: number | null;
+  comfort_club_discount_amount?: number | null;
+  final_cash_total?: number | null;
+  financing_monthly_36?: number | null;
+  financing_monthly_120?: number | null;
+  pricing_summary?: Record<string, any> | null;
   stripe_checkout_url: string | null;
   created_at: string;
   updated_at: string;
@@ -80,7 +90,15 @@ export function useJobCart(jobId: string | undefined) {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      if (data) return data as JobCart;
+      if (data) {
+        await (supabase as any).rpc("refresh_job_cart_pricing", { p_cart_id: data.id });
+        const { data: refreshed } = await (supabase as any)
+          .from("job_carts")
+          .select("*")
+          .eq("id", data.id)
+          .maybeSingle();
+        return (refreshed || data) as JobCart;
+      }
 
       // Lazy create if missing (fallback — trigger should auto-create)
       const { data: created, error: createErr } = await (supabase as any)
@@ -89,7 +107,13 @@ export function useJobCart(jobId: string | undefined) {
         .select()
         .single();
       if (createErr) throw createErr;
-      return created as JobCart;
+      await (supabase as any).rpc("refresh_job_cart_pricing", { p_cart_id: created.id });
+      const { data: refreshed } = await (supabase as any)
+        .from("job_carts")
+        .select("*")
+        .eq("id", created.id)
+        .maybeSingle();
+      return (refreshed || created) as JobCart;
     },
   });
 
@@ -213,6 +237,18 @@ export function useJobCart(jobId: string | undefined) {
           .eq("id", cartQuery.data.id);
         if (error) throw error;
       }
+      (supabase as any).rpc("log_quote_cart_event", {
+        p_event_type: "cart_sent",
+        p_cart_id: cartQuery.data.id,
+        p_job_id: jobId,
+        p_actor_type: "staff",
+        p_metadata: {
+          via: "sms",
+          source: "job_cart_send",
+          link_label: linkLabel,
+          has_customer_phone: true,
+        },
+      }).then(() => {}, () => {});
       return { link, linkLabel };
     },
     onSuccess: ({ link, linkLabel }) => {

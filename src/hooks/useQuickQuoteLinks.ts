@@ -46,10 +46,7 @@ export function useQuickQuoteLinkByToken(token: string | undefined) {
     enabled: !!token,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("quick_quote_links" as any)
-        .select("*")
-        .eq("token", token!)
-        .maybeSingle();
+        .rpc("get_public_quick_quote_link" as any, { p_token: token! });
       if (error) throw error;
       return data as unknown as QuickQuoteLink | null;
     },
@@ -87,14 +84,7 @@ export function useApproveQuickQuote() {
   return useMutation({
     mutationFn: async ({ token, option }: { token: string; option: "A" | "B" | "C" }) => {
       const { data, error } = await supabase
-        .from("quick_quote_links" as any)
-        .update({
-          selected_payment: option,
-          approved_at: new Date().toISOString(),
-        } as any)
-        .eq("token", token)
-        .select("*")
-        .single();
+        .rpc("approve_public_quick_quote" as any, { p_token: token, p_option: option });
       if (error) throw error;
 
       // Auto-create / update HCP job + dispatcher notification — non-blocking
@@ -106,13 +96,6 @@ export function useApproveQuickQuote() {
   });
 }
 
-export async function trackQuickQuoteView(token: string, currentCount: number) {
-  await supabase
-    .from("quick_quote_links" as any)
-    .update({
-      view_count: currentCount + 1,
-      first_viewed_at: currentCount === 0 ? new Date().toISOString() : undefined,
-      last_viewed_at: new Date().toISOString(),
-    } as any)
-    .eq("token", token);
+export async function trackQuickQuoteView(token: string, _currentCount: number) {
+  await supabase.rpc("track_quick_quote_view" as any, { p_token: token });
 }

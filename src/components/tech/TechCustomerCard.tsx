@@ -18,7 +18,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { StreetViewThumbnail } from "./StreetViewThumbnail";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCapacitor } from "@/hooks/useCapacitor";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 
 const DISPATCH_LINE = "+12106005091";
 
@@ -42,12 +41,12 @@ export function TechCustomerCard({
   address,
   jobCount,
   hcpCustomerId,
+  jobId,
   bare = false,
 }: TechCustomerCardProps) {
   const navigate = useNavigate();
   const softphone = useSoftphoneContext();
   const { isNative } = useCapacitor();
-  const telephony = useTelephonyMode();
 
   const handleSms = () => {
     if (!customerPhone) return;
@@ -55,7 +54,14 @@ export function TechCustomerCard({
   };
 
   const handleDispatch = () => {
-    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}`);
+    const draft = [
+      "Tech update",
+      customerName || null,
+      address || null,
+      jobId ? `job ${jobId.slice(0, 8)}` : null,
+    ].filter(Boolean).join(" - ");
+    const draftParam = encodeURIComponent(`${draft}: `);
+    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}&draft=${draftParam}`);
   };
 
   const handleCall = () => {
@@ -103,9 +109,9 @@ export function TechCustomerCard({
 
         {/* Big action grid - 4 large tap targets */}
         <div className="grid grid-cols-4 gap-2 pt-1">
-          <ActionButton onClick={handleCall} disabled={!customerPhone} icon={Phone} label="Call Customer" tone="primary" />
-          <ActionButton onClick={handleSms} disabled={!customerPhone} icon={MessageSquare} label="Text Customer" tone="primary" />
-          <ActionButton onClick={handleDispatch} icon={Radio} label="Message Dispatch" tone="amber" />
+          <ActionButton onClick={handleCall} disabled={!customerPhone} icon={Phone} label="Call" ariaLabel="Call customer" tone="primary" />
+          <ActionButton onClick={handleSms} disabled={!customerPhone} icon={MessageSquare} label="Text" ariaLabel="Text customer" tone="primary" />
+          <ActionButton onClick={handleDispatch} icon={Radio} label="Dispatch" ariaLabel="Contact dispatch" tone="amber" />
           <ActionButton onClick={handleNavigate} disabled={!address} icon={Navigation} label="Navigate" tone="emerald" />
         </div>
 
@@ -136,12 +142,14 @@ function ActionButton({
   disabled,
   icon: Icon,
   label,
+  ariaLabel,
   tone = "primary",
 }: {
   onClick: () => void;
   disabled?: boolean;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  ariaLabel?: string;
   tone?: "primary" | "amber" | "emerald";
 }) {
   const tones: Record<string, string> = {
@@ -154,7 +162,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
+      aria-label={ariaLabel || label}
       className={`flex flex-col items-center justify-center gap-1 h-16 rounded-xl disabled:opacity-30 ${tones[tone]}`}
     >
       <Icon className="h-6 w-6" />

@@ -6,6 +6,7 @@ interface Props {
   total: number;
   onApply?: () => void;
   compact?: boolean;
+  financingDisclaimer?: string | null;
 }
 
 /**
@@ -19,7 +20,7 @@ function estimateMonthly(total: number, apr = 0.0999, months = 60): number {
   return (total * r) / (1 - Math.pow(1 + r, -months));
 }
 
-export function FinancingWidget({ total, onApply, compact }: Props) {
+export function FinancingWidget({ total, onApply, compact, financingDisclaimer }: Props) {
   if (total < 500) return null; // not worth showing on small tickets
   const monthly = estimateMonthly(total);
 
@@ -51,12 +52,14 @@ export function FinancingWidget({ total, onApply, compact }: Props) {
           <p className="text-2xl font-bold mt-0.5">
             ${monthly.toFixed(0)}<span className="text-sm font-normal text-muted-foreground">/mo</span>
           </p>
-          <p className="text-xs text-muted-foreground">
-            Estimated 60 months at 9.99% APR. Subject to credit approval.
-          </p>
+          {financingDisclaimer && (
+            <p className="text-xs text-muted-foreground">
+              {financingDisclaimer}
+            </p>
+          )}
           {onApply && (
             <Button size="sm" className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={onApply}>
-              Get Pre-Approved — No Impact to Credit
+              Apply for Financing
             </Button>
           )}
         </div>

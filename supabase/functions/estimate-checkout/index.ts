@@ -18,6 +18,11 @@ const APP_BASE_URL =
   Deno.env.get("APP_BASE_URL") ||
   "https://codex-ultron.onrender.com";
 
+async function logQuoteCartEvent(supabase: any, event: Record<string, unknown>) {
+  const { error } = await supabase.from("quote_cart_events").insert(event);
+  if (error) console.warn("quote_cart_events insert failed:", error.message);
+}
+
 function isUuid(value: unknown) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -249,6 +254,8 @@ Deno.serve(async (req) => {
     const jobId = await resolveJobId(supabase, pres);
     let cartId: string | null = null;
     let cartToken: string | null = null;
+    let checkoutTotal = selected.total;
+    let pricingSummary: Record<string, unknown> | null = null;
 
     await supabase.from("estimate_presentations").update({
       status: "approved",
@@ -260,12 +267,22 @@ Deno.serve(async (req) => {
 
     if (jobId) {
       cartId = await upsertRememberedCart(supabase, pres, jobId, selected_option_key, timing, selected.lines, selected.selectedSnapshot);
-      const { data: cart } = await supabase.from("job_carts").select("public_token").eq("id", cartId).maybeSingle();
+      await supabase.rpc("refresh_job_cart_pricing", { p_cart_id: cartId });
+      const { data: cart } = await supabase
+        .from("job_carts")
+        .select("public_token,total,pricing_summary")
+        .eq("id", cartId)
+        .maybeSingle();
       cartToken = cart?.public_token || null;
+      checkoutTotal = Number(cart?.total || selected.total);
+      pricingSummary = cart?.pricing_summary || null;
+      await supabase.from("estimate_presentations").update({
+        total_amount: checkoutTotal,
+      }).eq("id", presentation_id);
       await supabase.from("activity_log").insert({
         job_id: jobId,
         action: "proposal_option_approved",
-        details: `Customer approved ${selected.title} (${payment_method || "stripe"}). Cart remembered for $${selected.total.toFixed(2)}.`,
+        details: `Customer approved ${selected.title} (${payment_method || "stripe"}). Cart remembered for $${checkoutTotal.toFixed(2)}.`,
       });
     }
 
@@ -277,6 +294,22 @@ Deno.serve(async (req) => {
       payment_preference: payment_method || "stripe",
     });
 
+    await logQuoteCartEvent(supabase, {
+      event_type: "customer_approved",
+      actor_type: "customer",
+      cart_id: cartId,
+      job_id: jobId,
+      estimate_id: pres.estimate_id,
+      presentation_id,
+      metadata: {
+        source: "estimate-checkout",
+        selected_option_key,
+        payment_method: payment_method || "stripe",
+        payment_timing: timing,
+        total: checkoutTotal,
+      },
+    });
+
     if (timing !== "pay_now") {
       return new Response(JSON.stringify({
         success: true,
@@ -284,6 +317,7 @@ Deno.serve(async (req) => {
         cart_url: cartToken ? `${APP_BASE_URL}/cart/${cartToken}` : null,
         payment_method,
         payment_timing: timing,
+        pricing: pricingSummary,
         message: timing === "financing"
           ? "Financing selected. The approved cart is saved while financing is completed."
           : "Approved. The cart is saved and can be paid after the work is complete.",
@@ -302,7 +336,7 @@ Deno.serve(async (req) => {
     params.append("mode", "payment");
     params.append("line_items[0][price_data][currency]", "usd");
     params.append("line_items[0][price_data][product_data][name]", selected.title);
-    params.append("line_items[0][price_data][unit_amount]", String(Math.round(selected.total * 100)));
+    params.append("line_items[0][price_data][unit_amount]", String(Math.round(checkoutTotal * 100)));
     params.append("line_items[0][quantity]", "1");
     params.append("success_url", success_url || `${APP_BASE_URL}/presentation/${pres.token}?paid=true`);
     params.append("cancel_url", cancel_url || `${APP_BASE_URL}/presentation/${pres.token}`);
@@ -311,6 +345,7 @@ Deno.serve(async (req) => {
     params.append("metadata[presentation_id]", presentation_id);
     params.append("metadata[estimate_id]", pres.estimate_id);
     params.append("metadata[selected_option]", selected_option_key);
+    params.append("metadata[server_total]", checkoutTotal.toFixed(2));
     if (cartId) params.append("metadata[cart_id]", cartId);
     if (jobId) params.append("metadata[job_id]", jobId);
     if (cartToken) params.append("metadata[cart_token]", cartToken);
@@ -341,6 +376,22 @@ Deno.serve(async (req) => {
         stripe_payment_intent_id: session.id,
       }).eq("id", cartId);
     }
+
+    await logQuoteCartEvent(supabase, {
+      event_type: "payment_started",
+      actor_type: "customer",
+      cart_id: cartId,
+      job_id: jobId,
+      estimate_id: pres.estimate_id,
+      presentation_id,
+      metadata: {
+        source: "estimate-checkout",
+        payment_method: "stripe",
+        selected_option_key,
+        total: checkoutTotal,
+        stripe_session_id: session.id,
+      },
+    });
 
     return new Response(JSON.stringify({
       url: session.url,

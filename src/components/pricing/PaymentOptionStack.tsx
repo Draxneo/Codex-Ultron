@@ -24,6 +24,7 @@ export interface PaymentOptionStackProps {
   className?: string;
   /** Compact variant for tight cards (smaller text + padding). */
   compact?: boolean;
+  financingDisclaimer?: string | null;
 }
 
 function fmtMoney(n: number, withCents = true): string {
@@ -70,6 +71,7 @@ export function PaymentOptionStack({
   rebatePrice,
   className,
   compact = false,
+  financingDisclaimer,
 }: PaymentOptionStackProps) {
   const savingsVsFinanced = Math.max(0, financed - rebatePrice);
 
@@ -178,15 +180,16 @@ export function PaymentOptionStack({
         </div>
       </div>
 
-      {/* Financing footnote — answers "Can I pay it off early?" */}
-      <div className={cn(
-        "border-t border-border bg-muted/40 px-3 py-2",
-        compact && "py-1.5"
-      )}>
-        <p className="text-[10px] text-muted-foreground leading-snug">
-          <span className="text-warning font-bold">*</span> No prepayment penalty — pay off anytime. Interest only accrues on your remaining balance, just like a credit card. Traditional financing through <span className="font-bold text-foreground">Synchrony Bank</span>, the nation's largest consumer finance lender.
-        </p>
-      </div>
+      {financingDisclaimer && (
+        <div className={cn(
+          "border-t border-border bg-muted/40 px-3 py-2",
+          compact && "py-1.5"
+        )}>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            <span className="text-warning font-bold">*</span> {financingDisclaimer}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -28,8 +28,11 @@ import {
   AlertCircle,
   Eye,
   MessageSquareText,
+  Crown,
+  BadgePercent,
 } from "lucide-react";
 import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
+import { useComfortClubCartSummary } from "@/hooks/useComfortClubCart";
 import { JobCartPicker } from "@/components/cart/JobCartPicker";
 import { JobCartDrawer } from "@/components/cart/JobCartDrawer";
 import { CartAddonSuggestions } from "@/components/cart/CartAddonSuggestions";
@@ -40,6 +43,7 @@ import { formatDistanceToNow } from "date-fns";
 
 interface Props {
   jobId: string;
+  customerId?: string | null;
   customerPhone: string | null;
   customerName: string | null;
   bare?: boolean;
@@ -52,7 +56,7 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
   custom: Sparkles,
 };
 
-export function TechCartCard({ jobId, customerPhone, customerName, bare = false }: Props) {
+export function TechCartCard({ jobId, customerId, customerPhone, customerName, bare = false }: Props) {
   const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -69,6 +73,11 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const customerFirstName = customerName?.split(" ")[0] || "the customer";
   const customerTarget = customerPhone || "No customer phone";
   const sendDisabled = sendToCustomer.isPending || !customerPhone;
+  const memberInfo = useComfortClubCartSummary(customerId, {
+    cartSubtotal: Number((cart as any)?.discount_eligible_subtotal || (cart as any)?.subtotal || 0),
+    actualDiscountAmount: Number((cart as any)?.comfort_club_discount_amount || 0),
+    items,
+  });
 
   const handleAddCustom = () => {
     const price = parseFloat(customPrice);
@@ -241,6 +250,98 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
     );
   };
 
+  const renderComfortClub = () => {
+    if (!customerId) return null;
+
+    const savings = memberInfo.displayedSavings;
+    const planPrice = memberInfo.planSource === "install_included"
+      ? "Included with install"
+      : `$${memberInfo.planAnnualPrice.toFixed(0)}/year`;
+    const visiblePerks = memberInfo.perks.slice(0, 3);
+
+    if (memberInfo.isLoading) {
+      return (
+        <div className="px-3 py-3 border-b border-border">
+          <div className="h-16 rounded-lg bg-muted animate-pulse" />
+        </div>
+      );
+    }
+
+    if (memberInfo.isActive) {
+      return (
+        <div className="px-3 py-3 border-b border-border bg-emerald-500/5">
+          <div className="rounded-xl border border-emerald-500/25 bg-background p-3">
+            <div className="flex items-start gap-2">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <Crown className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">Comfort Club member</p>
+                  {savings > 0 && (
+                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+                      -${savings.toFixed(2)}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {memberInfo.planName} gives this customer {memberInfo.discountPercent}% member pricing.
+                </p>
+                {savings > 0 && (
+                  <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                    {memberInfo.savingsLabel}: ${savings.toFixed(2)}
+                  </p>
+                )}
+                {visiblePerks.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {visiblePerks.map((perk) => (
+                      <span key={perk} className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                        {perk}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="px-3 py-3 border-b border-border bg-amber-500/5">
+        <div className="rounded-xl border border-amber-500/25 bg-background p-3">
+          <div className="flex items-start gap-2">
+            <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+              <BadgePercent className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">Offer Comfort Club</p>
+                <Badge variant="outline" className="text-[10px]">{planPrice}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {savings > 0
+                  ? `This cart could show about $${savings.toFixed(2)} in member savings.`
+                  : `${memberInfo.planName} includes member pricing and service perks.`}
+              </p>
+              {visiblePerks.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {visiblePerks.map((perk) => (
+                    <span key={perk} className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      {perk}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">Membership checkout is separate from this cart.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const inner = (
     <>
       {!bare && (
@@ -279,6 +380,8 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
 
       {/* Status-driven action row */}
       <div className="px-3 py-3 border-b border-border bg-muted/10">{renderActionRow()}</div>
+
+      {renderComfortClub()}
 
       {/* View status */}
       {cart?.id && status !== "draft" && (

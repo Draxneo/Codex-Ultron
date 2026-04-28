@@ -6,11 +6,13 @@
  */
 
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, MoreVertical, FileText, DollarSign, CreditCard, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreVertical, Phone, MessageSquare, Radio, Navigation, Wrench, Sparkles, ExternalLink, User2, Shield, CalendarClock, ShoppingCart, ImagePlus, Mic, Plug, CloudSun } from "lucide-react";
 import { useJob } from "@/hooks/useJobs";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useCustomerJobs } from "@/hooks/useCustomerHistory";
+import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
+import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TechStatusCard } from "@/components/tech/TechStatusCard";
@@ -25,10 +27,14 @@ import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
 import { Card } from "@/components/ui/card";
 
+const DISPATCH_LINE = "+12106005091";
+
 export default function TechJobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employeeId } = useEffectiveAuth();
+  const softphone = useSoftphoneContext();
+  const { send: sendOMW, sending: sendingOMW } = useSendOnMyWay();
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
   const { data: customerJobs } = useCustomerJobs(job?.customer_id || undefined);
@@ -81,6 +87,30 @@ export default function TechJobDetail() {
 
   const jobNumber = job.job_number || job.hcp_job_number || "-";
   const jobCount = customerJobs?.length;
+  const employeeName = job.assigned_to || null;
+  const dispatchDraft = [
+    `Tech update for Job ${jobNumber}`,
+    customerName !== "Unknown" ? customerName : null,
+    customerAddress,
+  ].filter(Boolean).join(" - ");
+
+  const openCustomerSms = () => {
+    if (!customerPhone) return;
+    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}`);
+  };
+
+  const openDispatchSms = () => {
+    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}&draft=${encodeURIComponent(`${dispatchDraft}: `)}`);
+  };
+
+  const callCustomer = () => {
+    if (!customerPhone) return;
+    softphone.dial?.(customerPhone, customerName || undefined);
+  };
+
+  const sendOnMyWay = () => {
+    void sendOMW({ jobId: id!, customerPhone, customerName, jobAddress: customerAddress, employeeName, employeeId: employeeId || null });
+  };
 
   return (
     <div className="flex flex-col min-h-full bg-background pb-36">
@@ -105,9 +135,13 @@ export default function TechJobDetail() {
 
       {/* Sticky action bar */}
       <div className="sticky top-12 z-10 flex items-center gap-1 px-2 h-11 bg-card border-b border-border overflow-x-auto">
-        <ActionPill icon={FileText} label="Approve" />
-        <ActionPill icon={FileText} label="Invoice" onClick={() => navigate(`/jobs/${id}?tab=invoice`)} />
-        <ActionPill icon={CreditCard} label="Pay" onClick={() => navigate(`/jobs/${id}?tab=invoice`)} />
+        <ActionPill icon={Phone} label="Call" onClick={callCustomer} disabled={!customerPhone} />
+        <ActionPill icon={MessageSquare} label="SMS" onClick={openCustomerSms} disabled={!customerPhone} />
+        <ActionPill icon={Navigation} label={sendingOMW ? "Sending" : "On My Way"} onClick={sendOnMyWay} disabled={!customerPhone || sendingOMW || !!(job as any).on_my_way_sent_at} />
+        <ActionPill icon={Radio} label="Dispatch" onClick={openDispatchSms} />
+        <ActionPill icon={ImagePlus} label="Photos" onClick={() => scrollToSection("tech-photos")} />
+        <ActionPill icon={Mic} label="JARVIS" onClick={() => scrollToSection("tech-jarvis")} />
+        <ActionPill icon={ShoppingCart} label="Cart" onClick={() => scrollToSection("tech-cart")} />
         {job.hcp_id && (
           <a
             href={`https://pro.housecallpro.com/app/jobs/${job.hcp_id}`}
@@ -161,7 +195,7 @@ export default function TechJobDetail() {
           customerPhone={customerPhone}
           customerName={customerName}
           jobAddress={customerAddress}
-          employeeName={null}
+          employeeName={employeeName}
           employeeId={employeeId || null}
         />
 
@@ -251,7 +285,13 @@ export default function TechJobDetail() {
           id="tech-cart"
           className="order-5 scroll-mt-24"
         >
-          <TechCartCard jobId={id!} customerPhone={customerPhone} customerName={customerName} bare />
+          <TechCartCard
+            jobId={id!}
+            customerId={job.customer_id || null}
+            customerPhone={customerPhone}
+            customerName={customerName}
+            bare
+          />
         </TechCollapsibleCard>
 
         {/* 6. Attachments — always visible */}
@@ -366,16 +406,19 @@ function ActionPill({
   icon: Icon,
   label,
   onClick,
+  disabled,
 }: {
-  icon: typeof FileText;
+  icon: typeof Phone;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium text-foreground bg-muted/50 hover:bg-muted active:bg-muted/80 shrink-0"
+      disabled={disabled}
+      className="flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium text-foreground bg-muted/50 hover:bg-muted active:bg-muted/80 disabled:opacity-40 disabled:pointer-events-none shrink-0"
     >
       <Icon className="h-3.5 w-3.5" /> {label}
     </button>

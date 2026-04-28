@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, Loader2, Package, Wrench, Zap, Sparkles, Phone, ShieldCheck, FileText } from "lucide-react";
+import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, Loader2, Package, Wrench, Zap, Sparkles, Phone, ShieldCheck, FileText, Crown, BadgePercent, MessageCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { FinancingWidget } from "@/components/cart/FinancingWidget";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
 import { calcMonthly36, calcMonthly120 } from "@/lib/paymentOptions";
 import type { JobCart, JobCartItem } from "@/hooks/useJobCart";
+import { buildComfortClubCartSummary, type ComfortClubPublicInfo } from "@/lib/comfortClubCart";
 
 const KIND_ICON: Record<JobCartItem["kind"], React.ComponentType<{ className?: string }>> = {
   equipment: Zap,
@@ -29,7 +30,9 @@ interface CartView {
   cart: JobCart;
   items: JobCartItem[];
   job: { customer_name?: string | null; address?: string | null; assigned_to?: string | null; job_number?: string | null } | null;
-  company: { name: string; phone: string; tagline?: string };
+  company: { name: string; phone: string; tagline?: string; financingDisclaimer?: string };
+  pricing: Record<string, any>;
+  memberInfo?: ComfortClubPublicInfo | null;
 }
 
 export default function CustomerCart() {
@@ -56,7 +59,10 @@ export default function CustomerCart() {
             name: settingsMap.company_name || "Carnes and Sons Air Conditioning",
             phone: settingsMap.company_phone || "",
             tagline: settingsMap.company_tagline || "",
+            financingDisclaimer: settingsMap.cart_financing_disclaimer || "",
           },
+          pricing: (publicCart.pricing || publicCart.cart?.pricing_summary || {}) as Record<string, any>,
+          memberInfo: (publicCart.memberInfo as ComfortClubPublicInfo | null) || null,
         });
       } catch (e: any) {
         setError(e.message || "Failed to load estimate");
@@ -73,7 +79,7 @@ export default function CustomerCart() {
     (supabase as any).rpc("track_cart_view", { p_token: token }).then(() => {}, () => { /* non-fatal */ });
   }, [token]);
 
-  const handlePay = async (method: "stripe" | "cash" | "financing" | "approve") => {
+  const handlePay = async (method: "stripe" | "cash" | "financing" | "approve" | "contact" | "decline") => {
     if (!data) return;
     setPaying(method);
     try {
@@ -118,22 +124,36 @@ export default function CustomerCart() {
     );
   }
 
-  const { cart, items, job, company } = data;
+  const { cart, items, job, company, pricing } = data;
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
+  const isDeclined = cart.status === "declined";
   const isPayAfterCompletion = (cart as any).payment_timing === "pay_after_completion";
   const isFinancing = (cart as any).payment_timing === "financing" || cart.payment_method === "financing";
-  const canEditCart = !isPaid && !isApproved;
-  const canPayCart = !isPaid && (!isApproved || isPayAfterCompletion);
+  const canEditCart = !isPaid && !isApproved && !isDeclined;
+  const canPayCart = !isPaid && !isDeclined && (!isApproved || isPayAfterCompletion);
 
   // System-purchase pricing framing — shows the same A/B/C stack the tech showed in person
   const hasEquipment = items.some((i) => i.kind === "equipment");
   const total = Number(cart.total);
   const showPaymentStack = total >= 1500;
-  const monthly36 = calcMonthly36(total) ?? 0;
-  const monthly120 = calcMonthly120(total) ?? 0;
+  const monthly36 = Number((cart as any).financing_monthly_36 ?? pricing?.financing?.monthly_36 ?? calcMonthly36(total) ?? 0);
+  const monthly120 = Number((cart as any).financing_monthly_120 ?? pricing?.financing?.monthly_120 ?? calcMonthly120(total) ?? 0);
   // Option 1: only show rebate price (Option C) when there is real system equipment in the cart
   const rebatePrice = hasEquipment ? Math.round(total * 0.92 * 100) / 100 : total;
+  const repairSubtotal = Number((cart as any).repair_subtotal ?? pricing.repair_subtotal ?? 0);
+  const eligibleDiscountSubtotal = Number((cart as any).discount_eligible_subtotal ?? pricing.discount_eligible_subtotal ?? 0);
+  const cashDiscountAmount = Number((cart as any).cash_discount_amount ?? pricing.cash_discount_amount ?? 0);
+  const cashDiscountPercent = Number((cart as any).cash_discount_percent ?? pricing.cash_discount_percent ?? 15);
+  const comfortClubDiscountAmount = Number((cart as any).comfort_club_discount_amount ?? pricing.comfort_club?.discount_amount ?? 0);
+  const comfortClubDiscountPercent = Number((cart as any).comfort_club_discount_percent ?? pricing.comfort_club?.discount_percent ?? 15);
+  const finalCashTotal = Number((cart as any).final_cash_total ?? pricing.final_cash_total ?? 0);
+  const comfortClub = buildComfortClubCartSummary(data.memberInfo, {
+    cartSubtotal: eligibleDiscountSubtotal || Number(cart.subtotal || 0),
+    actualDiscountAmount: comfortClubDiscountAmount,
+    items,
+  });
+  const comfortClubPerks = comfortClub.perks.slice(0, 3);
 
   return (
     <div className="min-h-screen bg-muted/30 pb-32">
@@ -187,6 +207,15 @@ export default function CustomerCart() {
             </div>
           </Card>
         )}
+        {isDeclined && (
+          <Card className="p-4 bg-muted border-border flex items-center gap-3">
+            <XCircle className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <p className="font-semibold text-foreground">Estimate declined.</p>
+              <p className="text-xs text-muted-foreground">If this was a mistake, call the office and we'll reopen it.</p>
+            </div>
+          </Card>
+        )}
 
         {/* Greeting */}
         {canEditCart && (
@@ -215,6 +244,74 @@ export default function CustomerCart() {
               <div className="rounded-lg bg-background/80 border px-3 py-2">
                 <p className="font-semibold text-foreground">Finance</p>
                 <p>Apply for financing before work starts.</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {comfortClub.isActive ? (
+          <Card className="p-4 bg-emerald-500/10 border-emerald-500/25">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+                <Crown className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Comfort Club savings</p>
+                  {comfortClub.displayedSavings > 0 && (
+                    <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
+                      -${comfortClub.displayedSavings.toFixed(2)}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your {comfortClub.planName} membership includes {comfortClub.discountPercent}% member pricing on eligible work.
+                </p>
+                {comfortClub.displayedSavings > 0 && (
+                  <p className="mt-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                    {comfortClub.savingsLabel}: ${comfortClub.displayedSavings.toFixed(2)}
+                  </p>
+                )}
+                {comfortClubPerks.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {comfortClubPerks.map((perk) => (
+                      <span key={perk} className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                        {perk}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card className="p-4 bg-amber-500/10 border-amber-500/25">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+                <BadgePercent className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">Ask about Comfort Club</p>
+                  <Badge variant="outline" className="text-[10px]">
+                    ${comfortClub.planAnnualPrice.toFixed(0)}/year
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {comfortClub.displayedSavings > 0
+                    ? `Members could save about $${comfortClub.displayedSavings.toFixed(2)} on this estimate.`
+                    : "Members get service perks and preferred repair pricing."}
+                </p>
+                {comfortClubPerks.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {comfortClubPerks.map((perk) => (
+                      <span key={perk} className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300 border border-amber-500/20">
+                        {perk}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">Your technician can review membership separately from this estimate.</p>
               </div>
             </div>
           </Card>
@@ -265,8 +362,28 @@ export default function CustomerCart() {
               <span>−${Number((cart as any).discount_amount).toFixed(2)}</span>
             </div>
           )}
+          {repairSubtotal > 0 && (
+            <div className="flex justify-between text-muted-foreground"><span>Repair subtotal</span><span>${repairSubtotal.toFixed(2)}</span></div>
+          )}
+          {eligibleDiscountSubtotal > 0 && cashDiscountAmount > 0 && (
+            <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+              <span>Cash discount ({cashDiscountPercent.toFixed(0)}%)</span>
+              <span>-${cashDiscountAmount.toFixed(2)}</span>
+            </div>
+          )}
+          {comfortClubDiscountAmount > 0 && (
+            <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+              <span>Comfort Club ({comfortClubDiscountPercent.toFixed(0)}%)</span>
+              <span>-${comfortClubDiscountAmount.toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>${Number(cart.tax_amount).toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-lg pt-2 border-t"><span>Total</span><span>${Number(cart.total).toFixed(2)}</span></div>
+          {finalCashTotal > 0 && (cashDiscountAmount > 0 || comfortClubDiscountAmount > 0) && (
+            <div className="flex justify-between font-semibold text-emerald-700 dark:text-emerald-400 pt-1">
+              <span>Cash total</span><span>${finalCashTotal.toFixed(2)}</span>
+            </div>
+          )}
         </Card>
 
         {/* Payment framing — A/B/C stack on system purchases, simple widget on small carts */}
@@ -276,11 +393,13 @@ export default function CustomerCart() {
             monthly36={monthly36}
             monthly120={monthly120}
             rebatePrice={rebatePrice}
+            financingDisclaimer={company.financingDisclaimer}
           />
         ) : canPayCart ? (
           <FinancingWidget
             total={total}
             onApply={() => handlePay("financing")}
+            financingDisclaimer={company.financingDisclaimer}
           />
         ) : null}
 
@@ -313,12 +432,22 @@ export default function CustomerCart() {
             </Button>
             <Button variant="outline" className="w-full h-11" onClick={() => handlePay("cash")} disabled={!!paying}>
               {paying === "cash" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Banknote className="h-5 w-5 mr-2" />}
-              Pay Cash on Visit
+              Pay Cash on Visit{finalCashTotal > 0 && finalCashTotal !== total ? ` - $${finalCashTotal.toFixed(2)}` : ""}
             </Button>
             <Button variant="ghost" className="w-full h-10 text-sm" onClick={() => handlePay("approve")} disabled={!!paying}>
               {paying === "approve" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PenLine className="h-4 w-4 mr-2" />}
               Approve Scope Only (Sign)
             </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+              <Button variant="ghost" className="h-10 text-sm" onClick={() => handlePay("contact")} disabled={!!paying}>
+                {paying === "contact" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
+                I Have Questions
+              </Button>
+              <Button variant="ghost" className="h-10 text-sm text-muted-foreground" onClick={() => handlePay("decline")} disabled={!!paying}>
+                {paying === "decline" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
+                Decline Estimate
+              </Button>
+            </div>
           </Card>
         )}
 
