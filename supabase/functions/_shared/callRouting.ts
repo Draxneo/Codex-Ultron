@@ -101,13 +101,12 @@ export async function isUserBusy(
       return true;
     }
 
-    // Ignore unattributed in-progress rows for busy routing. One stale or
-    // partially reconciled callback should not poison the whole phone tree.
-    // Client-side duplicate-call guards still reject a second invite if the
-    // dispatcher is actually connected.
+    // Fail safe for launch: if Twilio/the browser says a call is active but
+    // attribution has not landed yet, do not ring another caller into the same
+    // office route. Stale active rows are closed by reconcile-stuck-calls.
     if (rows.some((r) => !r.answered_by)) {
-      console.log(`[callRouting] ${employeeName}: ignoring unattributed in-progress call`);
-      return false;
+      console.log(`[callRouting] ${employeeName}: BUSY (unattributed in-progress call present)`);
+      return true;
     }
 
     return false;
