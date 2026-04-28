@@ -34,10 +34,7 @@ export function useCertificateByToken(token: string | undefined) {
     enabled: !!token,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("customer_certificates" as any)
-        .select("*")
-        .eq("token", token!)
-        .maybeSingle();
+        .rpc("get_public_certificate" as any, { p_token: token! });
       if (error) throw error;
       return data as unknown as CustomerCertificate | null;
     },
