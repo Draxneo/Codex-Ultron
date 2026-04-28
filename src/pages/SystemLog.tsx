@@ -433,7 +433,7 @@ function ApiUsagePanel() {
   const topStatuses = useMemo(() => {
     if (!data?.alerts.statuses) return [];
     const order = { critical: 0, warning: 1, ok: 2 } as const;
-    return [...data.alerts.statuses].sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 6);
+    return [...data.alerts.statuses].sort((a, b) => order[a.severity] - order[b.severity]);
   }, [data]);
 
   const severityTone = (severity: string) => {
@@ -484,7 +484,7 @@ function ApiUsagePanel() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">API Cost Status</CardTitle>
-          <CardDescription>Daily limits use recent detail for same-day alerts; trend history prefers rollups when present.</CardDescription>
+          <CardDescription>Internal daily guardrails use recent detail for same-day runaway alerts; vendor plan limits are separate.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? <div className="p-6 text-sm text-muted-foreground">Loading...</div>
@@ -500,7 +500,7 @@ function ApiUsagePanel() {
                     <span className="text-xs text-muted-foreground">{status.currentCalls.toLocaleString()} calls</span>
                     <span className="ml-auto text-xs tabular-nums">
                       {formatCurrency(status.currentCostUsd)}
-                      <span className="text-muted-foreground"> / {formatCurrency(status.limit.dailyCostUsd)} daily limit</span>
+                      <span className="text-muted-foreground"> / {formatCurrency(status.limit.dailyCostUsd)} daily guardrail</span>
                     </span>
                   </div>
                 ))}

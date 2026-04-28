@@ -191,7 +191,7 @@ function emptyHourlyBuckets() {
 }
 
 function buildHourlyFromRows(rows: ApiUsageDetailRow[]): ApiUsageHourlyResult {
-  const services = new Set<string>();
+  const services = new Set<string>(API_COST_LIMITS.map((limit) => limit.service));
   const buckets = emptyHourlyBuckets();
 
   for (const row of rows) {
@@ -323,7 +323,14 @@ function buildViewModel(
   }
 
   const metrics: ApiUsageMetricsResult = {
-    byService: Array.from(serviceMap.values()).sort((a, b) => b.total_cost_cents - a.total_cost_cents),
+    byService: API_COST_LIMITS
+      .map((limit) => serviceMap.get(limit.service) || {
+        service: limit.service,
+        call_count: 0,
+        total_cost_cents: 0,
+        tokens_total: 0,
+      })
+      .sort((a, b) => b.total_cost_cents - a.total_cost_cents),
     byFunction: Array.from(functionMap.values()).sort((a, b) => b.call_count - a.call_count),
     dailyTrend: Array.from(trendMap.values()).sort((a, b) => a.day.localeCompare(b.day)),
     todayCostCents: Array.from(serviceMap.values()).reduce((sum, metric) => sum + metric.total_cost_cents, 0),

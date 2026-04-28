@@ -18,7 +18,7 @@ const severityStyles = {
 
 /**
  * Comprehensive admin card listing every monitored API service:
- * - daily limit (cost + call volume)
+ * - daily guardrail (cost + call volume)
  * - actual usage today
  * - projected end-of-day cost (extrapolated from elapsed hours)
  * - status badge (OK / WARNING / OVER LIMIT)
@@ -85,7 +85,7 @@ export function ApiCostsOverviewCard() {
             <div className="rounded-lg border-2 border-destructive bg-destructive/10 p-3 flex items-center gap-3">
               <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
               <div className="text-sm">
-                <p className="font-bold text-destructive">⚠️ {data.criticalServices.length} service{data.criticalServices.length > 1 ? "s" : ""} over daily limit</p>
+                <p className="font-bold text-destructive">Warning: {data.criticalServices.length} service{data.criticalServices.length > 1 ? "s" : ""} over daily guardrail</p>
                 <p className="text-xs text-muted-foreground">
                   Investigate immediately: <span className="font-medium">{data.criticalServices.join(", ")}</span>
                 </p>
@@ -144,7 +144,7 @@ export function ApiCostsOverviewCard() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className={`text-sm font-bold tabular-nums ${style.color}`}>
-                        ${currentCostUsd.toFixed(2)} <span className="text-xs text-muted-foreground font-normal">/ ${limit.dailyCostUsd.toFixed(2)} per day</span>
+                        ${currentCostUsd.toFixed(2)} <span className="text-xs text-muted-foreground font-normal">/ ${limit.dailyCostUsd.toFixed(2)} daily guardrail</span>
                       </p>
                       <p className="text-[11px] text-muted-foreground tabular-nums">
                         {currentCalls.toLocaleString()} / {limit.dailyCalls.toLocaleString()} calls today
@@ -158,7 +158,7 @@ export function ApiCostsOverviewCard() {
                       className={`h-1.5 ${severity === "critical" ? "[&>div]:bg-destructive" : severity === "warning" ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"}`}
                     />
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>{dominantPct.toFixed(0)}% of limit reached</span>
+                      <span>{dominantPct.toFixed(0)}% of guardrail reached</span>
                       <span className="flex items-center gap-1">
                         <TrendingUp className="h-2.5 w-2.5" />
                         Projected today: <span className="font-semibold text-foreground tabular-nums">${projectedDailyCostUsd.toFixed(2)}</span>
@@ -175,10 +175,11 @@ export function ApiCostsOverviewCard() {
           )}
 
           <p className="text-[10px] text-muted-foreground text-center pt-2 border-t">
-            Limits are based on healthy operational baselines. Edit them in <code className="bg-muted px-1 rounded">src/config/apiCostLimits.ts</code>.
+            Guardrails are based on healthy operational baselines and are separate from vendor plan limits.
           </p>
         </CardContent>
       </Card>
     </TooltipProvider>
   );
 }
+
