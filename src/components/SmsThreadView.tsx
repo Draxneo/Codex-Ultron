@@ -7,9 +7,12 @@ import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
 import { getFileCategory } from "@/lib/fileTypes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
+import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
 import { ClickToCall } from "@/components/ClickToCall";
 import { Link } from "react-router-dom";
 import { formatDateTimeUS, formatPhone, formatPhoneInput, toE164 } from "@/lib/formatters";
@@ -20,7 +23,7 @@ import { DictateButton } from "@/components/voice/DictateButton";
 import { insertAtSelection } from "@/lib/insertAtCursor";
 import { DayDivider } from "@/components/shared/DayDivider";
 import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
-import type { SmsConversation } from "@/hooks/useSmsLog";
+import { SMS_CONVERSATION_STATUS_LABELS, type SmsConversation, type SmsConversationStatus } from "@/hooks/useSmsLog";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 
@@ -33,6 +36,7 @@ interface Props {
   sending: boolean;
   onSend: (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => Promise<boolean>;
   onMarkRead: (phone: string) => void;
+  onStatusChange?: (phone: string, status: SmsConversationStatus) => void;
   onBack?: () => void;
   newMessageMode?: boolean;
   prefillPhone?: string;
@@ -58,13 +62,14 @@ function DeliveryIcon({ status }: { status?: string | null }) {
   }
 }
 
-export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBack, newMessageMode, prefillPhone, prefillBody, hasMore, loadingMore, onLoadMore }: Props) {
+export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onStatusChange, onBack, newMessageMode, prefillPhone, prefillBody, hasMore, loadingMore, onLoadMore }: Props) {
   const callerLookup = useCallerLookup(conversation?.phoneNumber);
   const telephony = useTelephonyMode();
   const [body, setBody] = useState(prefillBody || "");
   const [newTo, setNewTo] = useState(prefillPhone ? formatPhoneInput(prefillPhone) : "");
   const [visibleCount, setVisibleCount] = useState(INITIAL_MSG_COUNT);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sendInFlightRef = useRef(false);
 
   // Re-apply draft if it changes (e.g., user navigates from another todo)
   useEffect(() => {
@@ -80,6 +85,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
     if (conversation?.phoneNumber !== prevConvoPhone.current) {
       prevConvoPhone.current = conversation?.phoneNumber ?? null;
       setVisibleCount(INITIAL_MSG_COUNT);
+      requestAnimationFrame(() => bodyInputRef.current?.focus?.());
     }
   }, [conversation?.phoneNumber]);
 
@@ -135,7 +141,8 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
       }
       to = e164;
     }
-    if (!to || (!text.trim() && pendingFiles.length === 0) || sending) return false;
+    if (!to || (!text.trim() && pendingFiles.length === 0) || sending || sendInFlightRef.current) return false;
+    sendInFlightRef.current = true;
 
     let mediaUrls: string[] | undefined;
     if (pendingFiles.length > 0) {
@@ -145,12 +152,14 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
       } catch (err: any) {
         toast.error("Failed to upload file", { description: err?.message || "Check your connection and try again" });
         setUploading(false);
+        sendInFlightRef.current = false;
         return false;
       }
       setUploading(false);
     }
 
-    const success = await onSend(to, text.trim() || "📎", conversation?.latestJobId || undefined, conversation?.contactName || undefined, mediaUrls);
+    const success = await onSend(to, text.trim() || "Attachment", conversation?.latestJobId || undefined, conversation?.contactName || undefined, mediaUrls);
+    sendInFlightRef.current = false;
     if (success) {
       setBody("");
       setPendingFiles([]);
@@ -278,6 +287,21 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
                   <>📣 Marketing</>
                 ) : "Unknown"}
               </Badge>
+              <Select
+                value={conversation.status}
+                onValueChange={(value) => onStatusChange?.(conversation.phoneNumber, value as SmsConversationStatus)}
+              >
+                <SelectTrigger className="h-7 w-[128px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {(Object.keys(SMS_CONVERSATION_STATUS_LABELS) as SmsConversationStatus[]).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {SMS_CONVERSATION_STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               <ClickToCall
@@ -327,8 +351,10 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
               )}
 
               {conversation.latestJobId && (
-                <Link to={`/jobs/${conversation.latestJobId}`} className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
-                  <LinkIcon className="h-3 w-3" /> View Job
+                <Link to={`/jobs/${conversation.latestJobId}`} className="inline-flex items-center gap-1 rounded border bg-muted/40 px-2 py-1 text-[10px] text-primary hover:underline">
+                  <LinkIcon className="h-3 w-3" />
+                  {conversation.jobContext?.label || "View Job"}
+                  {conversation.jobContext?.status ? ` - ${conversation.jobContext.status}` : ""}
                 </Link>
               )}
 
@@ -497,6 +523,15 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => fileInputRef.current?.click()} title="Attach image">
             <Paperclip className="h-4 w-4" />
           </Button>
+          <SmsTemplatePicker
+            onSelect={(templateBody) => {
+              const el = bodyInputRef.current;
+              const insertText = body ? ` ${templateBody}` : templateBody;
+              const { value, caret } = insertAtSelection(body, el?.selectionStart ?? null, el?.selectionEnd ?? null, insertText);
+              setBody(value);
+              requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+            }}
+          />
           <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
           <DictateButton
             onTranscript={(text) => {
@@ -506,20 +541,26 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onBac
               requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
             }}
           />
-          <Input
+          <Textarea
             ref={bodyInputRef}
             value={body}
             onChange={handleBodyChange}
             onBlur={handleBodyBlur}
-            onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === "Enter" && !e.shiftKey) handleSend(); }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
             onPaste={handlePaste}
-            placeholder="Type a message… (paste images)"
-            className="flex-1"
+            placeholder="Type a message... (Shift+Enter for newline)"
+            className="min-h-[42px] max-h-28 flex-1 resize-none py-2 text-sm"
             disabled={sending || uploading || polishing}
           />
           <Button
             size="icon"
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={sending || uploading || isBusy || (!body.trim() && pendingFiles.length === 0) || (newMessageMode && !newTo.trim())}
             title={polishing ? "Checking grammar..." : "Send"}
           >

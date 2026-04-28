@@ -18,10 +18,10 @@ import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 
 export function useSmsLogScoped() {
   const ctx = useSmsLogContextOptional();
-  const { role, employeeId } = useEffectiveAuth();
+  const { role, employeeId, user } = useEffectiveAuth();
   // Only run the local hook when no context exists (e.g., embedded/public routes).
   // We use a tiny wrapper component pattern via early return at the call site;
   // here we always call it but the provider will short-circuit consumers in practice.
-  const local = useSmsLog({ role, employeeId, disabled: !!ctx });
+  const local = useSmsLog({ role, employeeId, userId: user?.id ?? null, disabled: !!ctx });
   return ctx ?? local;
 }

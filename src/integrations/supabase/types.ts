@@ -6516,6 +6516,7 @@ export type Database = {
       }
       sms_thread_settings: {
         Row: {
+          conversation_status: string | null
           muted_until: string | null
           phone_last10: string
           pinned: boolean
@@ -6523,6 +6524,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          conversation_status?: string | null
           muted_until?: string | null
           phone_last10: string
           pinned?: boolean
@@ -6530,6 +6532,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          conversation_status?: string | null
           muted_until?: string | null
           phone_last10?: string
           pinned?: boolean

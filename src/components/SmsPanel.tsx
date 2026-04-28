@@ -1,19 +1,16 @@
-import { useState, useEffect } from "react";
-import { Search, Plus, User, Wrench, MessageSquare, Building2 } from "lucide-react";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { useEffect, useState } from "react";
+import { MessageSquare, Plus, Search } from "lucide-react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
-import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
-import { SmsContactCard } from "@/components/SmsContactCard";
 import { SmsThreadView } from "@/components/SmsThreadView";
 import { SmsConversationListItem } from "@/components/SmsConversationListItem";
 import { cn } from "@/lib/utils";
-import { toE164, normalizeLast10 } from "@/lib/formatters";
+import { normalizeLast10, toE164 } from "@/lib/formatters";
 
 interface SmsPanelProps {
   compact?: boolean;
@@ -21,11 +18,27 @@ interface SmsPanelProps {
   initialDraft?: string | null;
 }
 
-export function SmsPanel({ compact = false, initialPhone = null, initialDraft = null }: SmsPanelProps = {}) {
+type SmsFilter = "all" | "needs_reply" | "waiting" | "done" | "unknown" | "unread";
+type SmsConvo = ReturnType<typeof useSmsLogScoped>["conversations"][number];
+
+const SMS_FILTERS: { key: SmsFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "needs_reply", label: "Needs Reply" },
+  { key: "waiting", label: "Waiting" },
+  { key: "done", label: "Done" },
+  { key: "unknown", label: "Unknown" },
+  { key: "unread", label: "Unread" },
+];
+
+export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelProps = {}) {
   const isMobile = useIsMobile();
-  const { role, employeeId } = useEffectiveAuth();
-  const { conversations, loading, sending, sendSms, markAsRead, hasMore, loadMore, loadingMore } = useSmsLogScoped();
-  // Resolve incoming phone (any format) to a conversation key by matching last-10 digits
+  const { conversations, sending, sendSms, markAsRead, setThreadStatus, hasMore, loadMore, loadingMore } = useSmsLogScoped();
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [newMessageMode, setNewMessageMode] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<SmsFilter>("all");
+  const { startSmsSession } = useCopilotPanel();
+
   const resolveConversationKey = (raw: string | null): string | null => {
     if (!raw) return null;
     const last10 = normalizeLast10(raw);
@@ -33,48 +46,44 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
     const match = conversations.find((c) => normalizeLast10(c.phoneNumber) === last10);
     return match ? match.phoneNumber : (toE164(raw) ?? raw);
   };
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(resolveConversationKey(initialPhone));
-  const [newMessageMode, setNewMessageMode] = useState(false);
-  const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"customers" | "team" | "external">("customers");
-
-  const { startSmsSession } = useCopilotPanel();
 
   useEffect(() => {
-    if (initialPhone) {
-      setSelectedPhone(resolveConversationKey(initialPhone));
-      setNewMessageMode(false);
-    }
+    if (!initialPhone) return;
+    setSelectedPhone(resolveConversationKey(initialPhone));
+    setNewMessageMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPhone, conversations.length]);
 
-  const filtered = conversations.filter((c) => {
+  const searched = conversations.filter((c) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return c.phoneNumber.includes(q) || (c.contactName && c.contactName.toLowerCase().includes(q));
+    return (
+      c.phoneNumber.includes(q) ||
+      (c.contactName && c.contactName.toLowerCase().includes(q)) ||
+      (c.jobContext?.label && c.jobContext.label.toLowerCase().includes(q))
+    );
   });
 
-  const team = filtered.filter((c) => c.contactType === "employee");
-  // Marketing/ad-agency contacts are grouped under Vendors (they're external B2B)
-  const external = filtered.filter((c) => c.contactType === "vendor" || c.contactType === "marketing");
-  // Customers tab = anything that isn't team or vendor/marketing
-  const customers = filtered.filter((c) => !["employee", "vendor", "marketing"].includes(c.contactType));
+  const filtered = searched.filter((c) => {
+    if (activeFilter === "all") return true;
+    if (activeFilter === "unknown") return c.contactType === "unknown";
+    if (activeFilter === "unread") return c.unreadCount > 0;
+    return c.status === activeFilter;
+  });
 
-  const sumUnread = (list: typeof conversations) => list.reduce((s, c) => s + (c.unreadCount || 0), 0);
-  const teamUnread = sumUnread(team);
-  const externalUnread = sumUnread(external);
-  const customersUnread = sumUnread(customers);
+  const filterCounts: Record<SmsFilter, number> = {
+    all: searched.length,
+    needs_reply: searched.filter((c) => c.status === "needs_reply").length,
+    waiting: searched.filter((c) => c.status === "waiting").length,
+    done: searched.filter((c) => c.status === "done").length,
+    unknown: searched.filter((c) => c.contactType === "unknown").length,
+    unread: searched.filter((c) => c.unreadCount > 0).length,
+  };
 
   const selectConversation = (phone: string) => {
     setSelectedPhone(phone);
     setNewMessageMode(false);
     const convo = conversations.find((c) => c.phoneNumber === phone);
-    // Auto-switch tab so the selected convo lives under the visible tab
-    if (convo) {
-      if (convo.contactType === "employee") setActiveTab("team");
-      else if (convo.contactType === "vendor" || convo.contactType === "marketing") setActiveTab("external");
-      else setActiveTab("customers");
-    }
     startSmsSession(phone, convo?.contactName || undefined);
   };
 
@@ -96,9 +105,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
 
   const selectedConvo = selectedPhone ? conversations.find((c) => c.phoneNumber === selectedPhone) || null : null;
 
-  // --- MOBILE: expandable card layout ---
   if (isMobile) {
-    // If navigated from calls/voicemail or tapped a convo, show full thread
     if (selectedPhone) {
       return (
         <SmsThreadView
@@ -106,6 +113,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
           sending={sending}
           onSend={handleSend}
           onMarkRead={markAsRead}
+          onStatusChange={setThreadStatus}
           onBack={() => setSelectedPhone(null)}
           newMessageMode={!selectedConvo}
           prefillPhone={!selectedConvo ? selectedPhone : undefined}
@@ -124,6 +132,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
           sending={sending}
           onSend={handleSend}
           onMarkRead={markAsRead}
+          onStatusChange={setThreadStatus}
           onBack={() => setNewMessageMode(false)}
           newMessageMode={true}
           prefillBody={initialDraft}
@@ -134,28 +143,15 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
     return (
       <ScrollArea className="h-full">
         <div className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search messages..." className="pl-9 h-9" />
-            </div>
-            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={handleNewMessage}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <SmsTabbedList
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            customers={customers}
-            team={team}
-            external={external}
-            customersUnread={customersUnread}
-            teamUnread={teamUnread}
-            externalUnread={externalUnread}
+          <SmsSearchBar search={search} setSearch={setSearch} onNewMessage={handleNewMessage} />
+          <SmsFilteredList
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            conversations={filtered}
+            counts={filterCounts}
             selectedPhone={selectedPhone}
             onSelect={selectConversation}
-            empty={filtered.length === 0}
+            empty={searched.length === 0}
             density="comfortable"
           />
         </div>
@@ -163,42 +159,26 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
     );
   }
 
-  // --- DESKTOP: 2-column split layout ---
   return (
     <ResizablePanelGroup direction="horizontal" className="h-full">
-      {/* Left column — conversation list */}
       <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="flex flex-col h-full">
-        <div className="p-3 border-b space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search messages..." className="pl-9 h-9" />
-            </div>
-            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={handleNewMessage}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="p-3 border-b">
+          <SmsSearchBar search={search} setSearch={setSearch} onNewMessage={handleNewMessage} />
         </div>
-
-        <SmsTabbedList
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          customers={customers}
-          team={team}
-          external={external}
-          customersUnread={customersUnread}
-          teamUnread={teamUnread}
-          externalUnread={externalUnread}
+        <SmsFilteredList
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          conversations={filtered}
+          counts={filterCounts}
           selectedPhone={selectedPhone}
           onSelect={selectConversation}
-          empty={filtered.length === 0}
+          empty={searched.length === 0}
           density="compact"
         />
       </ResizablePanel>
 
       <ResizableHandle withHandle />
 
-      {/* Right column — thread view */}
       <ResizablePanel defaultSize={75} className="flex flex-col min-w-0 h-full">
         {newMessageMode ? (
           <SmsThreadView
@@ -206,6 +186,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
             sending={sending}
             onSend={handleSend}
             onMarkRead={markAsRead}
+            onStatusChange={setThreadStatus}
             onBack={() => setNewMessageMode(false)}
             newMessageMode={true}
             prefillBody={initialDraft}
@@ -216,6 +197,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
             sending={sending}
             onSend={handleSend}
             onMarkRead={markAsRead}
+            onStatusChange={setThreadStatus}
             prefillBody={initialDraft}
             hasMore={hasMore}
             loadingMore={loadingMore}
@@ -227,6 +209,7 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
             sending={sending}
             onSend={handleSend}
             onMarkRead={markAsRead}
+            onStatusChange={setThreadStatus}
             onBack={() => setSelectedPhone(null)}
             newMessageMode={true}
             prefillPhone={selectedPhone}
@@ -245,122 +228,88 @@ export function SmsPanel({ compact = false, initialPhone = null, initialDraft = 
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Tabbed list — Customers / Team / Vendors with red unread badges
-// ──────────────────────────────────────────────────────────────────────────────
-type SmsConvo = ReturnType<typeof useSmsLogScoped>["conversations"][number];
+function SmsSearchBar({
+  search,
+  setSearch,
+  onNewMessage,
+}: {
+  search: string;
+  setSearch: (value: string) => void;
+  onNewMessage: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search messages..." className="pl-9 h-9" />
+      </div>
+      <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={onNewMessage}>
+        <Plus className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
 
-interface SmsTabbedListProps {
-  activeTab: "customers" | "team" | "external";
-  onTabChange: (t: "customers" | "team" | "external") => void;
-  customers: SmsConvo[];
-  team: SmsConvo[];
-  external: SmsConvo[];
-  customersUnread: number;
-  teamUnread: number;
-  externalUnread: number;
+interface SmsFilteredListProps {
+  activeFilter: SmsFilter;
+  onFilterChange: (t: SmsFilter) => void;
+  conversations: SmsConvo[];
+  counts: Record<SmsFilter, number>;
   selectedPhone: string | null;
   onSelect: (phone: string) => void;
   empty: boolean;
   density: "comfortable" | "compact";
 }
 
-function SmsTabbedList({
-  activeTab,
-  onTabChange,
-  customers,
-  team,
-  external,
-  customersUnread,
-  teamUnread,
-  externalUnread,
+function SmsFilteredList({
+  activeFilter,
+  onFilterChange,
+  conversations,
+  counts,
   selectedPhone,
   onSelect,
   empty,
   density,
-}: SmsTabbedListProps) {
-  const list =
-    activeTab === "customers" ? customers : activeTab === "team" ? team : external;
+}: SmsFilteredListProps) {
   const itemSpacing = density === "compact" ? "space-y-0.5" : "space-y-1";
   const padding = density === "compact" ? "p-2" : "px-1";
 
   return (
-    <Tabs
-      value={activeTab}
-      onValueChange={(v) => onTabChange(v as "customers" | "team" | "external")}
-      className="flex-1 flex flex-col min-h-0"
-    >
-      <TabsList className="grid grid-cols-3 mx-2 mt-1 h-8">
-        <TabBadgeTrigger
-          value="customers"
-          icon={<User className="h-3 w-3" />}
-          label="Customers"
-          count={customers.length}
-          unread={customersUnread}
-        />
-        <TabBadgeTrigger
-          value="team"
-          icon={<Wrench className="h-3 w-3" />}
-          label="Team"
-          count={team.length}
-          unread={teamUnread}
-        />
-        <TabBadgeTrigger
-          value="external"
-          icon={<Building2 className="h-3 w-3" />}
-          label="External"
-          count={external.length}
-          unread={externalUnread}
-        />
-      </TabsList>
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="px-2 pt-2 pb-1 flex gap-1 overflow-x-auto border-b">
+        {SMS_FILTERS.map((filter) => (
+          <Button
+            key={filter.key}
+            type="button"
+            size="sm"
+            variant={activeFilter === filter.key ? "default" : "ghost"}
+            className="h-7 shrink-0 px-2 text-[11px]"
+            onClick={() => onFilterChange(filter.key)}
+          >
+            {filter.label}
+            <span className="ml-1 opacity-70">{counts[filter.key]}</span>
+          </Button>
+        ))}
+      </div>
 
-      <TabsContent value={activeTab} className="flex-1 min-h-0 mt-2">
-        <ScrollArea className="h-full">
-          <div className={cn(padding, itemSpacing)}>
-            {list.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">
-                {empty ? "No conversations" : `No ${activeTab} conversations`}
-              </p>
-            ) : (
-              list.map((c) => (
-                <SmsConversationListItem
-                  key={c.phoneNumber}
-                  conversation={c}
-                  isSelected={selectedPhone === c.phoneNumber}
-                  onSelect={() => onSelect(c.phoneNumber)}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </TabsContent>
-    </Tabs>
-  );
-}
-
-function TabBadgeTrigger({
-  value,
-  icon,
-  label,
-  count,
-  unread,
-}: {
-  value: string;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  unread: number;
-}) {
-  return (
-    <TabsTrigger value={value} className="relative gap-1 text-[11px] px-1">
-      {icon}
-      <span>{label}</span>
-      <span className="text-muted-foreground/70">({count})</span>
-      {unread > 0 && (
-        <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
-          {unread > 9 ? "9+" : unread}
-        </span>
-      )}
-    </TabsTrigger>
+      <ScrollArea className="flex-1">
+        <div className={cn(padding, itemSpacing)}>
+          {conversations.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">
+              {empty ? "No conversations" : "No conversations in this filter"}
+            </p>
+          ) : (
+            conversations.map((c) => (
+              <SmsConversationListItem
+                key={c.phoneNumber}
+                conversation={c}
+                isSelected={selectedPhone === c.phoneNumber}
+                onSelect={() => onSelect(c.phoneNumber)}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }

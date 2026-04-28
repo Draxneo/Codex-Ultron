@@ -2,7 +2,7 @@ import { User, Wrench, HelpCircle, Building2, Megaphone } from "lucide-react";
 import { formatPhone } from "@/lib/formatters";
 import { ctHeaderLabel } from "@/lib/dateGrouping";
 import { cn } from "@/lib/utils";
-import type { SmsConversation } from "@/hooks/useSmsLog";
+import { SMS_CONVERSATION_STATUS_LABELS, type SmsConversation } from "@/hooks/useSmsLog";
 
 interface Props {
   conversation: SmsConversation;
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function SmsConversationListItem({ conversation, isSelected, onSelect }: Props) {
-  const { phoneNumber, contactName, contactType, lastMessage, unreadCount, toNumber } = conversation;
+  const { phoneNumber, contactName, contactType, status, lastMessage, unreadCount, toNumber, jobContext } = conversation;
   const Icon = contactType === "employee" ? Wrench : contactType === "marketing" ? Megaphone : contactType === "customer" ? User : contactType === "vendor" ? Building2 : HelpCircle;
   const viaLabel = toNumber ? `via ...${toNumber.replace(/\D/g, "").slice(-4)}` : null;
 
@@ -47,6 +47,24 @@ export function SmsConversationListItem({ conversation, isSelected, onSelect }: 
         {viaLabel && (
           <span className="text-[9px] text-muted-foreground/70 font-mono">{viaLabel}</span>
         )}
+        <div className="flex items-center gap-1 mt-1 min-w-0">
+          <span
+            className={cn(
+              "h-5 rounded border px-1.5 text-[10px] font-medium inline-flex items-center shrink-0",
+              status === "needs_reply" && "border-destructive/30 bg-destructive/10 text-destructive",
+              status === "waiting" && "border-blue-500/30 bg-blue-500/10 text-blue-700",
+              status === "done" && "border-[hsl(var(--complete))]/30 bg-complete-bg text-[hsl(var(--complete))]"
+            )}
+          >
+            {SMS_CONVERSATION_STATUS_LABELS[status]}
+          </span>
+          {jobContext && (
+            <span className="truncate text-[10px] text-muted-foreground">
+              {jobContext.label}
+              {jobContext.scheduledDate ? ` - ${jobContext.scheduledDate}` : ""}
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-1 mt-0.5">
           <p className="text-xs text-muted-foreground truncate">
             {lastMessage.direction === "outbound" ? "You: " : ""}

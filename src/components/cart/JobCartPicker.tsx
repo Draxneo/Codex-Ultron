@@ -147,7 +147,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
                 <Input id="custom-price" type="number" inputMode="decimal" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder="0.00" />
               </div>
               <Button onClick={handleAddCustom} className="w-full" disabled={!permissions.canEditItems || !customName.trim() || !customPrice}>
-                <Plus className="h-4 w-4 mr-1" /> Add to Estimate
+                <Plus className="h-4 w-4 mr-1" /> Add to Cart
               </Button>
             </Card>
           </TabsContent>
@@ -179,7 +179,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
         <DrawerContent className="h-[92vh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Estimate</span>
+              <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Customer Cart</span>
               <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-7 w-7">
                 <X className="h-4 w-4" />
               </Button>
@@ -195,7 +195,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
-          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Estimate</SheetTitle>
+          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Customer Cart</SheetTitle>
         </SheetHeader>
         <div className="relative flex-1 min-h-0">{body}</div>
       </SheetContent>

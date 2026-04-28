@@ -1,15 +1,9 @@
 /**
- * TechCartCard — Mobile-inline Estimate builder for the tech job detail page.
+ * TechCartCard - mobile customer cart for the tech job detail page.
  *
- * State-driven action row replaces the old single "Send" button:
- *  - draft     → Send Estimate for Approval · Present
- *  - sent      → "Sent · waiting" / "Viewed Xm ago" pill · Resend · Present
- *  - approved  → Approved badge · Charge / Invoice · Present receipt
- *  - declined  → Declined badge · Revise & Resend
- *  - paid      → Paid badge (no actions)
- *
- * Realtime subscription on `job_carts` (in useJobCart) auto-invalidates,
- * so buttons swap as the customer interacts with the public Estimate link.
+ * Techs add repair/equipment options here, send the customer approval/payment
+ * link, and watch the card update as the customer views, approves, declines,
+ * or pays.
  */
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -34,6 +28,7 @@ import {
 } from "lucide-react";
 import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
 import { JobCartPicker } from "@/components/cart/JobCartPicker";
+import { JobCartDrawer } from "@/components/cart/JobCartDrawer";
 import { CartAddonSuggestions } from "@/components/cart/CartAddonSuggestions";
 import { CartViewStatus } from "@/components/cart/CartViewStatus";
 import { cn } from "@/lib/utils";
@@ -57,6 +52,7 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
 export function TechCartCard({ jobId, customerPhone, customerName, bare = false }: Props) {
   const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -94,14 +90,14 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
   const renderActionRow = () => {
     if (itemCount === 0) {
       return (
-        <p className="text-[11px] text-muted-foreground italic">Add options, then send this Estimate for approval.</p>
+        <p className="text-[11px] text-muted-foreground italic">Add options, then send the customer cart for approval.</p>
       );
     }
 
     if (status === "paid") {
       return (
         <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 h-8 px-3">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Paid · ${total.toFixed(2)}
+          <CheckCircle2 className="h-3.5 w-3.5" /> Paid - ${total.toFixed(2)}
         </Badge>
       );
     }
@@ -152,7 +148,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
       const viewed = !!firstViewedAt;
       const pillText = viewed
         ? `Viewed ${formatDistanceToNow(new Date(lastViewedAt || firstViewedAt))} ago`
-        : "Sent · waiting";
+        : "Sent - waiting";
       return (
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="gap-1.5 h-8 px-3 text-xs">
@@ -184,7 +180,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
           disabled={sendToCustomer.isPending || !customerPhone}
         >
           <Send className="h-3.5 w-3.5" />
-          {sendToCustomer.isPending ? "Sending..." : "Send Estimate for Approval"}
+          {sendToCustomer.isPending ? "Sending..." : "Send Cart for Approval"}
         </Button>
         <Button size="sm" variant="outline" className="h-9 text-xs gap-1.5" onClick={handlePresent} disabled={!presentLink}>
           <Presentation className="h-3.5 w-3.5" /> Present
@@ -201,9 +197,9 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
             <ShoppingCart className="h-5 w-5 text-amber-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground leading-tight">{cart?.estimate_number || "Estimate"}</p>
+            <p className="text-sm font-medium text-foreground leading-tight">{cart?.estimate_number || "Customer Cart"}</p>
             <p className="text-xs text-muted-foreground leading-tight">
-              {itemCount} item{itemCount !== 1 ? "s" : ""} · ${total.toFixed(2)}
+              {itemCount} item{itemCount !== 1 ? "s" : ""} - ${total.toFixed(2)}
             </p>
           </div>
         </div>
@@ -212,8 +208,17 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
       {bare && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20">
           <p className="text-xs text-muted-foreground flex-1">
-            {itemCount} item{itemCount !== 1 ? "s" : ""} · ${total.toFixed(2)}
+            {itemCount} item{itemCount !== 1 ? "s" : ""} - ${total.toFixed(2)}
           </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setDrawerOpen(true)}
+            disabled={!cart}
+          >
+            Review
+          </Button>
         </div>
       )}
 
@@ -244,7 +249,7 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    qty {item.quantity} · ${Number(item.unit_price).toFixed(2)}
+                    qty {item.quantity} - ${Number(item.unit_price).toFixed(2)}
                   </p>
                 </div>
                 <p className="text-sm font-semibold text-foreground tabular-nums">
@@ -367,6 +372,18 @@ export function TechCartCard({ jobId, customerPhone, customerName, bare = false 
         jobId={jobId}
         open={pickerOpen}
         onOpenChange={setPickerOpen}
+        onOpenCart={() => setDrawerOpen(true)}
+        customerPhone={customerPhone}
+        customerName={customerName}
+      />
+      <JobCartDrawer
+        jobId={jobId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onAddMore={() => {
+          setDrawerOpen(false);
+          setPickerOpen(true);
+        }}
         customerPhone={customerPhone}
         customerName={customerName}
       />

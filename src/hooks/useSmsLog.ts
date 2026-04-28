@@ -16,6 +16,14 @@ export type SmsMediaItem = {
   content_type: string;
 };
 
+export type SmsConversationStatus = "needs_reply" | "waiting" | "done";
+
+export const SMS_CONVERSATION_STATUS_LABELS: Record<SmsConversationStatus, string> = {
+  needs_reply: "Needs Reply",
+  waiting: "Waiting",
+  done: "Done",
+};
+
 export type SmsMessage = {
   id: string;
   direction: "inbound" | "outbound";
@@ -41,11 +49,27 @@ export type SmsConversation = {
   phoneNumber: string;
   contactName: string | null;
   contactType: string;
+  status: SmsConversationStatus;
   lastMessage: SmsMessage;
   unreadCount: number;
   messages: SmsMessage[];
   latestJobId: string | null;
+  jobContext: SmsJobContext | null;
   toNumber?: string | null;
+};
+
+type SmsThreadSetting = {
+  phone_last10: string;
+  conversation_status: SmsConversationStatus | null;
+  updated_at: string | null;
+};
+
+export type SmsJobContext = {
+  id: string;
+  label: string;
+  customerName: string | null;
+  scheduledDate: string | null;
+  status: string | null;
 };
 
 function compareByCreatedAt(a: SmsMessage, b: SmsMessage): number {
@@ -71,17 +95,20 @@ const PAGE_SIZE = 500;
 interface UseSmsLogOptions {
   role?: string | null;
   employeeId?: string | null;
+  userId?: string | null;
   /** When true, skip all fetches and realtime subscriptions. Useful when a
    *  parent provider already owns the SMS state. */
   disabled?: boolean;
 }
 
 export function useSmsLog(options: UseSmsLogOptions = {}) {
-  const { role, employeeId, disabled = false } = options;
+  const { role, employeeId, userId, disabled = false } = options;
   const [messages, setMessages] = useState<SmsMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [contactMap, setContactMap] = useState<ContactLookupMap>({});
+  const [jobContextMap, setJobContextMap] = useState<Record<string, SmsJobContext>>({});
+  const [threadSettings, setThreadSettings] = useState<Record<string, SmsThreadSetting>>({});
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [techPhoneFilter, setTechPhoneFilter] = useState<Set<string> | null>(null);
@@ -96,7 +123,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         supabase.from("employees").select("name, phone, is_active"),
         supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
         supabase.from("estimates").select("customer_name, customer_phone").not("customer_phone", "is", null).not("customer_name", "is", null),
-        supabase.from("jobs").select("customer_name, customer_phone").not("customer_phone", "is", null).not("customer_name", "is", null),
+        supabase.from("jobs").select("id, customer_name, customer_phone, hcp_job_number, job_type, scheduled_date, status").not("customer_phone", "is", null).not("customer_name", "is", null),
         supabase.from("supply_houses").select("name, contact_phone, text_support_phone").not("contact_phone", "is", null),
         supabase.from("vendor_contacts").select("name, phone, supply_house_id, supply_houses(name)").not("phone", "is", null),
       ]);
@@ -130,9 +157,19 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       }
 
       // Priority 5: jobs (customer_name from job records)
+      const jobsByPhone: Record<string, SmsJobContext> = {};
       for (const job of jobs || []) {
         if (!job.customer_name || !job.customer_phone) continue;
         addContactLookup(map, job.customer_phone, { name: job.customer_name, type: "customer" });
+        const key = normalizeLast10(job.customer_phone);
+        if (!key || jobsByPhone[key]) continue;
+        jobsByPhone[key] = {
+          id: job.id,
+          label: job.hcp_job_number ? `Job #${job.hcp_job_number}` : job.job_type || "Job",
+          customerName: job.customer_name,
+          scheduledDate: job.scheduled_date,
+          status: job.status,
+        };
       }
 
       // Priority 6: estimates (leads not yet converted to customers)
@@ -142,10 +179,63 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       }
 
       setContactMap(map);
+      setJobContextMap(jobsByPhone);
     };
 
     buildContactMap();
   }, [disabled]);
+
+  useEffect(() => {
+    if (disabled || !userId) return;
+
+    const fetchThreadSettings = async () => {
+      const { data, error } = await (supabase as any)
+        .from("sms_thread_settings")
+        .select("phone_last10, conversation_status, updated_at")
+        .eq("user_id", userId);
+
+      if (error) {
+        console.warn("Failed to fetch SMS thread settings:", error);
+        return;
+      }
+
+      const next: Record<string, SmsThreadSetting> = {};
+      for (const row of (data || []) as SmsThreadSetting[]) {
+        next[row.phone_last10] = row;
+      }
+      setThreadSettings(next);
+    };
+
+    fetchThreadSettings();
+  }, [disabled, userId]);
+
+  const setThreadStatus = useCallback(async (phoneNumber: string, status: SmsConversationStatus) => {
+    const phoneLast10 = normalizeLast10(phoneNumber);
+    if (!phoneLast10 || !userId) return;
+
+    const updatedAt = new Date().toISOString();
+    setThreadSettings((prev) => ({
+      ...prev,
+      [phoneLast10]: {
+        phone_last10: phoneLast10,
+        conversation_status: status,
+        updated_at: updatedAt,
+      },
+    }));
+
+    const { error } = await (supabase as any)
+      .from("sms_thread_settings")
+      .upsert({
+        user_id: userId,
+        phone_last10: phoneLast10,
+        conversation_status: status,
+        updated_at: updatedAt,
+      }, { onConflict: "user_id,phone_last10" });
+
+    if (error) {
+      console.error("Failed to update SMS thread status:", error);
+    }
+  }, [userId]);
 
   // For tech role: build a set of phone numbers they're allowed to see
   useEffect(() => {
@@ -337,6 +427,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
             });
             return mergeMessagesChrono(withoutOptimistic, [msg]);
           });
+          if (msg.direction === "inbound") {
+            void setThreadStatus(msg.phone_number, "needs_reply");
+          }
         }
       )
       .on(
@@ -394,6 +487,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const lastMsg = convoMsgs[convoMsgs.length - 1];
       const unread = convoMsgs.filter((m) => m.direction === "inbound" && !m.is_read).length;
       const latestJob = [...convoMsgs].reverse().find((m) => m.related_job_id)?.related_job_id || null;
+      const latestInbound = [...convoMsgs].reverse().find((m) => m.direction === "inbound") || null;
 
       // Try DB-stored contact info from most recent message first
       const withContact = [...convoMsgs].reverse().find((m) => m.contact_name);
@@ -408,15 +502,28 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
       // Get the most recent to_number for this conversation
       const latestToNumber = [...convoMsgs].reverse().find((m) => m.to_number)?.to_number || null;
+      const phoneLast10 = normalizeLast10(phone);
+      const setting = phoneLast10 ? threadSettings[phoneLast10] : undefined;
+      const manualIsFresh = !!(
+        setting?.conversation_status &&
+        setting.updated_at &&
+        (!latestInbound || new Date(setting.updated_at).getTime() >= new Date(latestInbound.created_at).getTime())
+      );
+      const derivedStatus: SmsConversationStatus =
+        unread > 0 || lastMsg.direction === "inbound" ? "needs_reply" : "waiting";
+      const status = manualIsFresh ? setting!.conversation_status! : derivedStatus;
+      const matchedJob = phoneLast10 ? jobContextMap[phoneLast10] || null : null;
 
       return {
         phoneNumber: phone,
         contactName: resolved.name,
         contactType: resolved.type,
+        status,
         lastMessage: lastMsg,
         unreadCount: unread,
         messages: convoMsgs,
-        latestJobId: latestJob,
+        latestJobId: latestJob || matchedJob?.id || null,
+        jobContext: matchedJob,
         toNumber: latestToNumber,
       };
     });
@@ -425,11 +532,13 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     convos.sort((a, b) => {
       if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
       if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+      if (a.status === "needs_reply" && b.status !== "needs_reply") return -1;
+      if (a.status !== "needs_reply" && b.status === "needs_reply") return 1;
       return new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime();
     });
 
     return convos;
-  }, [messages, resolveContact]);
+  }, [messages, resolveContact, threadSettings, jobContextMap]);
 
   const queryClient = useQueryClient();
 
@@ -507,6 +616,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         return false;
       }
       toast({ title: "SMS Sent", description: `Message sent to ${contactName || to}` });
+      void setThreadStatus(to, "waiting");
       return true;
     } catch (e: any) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
@@ -517,5 +627,5 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     }
   };
 
-  return { messages, conversations, loading, sending, sendSms, markAsRead, refetch: fetchMessages, hasMore, loadMore, loadingMore };
+  return { messages, conversations, loading, sending, sendSms, markAsRead, setThreadStatus, refetch: fetchMessages, hasMore, loadMore, loadingMore };
 }

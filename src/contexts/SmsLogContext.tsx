@@ -21,8 +21,8 @@ type SmsLogContextValue = ReturnType<typeof useSmsLog>;
 const SmsLogContext = createContext<SmsLogContextValue | null>(null);
 
 export function SmsLogProvider({ children }: { children: ReactNode }) {
-  const { role, employeeId } = useEffectiveAuth();
-  const value = useSmsLog({ role, employeeId });
+  const { role, employeeId, user } = useEffectiveAuth();
+  const value = useSmsLog({ role, employeeId, userId: user?.id ?? null });
   return <SmsLogContext.Provider value={value}>{children}</SmsLogContext.Provider>;
 }
 
