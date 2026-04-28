@@ -522,7 +522,8 @@ Deno.serve(async (req) => {
     const twilioNumber = getTwilioCallerId() || from;
 
     const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys);
-    if (forwardingNumbers.length > 0) {
+    const inboundRouteMode = ((option as any).inbound_route_mode || "cell_forwarding").toLowerCase();
+    if (forwardingNumbers.length > 0 && inboundRouteMode !== "softphone") {
       const numberTags = buildNumberTags(forwardingNumbers);
       const timeout = Math.max(10, Math.min(60, (option as any).ring_timeout_seconds || dialTimeout));
       console.log(`[ivr-handler] dept "${option.label}" -> cell forwarding (${forwardingNumbers.length} numbers)`);

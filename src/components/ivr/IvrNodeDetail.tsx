@@ -371,6 +371,50 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         <p className="text-[10px] text-muted-foreground">
           Calls for this department ring these real cell numbers through Twilio. The browser phone is not required for inbound calls.
         </p>
+        <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-background/70 p-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Inbound route mode</Label>
+            <Select
+              value={(option as any).inbound_route_mode || "cell_forwarding"}
+              onValueChange={(v) => onSave({ digit: option.digit, inbound_route_mode: v } as any)}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cell_forwarding">Cell forwarding first</SelectItem>
+                <SelectItem value="softphone">Softphone fallback only</SelectItem>
+                <SelectItem value="both">Both, if supported</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Ring timeout before fallback</Label>
+              <Badge variant="outline" className="text-xs font-mono">
+                {((option as any).ring_timeout_seconds || 25)}s
+              </Badge>
+            </div>
+            <Slider
+              value={[((option as any).ring_timeout_seconds || 25)]}
+              min={10}
+              max={60}
+              step={5}
+              onValueChange={([v]) => onSave({ digit: option.digit, ring_timeout_seconds: v } as any)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Ring strategy</Label>
+            <Select
+              value={(option as any).ring_strategy || "simultaneous"}
+              onValueChange={(v) => onSave({ digit: option.digit, ring_strategy: v } as any)}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="simultaneous">Ring all numbers together</SelectItem>
+                <SelectItem value="priority">Priority order later</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="space-y-2">
           {forwardingNumbers.map((row) => (
             <div key={row.id} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
