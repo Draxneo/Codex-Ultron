@@ -6,11 +6,13 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { Camera, Loader2, Mic, ShoppingCart, Sparkles, Volume2 } from "lucide-react";
+import { Camera, Check, Loader2, Mic, ShoppingCart, Sparkles, Trash2, Volume2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useVoiceToText } from "@/hooks/useVoiceToText";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
+import { useJobCart, type JobCartItem, type NewCartItem } from "@/hooks/useJobCart";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -25,6 +27,102 @@ interface Props {
   onOpenPhotos?: () => void;
 }
 
+type ProposedCartAction = {
+  id: string;
+  name: string;
+  description: string | null;
+  unitPrice: number;
+  quantity: number;
+  kind: NewCartItem["kind"];
+  tier: JobCartItem["tier"];
+  sourceLine: string;
+};
+
+function inferKind(text: string): NewCartItem["kind"] {
+  const lower = text.toLowerCase();
+  if (/\b(system|condenser|furnace|air handler|coil|equipment|unit)\b/.test(lower)) return "equipment";
+  if (/\b(part|capacitor|contactor|motor|board|sensor|valve|filter)\b/.test(lower)) return "part";
+  if (/\b(repair|replace|clean|diagnostic|recharge|recondition|service)\b/.test(lower)) return "repair";
+  return "custom";
+}
+
+function inferTier(text: string): JobCartItem["tier"] {
+  const lower = text.toLowerCase();
+  if (/\b(good|basic|option a)\b/.test(lower)) return "good";
+  if (/\b(better|recommended|option b)\b/.test(lower)) return "better";
+  if (/\b(best|premium|option c)\b/.test(lower)) return "best";
+  if (/\b(critical|urgent)\b/.test(lower)) return "critical";
+  return "recommended";
+}
+
+function stripOptionPrefix(text: string) {
+  return text
+    .replace(/^[-*\u2022\d.)\s]+/, "")
+    .replace(/^cart\s+option\s*[:#-]?\s*/i, "")
+    .replace(/^option\s+[a-c0-9#]+\s*[:.-]?\s*/i, "")
+    .replace(/^name\s*[:|-]\s*/i, "")
+    .replace(/\|\s*price\s*:?\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function cleanOptionName(line: string, priceMatch: RegExpMatchArray) {
+  const priceText = priceMatch[0];
+  const beforePrice = line.slice(0, priceMatch.index).trim();
+  const candidate = beforePrice || line.replace(priceText, "").trim();
+  return stripOptionPrefix(candidate);
+}
+
+function parseJarvisCartSuggestions(reply: string): ProposedCartAction[] {
+  const seen = new Set<string>();
+  const suggestions: ProposedCartAction[] = [];
+  const lines = reply
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const priceMatch = line.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
+    if (!priceMatch) continue;
+
+    const unitPrice = Number(priceMatch[1].replace(/,/g, ""));
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
+
+    let name = cleanOptionName(line, priceMatch);
+    let description = line.replace(priceMatch[0], "").trim();
+
+    const pipeParts = line.split("|").map((part) => part.trim()).filter(Boolean);
+    if (pipeParts.length >= 2) {
+      const namePart = pipeParts.find((part) => !/price\s*:/i.test(part) && !/\$\s*[\d,]+/i.test(part));
+      const descriptionPart = pipeParts.find((part) => /description\s*:/i.test(part));
+      if (namePart) name = stripOptionPrefix(namePart);
+      if (descriptionPart) description = descriptionPart.replace(/^description\s*:\s*/i, "").trim();
+    }
+
+    name = name.replace(/\s*[-:]\s*$/, "").trim();
+    if (!name || name.length < 3 || /total|subtotal|tax|financing/i.test(name)) continue;
+
+    const key = `${name.toLowerCase()}-${unitPrice}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    suggestions.push({
+      id: `${key}-${suggestions.length}`,
+      name: name.slice(0, 120),
+      description: description && description !== name ? description.slice(0, 500) : null,
+      unitPrice,
+      quantity: 1,
+      kind: inferKind(line),
+      tier: inferTier(line),
+      sourceLine: line,
+    });
+
+    if (suggestions.length >= 6) break;
+  }
+
+  return suggestions;
+}
+
 export function TechJarvisPushToTalk({
   jobId,
   jobNumber,
@@ -36,14 +134,18 @@ export function TechJarvisPushToTalk({
   const [thinking, setThinking] = useState(false);
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [proposedCartActions, setProposedCartActions] = useState<ProposedCartAction[]>([]);
+  const [addingSuggestionId, setAddingSuggestionId] = useState<string | null>(null);
   const transcriptRef = useRef<string>("");
   const { announce } = useAnnouncer();
+  const { addItem } = useJobCart(jobId);
 
   const askJarvis = useCallback(
     async (text: string) => {
       const question = text.trim();
       if (!question) return;
       setLastQuestion(question);
+      setProposedCartActions([]);
       setThinking(true);
       try {
         const pageCtx = [
@@ -51,6 +153,7 @@ export function TechJarvisPushToTalk({
           `Job ID: ${jobId}.`,
           "Tech workflow: photos plus voice notes should become repair/replacement recommendations, cart options, and a customer-ready approval/payment link.",
           "If the tech describes options, respond with clear cart item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved.",
+          "When recommending cart choices, add a final section named CART OPTIONS. Put each priced option on one line like: Option A: Replace capacitor | price: $289 | description: Includes part, labor, testing.",
         ].join(" ");
 
         const { data, error } = await supabase.functions.invoke("ai-task-agent", {
@@ -63,6 +166,7 @@ export function TechJarvisPushToTalk({
         if (error) throw error;
         const reply: string = data?.reply || "No response.";
         setLastReply(reply);
+        setProposedCartActions(parseJarvisCartSuggestions(reply));
         announce(reply);
       } catch (e: any) {
         toast.error(e?.message || "JARVIS failed to respond");
@@ -72,6 +176,40 @@ export function TechJarvisPushToTalk({
     },
     [jobId, jobNumber, customerName, announce],
   );
+
+  const addProposedAction = useCallback(
+    async (action: ProposedCartAction) => {
+      setAddingSuggestionId(action.id);
+      try {
+        await addItem.mutateAsync({
+          kind: action.kind,
+          name: action.name,
+          description: action.description,
+          quantity: action.quantity,
+          unit_price: action.unitPrice,
+          tier: action.tier,
+          metadata: {
+            source: "tech_jarvis_voice",
+            job_id: jobId,
+            customer_name: customerName,
+            tech_question: lastQuestion,
+            jarvis_source_line: action.sourceLine,
+          },
+        });
+        setProposedCartActions((items) => items.filter((item) => item.id !== action.id));
+        onOpenCart?.();
+      } catch (e: any) {
+        toast.error(e?.message || "Could not add JARVIS suggestion");
+      } finally {
+        setAddingSuggestionId(null);
+      }
+    },
+    [addItem, customerName, jobId, lastQuestion, onOpenCart],
+  );
+
+  const dismissProposedAction = useCallback((id: string) => {
+    setProposedCartActions((items) => items.filter((item) => item.id !== id));
+  }, []);
 
   const { isRecording, loading, start, stop } = useVoiceToText({
     onTranscript: (t) => {
@@ -185,6 +323,67 @@ export function TechJarvisPushToTalk({
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">JARVIS</p>
               </div>
               <p className="text-xs text-foreground whitespace-pre-wrap">{lastReply}</p>
+              {proposedCartActions.length > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Proposed cart actions</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        JARVIS found priced options. Review before adding anything.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="bg-background">
+                      Needs approval
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {proposedCartActions.map((action) => (
+                      <div key={action.id} className="rounded-lg border bg-background p-2.5 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground leading-tight">{action.name}</p>
+                            {action.description && (
+                              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{action.description}</p>
+                            )}
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <Badge variant="secondary" className="capitalize">{action.kind}</Badge>
+                              {action.tier && <Badge variant="outline" className="capitalize">{action.tier}</Badge>}
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold tabular-nums">${action.unitPrice.toFixed(2)}</p>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-10 gap-1.5"
+                            disabled={addingSuggestionId === action.id || addItem.isPending}
+                            onClick={() => addProposedAction(action)}
+                          >
+                            {addingSuggestionId === action.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                            Add to cart
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-10 w-10"
+                            disabled={addingSuggestionId === action.id}
+                            onClick={() => dismissProposedAction(action.id)}
+                            aria-label="Dismiss suggested cart item"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 pt-1">
                 <Button type="button" size="sm" className="h-9 gap-1.5" onClick={onOpenCart}>
                   <ShoppingCart className="h-3.5 w-3.5" /> Build cart
