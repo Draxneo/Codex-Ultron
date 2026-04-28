@@ -177,7 +177,7 @@ export function TechStatusCard({
       </div>
 
       {/* 4 big status circles */}
-      <div className="grid grid-cols-4 gap-2 px-3 py-4">
+      <div className="grid grid-cols-4 gap-2 px-3 py-5">
         <StatusCircle
           icon={Navigation}
           label="On My Way"
@@ -293,16 +293,16 @@ function StatusCircle({ icon: Icon, label, done, paused, onClick, loading, disab
         onClick={onClick}
         disabled={disabled || loading || (!onClick && !done && !paused)}
         className={cn(
-          "h-14 w-14 rounded-full flex items-center justify-center border-2 transition-all",
+          "h-16 w-16 rounded-full flex items-center justify-center border-2 transition-all",
           done && "bg-[hsl(var(--complete))]/15 border-[hsl(var(--complete))] text-[hsl(var(--complete))]",
           paused && "bg-amber-500/15 border-amber-500 text-amber-600 animate-pulse",
           !done && !paused && disabled && "bg-muted border-border text-muted-foreground/40",
           !done && !paused && !disabled && "bg-primary/10 border-primary text-primary active:scale-95",
         )}
       >
-        {done ? <Check className="h-6 w-6" /> : <Icon className="h-5 w-5" />}
+        {done ? <Check className="h-7 w-7" /> : <Icon className="h-6 w-6" />}
       </button>
-      <span className="text-[11px] font-medium text-foreground">{label}</span>
+      <span className="min-h-[28px] text-center text-[11px] font-semibold leading-tight text-foreground">{label}</span>
       {time && <span className="text-[10px] text-muted-foreground">{time}</span>}
     </div>
   );

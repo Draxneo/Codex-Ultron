@@ -175,7 +175,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
     <div className="flex flex-col h-screen bg-background overflow-x-hidden max-w-screen">
       {/* ── Top bar ──────────────────────────── */}
       <header className="shrink-0 bg-[hsl(var(--navy))] text-primary-foreground safe-area-top">
-        <div className="h-12 px-4 flex items-center justify-between">
+        <div className="h-14 px-4 flex items-center justify-between">
           <span className="text-sm font-semibold tracking-wide truncate max-w-[50%]">
             {companyName}
           </span>
@@ -192,7 +192,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
             )}
             <button
               onClick={signOut}
-              className="h-8 w-8 rounded-lg flex items-center justify-center text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 transition-colors"
+              className="h-11 w-11 rounded-xl flex items-center justify-center text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 transition-colors"
               aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />
@@ -300,7 +300,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
 
       {/* ── Bottom nav with animated indicator ── */}
       <nav className="shrink-0 border-t border-border bg-card/95 backdrop-blur-sm safe-area-bottom">
-        <div className="relative flex h-14">
+        <div className="relative flex h-16">
           {/* Animated active indicator bar */}
           <div
             className="absolute top-0 h-[2px] bg-accent transition-all duration-300 ease-out"
@@ -319,7 +319,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
                 to={path}
                 onClick={() => triggerLightHaptic()}
                 className={cn(
-                  "flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors relative pt-1",
+                  "flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors relative pt-1 active:bg-muted/50",
                   active
                     ? "text-accent"
                     : "text-muted-foreground active:text-foreground"

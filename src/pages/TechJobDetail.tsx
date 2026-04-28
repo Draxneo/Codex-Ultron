@@ -83,7 +83,7 @@ export default function TechJobDetail() {
   const jobCount = customerJobs?.length;
 
   return (
-    <div className="flex flex-col min-h-full bg-background pb-24">
+    <div className="flex flex-col min-h-full bg-background pb-36">
       {/* Sticky header */}
       <header className="sticky top-0 z-20 flex items-center px-2 h-12 bg-card border-b border-border">
         <Button
@@ -330,6 +330,34 @@ export default function TechJobDetail() {
           </div>
         </TechCollapsibleCard>
       </main>
+
+      <nav
+        className="fixed left-0 right-0 bottom-16 z-30 border-t border-border bg-card/95 px-3 py-2 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        aria-label="Tech job quick actions"
+      >
+        <div className="mx-auto grid max-w-2xl grid-cols-3 gap-2">
+          <Button type="button" className="h-12 flex-col gap-0.5 text-xs" onClick={() => scrollToSection("tech-photos")}>
+            <ImagePlus className="h-4 w-4" />
+            Photos
+          </Button>
+          <Button
+            type="button"
+            className="h-12 flex-col gap-0.5 bg-purple-600 text-xs hover:bg-purple-700"
+            onClick={() => scrollToSection("tech-jarvis")}
+          >
+            <Mic className="h-4 w-4" />
+            Talk
+          </Button>
+          <Button
+            type="button"
+            className="h-12 flex-col gap-0.5 bg-amber-500 text-xs text-white hover:bg-amber-600"
+            onClick={() => scrollToSection("tech-cart")}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Cart
+          </Button>
+        </div>
+      </nav>
     </div>
   );
 }

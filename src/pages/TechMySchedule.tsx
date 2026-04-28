@@ -240,6 +240,24 @@ export default function TechMySchedule() {
       )}
 
       {/* Job list — uses shared JobScheduleCard so techs see exactly what dispatch sees */}
+      <div className="border-b border-border bg-background px-3 py-3">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {isToday(currentDay) ? "Today" : format(currentDay, "EEEE")}
+            </p>
+            <h1 className="truncate text-xl font-bold text-foreground">
+              {items.length} job{items.length === 1 ? "" : "s"} for {employeeName || "you"}
+            </h1>
+          </div>
+          {!isToday(currentDay) && (
+            <Button type="button" size="sm" className="h-11 shrink-0 px-4" onClick={goToday}>
+              Today
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-3 pt-3 pb-24 space-y-2 max-w-3xl mx-auto w-full">
         {isLoading && !data ? (
           <>
@@ -259,7 +277,10 @@ export default function TechMySchedule() {
             const leg = travelMap.get(job.id);
 
             return (
-              <div key={`${job._itemType}-${job.id}`} className="min-h-[120px]">
+              <div
+                key={`${job._itemType}-${job.id}`}
+                className="min-h-[132px] rounded-xl transition-transform active:scale-[0.99]"
+              >
                 <JobScheduleCard
                   item={{ ...job, customer_phone: phone, item_type: job._itemType }}
                   techColor={techColor}

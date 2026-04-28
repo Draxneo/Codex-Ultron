@@ -38,24 +38,24 @@ export function TechCollapsibleCard({
 
   return (
     <Card id={id} className={cn("overflow-hidden", className)}>
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-border bg-card">
+      <div className="flex items-center gap-2 px-4 h-14 border-b border-border bg-card">
         <button
           type="button"
           onClick={() => collapsible && setOpen((o) => !o)}
           disabled={!collapsible}
-          className="flex-1 flex items-center gap-2 text-left -mx-1 px-1 rounded active:bg-muted/50 disabled:active:bg-transparent"
+          className="flex-1 flex h-full items-center gap-3 text-left -mx-1 px-1 rounded active:bg-muted/50 disabled:active:bg-transparent"
           aria-expanded={open}
         >
           {Icon && (
-            <span className={cn("h-7 w-7 rounded-md flex items-center justify-center shrink-0", iconBg)}>
-              <Icon className={cn("h-4 w-4", iconColor)} />
+            <span className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", iconBg)}>
+              <Icon className={cn("h-5 w-5", iconColor)} />
             </span>
           )}
-          <span className="text-sm font-semibold text-foreground truncate">{title}</span>
+          <span className="text-base font-semibold text-foreground truncate">{title}</span>
           {collapsible && (
             <ChevronDown
               className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform ml-1",
+                "h-5 w-5 text-muted-foreground transition-transform ml-1",
                 open ? "rotate-0" : "-rotate-90",
               )}
             />
