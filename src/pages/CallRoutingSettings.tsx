@@ -140,15 +140,15 @@ export function CallRoutingSettings() {
     },
   });
 
-  const { data: employees = [] } = useQuery<Array<{ name: string; ooo_enabled: boolean | null }>>({
+  const { data: employees = [] } = useQuery<Array<{ name: string; ooo_enabled: boolean | null; profile_id: string | null }>>({
     queryKey: ["employees-for-routing"],
     queryFn: async () => {
       const { data } = await supabase
         .from("employees")
-        .select("name, ooo_enabled")
+        .select("name, ooo_enabled, profile_id")
         .eq("is_active", true)
         .order("name", { ascending: true });
-      return (data || []) as Array<{ name: string; ooo_enabled: boolean | null }>;
+      return (data || []) as Array<{ name: string; ooo_enabled: boolean | null; profile_id: string | null }>;
     },
   });
 
@@ -327,8 +327,11 @@ export function CallRoutingSettings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deptRules.map((rule) => (
-                      <TableRow key={rule.id}>
+                    {deptRules.map((rule) => {
+                      const employee = employeeByName.get(rule.employee_name);
+                      const hasLogin = Boolean(employee?.profile_id);
+                      return (
+                      <TableRow key={rule.id} className={!hasLogin ? "bg-warning/5" : undefined}>
                         <TableCell>
                           <GripVertical className="h-4 w-4 text-muted-foreground" />
                         </TableCell>
@@ -346,7 +349,14 @@ export function CallRoutingSettings() {
                             className="w-16 h-8"
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{rule.employee_name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{rule.employee_name}</div>
+                          {!hasLogin && (
+                            <div className="text-xs text-warning">
+                              No app login linked - Twilio cannot ring this webphone yet.
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Switch
                             checked={rule.is_active}
@@ -374,7 +384,7 @@ export function CallRoutingSettings() {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
               )}
@@ -389,6 +399,7 @@ export function CallRoutingSettings() {
           <ul className="list-disc pl-5 space-y-1">
             <li>The IVR Builder defines the departments; this page only controls who each department routes to.</li>
             <li>When a call comes in for a department, the server tries recipients in priority order (1, 2, 3…).</li>
+            <li>Only employees with a linked app login can receive in-app webphone calls.</li>
             <li>Anyone currently on a live call is skipped until they become available again.</li>
             <li>Anyone with "Away from Desk" toggled on is also skipped.</li>
             <li>If everyone is busy, queue and overflow behavior comes from the IVR Builder settings.</li>

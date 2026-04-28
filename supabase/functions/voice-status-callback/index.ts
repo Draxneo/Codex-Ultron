@@ -30,6 +30,7 @@ const TERMINAL_STATUSES = new Set([
 type CallRow = {
   id: string;
   status: string | null;
+  answered_by?: string | null;
   duration_seconds: number | null;
   recording_url: string | null;
   transcription: string | null;
@@ -147,7 +148,7 @@ async function findCallRow(
     const { data, error } = await supabase
       .from("call_log")
       .select(
-        "id, status, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, contact_name, contact_type, extracted_data",
+        "id, status, answered_by, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, contact_name, contact_type, extracted_data",
       )
       .eq("twilio_sid", sid)
       .maybeSingle();
@@ -161,6 +162,63 @@ async function findCallRow(
   }
 
   return null;
+}
+
+function normalizeClientIdentity(value: string | null | undefined): string | null {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  return raw.replace(/^client:/i, "").trim() || null;
+}
+
+function profileIdFromClientIdentity(value: string | null | undefined): string | null {
+  const identity = normalizeClientIdentity(value);
+  if (!identity) return null;
+
+  const compact = identity.replace(/^uo2_user_/i, "").replace(/^user_/i, "").trim();
+  if (!compact || compact.length !== 32) return null;
+
+  return [
+    compact.slice(0, 8),
+    compact.slice(8, 12),
+    compact.slice(12, 16),
+    compact.slice(16, 20),
+    compact.slice(20),
+  ].join("-");
+}
+
+async function resolveAnsweredByFromCallback(
+  supabase: any,
+  params: URLSearchParams,
+): Promise<{ employeeName: string | null; clientIdentity: string | null }> {
+  const candidates = [
+    params.get("To"),
+    params.get("Called"),
+    params.get("ClientIdentity"),
+    params.get("DialCallTo"),
+  ].map(normalizeClientIdentity).filter(Boolean) as string[];
+
+  for (const clientIdentity of candidates) {
+    const profileId = profileIdFromClientIdentity(clientIdentity);
+    if (!profileId) continue;
+
+    const { data: employee, error } = await supabase
+      .from("employees")
+      .select("name")
+      .eq("is_active", true)
+      .eq("profile_id", profileId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Failed to resolve answered_by from Twilio client identity:", error);
+      continue;
+    }
+
+    if (employee?.name) {
+      return { employeeName: employee.name, clientIdentity };
+    }
+  }
+
+  return { employeeName: null, clientIdentity: candidates[0] || null };
 }
 
 function resolveEffectiveStatus({
@@ -324,6 +382,8 @@ Deno.serve(async (req) => {
 
     const updates: Record<string, unknown> = {};
     const callbackIsChildLeg = Boolean(parentCallSid && callSid && existingRow.twilio_sid === parentCallSid);
+    const { employeeName: callbackAnsweredBy, clientIdentity: callbackClientIdentity } =
+      await resolveAnsweredByFromCallback(supabase, params);
 
     if (callbackIsChildLeg) {
       const extracted = (existingRow.extracted_data || {}) as Record<string, unknown>;
@@ -337,6 +397,17 @@ Deno.serve(async (req) => {
           latest_child_call_sid: callSid,
         };
       }
+    }
+
+    if (callbackClientIdentity) {
+      const baseExtracted = {
+        ...((existingRow.extracted_data || {}) as Record<string, unknown>),
+        ...(((updates.extracted_data as Record<string, unknown>) || {})),
+      };
+      updates.extracted_data = {
+        ...baseExtracted,
+        answered_client_identity: callbackClientIdentity,
+      };
     }
 
     if (effectiveStatus && effectiveStatus !== existingRow.status) {
@@ -355,6 +426,10 @@ Deno.serve(async (req) => {
 
     if (effectiveStatus === "in-progress" && !existingRow.started_at) {
       updates.started_at = new Date().toISOString();
+    }
+
+    if (callbackAnsweredBy && !existingRow.answered_by) {
+      updates.answered_by = callbackAnsweredBy;
     }
 
     if (
@@ -484,6 +559,8 @@ Deno.serve(async (req) => {
         row_twilio_sid: existingRow.twilio_sid,
         raw_status: callStatus,
         effective_status: effectiveStatus,
+        answered_by: callbackAnsweredBy || existingRow.answered_by || null,
+        answered_client_identity: callbackClientIdentity,
         duration_seconds: parsedDuration,
         recording_url: mergedRecordingUrl,
       },
