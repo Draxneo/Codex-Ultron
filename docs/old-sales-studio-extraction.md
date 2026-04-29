@@ -81,6 +81,25 @@ Recommendation:
 
 Jarvis and the phone cart should use this exact mental model: `brand -> tonnage -> type -> tier -> orientation/location`. The technician should not have to search by model number first.
 
+## Jarvis Context Model
+
+The old app exposes Jarvis as a floating assistant across major pages rather than a standalone `/jarvis` route. In the authenticated pass, the standalone route returned 404, but the floating panel was available on Quick Quote, Schedule, Inbox, Vendors, Admin, and Tech.
+
+Observed Jarvis structure:
+
+- Header: `JARVIS_SYS v2.4.1`
+- Status: active
+- Context label reflects the current page, such as `Quick Quote`
+- `Now` tab for live action queues
+- `Chat` tab for assistant messages
+- Context picker categories: Jobs, SMS, Calls, History
+- Live queues: Ready to Schedule, Past Due, Follow-Up, Warranty, Inspection, Action Items, New Leads, Comfort Club
+- Chat controls: pick context, new chat, assistant mode selector, voice input, prompt box, send
+
+Recommendation:
+
+UltraOffice 2.0 Jarvis should stay page-aware and panel-aware. On a tech job/cart page, it should know the selected job, customer-safe cart snapshot, selected equipment matchup, photos/notes state, and available actions. On Quick Quote, it should know the picker state and speak in `brand -> tonnage -> type -> tier -> orientation` terms.
+
 ## Sales Hero
 
 Reusable structure:
