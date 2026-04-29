@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings } from "lucide-react";
+import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavOrder } from "@/hooks/useNavOrder";
@@ -25,10 +25,11 @@ const NAV_META: Record<string, { icon: any; label: string }> = {
   "/sms": { icon: MessageSquare, label: "SMS" },
   "/team": { icon: Users, label: "Team Chat" },
   "/customers": { icon: Users, label: "Customers" },
+  "/quick-quote": { icon: Zap, label: "Estimates" },
+  "/catalog": { icon: Package, label: "Price Book" },
+  "/pay": { icon: DollarSign, label: "Payments" },
   "/copilot": { icon: Bot, label: "JARVIS" },
-  "/pay": { icon: DollarSign, label: "Pay" },
   "/admin": { icon: Settings, label: "Admin" },
-  "/quick-quote": { icon: Zap, label: "Quick Quote" },
 };
 
 function SortableNavItem({ id }: { id: string }) {

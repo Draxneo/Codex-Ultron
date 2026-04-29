@@ -25,10 +25,11 @@ const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/sms": { label: "SMS", roles: null },
   "/team": { label: "Team Chat", roles: null },
   "/customers": { label: "Customers", roles: null },
+  "/quick-quote": { label: "Estimates", roles: null },
+  "/catalog": { label: "Price Book", roles: null },
+  "/pay": { label: "Payments", roles: null },
   "/copilot": { label: "JARVIS", roles: null },
-  "/pay": { label: "Pay", roles: null },
   "/admin": { label: "Admin", roles: null },
-  "/quick-quote": { label: "Quick Quote", roles: null },
 };
 
 function ThemeToggleButton() {
@@ -75,7 +76,7 @@ export function AppHeader() {
     })
     .map((path) => ({ to: path, ...allNavItems[path] }));
 
-  const adminSubRoutes = ["/parts", "/payments", "/agent-training", "/brochure", "/settings", "/agreements"];
+  const adminSubRoutes = ["/parts", "/payments", "/catalog", "/leads", "/agent-training", "/brochure", "/settings", "/agreements"];
 
   return (
     <>

@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Package, Zap, Search, ArrowLeft, Wrench, Info, Briefcase, Sparkles } from "lucide-react";
+import { Package, Zap, Search, ArrowLeft, Wrench, Info, Briefcase, Sparkles, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
@@ -36,9 +36,9 @@ export default function Catalog() {
   });
 
   const stats = [
+    { label: "Services", value: counts?.repairs ?? "…", icon: Wrench, color: "text-rose-500" },
+    { label: "Materials", value: counts?.parts ?? "…", icon: Package, color: "text-emerald-500" },
     { label: "Equipment", value: counts?.equipment ?? "…", icon: Zap, color: "text-primary" },
-    { label: "Repairs", value: counts?.repairs ?? "…", icon: Wrench, color: "text-rose-500" },
-    { label: "Parts", value: counts?.parts ?? "…", icon: Package, color: "text-emerald-500" },
     { label: "AHRI Lookups", value: counts?.ahri ?? "…", icon: Search, color: "text-[hsl(var(--warning))]" },
   ];
 
@@ -54,12 +54,19 @@ export default function Catalog() {
             </Link>
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2">
-                <Package className="h-5 w-5 text-orange-500" /> Catalog & Pricebook
+                <Package className="h-5 w-5 text-orange-500" /> Price Book
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Master line items — equipment, repairs, parts, and AHRI matchups.
+                Services, materials, equipment, templates, discounts, and AHRI matchups.
               </p>
             </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-2">
+            <Link to="/admin?section=company">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Settings2 className="h-3.5 w-3.5" /> Price book settings
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -93,22 +100,22 @@ export default function Catalog() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="equipment" className="w-full">
-          <TabsList className="w-full bg-muted/60 flex-wrap h-auto gap-1 p-1">
+        <Tabs defaultValue="repairs" className="w-full">
+          <TabsList className="w-full justify-start bg-muted/60 flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="repairs" className="flex-1 gap-1.5 data-[state=active]:bg-rose-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+              <Wrench className="h-4 w-4" /> Services
+            </TabsTrigger>
+            <TabsTrigger value="parts" className="flex-1 gap-1.5 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+              <Package className="h-4 w-4" /> Materials
+            </TabsTrigger>
             <TabsTrigger value="equipment" className="flex-1 gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
               <Zap className="h-4 w-4" /> Equipment
             </TabsTrigger>
-            <TabsTrigger value="repairs" className="flex-1 gap-1.5 data-[state=active]:bg-rose-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Wrench className="h-4 w-4" /> Repairs
-            </TabsTrigger>
-            <TabsTrigger value="parts" className="flex-1 gap-1.5 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Package className="h-4 w-4" /> Parts
+            <TabsTrigger value="addons" className="flex-1 gap-1.5 data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+              <Sparkles className="h-4 w-4" /> Discounts
             </TabsTrigger>
             <TabsTrigger value="ahri" className="flex-1 gap-1.5 data-[state=active]:bg-[hsl(var(--warning))] data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Search className="h-4 w-4" /> AHRI
-            </TabsTrigger>
-            <TabsTrigger value="addons" className="flex-1 gap-1.5 data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
-              <Sparkles className="h-4 w-4" /> Add-Ons & Promos
             </TabsTrigger>
           </TabsList>
           <TabsContent value="equipment" className="mt-4">

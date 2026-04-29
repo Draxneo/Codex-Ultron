@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { NewCustomerDialog } from "@/components/NewCustomerDialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ModuleWorkbench } from "@/components/workbench/ModuleWorkbench";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +85,56 @@ export default function Customers() {
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       {!isMobile && <AppHeader />}
       <main className="flex-1 overflow-hidden flex">
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <ModuleWorkbench
+          title="Customers"
+          eyebrow="Customer workspace"
+          description="Find customers, start work, and review recent activity."
+          icon={<Users className="h-4.5 w-4.5" />}
+          primaryAction={
+            <Button size="sm" className="text-xs bg-[hsl(var(--sky))] text-white hover:bg-[hsl(var(--sky))]/90" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> New Customer
+            </Button>
+          }
+          search={
+            <div className="relative w-full min-w-[220px] max-w-sm sm:w-80">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customers..."
+                value={search}
+                onChange={e => handleSearch(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+          }
+          filters={
+            <ToggleGroup type="single" value={sortMode} onValueChange={handleSortChange} className="hidden sm:flex">
+              <ToggleGroupItem value="recent" aria-label="Sort by recent jobs" size="sm" title="Recent Jobs">
+                <Clock className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="az" aria-label="Sort A-Z" size="sm" title="A-Z">
+                <ArrowDownAZ className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          }
+          viewControls={
+            <ToggleGroup type="single" value={view} onValueChange={v => v && setView(v as "card" | "table")} className="hidden sm:flex">
+              <ToggleGroupItem value="table" aria-label="Table view" size="sm">
+                <LayoutList className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="card" aria-label="Card view" size="sm">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          }
+          meta={
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              {totalCount.toLocaleString()} customer{totalCount !== 1 ? "s" : ""}
+              {letterFilter && ` · ${letterFilter}`}
+            </span>
+          }
+          contentClassName="p-4"
+        >
+          {search === "__legacy_toolbar__" && (
           <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
             <div className="flex items-center gap-2">
               <Button size="sm" className="text-xs bg-[hsl(var(--sky))] text-white hover:bg-[hsl(var(--sky))]/90" onClick={() => setDialogOpen(true)}>
@@ -123,8 +173,9 @@ export default function Customers() {
               </span>
             </div>
           </div>
+          )}
 
-          <div ref={scrollRef} className="flex-1 overflow-auto p-4">
+          <div ref={scrollRef}>
             {isLoading && Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full rounded mb-1" />
             ))}
@@ -241,7 +292,7 @@ export default function Customers() {
               </div>
             )}
           </div>
-        </div>
+        </ModuleWorkbench>
 
         {!isLoading && sortMode === "az" && (
           <div className="w-6 flex flex-col items-center justify-center py-2 bg-card border-l select-none shrink-0">
