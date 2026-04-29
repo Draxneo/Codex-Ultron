@@ -79,6 +79,7 @@ Authenticated HCP shell findings:
 - Primary nav is persistent and horizontal.
 - Utility cluster stays on the right: global search, New, notifications, apps/tools, account.
 - The global New button is the creation hub instead of forcing users to remember which page creates which record.
+- Phone is both a primary workspace and a global utility. UltraOffice should keep `/phone` as the calls/voicemail workspace while also exposing a header dialer button that opens the phone console from anywhere.
 - Home dashboard is a command center: open estimates, unscheduled jobs, open invoices, employee status, map, recent activity, and upcoming schedule.
 - Schedule keeps date controls, employee filters, view selector, bulk actions, and mini calendar near the calendar/dispatch canvas.
 - Customers uses a data-table workspace with search, filter, edit columns, create customer, actions, row selection, sortable columns, and pagination.

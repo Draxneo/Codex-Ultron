@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import logo from "@/assets/logo.png";
-import { LogOut, Settings, Moon, Sun } from "lucide-react";
+import { LogOut, Settings, Moon, Sun, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess, routeToTabKey } from "@/hooks/useEmployeeTabAccess";
@@ -18,6 +18,7 @@ import { ViewAsTechTester } from "@/components/ViewAsTechTester";
 import { ApiCostAlertBanner } from "@/components/ApiCostAlertBanner";
 import { SystemStatusIndicator } from "@/components/SystemStatusIndicator";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/": { label: "Schedule", roles: null },
@@ -126,6 +127,20 @@ export function AppHeader() {
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <SmartSearchBar />
             <NewItemDropdown />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openPhoneConsole()}
+              className="relative h-9 w-9 text-muted-foreground hover:text-foreground"
+              title="Open dialer"
+            >
+              <PhoneCall className="h-4.5 w-4.5" />
+              {unreadVoicemails > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 h-4 min-w-[16px] rounded-full bg-destructive px-0.5 text-[9px] font-bold text-destructive-foreground">
+                  {unreadVoicemails > 9 ? "9+" : unreadVoicemails}
+                </span>
+              )}
+            </Button>
 
             <AdminToolsGrid />
             <ViewAsTechTester />
