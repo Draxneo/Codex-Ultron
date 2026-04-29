@@ -43,8 +43,9 @@ export function MobileCallScreen() {
   // AMD detection — outbound voicemail awareness (must run before any early return)
   const amdStatus = useAmdStatus(isConnecting || isOnCall);
 
-  // Only show on mobile when there's call activity
-  if (!isMobile || !isActive) return null;
+  // Only show on mobile for incoming calls. Active/connecting calls stay in
+  // the compact persistent bar rendered by MobileShell.
+  if (!isMobile || !isActive || !hasIncoming) return null;
 
   const callerName = softphone.callerInfo?.name || "Unknown";
   const callerNumber = softphone.callerInfo?.number || "";

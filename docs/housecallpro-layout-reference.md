@@ -191,6 +191,7 @@ UltraOffice tech mobile direction:
 - Customer/contact/navigation next.
 - Estimate/cart stays attached to the job detail as a collapsible section, while the full presentation/cart workspace remains one tap away.
 - Attachments, Jarvis, weather, plans, and integrations follow the core job flow.
+- Active phone calls should remain as a compact persistent bar over the job view, with tap-to-expand controls for mute, keypad, phone console, and end call. Avoid taking over the whole screen once a call is connected, because the technician still needs photos, notes, customer history, and cart/presentation tools during the call.
 
 Implementation targets:
 
@@ -198,6 +199,8 @@ Implementation targets:
 - `src/components/tech/TechStatusCard.tsx`
 - `src/components/tech/TechScheduleCard.tsx`
 - `src/components/tech/TechCartCard.tsx`
+- `src/components/MobileShell.tsx`
+- `src/lib/phoneConsoleBridge.ts`
 
 Keep:
 

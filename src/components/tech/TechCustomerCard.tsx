@@ -18,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { StreetViewThumbnail } from "./StreetViewThumbnail";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCapacitor } from "@/hooks/useCapacitor";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 
 const DISPATCH_LINE = "+12106005091";
 
@@ -66,10 +67,11 @@ export function TechCustomerCard({
 
   const handleCall = () => {
     if (!customerPhone) return;
-    // ALWAYS route through the in-app softphone (works on web + native via
-    // useNativeSoftphone). Falling back to `tel:` would open the device
-    // dialer and bypass our call recording / Twilio number routing.
-    softphone.dial?.(customerPhone, customerName || undefined);
+    if (softphone.status === "ready" || softphone.status === "on-call" || softphone.status === "ringing" || softphone.status === "connecting") {
+      softphone.dial?.(customerPhone, customerName || undefined, jobId);
+      return;
+    }
+    openPhoneConsole(customerPhone);
   };
 
   const handleNavigate = () => {

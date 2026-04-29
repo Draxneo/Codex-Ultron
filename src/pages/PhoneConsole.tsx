@@ -9,10 +9,18 @@ import { createPhoneConsoleChannel, type PhoneConsoleMessage } from "@/lib/phone
 export default function PhoneConsole() {
   const softphone = useSoftphoneContext();
   const {
+    acceptCall,
+    callDuration,
+    callerInfo,
     error,
+    hangUp,
     initialize,
+    isMuted,
+    rejectCall,
+    sendDigit,
     setDialNumber,
     status,
+    toggleMute,
   } = softphone;
   const [searchParams] = useSearchParams();
   const bootDialNumber = searchParams.get("dial") || "";
@@ -43,6 +51,12 @@ export default function PhoneConsole() {
       if (message?.type === "dial" && message.number) {
         pendingDialRef.current = message.number;
         setDialNumber(message.number);
+      } else if (message?.type === "command") {
+        if (message.command === "accept") acceptCall();
+        if (message.command === "reject") rejectCall();
+        if (message.command === "hangUp") hangUp();
+        if (message.command === "toggleMute") toggleMute();
+        if (message.command === "sendDigit" && message.digit) sendDigit(message.digit);
       }
     };
 
@@ -50,15 +64,18 @@ export default function PhoneConsole() {
       channel.close();
       channelRef.current = null;
     };
-  }, [setDialNumber]);
+  }, [acceptCall, hangUp, rejectCall, sendDigit, setDialNumber, toggleMute]);
 
   useEffect(() => {
     channelRef.current?.postMessage({
       type: "status",
       status,
       error,
+      callerInfo,
+      callDuration,
+      isMuted,
     } satisfies PhoneConsoleMessage);
-  }, [status, error]);
+  }, [status, error, callerInfo, callDuration, isMuted]);
 
   useEffect(() => {
     if (bootDialNumber) {
