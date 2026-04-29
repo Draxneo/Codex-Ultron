@@ -215,7 +215,7 @@ export function TechStatusCard({
         />
       </div>
 
-      {/* HCP Private Notes — collapsible, read-only sync from Housecall Pro */}
+      {/* Work notes — collapsible, read-only sync from Housecall Pro */}
       {notes && (
         <div className="border-t border-border">
           <button

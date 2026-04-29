@@ -51,6 +51,12 @@ export default function Payments() {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const moneyTabs = [
+    { label: "Pending", value: "pending", caption: "Needs action or payout" },
+    { label: "Payouts", value: "succeeded", caption: "Deposited or collected" },
+    { label: "Refunds", value: "refunded", caption: "Returned payments" },
+    { label: "Failed", value: "failed", caption: "Follow-up required" },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -65,6 +71,24 @@ export default function Payments() {
               <DollarSign className="h-6 w-6 text-[hsl(var(--complete))]" /> Payments
             </h1>
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {moneyTabs.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setStatusFilter(tab.value)}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                statusFilter === tab.value
+                  ? "border-accent bg-accent/10 text-foreground shadow-sm"
+                  : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              <p className="text-sm font-semibold">{tab.label}</p>
+              <p className="mt-0.5 text-[11px] leading-tight">{tab.caption}</p>
+            </button>
+          ))}
         </div>
 
         {/* Summary Cards */}
@@ -120,6 +144,7 @@ export default function Payments() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="succeeded">Succeeded</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
               <SelectItem value="refunded">Refunded</SelectItem>

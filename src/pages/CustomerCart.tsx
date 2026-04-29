@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, Loader2, Package, Wrench, Zap, Sparkles, Phone, ShieldCheck, FileText, Crown, BadgePercent, MessageCircle, XCircle } from "lucide-react";
+import { ShoppingCart, CreditCard, DollarSign, Banknote, PenLine, CheckCircle2, Loader2, Package, Wrench, Zap, Sparkles, Phone, ShieldCheck, FileText, Crown, BadgePercent, MessageCircle, XCircle, CalendarDays, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { FinancingWidget } from "@/components/cart/FinancingWidget";
 import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
@@ -190,18 +190,18 @@ export default function CustomerCart() {
   return (
     <div className="min-h-screen bg-muted/30 pb-32">
       {/* Header */}
-      <header className="bg-background border-b border-border">
+      <header className="bg-primary text-primary-foreground border-b border-primary/20">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-bold text-lg text-foreground leading-tight truncate">{company.name}</p>
+              <p className="font-bold text-lg leading-tight truncate">{company.name}</p>
               {company.tagline && (
-                <p className="text-[11px] text-muted-foreground leading-tight truncate">{company.tagline}</p>
+                <p className="text-[11px] text-primary-foreground/75 leading-tight truncate">{company.tagline}</p>
               )}
-              {job?.job_number && <p className="text-xs text-muted-foreground mt-0.5">Order #{job.job_number}</p>}
+              {job?.job_number && <p className="text-xs text-primary-foreground/75 mt-0.5">Order #{job.job_number}</p>}
             </div>
             {company.phone && (
-              <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 text-sm text-primary font-medium shrink-0">
+              <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground shrink-0">
                 <Phone className="h-4 w-4" /> {company.phone}
               </a>
             )}
@@ -210,6 +210,41 @@ export default function CustomerCart() {
       </header>
 
       <main className={cn("mx-auto px-4 py-6 space-y-4", isPresentMode ? "max-w-4xl" : "max-w-2xl")}>
+        <Card className="overflow-hidden border-primary/15">
+          <div className="grid grid-cols-4 divide-x divide-border text-center">
+            {[
+              { label: "Estimate", icon: FileText, active: true },
+              { label: "Appointments", icon: CalendarDays },
+              { label: "Invoices", icon: ReceiptText },
+              { label: "Message", icon: MessageCircle },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={cn(
+                    "flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[11px] font-semibold transition-colors",
+                    item.active ? "bg-accent/10 text-primary" : "bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  )}
+                  onClick={() => {
+                    if (item.label === "Estimate") document.getElementById("customer-estimate")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    if (item.label === "Appointments") toast.info("Appointment details are handled by the office and your technician.");
+                    if (item.label === "Invoices") document.getElementById("customer-payment")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    if (item.label === "Message") {
+                      if (company.phone) window.location.href = `sms:${company.phone}`;
+                      else handlePay("contact");
+                    }
+                  }}
+                >
+                  <Icon className={cn("h-4 w-4", item.active ? "text-accent" : "")} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
         {/* Status banner */}
         {isPaid && (
           <Card className="p-4 bg-emerald-500/10 border-emerald-500/30 flex items-center gap-3">
@@ -251,7 +286,7 @@ export default function CustomerCart() {
 
         {/* Greeting */}
         {canEditCart && (
-          <div className="space-y-1">
+          <div id="customer-estimate" className="space-y-1 scroll-mt-4">
             <h1 className="text-2xl font-bold">
               {isPresentMode ? "Your comfort presentation" : job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
             </h1>
@@ -584,7 +619,7 @@ export default function CustomerCart() {
 
         {/* CTAs */}
         {canPayCart && (
-          <Card className="p-4 space-y-2">
+          <Card id="customer-payment" className="p-4 space-y-2 scroll-mt-4">
             <p className="text-sm font-semibold mb-2">
               {isPayAfterCompletion ? "Ready to pay for the completed work?" : "Choose how to proceed:"}
             </p>

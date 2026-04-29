@@ -151,6 +151,20 @@ export default function TechJobDetail() {
           />
         </TechCollapsibleCard>
 
+        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-primary/10" iconColor="text-primary" collapsible={false}>
+          <TechCustomerCard
+            customerId={job.customer_id || null}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            customerEmail={customerEmail}
+            address={customerAddress}
+            jobCount={jobCount}
+            hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
+            jobId={id}
+            bare
+          />
+        </TechCollapsibleCard>
+
         <TechStatusCard
           jobId={id!}
           status={job.status || "new"}
@@ -167,25 +181,11 @@ export default function TechJobDetail() {
           employeeId={employeeId || null}
         />
 
-        <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false}>
-          <TechCustomerCard
-            customerId={job.customer_id || null}
-            customerName={customerName}
-            customerPhone={customerPhone}
-            customerEmail={customerEmail}
-            address={customerAddress}
-            jobCount={jobCount}
-            hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
-            jobId={id}
-            bare
-          />
-        </TechCollapsibleCard>
-
         <TechCollapsibleCard
           icon={ShoppingCart}
           title="Estimate / Cart"
-          iconBg="bg-amber-500/10"
-          iconColor="text-amber-500"
+          iconBg="bg-accent/15"
+          iconColor="text-accent"
           defaultOpen={false}
           rightSlot={
             <Button
@@ -334,7 +334,7 @@ export default function TechJobDetail() {
         >
           <span className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
-            View Cart
+            Build Options
           </span>
           <span className="text-sm font-semibold">
             {cartLoading ? "Loading" : `${itemCount} - $${Number(cart?.total || 0).toFixed(2)}`}
