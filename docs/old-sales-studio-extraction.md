@@ -4,8 +4,9 @@ Source reviewed:
 - `https://csultramode.lovable.app/sales-presentations`
 - Deployed bundle: `https://csultramode.lovable.app/assets/index-tdsaIl9G.js`
 - Public readable old Supabase tables: `brochure_blocks`, `comparison_blocks`, `addons`, `presentation_sections`
+- Authenticated Firecrawl browser pass through the live Presentation Design Studio
 
-Firecrawl was not exposed in this thread, so the extraction used direct bundle inspection and public Supabase reads.
+Earlier extraction used direct bundle inspection and public Supabase reads. A later authenticated Firecrawl pass confirmed the live Studio tabs and revealed additional certificate, rebate, agreement, and comparison content.
 
 ## Studio Structure
 
@@ -257,15 +258,80 @@ Port this into the new app as equipment sales profiles. Do not rely only on mode
 
 ## Comparison Blocks
 
-The old `comparison_blocks` table had comparison categories for Good / Better / Best:
+The authenticated Studio comparison editor had these Good / Better / Best categories:
 
 - Cooling Performance
 - Comfort & Humidity
-- Noise & Peace
-- Energy Savings
+- Sound Levels
+- Airflow & Fan
+- Air Quality
 - Reliability & Warranty
 - Smart Features
-- Best Fit
+
+### Cooling Performance
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Efficiency | 14 SEER | 17 SEER | 19+ SEER |
+| Compressor type | Single-stage | Two-stage | Variable speed |
+| Capacity range | 100% on or off | 65% / 100% | 25-100% continuous |
+| Temperature consistency | +/-3-4°F swings | +/-2°F | +/-0.5-1°F |
+| Hot/cold spots | Common | Reduced | Minimal |
+
+### Comfort & Humidity
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Dehumidification | Basic | Better | Excellent |
+| Humidity removal | Only when running | Longer cycles help | Runs low and slow, removes 2x more |
+| Clammy feeling | Sometimes | Rarely | Never |
+| Recommended for | Dry climates | Most homes | Humid climates, tight houses |
+
+### Sound Levels
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Outdoor unit | 72-76 dB | 68-72 dB | 56-65 dB |
+| Comparison | Vacuum cleaner | Normal conversation | Quiet library |
+| Indoor blower | Noticeable | Softer | Near-silent |
+| Startup sound | Hard start | Softer ramp | Smooth ramp, no jolt |
+
+### Airflow & Fan
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Fan speeds | 1 speed | 2-3 speeds | Variable, unlimited |
+| Airflow feel | Blast on/off | More even | Gentle, continuous |
+| Short cycling | Common | Reduced | Rare |
+| Run time | Short bursts | Longer cycles | Long, efficient cycles |
+
+### Air Quality
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Filtration compatibility | Standard 1 inch filter | Standard 1 inch filter | High-capacity 4 inch+ media filter |
+| Air circulation | Intermittent | Better | Continuous option |
+| Dust/allergen control | Basic | Good | Excellent |
+| UV / purifier ready | Add-on | Add-on | Integrated options |
+
+### Reliability & Warranty
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Compressor stress | High, on/off cycling | Medium | Low, soft start, variable |
+| Expected lifespan | 12-15 years | 15-18 years | 18-22 years |
+| Parts warranty | 10 years | 10 years | 10 years |
+| Labor warranty | 1 year | 1 year | Extended available |
+| Smart diagnostics | No | No | Alerts before failure |
+
+### Smart Features
+
+| Label | Good | Better | Best |
+| --- | --- | --- | --- |
+| Wi-Fi thermostat | Compatible | Compatible | Included, Infinity |
+| Phone alerts | No | No | Yes |
+| Dealer diagnostics | Manual | Manual | Remote monitoring |
+| Energy tracking | No | No | Yes |
 
 Recommendation:
 
@@ -360,9 +426,23 @@ Certificate types:
 - Price match
 - Comfort Club
 
+Authenticated Studio template notes:
+
+- Manufacturer Warranty Certificate: 10-year parts warranty, registration completed with the manufacturer, fields for brand, model, serial, install date, expiration, and confirmation.
+- Labor Warranty Certificate: 2-year labor coverage for original installation labor, with equipment, install date, coverage expiration, and serial fields.
+- Price Match Guarantee: match any licensed Texas contractor's written quote for identical equipment and scope, valid for 30 days.
+- No-Lemon Guarantee: 5-year compressor-focused guarantee; if the compressor fails more than once during the first five years, replace the outdoor unit.
+- 10-Year Labor Warranty: extended labor coverage certificate for upgraded warranty purchases.
+- Comfort Club Membership: member-since certificate with plan, annual rate, and membership ID.
+
 Recommendation:
 
 Certificates should be generated after install completion and attached to the invoice/customer record. They can also be previewed from the customer proposal if the user buys extended labor coverage.
+
+Status in UltraOffice 2.0:
+
+- `certificate_templates` was empty in the beta database during the authenticated pass.
+- Added migration `20260428191759_seed_certificate_templates_from_sales_studio.sql` to seed the six live Studio certificate templates.
 
 ## Build Direction
 
