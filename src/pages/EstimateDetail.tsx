@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
@@ -8,7 +9,9 @@ import {
   CalendarClock,
   ClipboardCheck,
   FileText,
+  Layers3,
   Loader2,
+  Plus,
   Printer,
   Send,
   Trash2,
@@ -73,6 +76,198 @@ const reviewStatusConfig: Record<string, { label: string; variant: "default" | "
   sent: { label: "Sent", variant: "outline" },
   revision_requested: { label: "Revision Requested", variant: "destructive" },
 };
+
+interface EstimateLineItem {
+  id: string;
+  option_name: string | null;
+  hcp_option_id: string | null;
+  name: string | null;
+  description: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  unit_cost: number | null;
+  total_price: number | null;
+  tax_amount: number | null;
+  kind: string | null;
+  item_type: string | null;
+  sort_order: number | null;
+}
+
+function money(value: number | null | undefined) {
+  return `$${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function EstimateOptionsWorkbench({
+  estimateId,
+  linkedJobId,
+  presentationUrl,
+  onBuildQuote,
+}: {
+  estimateId: string;
+  linkedJobId: string | null;
+  presentationUrl: string | null;
+  onBuildQuote: () => void;
+}) {
+  const [activeOptionKey, setActiveOptionKey] = useState<string | null>(null);
+  const { data: lineItems, isLoading } = useQuery({
+    queryKey: ["estimate_line_items", estimateId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estimate_line_items" as any)
+        .select("id, option_name, hcp_option_id, name, description, quantity, unit_price, unit_cost, total_price, tax_amount, kind, item_type, sort_order")
+        .eq("estimate_id", estimateId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data || []) as unknown as EstimateLineItem[];
+    },
+  });
+
+  const options = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; items: EstimateLineItem[] }>();
+    (lineItems || []).forEach((item, index) => {
+      const key = item.hcp_option_id || item.option_name || "option-1";
+      const label = item.option_name || (key === "option-1" ? "Option #1" : `Option #${index + 1}`);
+      if (!groups.has(key)) groups.set(key, { key, label, items: [] });
+      groups.get(key)!.items.push(item);
+    });
+    if (groups.size === 0) return [{ key: "option-1", label: "Option #1", items: [] as EstimateLineItem[] }];
+    return Array.from(groups.values());
+  }, [lineItems]);
+
+  const activeOption = options.find((option) => option.key === activeOptionKey) || options[0];
+
+  useEffect(() => {
+    if (!activeOptionKey && options[0]) setActiveOptionKey(options[0].key);
+  }, [activeOptionKey, options]);
+
+  const subtotal = activeOption.items.reduce((sum, item) => sum + Number(item.total_price || 0), 0);
+  const tax = activeOption.items.reduce((sum, item) => sum + Number(item.tax_amount || 0), 0);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <Layers3 className="h-4 w-4" /> Options
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Build the comfort presentation first, then carry the selected option into the cart and job.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" className="h-8" onClick={onBuildQuote}>
+            <Plus className="h-3.5 w-3.5" /> New option
+          </Button>
+          <Button size="sm" variant="outline" className="h-8" onClick={onBuildQuote}>
+            <BookOpen className="h-3.5 w-3.5" /> Price book
+          </Button>
+          {presentationUrl && (
+            <Button size="sm" className="h-8" onClick={() => window.open(presentationUrl, "_blank", "noopener,noreferrer")}>
+              <FileText className="h-3.5 w-3.5" /> Present
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="border-b bg-muted/30 px-3 py-2">
+        <div className="flex flex-wrap gap-2">
+          {options.map((option) => {
+            const optionTotal = option.items.reduce((sum, item) => sum + Number(item.total_price || 0), 0);
+            const active = option.key === activeOption.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setActiveOptionKey(option.key)}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                  active ? "border-primary bg-background text-primary shadow-sm" : "border-border bg-background hover:bg-accent",
+                )}
+              >
+                <span className="block font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {option.items.length ? `${option.items.length} items · ${money(optionTotal)}` : "No line items yet"}
+                </span>
+                {linkedJobId && active && (
+                  <span className="mt-1 block text-[11px] font-medium text-emerald-700">Copied to job</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2 p-4">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+        </div>
+      ) : activeOption.items.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">Item</th>
+                <th className="w-20 px-3 py-2 text-right font-medium">Qty</th>
+                <th className="w-28 px-3 py-2 text-right font-medium">Unit</th>
+                <th className="w-28 px-3 py-2 text-right font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeOption.items.map((item) => (
+                <tr key={item.id} className="border-t bg-background">
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{item.name || "Line item"}</div>
+                    {item.description && (
+                      <div className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground">
+                        {item.description}
+                      </div>
+                    )}
+                    {(item.kind || item.item_type) && (
+                      <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {[item.kind, item.item_type].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right">{Number(item.quantity || 1)}</td>
+                  <td className="px-3 py-3 text-right">{money(item.unit_price)}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{money(item.total_price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="ml-auto w-full max-w-sm space-y-1 border-t px-4 py-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{money(subtotal)}</span>
+            </div>
+            {tax > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tax</span>
+                <span className="font-medium">{money(tax)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-2 text-base font-bold">
+              <span>Total</span>
+              <span>{money(subtotal + tax)}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-6 text-center">
+          <p className="text-sm font-medium">No option line items yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Start with the system presentation, then attach the selected equipment, add-ons, and repair options.
+          </p>
+          <Button className="mt-4" onClick={onBuildQuote}>
+            <Plus className="h-4 w-4" /> Build option
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function EstimateActionBar({
   estimate,
@@ -324,6 +519,12 @@ export default function EstimateDetail() {
       "Draft a customer follow-up SMS for human approval",
     ],
   };
+  const estimateQuoteParams = new URLSearchParams({ estimate_id: id });
+  if (customerName) estimateQuoteParams.set("customer_name", customerName);
+  if (customerPhone) estimateQuoteParams.set("customer_phone", customerPhone);
+  if (customerEmail) estimateQuoteParams.set("customer_email", customerEmail);
+  const buildEstimateOption = () => navigate(`/quick-quote?${estimateQuoteParams.toString()}`);
+  const desktopPresentationUrl = latestPresentationToken ? `${window.location.origin}/presentation/${latestPresentationToken}` : null;
 
   const handleConvert = async () => {
     setConvertingToJob(true);
@@ -641,12 +842,7 @@ export default function EstimateDetail() {
                 if (item.key === "quote_built") {
                   return {
                     label: "Build",
-                    run: () => {
-                      const params = new URLSearchParams({ estimate_id: id });
-                      if (estimate.customer_name) params.set("customer_name", estimate.customer_name);
-                      if (estimate.customer_phone) params.set("customer_phone", estimate.customer_phone);
-                      navigate(`/quick-quote?${params.toString()}`);
-                    },
+                    run: buildEstimateOption,
                   };
                 }
                 if (item.key === "customer_decision") {
@@ -657,6 +853,13 @@ export default function EstimateDetail() {
             />
 
             <WorkSummaryCard description={estimate.description} />
+
+            <EstimateOptionsWorkbench
+              estimateId={id}
+              linkedJobId={linkedJobId}
+              presentationUrl={desktopPresentationUrl}
+              onBuildQuote={buildEstimateOption}
+            />
 
             <Card>
               <CardHeader className="border-b py-3">

@@ -189,11 +189,45 @@ export default function JobDetail() {
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Estimates
                 </h3>
-                <Button variant="outline" size="sm" className="h-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      job_id: id!,
+                      ...(customerName ? { customer_name: customerName } : {}),
+                      ...(customerPhone ? { customer_phone: customerPhone } : {}),
+                      ...(customerEmail ? { customer_email: customerEmail } : {}),
+                    });
+                    navigate(`/quick-quote?${params.toString()}`);
+                  }}
+                >
                   <Plus className="h-3.5 w-3.5" /> Estimate
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">No estimates linked to this job.</p>
+              {(job as any).estimate_id ? (
+                <div className="mt-3 overflow-hidden rounded-md border">
+                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 bg-background px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium">Estimate copied to this job</p>
+                      <p className="text-xs text-muted-foreground">
+                        Keep the estimate and install job connected for sales history, presentation context, and conversion tracking.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                      Copied to job
+                    </span>
+                    <Button size="sm" variant="outline" className="h-8" onClick={() => navigate(`/estimates/${(job as any).estimate_id}`)}>
+                      View
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-2">
+                  No estimates linked to this job. Build one from this job to keep the presentation and cart history attached.
+                </p>
+              )}
             </Card>
 
             <div ref={lineItemsRef}>

@@ -204,6 +204,64 @@ Implementation targets:
 - `src/pages/TechMySchedule.tsx`
 - `src/pages/TechJobDetail.tsx`
 
+## Job Detail Reference
+
+Authenticated HCP job detail review included job #8470. Notes below are structural only and intentionally omit customer, employee, address, contact, payment, and account data.
+
+Patterns to keep:
+
+- Breadcrumb trail: Customers > Customer > Jobs > Job number.
+- Header names the job in plain language and keeps status/job number close to the title.
+- Left rail starts with customer card and map/location context, then job facts.
+- Main work area begins with large workflow actions: schedule, on-my-way, start, finish, invoice, pay.
+- Each workflow action shows state text directly under the action, so the team can tell what has happened without opening a modal.
+- Summary of work is inline and editable-looking, not hidden in a separate document view.
+- Invoice lives directly on the job page, including send, print, due/payment controls, and message context.
+- Estimates are embedded on the job page as a small table/list with outcome and copied/linked state.
+- Line items are edited in the same scroll below workflow and finance context.
+
+UltraOffice direction:
+
+- Keep the current desktop job left rail and action-strip shape.
+- Keep invoice and line items in the main scroll.
+- When a job was converted from an estimate, show the linked estimate row on the job page instead of the empty estimate placeholder.
+- Use the linked estimate row as the handoff point between "presentation sold it" and "job fulfills it."
+
+Implementation targets:
+
+- `src/pages/JobDetail.tsx`
+- `src/components/job-v2/JobV2ActionBar.tsx`
+- `src/components/job-v2/JobV2LineItems.tsx`
+
+## Estimate Detail Reference
+
+Authenticated HCP estimate detail review included the estimate associated with job #8470. Notes below are structural only and intentionally omit customer, employee, address, contact, payment, and account data.
+
+Patterns to keep:
+
+- Breadcrumb trail mirrors job detail: Customers > Customer > Estimates > Estimate number.
+- Header keeps estimate number, status, present action, and linked/copy state visible.
+- Left rail uses the same customer/location pattern as job detail.
+- Utility row exposes location, checklists, fields, private notes, lead source, and property profile.
+- Estimate lifecycle mirrors job lifecycle: schedule, on-my-way, finish, send, approval, copied-to-job.
+- Options are first-class tabs. Each option can have its own status, line items, and manage menu.
+- New option, templates, and service price book actions are placed directly beside the option workspace.
+- Line items are dense and editable, with quantity, unit price, description, tax/cost, and totals visible.
+
+UltraOffice direction:
+
+- Treat estimates as a presentation workspace with cart/checkout attached, not as a bare cart.
+- Preserve the HCP option-tab mental model because techs already understand it.
+- Let the system picker build options in technician language: brand, tonnage, type, tier, orientation.
+- Show presentation tracking and customer decisions after options, so operations can see whether the presentation worked.
+
+Implementation targets:
+
+- `src/pages/EstimateDetail.tsx`
+- `src/pages/QuickQuote.tsx`
+- `src/components/EstimateCartStatus.tsx`
+- `src/components/QuickCheckoutPresentation.tsx`
+
 ## Next Implementation Sequence
 
 1. Finish authenticated HCP review and capture exact navigation/menu patterns.
