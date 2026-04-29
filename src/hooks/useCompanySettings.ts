@@ -21,7 +21,7 @@
  * - Various edge functions that need company phone/email
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -144,7 +144,6 @@ const DEFAULTS: CompanySettings = {
 
 export function useCompanySettings() {
   const queryClient = useQueryClient();
-  const channelNameRef = useRef(`company_settings_sync_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`);
 
   // Fetch all settings rows and merge into a single typed object
   const query = useQuery({
@@ -170,8 +169,9 @@ export function useCompanySettings() {
   });
 
   useEffect(() => {
+    const channelName = `company_settings_sync_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel(channelNameRef.current)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "company_settings" },

@@ -32,12 +32,14 @@ export function useRealtimeInvalidation(
 ) {
   const queryClient = useQueryClient();
   const subsRef = useRef(subscriptions);
+  const instanceIdRef = useRef(crypto.randomUUID?.() || Math.random().toString(36).slice(2));
   subsRef.current = subscriptions;
 
   useEffect(() => {
     if (subsRef.current.length === 0) return;
 
-    const name = channelName || `rt-invalidation-${subsRef.current.map(s => s.table).join("-")}`;
+    const baseName = channelName || `rt-invalidation-${subsRef.current.map(s => s.table).join("-")}`;
+    const name = `${baseName}-${instanceIdRef.current}`;
     let channel = supabase.channel(name);
 
     for (const sub of subsRef.current) {

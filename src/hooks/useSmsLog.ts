@@ -113,7 +113,6 @@ interface UseSmsLogOptions {
 
 export function useSmsLog(options: UseSmsLogOptions = {}) {
   const { role, employeeId, userId, disabled = false } = options;
-  const channelNameRef = useRef(`sms_log_realtime_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`);
   const [messages, setMessages] = useState<SmsMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -430,9 +429,10 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   useEffect(() => {
     if (disabled) return;
     fetchMessages();
+    const channelName = `sms_log_realtime_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
 
     const channel = supabase
-      .channel(channelNameRef.current)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "sms_log" },
