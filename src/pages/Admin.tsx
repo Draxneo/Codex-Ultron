@@ -15,6 +15,7 @@ import {
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
 import { AppHeader } from "@/components/AppHeader";
+import { ModuleWorkbench } from "@/components/workbench/ModuleWorkbench";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1281,24 +1282,54 @@ export default function Admin() {
 
   // Drill-down into a specific section
   const sectionMeta = ADMIN_SECTIONS.find(s => s.key === activeSection);
+  const SectionIcon = sectionMeta?.icon || Settings2;
 
   return (
     <div className="min-h-screen bg-background">
       {!isMobile && <AppHeader />}
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 min-w-0">
-        <div className="mb-6">
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2 mb-2" onClick={handleBack}>
-            <ChevronLeft className="h-4 w-4" /> Back to Admin
-          </Button>
-          <h1 className="text-xl font-bold tracking-tight">
-            {sectionMeta?.label || "Admin"}
-          </h1>
-        </div>
-        {isEmployeePaySection && allowedTabs && !allowedTabs.has("admin") ? (
-          <PaysheetPanel />
-        ) : (
-          <AdminSectionContent section={activeSection} />
-        )}
+      <main className="h-[calc(100vh-3rem)] min-h-0">
+        <ModuleWorkbench
+          title={sectionMeta?.label || "Admin"}
+          eyebrow="Settings"
+          description="Company configuration, permissions, communications, money, data tools, and system health."
+          icon={<SectionIcon className="h-4.5 w-4.5" />}
+          primaryAction={
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={handleBack}>
+              <ChevronLeft className="h-4 w-4" /> Admin Home
+            </Button>
+          }
+          sideRail={
+            <nav className="space-y-1 p-2">
+              {ADMIN_SECTIONS.map((section) => {
+                const Icon = section.icon;
+                const active = section.key === activeSection;
+                return (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => handleNavigateSection(section.key)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                      active ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{section.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          }
+          contentClassName="p-4 md:p-6"
+        >
+          <div className="mx-auto max-w-5xl">
+            {isEmployeePaySection && allowedTabs && !allowedTabs.has("admin") ? (
+              <PaysheetPanel />
+            ) : (
+              <AdminSectionContent section={activeSection} />
+            )}
+          </div>
+        </ModuleWorkbench>
       </main>
     </div>
   );
