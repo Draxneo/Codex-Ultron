@@ -173,6 +173,32 @@ Implementation target:
 
 - `src/components/cart/JobCartPicker.tsx`
 
+## Tech Mobile Job Detail Reference
+
+Public HCP documentation reviewed on April 29, 2026:
+
+- Field schedule docs say tapping a scheduled job or estimate opens the detail page with customer, service address, and work notes.
+- Mobile appointment docs say appointments are displayed prominently at the top of the job details page, with a View all path for multi-day appointment management.
+- Training docs describe the field job flow as On My Way, Start, Finish, then invoice/send/pay.
+- Invoice docs place the invoice paper-plane action in the job action bar and allow individual invoice settings from mobile.
+- Estimate docs place preview/send in the top action bar, and in-person approval/signature is launched from the estimate action bar.
+- Multi-option estimate docs use the estimate detail page as the home for Add option, Copy to option, rename option, and customer approval.
+
+UltraOffice tech mobile direction:
+
+- Appointment context first.
+- Large lifecycle actions immediately below: On My Way, Start/Resume, Pause, Finish.
+- Customer/contact/navigation next.
+- Estimate/cart stays attached to the job detail as a collapsible section, while the full presentation/cart workspace remains one tap away.
+- Attachments, Jarvis, weather, plans, and integrations follow the core job flow.
+
+Implementation targets:
+
+- `src/pages/TechJobDetail.tsx`
+- `src/components/tech/TechStatusCard.tsx`
+- `src/components/tech/TechScheduleCard.tsx`
+- `src/components/tech/TechCartCard.tsx`
+
 Keep:
 
 - `useJobCart` as the only cart source of truth.

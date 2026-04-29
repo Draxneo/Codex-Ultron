@@ -36,6 +36,7 @@ import { TechIntegrationRow } from "@/components/tech/TechIntegrationRow";
 import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
+import { TechCartCard } from "@/components/tech/TechCartCard";
 import { useJobCart } from "@/hooks/useJobCart";
 
 export default function TechJobDetail() {
@@ -110,13 +111,46 @@ export default function TechJobDetail() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="flex-1 text-center">
+        <div className="min-w-0 flex-1 text-center">
           <p className="text-sm font-semibold text-foreground">Job {jobNumber}</p>
+          {job.status && (
+            <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {String(job.status).replace(/_/g, " ")}
+            </p>
+          )}
         </div>
         <div className="w-9" />
       </header>
 
       <main className="px-3 pt-3 flex flex-col gap-3 max-w-2xl mx-auto w-full">
+        <TechCollapsibleCard
+          icon={CalendarClock}
+          title="Appointment"
+          iconBg="bg-indigo-500/10"
+          iconColor="text-indigo-500"
+          collapsible={false}
+          rightSlot={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => scrollToSection("tech-schedule-details")}
+            >
+              View all
+            </Button>
+          }
+        >
+          <TechScheduleCard
+            jobId={id!}
+            jobNumber={jobNumber}
+            scheduledDate={job.scheduled_date || null}
+            arrivalStart={(job as any).arrival_start || null}
+            arrivalEnd={(job as any).arrival_end || null}
+            assignedTo={job.assigned_to || null}
+            bare
+          />
+        </TechCollapsibleCard>
+
         <TechStatusCard
           jobId={id!}
           status={job.status || "new"}
@@ -143,6 +177,32 @@ export default function TechJobDetail() {
             jobCount={jobCount}
             hcpCustomerId={linkedCustomer?.hcp_customer_id || null}
             jobId={id}
+            bare
+          />
+        </TechCollapsibleCard>
+
+        <TechCollapsibleCard
+          icon={ShoppingCart}
+          title="Estimate / Cart"
+          iconBg="bg-amber-500/10"
+          iconColor="text-amber-500"
+          defaultOpen={false}
+          rightSlot={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => navigate(`/tech/jobs/${id}/cart`)}
+            >
+              Open
+            </Button>
+          }
+        >
+          <TechCartCard
+            jobId={id!}
+            customerId={job.customer_id || null}
+            customerPhone={customerPhone}
+            customerName={customerName}
             bare
           />
         </TechCollapsibleCard>
@@ -217,7 +277,15 @@ export default function TechJobDetail() {
           <TechServicePlansCard customerId={job.customer_id || null} bare />
         </TechCollapsibleCard>
 
-        <TechCollapsibleCard icon={CalendarClock} title="Schedule" iconBg="bg-indigo-500/10" iconColor="text-indigo-500">
+        <TechCollapsibleCard
+          icon={CalendarClock}
+          title="Schedule Details"
+          iconBg="bg-indigo-500/10"
+          iconColor="text-indigo-500"
+          id="tech-schedule-details"
+          className="scroll-mt-16"
+          defaultOpen={false}
+        >
           <TechScheduleCard
             jobId={id!}
             jobNumber={jobNumber}
