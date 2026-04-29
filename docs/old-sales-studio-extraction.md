@@ -47,6 +47,40 @@ The old quick quote/customer quote flow was organized as:
 
 These are the right sections to port into the new quote/cart customer preview. The phone cart should use a shorter version, but the customer preview should show this whole proposal.
 
+## Quick Quote Picker
+
+The old Quick Quote flow matched the way technicians talk:
+
+1. Brand
+2. Tonnage
+3. System type
+4. Tier
+5. Install location
+
+Example authenticated path:
+
+- Carrier
+- 3 Ton
+- Gas / AC
+- Any tier
+- Attic
+
+That produced Good, Better, and Best options with:
+
+- Matched condenser, coil, and furnace models
+- AHRI number
+- SEER2 / EER2
+- Cooling BTU
+- 10-year parts warranty
+- Financed system price
+- Three payment options: 0% 36 months, 9.99% 120 months, instant factory rebate
+- CPS rebate tier, early replacement amount, and burnout amount
+- Buttons for Copy Full Quote, Preview Full Quote, and View as Customer
+
+Recommendation:
+
+Jarvis and the phone cart should use this exact mental model: `brand -> tonnage -> type -> tier -> orientation/location`. The technician should not have to search by model number first.
+
 ## Sales Hero
 
 Reusable structure:
