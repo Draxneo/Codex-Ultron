@@ -217,10 +217,19 @@ Implementation targets:
 
 HCP settings, reporting, and apps all share one useful pattern: the user starts from a stable workbench, picks a category on the left, then works through a dense list of cards, rows, or links. UltraOffice admin should follow that pattern instead of a decorative icon-only launchpad.
 
+Authenticated HCP Settings detail:
+
+- Left sidebar groups: Global Settings, Feature Configurations, Tags & Tools.
+- Global Settings includes Company, Billing, Notifications, Refer a Friend, Team & Permissions.
+- Feature Configurations includes Booking, Leads, Communications, Customer Intake, Customer Portal, Estimates, Invoices, Jobs, Marketing Center, Pipeline, Price Book, and Service plans.
+- Tags & Tools includes Checklists, Job Fields, Lead Sources, and Tags.
+- The selected setting opens in the main pane and may have its own top tabs, such as Company Profile, Business hours, and Service area.
+- The important pattern for UltraOffice is stable category navigation first, then focused middle-pane configuration, with any deeper choices as top tabs inside that pane.
+
 Target admin home:
 
 - Workbench header with search, refresh, and alert badges.
-- Left rail for All, Create, Tools, People, Communications, Money, System, and Activity.
+- Left rail for All, Create, Tools, Global Settings, Feature Configurations, Tags & Tools, and Activity.
 - Scannable tool cards with short descriptions and group labels.
 - Operational metrics at the top.
 - Recent activity as a secondary section, not the whole page.

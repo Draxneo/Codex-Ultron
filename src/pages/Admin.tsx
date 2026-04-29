@@ -10,7 +10,7 @@ import {
   Package, CreditCard, Brain, ChevronRight, ChevronLeft, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
-  BookOpen, Database,
+  BookOpen, Database, Bell, CalendarDays, ClipboardCheck, Globe2, ListChecks, Megaphone, ReceiptText, Tags, Workflow,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
@@ -1078,15 +1078,33 @@ function DevOpsCenter() {
 }
 
 const ADMIN_SECTIONS = [
-  { key: "employees", label: "Employees", icon: Users },
-  { key: "company", label: "Company Settings", icon: Settings2 },
-  { key: "voice", label: "Voice & Phone", icon: Phone },
-  { key: "payments", label: "Payments & Invoicing", icon: CreditCard },
-  { key: "data", label: "Data Tools", icon: Database },
-  { key: "dev", label: "Dev / Ops", icon: Activity },
-  { key: "tools", label: "Tools", icon: Package },
-  { key: "reports", label: "Dashboard & Reports", icon: BarChart3 },
+  { key: "company", label: "Company", group: "Global Settings", icon: Settings2 },
+  { key: "billing", label: "Billing", group: "Global Settings", icon: CreditCard },
+  { key: "notifications", label: "Notifications", group: "Global Settings", icon: Bell },
+  { key: "employees", label: "Team & Permissions", group: "Global Settings", icon: Users },
+  { key: "booking", label: "Booking", group: "Feature Configurations", icon: CalendarDays },
+  { key: "leads", label: "Leads", group: "Feature Configurations", icon: MapPin },
+  { key: "voice", label: "Communications", group: "Feature Configurations", icon: Phone },
+  { key: "customer-intake", label: "Customer Intake", group: "Feature Configurations", icon: UserPlus },
+  { key: "customer-portal", label: "Customer Portal", group: "Feature Configurations", icon: Globe2 },
+  { key: "estimates", label: "Estimates", group: "Feature Configurations", icon: FileText },
+  { key: "payments", label: "Invoices", group: "Feature Configurations", icon: ReceiptText },
+  { key: "jobs", label: "Jobs", group: "Feature Configurations", icon: ClipboardCheck },
+  { key: "marketing", label: "Marketing Center", group: "Feature Configurations", icon: Megaphone },
+  { key: "pipeline", label: "Pipeline", group: "Feature Configurations", icon: Workflow },
+  { key: "pricebook", label: "Price Book", group: "Feature Configurations", icon: BookOpen },
+  { key: "service-plans", label: "Service Plans", group: "Feature Configurations", icon: Shield },
+  { key: "checklists", label: "Checklists", group: "Tags & Tools", icon: ListChecks },
+  { key: "job-fields", label: "Job Fields", group: "Tags & Tools", icon: ClipboardCheck },
+  { key: "lead-sources", label: "Lead Sources", group: "Tags & Tools", icon: MapPin },
+  { key: "tags", label: "Tags", group: "Tags & Tools", icon: Tags },
+  { key: "data", label: "Data Tools", group: "Tags & Tools", icon: Database },
+  { key: "tools", label: "Apps & Tools", group: "Tags & Tools", icon: Package },
+  { key: "reports", label: "Dashboard & Reports", group: "Tags & Tools", icon: BarChart3 },
+  { key: "dev", label: "Dev / Ops", group: "Tags & Tools", icon: Activity },
 ];
+
+const ADMIN_GROUPS = Array.from(new Set(ADMIN_SECTIONS.map((section) => section.group)));
 
 const SECTION_KEYS = new Set(ADMIN_SECTIONS.map((section) => section.key));
 const RETIRED_ADMIN_SECTIONS = new Set(["webhooks", "jarvis", "marketing", "operations"]);
@@ -1098,6 +1116,8 @@ const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   tools: "tools",
   reports: "reports",
   payments: "payments",
+  billing: "billing",
+  notifications: "notifications",
   voice: "voice",
   jarvis: "dev",
   marketing: "dev",
@@ -1112,10 +1132,59 @@ function resolveAdminSection(section: string | null, legacyTab: string | null) {
   return null;
 }
 
+function SettingsShortcutPanel({
+  title,
+  description,
+  links,
+}: {
+  title: string;
+  description: string;
+  links: Array<{ label: string; description: string; to: string; icon: React.ElementType }>;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          {links.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link key={link.label} to={link.to} className="rounded-md border bg-card p-3 transition-colors hover:bg-muted/40">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{link.label}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{link.description}</p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function AdminSectionContent({ section }: { section: string }) {
   switch (section) {
     case "company":
       return <div className="space-y-4"><CompanySettingsCard /><NavOrderEditor /></div>;
+    case "billing":
+      return <SettingsShortcutPanel title="Billing" description="Billing controls belong in the same global settings rail as company and permissions." links={[
+        { label: "Payments", description: "Open payment plans, invoicing rules, and checkout configuration.", to: "/payments", icon: CreditCard },
+        { label: "Invoices", description: "Tune invoice defaults and line-item templates.", to: "/admin?section=payments", icon: ReceiptText },
+      ]} />;
+    case "notifications":
+      return <SettingsShortcutPanel title="Notifications" description="Central place for call, SMS, device, and alert preferences." links={[
+        { label: "Registered Devices", description: "Manage notification-capable devices.", to: "/admin?section=voice", icon: Phone },
+        { label: "System Status", description: "Review alerts, costs, retries, and backend health.", to: "/system-log", icon: Activity },
+      ]} />;
     case "employees":
     case "team": // legacy alias
       return <EmployeeHub />;
@@ -1123,8 +1192,61 @@ function AdminSectionContent({ section }: { section: string }) {
       return <WebhooksIntegrationsSection />;
     case "voice":
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
+    case "booking":
+      return <SettingsShortcutPanel title="Booking" description="Scheduling and booking settings will live here as the HCP-style settings map fills out." links={[
+        { label: "Schedule", description: "Open the dispatch calendar and active schedule.", to: "/", icon: CalendarDays },
+        { label: "Customer Intake", description: "Review intake flow and booking handoff settings.", to: "/admin?section=customer-intake", icon: UserPlus },
+      ]} />;
+    case "leads":
+      return <SettingsShortcutPanel title="Leads" description="Lead capture, source tracking, and sales handoff settings." links={[
+        { label: "Lead Inbox", description: "Open lead records and source filters.", to: "/leads", icon: MapPin },
+        { label: "Lead Sources", description: "Configure source labels and reporting categories.", to: "/admin?section=lead-sources", icon: Tags },
+      ]} />;
+    case "customer-intake":
+      return <div className="space-y-4"><IntakeSimulator /><CustomerDataTools /></div>;
+    case "customer-portal":
+      return <SettingsShortcutPanel title="Customer Portal" description="Customer-facing approval, invoice, certificate, and cart links." links={[
+        { label: "Presentation Cart", description: "Open the price book and cart presentation tools.", to: "/catalog", icon: Package },
+        { label: "Documents", description: "Manage public customer-facing documents and templates.", to: "/admin?section=jobs", icon: FileText },
+      ]} />;
+    case "estimates":
+      return <SettingsShortcutPanel title="Estimates" description="Presentation and estimate configuration for customer options." links={[
+        { label: "Quick Quote", description: "Open the estimate builder.", to: "/quick-quote", icon: FileText },
+        { label: "Price Book", description: "Manage services, systems, discounts, and templates.", to: "/catalog", icon: BookOpen },
+      ]} />;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
+    case "jobs":
+      return (
+        <div className="space-y-4">
+          <CompanyDocumentsCard />
+          <TimeTrackerCard />
+          <PayRatesCard />
+        </div>
+      );
+    case "pipeline":
+      return <SettingsShortcutPanel title="Pipeline" description="Sales pipeline and estimate follow-up configuration." links={[
+        { label: "Estimates", description: "Open estimate and presentation workflow.", to: "/quick-quote", icon: FileText },
+        { label: "Reports", description: "Open reporting for pipeline follow-up.", to: "/reports", icon: BarChart3 },
+      ]} />;
+    case "pricebook":
+      return <SettingsShortcutPanel title="Price Book" description="Services, repairs, parts, equipment, AHRI data, discounts, and templates." links={[
+        { label: "Open Price Book", description: "Manage catalog content and customer-ready options.", to: "/catalog", icon: BookOpen },
+        { label: "Payments & Line Items", description: "Configure payment plans and line-item templates.", to: "/admin?section=payments", icon: CreditCard },
+      ]} />;
+    case "service-plans":
+      return <SettingsShortcutPanel title="Service Plans" description="Comfort Club, agreements, membership perks, and renewal controls." links={[
+        { label: "Agreements", description: "Open service agreements and customer memberships.", to: "/agreements", icon: Shield },
+        { label: "Comfort Club Scan", description: "Run operational tools for agreement backfill and verification.", to: "/admin?section=dev", icon: ScanSearch },
+      ]} />;
+    case "checklists":
+    case "job-fields":
+    case "lead-sources":
+    case "tags":
+      return <SettingsShortcutPanel title={ADMIN_SECTIONS.find((s) => s.key === section)?.label || "Settings"} description="Operational labels, fields, and checklists are grouped here so admin feels like HCP Settings instead of scattered tools." links={[
+        { label: "Data Tools", description: "Clean, dedupe, and normalize customer/job data.", to: "/admin?section=data", icon: Database },
+        { label: "Reports", description: "Use reporting to validate field and tag consistency.", to: "/reports", icon: BarChart3 },
+      ]} />;
     case "data":
       return <CustomerDataTools />;
     case "dev":
@@ -1299,25 +1421,30 @@ export default function Admin() {
             </Button>
           }
           sideRail={
-            <nav className="space-y-1 p-2">
-              {ADMIN_SECTIONS.map((section) => {
-                const Icon = section.icon;
-                const active = section.key === activeSection;
-                return (
-                  <button
-                    key={section.key}
-                    type="button"
-                    onClick={() => handleNavigateSection(section.key)}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
-                      active ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{section.label}</span>
-                  </button>
-                );
-              })}
+            <nav className="space-y-4 p-2">
+              {ADMIN_GROUPS.map((group) => (
+                <div key={group} className="space-y-1">
+                  <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{group}</p>
+                  {ADMIN_SECTIONS.filter((section) => section.group === group).map((section) => {
+                    const Icon = section.icon;
+                    const active = section.key === activeSection;
+                    return (
+                      <button
+                        key={section.key}
+                        type="button"
+                        onClick={() => handleNavigateSection(section.key)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                          active ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{section.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
           }
           contentClassName="p-4 md:p-6"
