@@ -10,7 +10,7 @@ import {
   Package, CreditCard, Brain, ChevronRight, ChevronLeft, Phone, Mail,
   Settings2, FileText, Webhook, MessageSquare, Users, Shield,
   Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
-  BookOpen, Database, Bell, CalendarDays, ClipboardCheck, Globe2, ListChecks, Megaphone, ReceiptText, Tags, Workflow,
+  BookOpen, Database, CalendarDays, ClipboardCheck, ReceiptText, Tags,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
@@ -70,6 +70,7 @@ import { ClickToCall } from "@/components/ClickToCall";
 import HcpCustomerSyncButton from "@/components/HcpCustomerSyncButton";
 import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { CustomerDataTools } from "@/components/admin/CustomerDataTools";
+import { ADMIN_SETTING_SECTIONS } from "@/config/adminNavigation";
 
 // ─── Webhook URLs ───
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hcp-webhook`;
@@ -1077,32 +1078,7 @@ function DevOpsCenter() {
   );
 }
 
-const ADMIN_SECTIONS = [
-  { key: "company", label: "Company", group: "Global Settings", icon: Settings2 },
-  { key: "billing", label: "Billing", group: "Global Settings", icon: CreditCard },
-  { key: "notifications", label: "Notifications", group: "Global Settings", icon: Bell },
-  { key: "employees", label: "Team & Permissions", group: "Global Settings", icon: Users },
-  { key: "booking", label: "Booking", group: "Feature Configurations", icon: CalendarDays },
-  { key: "leads", label: "Leads", group: "Feature Configurations", icon: MapPin },
-  { key: "voice", label: "Communications", group: "Feature Configurations", icon: Phone },
-  { key: "customer-intake", label: "Customer Intake", group: "Feature Configurations", icon: UserPlus },
-  { key: "customer-portal", label: "Customer Portal", group: "Feature Configurations", icon: Globe2 },
-  { key: "estimates", label: "Estimates", group: "Feature Configurations", icon: FileText },
-  { key: "payments", label: "Invoices", group: "Feature Configurations", icon: ReceiptText },
-  { key: "jobs", label: "Jobs", group: "Feature Configurations", icon: ClipboardCheck },
-  { key: "marketing", label: "Marketing Center", group: "Feature Configurations", icon: Megaphone },
-  { key: "pipeline", label: "Pipeline", group: "Feature Configurations", icon: Workflow },
-  { key: "pricebook", label: "Price Book", group: "Feature Configurations", icon: BookOpen },
-  { key: "service-plans", label: "Service Plans", group: "Feature Configurations", icon: Shield },
-  { key: "checklists", label: "Checklists", group: "Tags & Tools", icon: ListChecks },
-  { key: "job-fields", label: "Job Fields", group: "Tags & Tools", icon: ClipboardCheck },
-  { key: "lead-sources", label: "Lead Sources", group: "Tags & Tools", icon: MapPin },
-  { key: "tags", label: "Tags", group: "Tags & Tools", icon: Tags },
-  { key: "data", label: "Data Tools", group: "Tags & Tools", icon: Database },
-  { key: "tools", label: "Apps & Tools", group: "Tags & Tools", icon: Package },
-  { key: "reports", label: "Dashboard & Reports", group: "Tags & Tools", icon: BarChart3 },
-  { key: "dev", label: "Dev / Ops", group: "Tags & Tools", icon: Activity },
-];
+const ADMIN_SECTIONS = ADMIN_SETTING_SECTIONS;
 
 const ADMIN_GROUPS = Array.from(new Set(ADMIN_SECTIONS.map((section) => section.group)));
 

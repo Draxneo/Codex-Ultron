@@ -39,6 +39,13 @@ export type SettingsGroup = {
   cards: SettingEntry[];
 };
 
+export type AdminSettingSection = {
+  key: string;
+  label: string;
+  group: string;
+  icon: React.ElementType;
+};
+
 /* Tools & Builders (links to standalone routes) */
 export const TOOL_CARDS: ToolEntry[] = [
   { label: "JARVIS",            icon: Brain,         path: "/copilot",                     color: "text-violet-500",  bg: "bg-violet-500/10" },
@@ -99,3 +106,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
 
 /** Flat list of every settings card across all groups (used by the header dropdown). */
 export const ALL_SETTINGS: SettingEntry[] = SETTINGS_GROUPS.flatMap((g) => g.cards);
+
+/** Flat, grouped settings rail used by the main Admin settings workbench. */
+export const ADMIN_SETTING_SECTIONS: AdminSettingSection[] = SETTINGS_GROUPS.flatMap((group) =>
+  group.cards.map((card) => ({
+    key: card.section,
+    label: card.label,
+    group: group.title,
+    icon: card.icon,
+  }))
+);
