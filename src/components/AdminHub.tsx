@@ -266,7 +266,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
                   <p className="text-xs text-muted-foreground">
                     {marketplaceMode === "My apps"
                       ? "Tools and settings available to your current role."
-                      : "HCP-style launcher for the places the office team uses every day."}
+                      : "Launcher for the real tools the office team uses today."}
                   </p>
                 </div>
                 <Badge variant="outline" className="rounded-sm">{visibleItems.length} items</Badge>

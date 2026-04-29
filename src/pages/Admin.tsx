@@ -1083,7 +1083,7 @@ const ADMIN_SECTIONS = ADMIN_SETTING_SECTIONS;
 const ADMIN_GROUPS = Array.from(new Set(ADMIN_SECTIONS.map((section) => section.group)));
 
 const SECTION_KEYS = new Set(ADMIN_SECTIONS.map((section) => section.key));
-const RETIRED_ADMIN_SECTIONS = new Set(["webhooks", "jarvis", "marketing", "operations"]);
+const RETIRED_ADMIN_SECTIONS = new Set(["webhooks", "jarvis", "marketing", "operations", "booking", "customer-portal", "pipeline", "job-fields"]);
 const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   config: "company",
   settings: "company",
@@ -1168,11 +1168,6 @@ function AdminSectionContent({ section }: { section: string }) {
       return <WebhooksIntegrationsSection />;
     case "voice":
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
-    case "booking":
-      return <SettingsShortcutPanel title="Booking" description="Scheduling and booking settings will live here as the HCP-style settings map fills out." links={[
-        { label: "Schedule", description: "Open the dispatch calendar and active schedule.", to: "/", icon: CalendarDays },
-        { label: "Customer Intake", description: "Review intake flow and booking handoff settings.", to: "/admin?section=customer-intake", icon: UserPlus },
-      ]} />;
     case "leads":
       return <SettingsShortcutPanel title="Leads" description="Lead capture, source tracking, and sales handoff settings." links={[
         { label: "Lead Inbox", description: "Open lead records and source filters.", to: "/leads", icon: MapPin },
@@ -1180,11 +1175,6 @@ function AdminSectionContent({ section }: { section: string }) {
       ]} />;
     case "customer-intake":
       return <div className="space-y-4"><IntakeSimulator /><CustomerDataTools /></div>;
-    case "customer-portal":
-      return <SettingsShortcutPanel title="Customer Portal" description="Customer-facing approval, invoice, certificate, and cart links." links={[
-        { label: "Presentation Cart", description: "Open the price book and cart presentation tools.", to: "/catalog", icon: Package },
-        { label: "Documents", description: "Manage public customer-facing documents and templates.", to: "/admin?section=jobs", icon: FileText },
-      ]} />;
     case "estimates":
       return <SettingsShortcutPanel title="Estimates" description="Presentation and estimate configuration for customer options." links={[
         { label: "Quick Quote", description: "Open the estimate builder.", to: "/quick-quote", icon: FileText },
@@ -1200,11 +1190,6 @@ function AdminSectionContent({ section }: { section: string }) {
           <PayRatesCard />
         </div>
       );
-    case "pipeline":
-      return <SettingsShortcutPanel title="Pipeline" description="Sales pipeline and estimate follow-up configuration." links={[
-        { label: "Estimates", description: "Open estimate and presentation workflow.", to: "/quick-quote", icon: FileText },
-        { label: "Reports", description: "Open reporting for pipeline follow-up.", to: "/reports", icon: BarChart3 },
-      ]} />;
     case "pricebook":
       return <SettingsShortcutPanel title="Price Book" description="Services, repairs, parts, equipment, AHRI data, discounts, and templates." links={[
         { label: "Open Price Book", description: "Manage catalog content and customer-ready options.", to: "/catalog", icon: BookOpen },
@@ -1216,10 +1201,9 @@ function AdminSectionContent({ section }: { section: string }) {
         { label: "Comfort Club Scan", description: "Run operational tools for agreement backfill and verification.", to: "/admin?section=dev", icon: ScanSearch },
       ]} />;
     case "checklists":
-    case "job-fields":
     case "lead-sources":
     case "tags":
-      return <SettingsShortcutPanel title={ADMIN_SECTIONS.find((s) => s.key === section)?.label || "Settings"} description="Operational labels, fields, and checklists are grouped here so admin feels like HCP Settings instead of scattered tools." links={[
+      return <SettingsShortcutPanel title={ADMIN_SECTIONS.find((s) => s.key === section)?.label || "Settings"} description="Operational labels and checklists for the modules UltraOffice currently supports." links={[
         { label: "Data Tools", description: "Clean, dedupe, and normalize customer/job data.", to: "/admin?section=data", icon: Database },
         { label: "Reports", description: "Use reporting to validate field and tag consistency.", to: "/reports", icon: BarChart3 },
       ]} />;
