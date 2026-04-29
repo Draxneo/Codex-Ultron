@@ -679,7 +679,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         </div>
       )}
 
-      {/* Add row — disabled once customer has approved/paid */}
+      {/* Add row: disabled once customer has approved or paid */}
       {permissions.canEditItems && (
         <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
           <Button

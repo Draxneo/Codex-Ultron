@@ -64,7 +64,7 @@ export default function TechJobCart() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="truncate text-sm font-semibold text-foreground">Presentation · Job {jobNumber}</p>
+          <p className="truncate text-sm font-semibold text-foreground">Presentation - Job {jobNumber}</p>
         </div>
         <div className="w-9" />
       </header>

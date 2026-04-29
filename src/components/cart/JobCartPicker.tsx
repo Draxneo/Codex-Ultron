@@ -146,7 +146,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
   const mobileBody = (
     <div className="flex h-full flex-col">
       {mobileMode === "menu" ? (
-        <div className="flex-1 overflow-y-auto p-3 pb-24">
+        <div className="flex-1 overflow-y-auto p-3">
           {!permissions.canEditItems && (
             <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
               {permissions.lockedReason || "This estimate cannot be edited."}
@@ -193,7 +193,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
               {mobileMode === "equipment" ? "Build Presentation" : mobileMode === "repairs" ? "Add Repair" : mobileMode === "parts" ? "Add Part" : "Custom Item"}
             </p>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-24">
+          <div className="flex-1 overflow-y-auto px-3 pt-3 pb-3">
             {mobileMode === "equipment" && <GuidedEquipmentPicker onAdd={handleAddEquipment} disabled={!permissions.canEditItems} />}
             {mobileMode === "repairs" && <RepairCatalogBrowser onAddToCart={handleAddRepair} compact maxHeight="max-h-none" />}
             {mobileMode === "parts" && <PartsPickerGrid compact disabled={!permissions.canEditItems} onAdd={(p) => addItem.mutate({
@@ -225,6 +225,27 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           </div>
         </>
       )}
+      <div className="shrink-0 border-t bg-background p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {itemCount} item{itemCount !== 1 ? "s" : ""}
+            </p>
+            <p className="text-xs text-muted-foreground">${(cart?.total || 0).toFixed(2)}</p>
+          </div>
+          <Badge variant={permissions.canEditItems ? "secondary" : "outline"} className="rounded-sm">
+            {cart?.status || "draft"}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" className="h-11" onClick={() => onOpenChange(false)}>
+            Back to Job
+          </Button>
+          <Button className="h-11" onClick={() => { onOpenChange(false); onOpenCart?.(); }}>
+            Review Cart
+          </Button>
+        </div>
+      </div>
     </div>
   );
 
@@ -318,17 +339,17 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     if (!open) return null;
 
     return (
-      <div className="mt-3 overflow-hidden rounded-lg border border-border bg-background shadow-lg">
-        <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-          <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
-            <ShoppingCart className="h-4 w-4 shrink-0" />
+      <div className="fixed inset-0 z-50 flex h-[100dvh] flex-col bg-background">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur">
+          <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-foreground">
+            <ShoppingCart className="h-5 w-5 shrink-0 text-primary" />
             <span className="truncate">Build Customer Presentation</span>
           </h3>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-8 w-8 shrink-0">
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="relative h-[min(640px,calc(100vh-8rem))] min-h-[460px]">{body}</div>
+        <div className="relative min-h-0 flex-1">{body}</div>
       </div>
     );
   }
@@ -535,7 +556,7 @@ function GuidedEquipmentPicker({ onAdd, disabled }: { onAdd: (m: EquipmentMatchu
                       {matchup.brand} {matchup.tonnage}T {matchup.tier} {SYSTEM_TYPE_LABELS[matchup.system_type || ""] || matchup.system_type}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {matchup.application || "Any orientation"} · {matchup.seer2 ? `${matchup.seer2} SEER2` : "SEER2 not set"}
+                      {matchup.application || "Any orientation"} - {matchup.seer2 ? `${matchup.seer2} SEER2` : "SEER2 not set"}
                     </p>
                   </div>
                   <p className="shrink-0 text-sm font-bold tabular-nums">${Number(matchup.total_price || 0).toLocaleString()}</p>
@@ -551,7 +572,7 @@ function GuidedEquipmentPicker({ onAdd, disabled }: { onAdd: (m: EquipmentMatchu
                   </div>
                 </div>
                 <div className="rounded-md bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
-                  <p className="truncate">Proof: {matchup.seer2 ? `${matchup.seer2} SEER2` : "Efficiency pending"}{matchup.eer2 ? ` · ${matchup.eer2} EER2` : ""}{matchup.ahri_number ? ` · AHRI ${matchup.ahri_number}` : ""}</p>
+                  <p className="truncate">Proof: {matchup.seer2 ? `${matchup.seer2} SEER2` : "Efficiency pending"}{matchup.eer2 ? ` - ${matchup.eer2} EER2` : ""}{matchup.ahri_number ? ` - AHRI ${matchup.ahri_number}` : ""}</p>
                   <p className="truncate">Models: {[matchup.condenser_model, matchup.furnace_model, matchup.coil_model].filter(Boolean).join(" + ")}</p>
                   {Number(matchup.early_rebate || matchup.burnout_rebate || 0) > 0 && (
                     <p className="truncate text-emerald-700 dark:text-emerald-400">

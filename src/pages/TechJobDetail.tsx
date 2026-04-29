@@ -269,7 +269,7 @@ export default function TechJobDetail() {
             View Cart
           </span>
           <span className="text-sm font-semibold">
-            {cartLoading ? "Loading" : `${itemCount} · $${Number(cart?.total || 0).toFixed(2)}`}
+            {cartLoading ? "Loading" : `${itemCount} - $${Number(cart?.total || 0).toFixed(2)}`}
           </span>
         </Button>
       </div>
