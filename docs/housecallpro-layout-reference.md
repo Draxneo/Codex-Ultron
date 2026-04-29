@@ -14,6 +14,8 @@ Reviewed areas:
 - Inbox/communications
 - My Money / payments workspace
 - Price Book services, materials, estimate templates, and related tabs
+- Reporting workspace
+- Apps / marketplace workspace
 - Global New menu
 
 ## Public Price Book Pattern
@@ -83,6 +85,8 @@ Authenticated HCP shell findings:
 - Inbox uses sub-tabs for customer, employee, AI team, job inbox, overview, and voice call log.
 - Payments uses a secondary left/side menu for payouts, financing, card reader, expenses, insurance, accounting, tax, and settings.
 - Price Book has top tabs for Services, Materials, Pricing forms, Estimate Templates, and Discounts.
+- Reporting uses a left rail grouped by Business insights, Dashboards, and All Reports. The active report family opens into a dense catalog of report links grouped by dimensions such as date, customer, type, job costing, employee, and line items. The important pattern is not the exact report list; it is the scannable report directory with a clear side rail and top actions for create/report AI.
+- Apps uses a marketplace model: tabs for Explore, My apps, and All apps; search and filters at the top; category bands such as HVAC recommendations, grow revenue, manage jobs, get paid, and run your business. This maps well to UltraOffice Admin Tools, because tools should be discoverable by job-to-be-done rather than only by technical category.
 
 UltraOffice shell changes started:
 
@@ -206,3 +210,22 @@ Implementation targets:
 5. Rework `Catalog` into the matching admin price book manager.
 6. Bridge or retire the old `service_pricebook` / `TechPricebookDrawer` path.
 7. Add screenshots/manual QA across dispatcher desktop and tech mobile.
+
+## Admin / Tools Workspace Direction
+
+HCP settings, reporting, and apps all share one useful pattern: the user starts from a stable workbench, picks a category on the left, then works through a dense list of cards, rows, or links. UltraOffice admin should follow that pattern instead of a decorative icon-only launchpad.
+
+Target admin home:
+
+- Workbench header with search, refresh, and alert badges.
+- Left rail for All, Create, Tools, People, Communications, Money, System, and Activity.
+- Scannable tool cards with short descriptions and group labels.
+- Operational metrics at the top.
+- Recent activity as a secondary section, not the whole page.
+
+Implementation targets:
+
+- `src/components/AdminHub.tsx`
+- `src/components/AdminToolsGrid.tsx`
+- `src/config/adminNavigation.ts`
+- `src/pages/Admin.tsx`
