@@ -65,12 +65,12 @@ export function TechStatusCard({
   const qc = useQueryClient();
   const { send: sendOMW, sending: sendingOMW } = useSendOnMyWay();
   const [busy, setBusy] = useState<"start" | "pause" | "finish" | null>(null);
-  const [notesOpen, setNotesOpen] = useState(false);
   const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
   const [pauseReason, setPauseReason] = useState("Waiting on parts");
 
   // Prefer HCP private notes; fall back to description if HCP didn't sync any
   const notes = (hcpNote && hcpNote.trim()) || (description && description.trim()) || "";
+  const [notesOpen, setNotesOpen] = useState(() => Boolean(notes));
 
   const handleOMW = async () => {
     await sendOMW({ jobId, customerPhone, customerName, jobAddress, employeeName, employeeId });
@@ -226,7 +226,7 @@ export function TechStatusCard({
           >
             <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-              HCP Private Notes
+              Work Notes
             </span>
             <ChevronDown
               className={cn(
