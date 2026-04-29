@@ -231,6 +231,7 @@ Target admin home:
 
 - Workbench header with search, refresh, and alert badges.
 - Left rail for All, Create, Tools, Global Settings, Feature Configurations, Tags & Tools, and Activity.
+- Marketplace tabs for Explore, My apps, and All apps.
 - Scannable tool cards with short descriptions and group labels.
 - Operational metrics at the top.
 - Recent activity as a secondary section, not the whole page.

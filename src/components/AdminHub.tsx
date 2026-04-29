@@ -31,6 +31,7 @@ import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useRecentActivity } from "@/hooks/useActivityLog";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { TOOL_CARDS, SETTINGS_GROUPS } from "@/config/adminNavigation";
+import { routeToTabKey, useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
 const quickActions = [
   { label: "New Job", icon: Plus, path: "/?newJob=1", group: "Create" },
@@ -57,6 +58,8 @@ type HubItem = {
   path?: string;
   section?: string;
 };
+
+type MarketplaceMode = "Explore" | "My apps" | "All apps";
 
 function HubCard({ item, onNavigateSection }: { item: HubItem; onNavigateSection: (section: string) => void }) {
   const Icon = item.icon;
@@ -100,10 +103,12 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
   const { data: recentActivity } = useRecentActivity(5);
   const unreadSms = useUnreadSmsCount();
+  const allowedTabs = useEmployeeTabAccess();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [marketplaceMode, setMarketplaceMode] = useState<MarketplaceMode>("Explore");
 
   const firstName = user?.email?.split("@")[0] ?? "team";
 
@@ -155,14 +160,22 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
 
   const categories = useMemo(() => ["All", "Create", "Tools", ...SETTINGS_GROUPS.map((group) => group.title), "Activity"], []);
 
+  const canAccessItem = useCallback((item: HubItem) => {
+    if (!allowedTabs) return true;
+    const key = item.path ? routeToTabKey(item.path) : routeToTabKey("/admin", item.section ? `section=${item.section}` : undefined);
+    return !key || allowedTabs.has(key);
+  }, [allowedTabs]);
+
   const visibleItems = useMemo(() => {
     const term = search.trim().toLowerCase();
     return items.filter((item) => {
+      const matchesMode = marketplaceMode === "All apps"
+        || (marketplaceMode === "My apps" ? canAccessItem(item) : item.group !== "Tags & Tools");
       const matchesCategory = category === "All" || item.group === category;
       const matchesSearch = !term || `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(term);
-      return matchesCategory && matchesSearch;
+      return matchesMode && matchesCategory && matchesSearch;
     });
-  }, [category, items, search]);
+  }, [canAccessItem, category, items, marketplaceMode, search]);
 
   return (
     <main className="h-[calc(100vh-3rem)] min-h-0">
@@ -227,12 +240,34 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
             ))}
           </div>
 
+          <div className="flex flex-wrap items-center gap-1 rounded-md border bg-card p-1">
+            {(["Explore", "My apps", "All apps"] as MarketplaceMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setMarketplaceMode(mode)}
+                className={cn(
+                  "h-8 rounded-sm px-3 text-sm font-medium transition-colors",
+                  marketplaceMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+
           {category !== "Activity" && (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground">{category === "All" ? "All Admin Tools" : category}</h2>
-                  <p className="text-xs text-muted-foreground">HCP-style launcher for the places the office team uses every day.</p>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {marketplaceMode === "Explore" && category === "All" ? "Explore Admin Apps" : category === "All" ? marketplaceMode : category}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {marketplaceMode === "My apps"
+                      ? "Tools and settings available to your current role."
+                      : "HCP-style launcher for the places the office team uses every day."}
+                  </p>
                 </div>
                 <Badge variant="outline" className="rounded-sm">{visibleItems.length} items</Badge>
               </div>
