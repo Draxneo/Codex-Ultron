@@ -978,7 +978,7 @@ Job progression is tracked via the Workflow Action Bar (timestamps on job record
 // Collapsed from specialist agents into orchestrator for zero-hop execution.
 // Only repair_quote, supplyhouse, carrier_enterprise, invoicing remain as separate edge functions.
 
-const lookupEquipmentTool = { type: "function", function: { name: "lookup_equipment", description: "Search equipment matchups by specs.", parameters: { type: "object", properties: { tonnage: { type: "number" }, brand: { type: "string" }, system_type: { type: "string" }, tier: { type: "string" }, min_seer2: { type: "number" } }, additionalProperties: false } } };
+const lookupEquipmentTool = { type: "function", function: { name: "lookup_equipment", description: "Search equipment matchups by technician selection: brand, tonnage, system type, tier, and attic/closet/orientation.", parameters: { type: "object", properties: { tonnage: { type: "number" }, brand: { type: "string" }, system_type: { type: "string" }, tier: { type: "string" }, application: { type: "string", description: "Install application/orientation such as Multiposition, Horizontal, Vertical, Attic, or Closet." }, location: { type: "string", description: "Customer-facing install location such as attic or closet. The tool maps this to application when possible." }, min_seer2: { type: "number" } }, additionalProperties: false } } };
 const verifyAddressTool = { type: "function", function: { name: "verify_address", description: "Verify and correct a street address using Google geocoding. Use BEFORE saving any customer/job/estimate.", parameters: { type: "object", properties: { address: { type: "string", description: "Full address to verify" } }, required: ["address"], additionalProperties: false } } };
 
 // Communications (formerly communications-agent)
@@ -1340,7 +1340,13 @@ async function executeToolCall(
     // ═══════ Equipment ═══════
     if (toolName === "lookup_equipment") {
       let query = sb.from("equipment_matchups").select("*").order("brand");
-      if (args.application) query = query.ilike("application", `%${args.application}%`);
+      const requestedLocation = String(args.location || args.application || "").toLowerCase();
+      const applicationFilter = requestedLocation.includes("attic")
+        ? "Horizontal"
+        : requestedLocation.includes("closet")
+          ? "Vertical"
+          : args.application;
+      if (applicationFilter && !args.location) query = query.ilike("application", `%${applicationFilter}%`);
       if (args.tonnage) query = query.eq("tonnage", args.tonnage);
       if (args.brand) query = query.ilike("brand", `%${args.brand}%`);
       if (args.system_type) query = query.ilike("system_type", `%${args.system_type}%`);
@@ -1348,11 +1354,14 @@ async function executeToolCall(
       if (args.min_seer2) query = query.gte("seer2", args.min_seer2);
       const { data: allMatchups, error } = await query;
       if (error) throw error;
-      const multiKeys = new Set((allMatchups || []).filter((m: any) => m.application === "Multiposition").map((m: any) => `${m.brand}|${m.system_type}|${m.tonnage}|${m.tier}`));
-      const matchups = !args.application ? (allMatchups || []).filter((m: any) => {
+      const locationMatchups = applicationFilter
+        ? (allMatchups || []).filter((m: any) => m.application === "Multiposition" || !m.application || String(m.application || "").toLowerCase().includes(String(applicationFilter).toLowerCase()))
+        : (allMatchups || []);
+      const multiKeys = new Set(locationMatchups.filter((m: any) => m.application === "Multiposition").map((m: any) => `${m.brand}|${m.system_type}|${m.tonnage}|${m.tier}`));
+      const matchups = !applicationFilter ? locationMatchups.filter((m: any) => {
         if (m.application === "Multiposition" || !m.application) return true;
         return !multiKeys.has(`${m.brand}|${m.system_type}|${m.tonnage}|${m.tier}`);
-      }) : (allMatchups || []);
+      }) : locationMatchups;
       result = { status: "success", count: matchups.length, matchups: matchups.map((m: any) => ({
         id: m.id, brand: m.brand, condenser: m.condenser_model, coil: m.coil_model, furnace: m.furnace_model, heat_kit: m.heat_kit, tonnage: m.tonnage, seer2: m.seer2, eer2: m.eer2, hspf2: m.hspf2, afue: m.afue, cooling_cap: m.cooling_cap, cps_tonnage: m.cps_tonnage, system_type: m.system_type, application: m.application, tier: m.tier, ahri_number: m.ahri_number,
         instant_rebate_price: m.factory_rebate_price, financed: m.total_price,
@@ -2700,7 +2709,7 @@ serve(async (req) => {
       if (ctx.includes("sms") || ctx.includes("call")) { cats.add("comms"); }
       if (ctx.includes("chat") || ctx.includes("team")) cats.add("chat");
       if (ctx.includes("part") || ctx.includes("catalog")) cats.add("parts");
-      if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure")) { cats.add("estimates"); cats.add("equipment"); }
+      if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure") || ctx.includes("presentation") || ctx.includes("cart") || ctx.includes("replacement")) { cats.add("estimates"); cats.add("equipment"); }
       if (ctx.includes("payment") || ctx.includes("invoice")) { cats.add("invoices"); }
       if (ctx.includes("agreement") || ctx.includes("plan") || ctx.includes("maintenance")) cats.add("agreements");
       if (ctx.includes("dispatch") || ctx.includes("mission") || ctx.includes("dashboard")) { cats.add("workflow"); }
@@ -3152,7 +3161,7 @@ TOOL ROUTING RULES (follow strictly)
       if (ctx.includes("part") || ctx.includes("catalog") || ctx.includes("supply")) {
         ["invoke_supplyhouse", "invoke_carrier_enterprise", "scrape_url"].forEach(x => t.add(x));
       }
-      if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure") || ctx.includes("sales")) {
+      if (ctx.includes("estimate") || ctx.includes("quote") || ctx.includes("brochure") || ctx.includes("sales") || ctx.includes("presentation") || ctx.includes("cart") || ctx.includes("replacement")) {
         ["create_quote", "generate_install_quote", "invoke_repair_quote", "convert_estimate_to_job",
          "generate_letterhead_document"].forEach(x => t.add(x));
       }

@@ -11,6 +11,7 @@ import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
 import { calcMonthly36, calcMonthly120 } from "@/lib/paymentOptions";
 import type { JobCart, JobCartItem } from "@/hooks/useJobCart";
 import { buildComfortClubCartSummary, type ComfortClubPublicInfo } from "@/lib/comfortClubCart";
+import { cn } from "@/lib/utils";
 
 const KIND_ICON: Record<JobCartItem["kind"], React.ComponentType<{ className?: string }>> = {
   equipment: Zap,
@@ -184,6 +185,7 @@ export default function CustomerCart() {
     items,
   });
   const comfortClubPerks = comfortClub.perks.slice(0, 3);
+  const isPresentMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("present") === "1";
 
   return (
     <div className="min-h-screen bg-muted/30 pb-32">
@@ -207,7 +209,7 @@ export default function CustomerCart() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <main className={cn("mx-auto px-4 py-6 space-y-4", isPresentMode ? "max-w-4xl" : "max-w-2xl")}>
         {/* Status banner */}
         {isPaid && (
           <Card className="p-4 bg-emerald-500/10 border-emerald-500/30 flex items-center gap-3">
@@ -251,14 +253,38 @@ export default function CustomerCart() {
         {canEditCart && (
           <div className="space-y-1">
             <h1 className="text-2xl font-bold">
-              {job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
+              {isPresentMode ? "Your comfort presentation" : job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {primaryEquipment
+              {isPresentMode
+                ? "Review the comfort story first. The cart and payment choices are attached below."
+                : primaryEquipment
                 ? `Here is your ${primaryMeta.brand || ""} ${primaryMeta.tonnage ? `${primaryMeta.tonnage}-ton` : ""} comfort proposal from ${job?.assigned_to || "your tech"}.`
                 : `Here's Estimate ${cart.estimate_number || ""} from ${job?.assigned_to || "your tech"}. Review the options and choose how you'd like to proceed.`}
             </p>
           </div>
+        )}
+
+        {isPresentMode && (
+          <Card className="overflow-hidden border-primary/20 bg-background">
+            <div className="bg-primary text-primary-foreground px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Presentation mode</p>
+              <h2 className="mt-1 text-xl font-bold">Comfort, reliability, peace of mind, efficiency</h2>
+            </div>
+            <div className="grid gap-3 p-4 sm:grid-cols-4">
+              {[
+                ["Comfort", "Better temperature control and less sticky air."],
+                ["Reliability", "Matched equipment with documented performance."],
+                ["Peace of mind", "Warranty and rebate paperwork support."],
+                ["Efficiency", "Clear energy numbers and payment options."],
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-lg border bg-muted/20 p-3">
+                  <p className="text-sm font-semibold text-foreground">{title}</p>
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{body}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
         )}
 
         {primaryEquipment && (
@@ -271,7 +297,7 @@ export default function CustomerCart() {
             <div className="p-4 space-y-4">
               <div className="space-y-2">
                 <Badge className="w-fit bg-primary/10 text-primary border-primary/25" variant="outline">
-                  Your Custom Quote
+                  {isPresentMode ? "Recommended comfort system" : "Your Custom Quote"}
                 </Badge>
                 <div>
                   <h2 className="text-2xl font-bold leading-tight">{primaryEquipment.name}</h2>
@@ -413,7 +439,7 @@ export default function CustomerCart() {
         <Card className="overflow-hidden">
           <div className="px-4 py-3 border-b bg-muted/40 flex items-center justify-between gap-2">
             <p className="font-semibold text-sm flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" /> {items.length} item{items.length !== 1 ? "s" : ""}
+                  <ShoppingCart className="h-4 w-4" /> Attached cart · {items.length} item{items.length !== 1 ? "s" : ""}
             </p>
             {hasEquipment && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-success/15 text-success ring-1 ring-success/30">

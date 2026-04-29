@@ -68,6 +68,9 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
   const [customPrice, setCustomPrice] = useState("");
 
   const total = Number(cart?.total ?? 0) || 0;
+  const equipmentItems = items.filter((item) => item.kind === "equipment");
+  const primaryEquipment = equipmentItems[0] || null;
+  const primaryMeta = (primaryEquipment?.metadata || {}) as Record<string, any>;
   const status = (cart as any)?.status || "draft";
   const firstViewedAt = (cart as any)?.first_viewed_at;
   const lastViewedAt = (cart as any)?.last_viewed_at;
@@ -126,30 +129,94 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         <Card className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer cart</p>
-              <h2 className="mt-1 text-xl font-bold text-foreground">{money(total)}</h2>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sales presentation</p>
+              <h2 className="mt-1 text-xl font-bold text-foreground">
+                {primaryEquipment ? primaryEquipment.name : "Build the comfort story"}
+              </h2>
               <p className="text-sm text-muted-foreground">
-                {itemCount} option{itemCount !== 1 ? "s" : ""} for {customerName || "this customer"}
+                {primaryEquipment
+                  ? "The cart is attached below for approval and payment."
+                  : `Start with the system pitch, then attach the cart for ${customerName || "the customer"}.`}
               </p>
             </div>
             <Badge className={cn("border", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
           </div>
         </Card>
 
+        <Card className="overflow-hidden border-primary/20 bg-background">
+          <div className="border-b bg-primary/5 p-4">
+            <div className="flex items-center gap-2">
+              <Presentation className="h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Presentation first</p>
+            </div>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
+              Sell comfort, reliability, peace of mind, and efficiency here. The cart only confirms what they chose.
+            </p>
+          </div>
+          {primaryEquipment ? (
+            <div className="space-y-4 p-4">
+              <div>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Customer-ready pitch</Badge>
+                <h3 className="mt-2 text-lg font-bold leading-tight text-foreground">{primaryEquipment.name}</h3>
+                <p className="mt-1 text-sm leading-snug text-muted-foreground">
+                  {primaryEquipment.description || "A matched comfort system with a clean install, warranty support, and paperwork handled."}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {buildTechPresentationBenefits(primaryEquipment).map((benefit) => (
+                  <div key={benefit.title} className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-sm font-semibold leading-tight text-foreground">{benefit.title}</p>
+                    <p className="mt-1 text-xs leading-snug text-muted-foreground">{benefit.body}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  primaryMeta.seer2 ? { label: "SEER2", value: primaryMeta.seer2 } : null,
+                  primaryMeta.eer2 ? { label: "EER2", value: primaryMeta.eer2 } : null,
+                  primaryMeta.cps_rebate_tier ? { label: "CPS", value: primaryMeta.cps_rebate_tier } : null,
+                ].filter(Boolean).map((spec: any) => (
+                  <div key={spec.label} className="rounded-md bg-primary/5 px-2 py-2 text-center ring-1 ring-primary/10">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">{spec.label}</p>
+                    <p className="mt-0.5 truncate text-xs font-bold text-foreground">{spec.value}</p>
+                  </div>
+                ))}
+              </div>
+              {Number(primaryMeta.early_rebate || primaryMeta.burnout_rebate || 0) > 0 && (
+                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
+                  <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    CPS estimate: up to {money(Math.max(Number(primaryMeta.early_rebate || 0), Number(primaryMeta.burnout_rebate || 0)))}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    Present as estimated and subject to CPS Energy approval.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
+                <p className="text-sm font-semibold text-foreground">No system presentation yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Tap Build Presentation and select brand, tonnage, type, tier, and location.</p>
+              </div>
+            </div>
+          )}
+        </Card>
+
         <div className="grid grid-cols-2 gap-2">
           <Button className="h-14 gap-2 text-sm" onClick={() => setPickerOpen(true)} disabled={!permissions.canEditItems}>
-            <Plus className="h-4 w-4" /> Add Option
+            <Plus className="h-4 w-4" /> Build Presentation
           </Button>
           {presentLink ? (
             <a
               href={presentLink}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <Eye className="h-4 w-4" /> Preview
+              <Eye className="h-4 w-4" /> Customer View
             </a>
           ) : (
             <Button variant="outline" className="h-14 gap-2 text-sm" disabled>
-              <Eye className="h-4 w-4" /> Preview
+              <Eye className="h-4 w-4" /> Customer View
             </Button>
           )}
         </div>
@@ -157,8 +224,8 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         {items.length === 0 ? (
           <Card className="p-6 text-center">
             <ShoppingCart className="mx-auto mb-2 h-10 w-10 text-muted-foreground/35" />
-            <p className="text-sm font-semibold text-foreground">No customer options yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Add a system, repair, part, or custom item.</p>
+            <p className="text-sm font-semibold text-foreground">No presentation/cart items yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Start with a system presentation, then add repairs or add-ons as needed.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -207,7 +274,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         )}
 
         <Button variant="outline" className="h-12 w-full gap-2" onClick={() => setCustomOpen((v) => !v)} disabled={!permissions.canEditItems}>
-          <Sparkles className="h-4 w-4" /> Add Custom Item
+          <Sparkles className="h-4 w-4" /> Add Custom Cart Item
         </Button>
 
         <Card className="p-3 space-y-3">
@@ -681,4 +748,34 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       />
     </>
   );
+}
+
+function buildTechPresentationBenefits(item: JobCartItem) {
+  const meta = (item.metadata || {}) as Record<string, any>;
+  const sales = Array.isArray(meta.sales_positioning) ? meta.sales_positioning : [];
+  const fallback = [
+    {
+      title: "Comfort",
+      body: "Lead with even temperatures, lower humidity, and fewer hot spots.",
+    },
+    {
+      title: "Reliability",
+      body: "Matched equipment, AHRI proof, and a clean startup process.",
+    },
+    {
+      title: "Peace of mind",
+      body: "Warranty registration support, install documentation, and follow-up care.",
+    },
+    {
+      title: "Efficiency",
+      body: meta.seer2 ? `${meta.seer2} SEER2 helps explain the energy story.` : "Modern equipment helps reduce wasted energy.",
+    },
+  ];
+
+  return (sales.length > 0 ? sales : fallback)
+    .slice(0, 4)
+    .map((benefit: any, index: number) => ({
+      title: benefit.title || fallback[index]?.title || "Comfort",
+      body: benefit.body || benefit.text || fallback[index]?.body || "",
+    }));
 }

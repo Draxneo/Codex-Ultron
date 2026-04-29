@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TechCartCard } from "@/components/tech/TechCartCard";
@@ -30,13 +30,13 @@ export default function TechJobCart() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 text-center">
-            <p className="text-sm font-semibold text-foreground">Cart not found</p>
+            <p className="text-sm font-semibold text-foreground">Presentation not found</p>
           </div>
           <div className="w-9" />
         </header>
         <main className="px-6 py-16 text-center">
-          <ShoppingCart className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
-          <h1 className="text-lg font-semibold">Cart not found</h1>
+          <Presentation className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+          <h1 className="text-lg font-semibold">Presentation not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">This job may have moved or the link is invalid.</p>
         </main>
       </div>
@@ -64,7 +64,7 @@ export default function TechJobCart() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="truncate text-sm font-semibold text-foreground">Cart · Job {jobNumber}</p>
+          <p className="truncate text-sm font-semibold text-foreground">Presentation · Job {jobNumber}</p>
         </div>
         <div className="w-9" />
       </header>

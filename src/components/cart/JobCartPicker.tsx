@@ -155,7 +155,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           <div className="space-y-2">
             <MobileAddChoice
               icon={Zap}
-              title="Add System"
+              title="Build Equipment Presentation"
               description="Brand, tonnage, type, tier, location."
               onClick={() => setMobileMode("equipment")}
               disabled={!permissions.canEditItems}
@@ -190,7 +190,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
               Back
             </Button>
             <p className="text-sm font-semibold">
-              {mobileMode === "equipment" ? "Add System" : mobileMode === "repairs" ? "Add Repair" : mobileMode === "parts" ? "Add Part" : "Custom Item"}
+              {mobileMode === "equipment" ? "Build Presentation" : mobileMode === "repairs" ? "Add Repair" : mobileMode === "parts" ? "Add Part" : "Custom Item"}
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-3 pt-3 pb-24">
@@ -322,7 +322,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
         <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
           <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
             <ShoppingCart className="h-4 w-4 shrink-0" />
-            <span className="truncate">Add to Customer Cart</span>
+            <span className="truncate">Build Customer Presentation</span>
           </h3>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-8 w-8 shrink-0">
             <X className="h-4 w-4" />
@@ -337,7 +337,7 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
-          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Add to Customer Cart</SheetTitle>
+          <SheetTitle className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Build Customer Presentation</SheetTitle>
         </SheetHeader>
         <div className="relative flex-1 min-h-0">{body}</div>
       </SheetContent>
@@ -485,9 +485,9 @@ function GuidedEquipmentPicker({ onAdd, disabled }: { onAdd: (m: EquipmentMatchu
   return (
     <div className="space-y-3">
       <div className="rounded-lg border bg-muted/20 p-3">
-        <p className="text-sm font-semibold text-foreground">Build the system like a tech</p>
+        <p className="text-sm font-semibold text-foreground">Build the presentation like a tech</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Brand, tonnage, type, tier, then where it sits.
+          Pick the system in field language. The presentation sells comfort, then the cart carries price and approval.
         </p>
         {summaryParts.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -540,14 +540,27 @@ function GuidedEquipmentPicker({ onAdd, disabled }: { onAdd: (m: EquipmentMatchu
                   </div>
                   <p className="shrink-0 text-sm font-bold tabular-nums">${Number(matchup.total_price || 0).toLocaleString()}</p>
                 </div>
+                <div className="rounded-md border bg-primary/5 px-2 py-2">
+                  <p className="text-xs font-semibold text-foreground">{buildEquipmentBenefitSummary(matchup)}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {buildPickerBenefitChips(matchup).map((chip) => (
+                      <span key={chip} className="rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <div className="rounded-md bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
-                  <p className="truncate">Condenser: {matchup.condenser_model}</p>
-                  {matchup.furnace_model && <p className="truncate">Furnace: {matchup.furnace_model}</p>}
-                  {matchup.coil_model && <p className="truncate">Coil: {matchup.coil_model}</p>}
-                  {matchup.ahri_number && <p className="truncate">AHRI: {matchup.ahri_number}</p>}
+                  <p className="truncate">Proof: {matchup.seer2 ? `${matchup.seer2} SEER2` : "Efficiency pending"}{matchup.eer2 ? ` · ${matchup.eer2} EER2` : ""}{matchup.ahri_number ? ` · AHRI ${matchup.ahri_number}` : ""}</p>
+                  <p className="truncate">Models: {[matchup.condenser_model, matchup.furnace_model, matchup.coil_model].filter(Boolean).join(" + ")}</p>
+                  {Number(matchup.early_rebate || matchup.burnout_rebate || 0) > 0 && (
+                    <p className="truncate text-emerald-700 dark:text-emerald-400">
+                      CPS estimate: up to ${Math.max(Number(matchup.early_rebate || 0), Number(matchup.burnout_rebate || 0)).toLocaleString()}
+                    </p>
+                  )}
                 </div>
                 <Button className="h-10 w-full" onClick={() => onAdd(matchup)} disabled={disabled}>
-                  <ShoppingCart className="mr-1 h-4 w-4" /> Add to Cart
+                  <ShoppingCart className="mr-1 h-4 w-4" /> Add Presentation + Cart
                 </Button>
               </Card>
             ))
@@ -646,6 +659,25 @@ function buildEquipmentBenefitSummary(m: EquipmentMatchup) {
     return `Balanced ${type.toLowerCase()} for stronger comfort, dependable efficiency, and a quieter home.`;
   }
   return `Reliable ${type.toLowerCase()} replacement with clean installation, warranty protection, and improved comfort.`;
+}
+
+function buildPickerBenefitChips(m: EquipmentMatchup) {
+  const tier = (m.tier || "").toLowerCase();
+  const chips = [
+    m.seer2 ? `${m.seer2} SEER2` : null,
+    m.eer2 ? `${m.eer2} EER2` : null,
+  ];
+
+  if (tier.includes("best") || tier.includes("ultimate")) {
+    chips.push("quietest", "best humidity", "premium controls");
+  } else if (tier.includes("better") || tier.includes("performance")) {
+    chips.push("balanced comfort", "quieter", "better humidity");
+  } else {
+    chips.push("reliable", "warranty support", "best value");
+  }
+
+  if (Number(m.early_rebate || m.burnout_rebate || 0) > 0) chips.push("CPS rebate");
+  return chips.filter(Boolean).slice(0, 5) as string[];
 }
 
 function buildEquipmentSalesPositioning(m: EquipmentMatchup) {
