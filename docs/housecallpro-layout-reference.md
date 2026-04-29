@@ -93,6 +93,7 @@ UltraOffice shell changes started:
 - Add `Price Book` to first-class navigation.
 - Rename `Quick Quote` navigation to `Estimates`.
 - Rename `Pay` navigation to `Payments`.
+- Add `Reporting` as a first-class workbench instead of hiding reports under settings.
 - Expand the global New menu to include Job, Estimate, Customer, and Price Book Item.
 
 Future primary navigation target:
@@ -104,6 +105,7 @@ Future primary navigation target:
 - Estimates
 - Price Book
 - Payments
+- Reporting
 - JARVIS
 - Admin
 

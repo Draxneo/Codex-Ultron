@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 
 // Default nav order by route path
 const DEFAULT_ORDER = [
-  "/", "/phone", "/sms", "/customers", "/quick-quote", "/catalog", "/pay", "/copilot", "/admin",
+  "/", "/phone", "/sms", "/customers", "/quick-quote", "/catalog", "/pay", "/reports", "/copilot", "/admin",
 ];
 
 function migrateLegacyOrder(order: string[]) {

@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package } from "lucide-react";
+import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavOrder } from "@/hooks/useNavOrder";
@@ -28,6 +28,7 @@ const NAV_META: Record<string, { icon: any; label: string }> = {
   "/quick-quote": { icon: Zap, label: "Estimates" },
   "/catalog": { icon: Package, label: "Price Book" },
   "/pay": { icon: DollarSign, label: "Payments" },
+  "/reports": { icon: BarChart3, label: "Reporting" },
   "/copilot": { icon: Bot, label: "JARVIS" },
   "/admin": { icon: Settings, label: "Admin" },
 };

@@ -37,6 +37,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (pathname.startsWith("/copilot")) return "copilot";
   if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
   if (pathname.startsWith("/payments")) return "pay";
+  if (pathname.startsWith("/reports")) return "admin";
   if (pathname.startsWith("/pay")) return "pay";
   if (pathname.startsWith("/admin") && search?.includes("section=employees") && search?.includes("employeeTab=pay")) return "pay";
   if (

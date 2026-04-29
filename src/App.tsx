@@ -56,6 +56,7 @@ import Customers from "./pages/Customers";
 import CustomerDetail from "./pages/CustomerDetail";
 import Agreements from "./pages/Agreements";
 import Payments from "./pages/Payments";
+import Reports from "./pages/Reports";
 import SmsPage from "./pages/SmsPage";
 import CallsPage from "./pages/CallsPage";
 import TeamCommunications from "./pages/TeamCommunications";
@@ -500,6 +501,7 @@ function AppRouter() {
         <Route path="/brochure" element={<Navigate to="/catalog" replace />} />
         <Route path="/agreements" element={<ProtectedRoute><Agreements /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         <Route path="/admin/hub" element={<Navigate to="/admin" replace />} />
         <Route path="/admin/email-health" element={<Navigate to="/admin" replace />} />
@@ -526,7 +528,6 @@ function AppRouter() {
         
         <Route path="/estimates" element={<Navigate to="/" replace />} />
         <Route path="/paysheet" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
-        <Route path="/reports" element={<Navigate to="/admin?section=reports" replace />} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
