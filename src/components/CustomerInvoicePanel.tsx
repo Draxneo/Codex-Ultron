@@ -137,11 +137,11 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
     const inv = invoices?.find((i: any) => i.id === invoiceId);
     const publicToken = inv?.public_token;
     const link = publicToken ? `\n\nView & pay online: ${window.location.origin}/invoice/${publicToken}` : "";
-    const body = `Invoice ${invoiceNumber} for $${invoiceTotal.toFixed(2)} from your HVAC service.${link}`;
+    const body = `Hi ${customerName?.split(" ")[0] || "there"}, thank you for letting our family help yours. Invoice ${invoiceNumber} for $${invoiceTotal.toFixed(2)} is ready.${link}`;
     const { sendSmsImpl } = await import("@/hooks/useSendSms");
     const result = await sendSmsImpl({
       to: customerPhone, body, jobId, contactName: customerName || null,
-      contactType: "customer", source: "customer_invoice_sms", silent: true,
+      contactType: "customer", source: "customer_invoice_sms", hitlApproved: true, silent: true,
     });
     if (!result.success) {
       toast({ title: "SMS failed", description: result.error, variant: "destructive" });

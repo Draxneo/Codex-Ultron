@@ -27,6 +27,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
+import { sendSmsImpl } from "@/hooks/useSendSms";
+import { buildJobCompleteSms } from "@/lib/smsCopy";
 import { cn } from "@/lib/utils";
 
 interface TechStatusCardProps {
@@ -157,12 +159,32 @@ export function TechStatusCard({
     setBusy("finish");
     const { error } = await supabase
       .from("jobs")
-      .update({ completed_at: new Date().toISOString() } as any)
+      .update({ status: "done", completed_at: new Date().toISOString() } as any)
       .eq("id", jobId);
     if (error) {
       toast({ title: "Failed to finish", description: error.message, variant: "destructive" });
     } else {
       await supabase.from("activity_log").insert({ job_id: jobId, action: "job_finished", details: "Tech finished job", performed_by: employeeName });
+      if (customerPhone) {
+        const sms = await sendSmsImpl({
+          to: customerPhone,
+          body: buildJobCompleteSms({ customerName, companyName: "Carnes and Sons" }),
+          jobId,
+          contactName: customerName || null,
+          contactType: "customer",
+          source: "job_complete",
+          hitlApproved: true,
+          silent: true,
+        });
+        await supabase.from("activity_log").insert({
+          job_id: jobId,
+          action: sms.success ? "job_complete_sms_sent" : "job_complete_sms_failed",
+          details: sms.success
+            ? `Completion SMS sent to ${customerName || customerPhone}`
+            : `Completion SMS failed for ${customerName || customerPhone}: ${sms.error || "unknown error"}`,
+          performed_by: employeeName,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["jobs", jobId] });
       qc.invalidateQueries({ queryKey: ["tech_dashboard_data"] });
       toast({ title: "Job finished" });

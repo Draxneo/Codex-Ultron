@@ -10,6 +10,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { buildOnMyWaySms } from "@/lib/smsCopy";
 
 interface SendOnMyWayParams {
   jobId: string;
@@ -65,9 +66,12 @@ export function useSendOnMyWay() {
     //    the OMW SMS without an ETA. This is the cost-control rule: only press-to-Navigate
     //    triggers Maps calls.
 
-    const etaText = etaMinutes ? ` Estimated arrival: ${etaMinutes} min.` : "";
-    const techLabel = employeeName || "Your technician";
-    const body = `Hi${customerName ? ` ${customerName.split(" ")[0]}` : ""}, ${techLabel} is on the way!${etaText} See you soon!`;
+    const body = buildOnMyWaySms({
+      customerName,
+      techName: employeeName,
+      etaMinutes,
+      companyName: "Carnes and Sons",
+    });
 
     const { sendSmsImpl } = await import("@/hooks/useSendSms");
     const result = await sendSmsImpl({

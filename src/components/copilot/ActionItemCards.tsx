@@ -41,6 +41,11 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; co
   booking_confirm:  { label: "Booking",   icon: CalendarPlus,  color: "text-blue-500" },
   jarvis_action_approval: { label: "Approval", icon: Brain, color: "text-violet-500" },
   thread_attention: { label: "Thread",    icon: MessageCircle, color: "text-violet-500" },
+  schedule_change:  { label: "Schedule",  icon: CalendarPlus,  color: "text-amber-500" },
+  eta_request:      { label: "ETA",       icon: Phone,         color: "text-blue-500" },
+  access_note:      { label: "Access",    icon: MapPin,        color: "text-orange-500" },
+  pet_warning:      { label: "Pet",       icon: AlertTriangle, color: "text-red-500" },
+  contact_update:   { label: "Contact",   icon: Phone,         color: "text-sky-500" },
   permit_needed:    { label: "Permit",    icon: AlertTriangle, color: "text-red-500" },
   general:          { label: "General",   icon: Bot,           color: "text-muted-foreground" },
 };
@@ -558,7 +563,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   );
                 }
 
-                if (item.category === "follow_up") {
+                if (["follow_up", "schedule_change", "eta_request", "access_note", "pet_warning", "contact_update"].includes(item.category)) {
                   const estimateId = itemMetadata.active_estimate_id || itemMetadata.upcoming_estimate_id;
                   const reviewPath = item.job_id
                     ? `/jobs/${item.job_id}`

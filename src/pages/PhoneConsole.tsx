@@ -18,14 +18,26 @@ export default function PhoneConsole() {
     isMuted,
     rejectCall,
     sendDigit,
+    dial,
     setDialNumber,
+    setPendingCustomerId,
+    setPendingJobId,
     status,
     toggleMute,
   } = softphone;
   const [searchParams] = useSearchParams();
   const bootDialNumber = searchParams.get("dial") || "";
+  const bootContactName = searchParams.get("name") || undefined;
+  const bootJobId = searchParams.get("jobId") || undefined;
+  const bootCustomerId = searchParams.get("customerId") || undefined;
+  const bootAutoDial = searchParams.get("autoDial") === "1";
   const channelRef = useRef<BroadcastChannel | null>(null);
   const pendingDialRef = useRef<string | null>(bootDialNumber || null);
+  const pendingContactNameRef = useRef<string | undefined>(bootContactName);
+  const pendingJobIdRef = useRef<string | undefined>(bootJobId);
+  const pendingCustomerIdRef = useRef<string | undefined>(bootCustomerId);
+  const pendingAutoDialRef = useRef(bootAutoDial);
+  const autoDialStartedRef = useRef(false);
 
   const statusLabel = useMemo(() => {
     if (status === "on-call") return "On call";
@@ -50,6 +62,13 @@ export default function PhoneConsole() {
       const message = event.data as PhoneConsoleMessage;
       if (message?.type === "dial" && message.number) {
         pendingDialRef.current = message.number;
+        pendingContactNameRef.current = message.contactName;
+        pendingJobIdRef.current = message.jobId;
+        pendingCustomerIdRef.current = message.customerId;
+        pendingAutoDialRef.current = message.autoDial !== false;
+        autoDialStartedRef.current = false;
+        if (message.jobId) setPendingJobId(message.jobId);
+        if (message.customerId) setPendingCustomerId(message.customerId);
         setDialNumber(message.number);
       } else if (message?.type === "command") {
         if (message.command === "accept") acceptCall();
@@ -64,7 +83,7 @@ export default function PhoneConsole() {
       channel.close();
       channelRef.current = null;
     };
-  }, [acceptCall, hangUp, rejectCall, sendDigit, setDialNumber, toggleMute]);
+  }, [acceptCall, hangUp, rejectCall, sendDigit, setDialNumber, setPendingCustomerId, setPendingJobId, toggleMute]);
 
   useEffect(() => {
     channelRef.current?.postMessage({
@@ -78,10 +97,21 @@ export default function PhoneConsole() {
   }, [status, error, callerInfo, callDuration, isMuted]);
 
   useEffect(() => {
+    if (bootJobId) setPendingJobId(bootJobId);
+    if (bootCustomerId) setPendingCustomerId(bootCustomerId);
     if (bootDialNumber) {
       setDialNumber(bootDialNumber);
     }
-  }, [bootDialNumber, setDialNumber]);
+  }, [bootCustomerId, bootDialNumber, bootJobId, setDialNumber, setPendingCustomerId, setPendingJobId]);
+
+  useEffect(() => {
+    const number = pendingDialRef.current;
+    if (!number || !pendingAutoDialRef.current || autoDialStartedRef.current) return;
+    if (status === "connecting" || status === "ringing" || status === "on-call") return;
+
+    autoDialStartedRef.current = true;
+    void dial(number, pendingContactNameRef.current, pendingJobIdRef.current, pendingCustomerIdRef.current);
+  }, [dial, status]);
 
   return (
     <div className="h-screen w-screen bg-background flex flex-col overflow-hidden">
@@ -93,7 +123,9 @@ export default function PhoneConsole() {
             </div>
             <div>
               <h1 className="text-sm font-bold">Phone Console</h1>
-              <p className="text-xs text-muted-foreground">Outbound webphone</p>
+              <p className="text-xs text-muted-foreground">
+                {bootContactName ? `Outbound to ${bootContactName}` : "Outbound webphone"}
+              </p>
             </div>
           </div>
           <Badge variant={status === "ready" || status === "on-call" ? "default" : "secondary"} className="gap-1">

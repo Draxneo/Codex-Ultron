@@ -3,6 +3,10 @@ import { verifyAddress } from "../_shared/verifyContact.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { loadCompanyInfo } from "../_shared/companyInfo.ts";
+import {
+  buildJarvisIntentMetadata,
+  classifyCustomerContactIntent,
+} from "../_shared/jarvisContactIntent.ts";
 
 
 
@@ -33,6 +37,23 @@ const extractTool = {
           enum: ["high", "low"],
           description: "How confident you are about the address. Set to 'low' if partial, unclear, or possibly misspelled.",
         },
+        call_intent: {
+          type: "string",
+          enum: ["new_booking", "existing_job_update", "reschedule_existing", "cancel_existing", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "estimate_followup", "billing", "warranty_or_membership", "vendor", "spam", "internal", "unknown"],
+          description: "Primary reason for the call. Prefer existing_job_update/reschedule/cancel/ETA/access/pet/callback when the caller is talking about already scheduled work.",
+        },
+        intent_confidence: {
+          type: "string",
+          enum: ["high", "medium", "low"],
+          description: "Confidence in call_intent.",
+        },
+        callback_phone: { type: "string", description: "Phone number the customer asks us to call or text instead of the caller ID" },
+        access_code: { type: "string", description: "Gate, lockbox, garage, or door code if mentioned" },
+        access_notes: { type: "string", description: "Access instructions such as side gate, key location, parking, or entry instructions" },
+        pet_warning: { type: "string", description: "Dog, cat, pet, backyard, or safety warning if mentioned" },
+        requested_eta: { type: "string", description: "ETA or arrival timing question/request if mentioned" },
+        requested_schedule_change: { type: "string", description: "Requested new date/time/window for an existing appointment" },
+        cancel_reason: { type: "string", description: "Reason for canceling an existing appointment if provided" },
         service_type: {
           type: "string",
           enum: ["repair", "maintenance", "install", "estimate", "other"],
@@ -235,7 +256,16 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
 - Today's date is ${new Date().toISOString().split("T")[0]} (${new Date().toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Chicago" })}).
 - If a specific day was committed to (e.g. "let's do Monday", "Thursday works", "tomorrow"), resolve it to an ISO YYYY-MM-DD date in scheduled_date.
 - If a time or arrival window was discussed (e.g. "10am", "10 to 12", "morning"), set scheduled_time to the START time in HH:MM 24h format.
-- DO NOT guess. Only fill these if the conversation actually committed to that day/time.`,
+- DO NOT guess. Only fill these if the conversation actually committed to that day/time.
+
+INTENT EXTRACTION:
+- "New booking" means the caller wants a new service call, maintenance visit, or estimate.
+- If the caller is talking about an appointment already on the schedule, classify as existing_job_update, reschedule_existing, cancel_existing, eta_request, access_instructions, pet_warning, or callback_number_update.
+- Gate/lockbox/door/garage codes are access_instructions.
+- Dogs, pets, backyard warnings, or animal safety notes are pet_warning.
+- "When are they coming?" or "what's the ETA?" is eta_request.
+- "Call this number instead" is callback_number_update.
+- Default ambiguous calls with active work language to existing_job_update, not new booking.`,
           },
           { role: "user", content: call.transcription },
         ],
@@ -269,6 +299,8 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
     // ── Address verification via Google Geocoding ──
     let verifiedAddress: string | null = null;
     let addressConfident = extracted.address_confidence !== "low";
+    let addressVerificationConfidence: number | null = null;
+    let addressVerificationStatus: "high" | "low" | "none" = "none";
 
     if (extracted.address) {
       const geo = await verifyAddress(
@@ -279,17 +311,21 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
       );
 
       if (geo) {
+        addressVerificationConfidence = geo.confidence;
         if (geo.confidence >= 0.8) {
           verifiedAddress = geo.standardized;
           addressConfident = true;
+          addressVerificationStatus = "high";
           console.log(`Call ${call_id}: Google verified address → ${verifiedAddress}`);
         } else {
           verifiedAddress = geo.standardized;
           addressConfident = false;
+          addressVerificationStatus = "low";
           console.log(`Call ${call_id}: Google low confidence (${geo.confidence}) for address`);
         }
       } else {
         addressConfident = false;
+        addressVerificationStatus = "low";
         console.log(`Call ${call_id}: Google returned no results for address`);
       }
     }
@@ -345,6 +381,9 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
       ...extracted,
       verified_address: verifiedAddress,
       address_verified: addressConfident,
+      address_standardized: verifiedAddress,
+      address_verification_confidence: addressVerificationConfidence,
+      address_verification_status: addressVerificationStatus,
       name_verified: nameConfident,
     };
 
@@ -813,7 +852,10 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
     // This guarantees the "Book It Now" card appears in the Now tab even if the
     // todo-extraction AI call below times out or hangs.
     let shouldInjectBookingCard = true;
-    if (!isEmployeeCall && extracted.service_type && extracted.service_type !== "other") {
+    const hasActionableCallIntent =
+      (extracted.service_type && extracted.service_type !== "other") ||
+      (extracted.call_intent && !["unknown", "spam", "vendor", "internal"].includes(extracted.call_intent));
+    if (!isEmployeeCall && hasActionableCallIntent) {
       try {
         let activeJob: { id: string; hcp_job_number: string | null } | null = null;
         if (resolvedCustomerId) {
@@ -870,12 +912,27 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
           ? matchKnownProperty(extractedAddress, knownProperties)
           : null;
         const needsPropertySelection = knownProperties.length > 1 && (!extractedAddress || !matchedProperty);
+        const intentDecision = classifyCustomerContactIntent({
+          text: call.transcription || "",
+          extracted,
+          activeWork: { activeJob, activeEstimate, pendingBooking: null },
+          channel: "call",
+        });
+        const shouldCreateCallBooking =
+          intentDecision.actionCategory === "new_appointment" && intentDecision.shouldCreateNewWork;
+        console.log(`Call ${call_id}: intent ${intentDecision.intent}/${intentDecision.actionCategory} (${intentDecision.confidence})`);
 
         const baseFollowUpNote = `Phone call summary:\n${extracted.summary || extracted.problem_description || "Call reviewed by JARVIS"}${
           extracted.problem_description ? `\n\nIssue: ${extracted.problem_description}` : ""
         }${extracted.scheduling_preference ? `\nScheduling preference: ${extracted.scheduling_preference}` : ""}${
           extractedAddress ? `\nAddress mentioned: ${extractedAddress}` : ""
-        }`;
+        }${extracted.access_code ? `\nAccess code: ${extracted.access_code}` : ""}${
+          extracted.access_notes ? `\nAccess notes: ${extracted.access_notes}` : ""
+        }${extracted.pet_warning ? `\nPet warning: ${extracted.pet_warning}` : ""}${
+          extracted.callback_phone ? `\nCallback phone: ${extracted.callback_phone}` : ""
+        }${extracted.requested_eta ? `\nETA request: ${extracted.requested_eta}` : ""}${
+          extracted.requested_schedule_change ? `\nRequested schedule change: ${extracted.requested_schedule_change}` : ""
+        }\nJarvis intent: ${intentDecision.intent} (${intentDecision.confidence})`;
 
         if (activeJob) {
           const jobRef = activeJob.hcp_job_number ? `#${activeJob.hcp_job_number}` : "in progress";
@@ -899,14 +956,14 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               ? `${customerName} called about active job ${jobRef}`
               : `Caller has active job ${jobRef} — review notes`,
             description: extracted.problem_description || extracted.summary || "Follow-up call on existing job",
-            category: "follow_up",
-            priority: "normal",
+            category: intentDecision.actionCategory === "new_appointment" ? "follow_up" : intentDecision.actionCategory,
+            priority: ["schedule_change", "pet_warning", "eta_request"].includes(intentDecision.actionCategory) ? "high" : "normal",
             source: "jarvis",
             status: "pending",
             customer_phone: call.phone_number || null,
             job_id: activeJob.id,
             suggested_action: `Review job ${jobRef} notes — caller has work in progress`,
-            metadata: {
+            metadata: buildJarvisIntentMetadata(intentDecision, {
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -915,7 +972,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               suppressed_reason: "active_job_in_progress",
               active_job_id: activeJob.id,
               local_note_added: !!resolvedCustomerId,
-            },
+            }),
           });
           shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: SUPPRESSED booking — active job ${activeJob.id}; created follow_up instead`);
@@ -935,13 +992,13 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               ? `${customerName} called about estimate ${estimateRef}`
               : `Caller has estimate ${estimateRef} - review notes`,
             description: extracted.problem_description || extracted.summary || "Follow-up call on existing estimate",
-            category: "follow_up",
-            priority: "normal",
+            category: intentDecision.actionCategory === "new_appointment" ? "follow_up" : intentDecision.actionCategory,
+            priority: ["schedule_change", "pet_warning", "eta_request"].includes(intentDecision.actionCategory) ? "high" : "normal",
             source: "jarvis",
             status: "pending",
             customer_phone: call.phone_number || null,
-            suggested_action: `Review estimate ${estimateRef} - caller likely has an update or question`,
-            metadata: {
+            suggested_action: intentDecision.suggestedAction || `Review estimate ${estimateRef} - caller likely has an update or question`,
+            metadata: buildJarvisIntentMetadata(intentDecision, {
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -950,11 +1007,11 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               suppressed_reason: "active_estimate_in_progress",
               active_estimate_id: activeEstimate.id,
               local_note_added: !!resolvedCustomerId,
-            },
+            }),
           });
           shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: SUPPRESSED booking - active estimate ${activeEstimate.id}; created follow_up instead`);
-        } else if (needsPropertySelection) {
+        } else if (needsPropertySelection && shouldCreateCallBooking) {
           await supabase.from("action_items").insert({
             title: customerName
               ? `${customerName} called - choose service property`
@@ -966,7 +1023,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
             status: "pending",
             customer_phone: call.phone_number || null,
             suggested_action: "Choose the correct property before booking",
-            metadata: {
+            metadata: buildJarvisIntentMetadata(intentDecision, {
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -983,11 +1040,11 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               scheduled_date: extracted.scheduled_date || null,
               scheduled_time: extracted.scheduled_time || null,
               description: extracted.problem_description || null,
-            },
+            }),
           });
           shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: booking held for property selection (${knownProperties.length} properties)`);
-        } else {
+        } else if (shouldCreateCallBooking) {
           const aiTitle = customerName
             ? `New ${extracted.service_type || "service"} request from ${customerName}`
             : `New ${extracted.service_type || "service"} request from ${call.phone_number}`;
@@ -1000,7 +1057,7 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
             status: "pending",
             customer_phone: call.phone_number || null,
             suggested_action: `Book ${extracted.service_type || "service call"} for ${customerName || call.phone_number}`,
-            metadata: {
+            metadata: buildJarvisIntentMetadata(intentDecision, {
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -1020,9 +1077,35 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
               assigned_to: "Jonathan Carnes",
               call_id: call_id,
               description: extracted.problem_description || null,
-            },
+            }),
           });
           console.log(`Call ${call_id}: action_item created for booking (early path) — date=${extracted.scheduled_date || "none"}, time=${extracted.scheduled_time || "none"}, tech=Jonathan Carnes`);
+        } else if (intentDecision.intent !== "general_question" && intentDecision.intent !== "unknown") {
+          await supabase.from("action_items").insert({
+            title: customerName
+              ? `${customerName} called - ${intentDecision.intent.replaceAll("_", " ")}`
+              : `Caller ${call.phone_number} - ${intentDecision.intent.replaceAll("_", " ")}`,
+            description: intentDecision.summary || extracted.problem_description || extracted.summary || "Phone call needs dispatcher review",
+            category: intentDecision.actionCategory === "new_appointment" ? "thread_attention" : intentDecision.actionCategory,
+            priority: ["schedule_change", "pet_warning", "eta_request"].includes(intentDecision.actionCategory) ? "high" : "normal",
+            source: "jarvis",
+            status: "pending",
+            customer_phone: call.phone_number || null,
+            suggested_action: intentDecision.suggestedAction,
+            metadata: buildJarvisIntentMetadata(intentDecision, {
+              customer_name: customerName || null,
+              customer_id: resolvedCustomerId || null,
+              phone: call.phone_number || null,
+              call_id,
+              call_extraction: extracted,
+              description: extracted.problem_description || null,
+            }),
+          });
+          shouldInjectBookingCard = false;
+          console.log(`Call ${call_id}: created ${intentDecision.actionCategory} action_item instead of booking`);
+        } else {
+          shouldInjectBookingCard = false;
+          console.log(`Call ${call_id}: no booking card; intent=${intentDecision.intent}`);
         }
       } catch (aiErr) {
         console.error(`Call ${call_id}: failed to create early booking action_item:`, aiErr);

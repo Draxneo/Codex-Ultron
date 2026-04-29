@@ -17,7 +17,20 @@ import { getRoleDefaults } from "@/lib/roleAccessDefaults";
 
 /** Map a pathname to its access-control key. Returns undefined for unknown routes. */
 export function routeToTabKey(pathname: string, search?: string): string | undefined {
-  if (pathname === "/" || pathname.startsWith("/jobs") || pathname.startsWith("/records/") || pathname === "/tech" || pathname.startsWith("/tech/jobs") || pathname.startsWith("/estimates") || pathname.startsWith("/form/")) return "jobs";
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/intake") ||
+    pathname.startsWith("/dispatch") ||
+    pathname.startsWith("/operations-v2") ||
+    pathname.startsWith("/dispatch-v2") ||
+    pathname.startsWith("/schedule-v2") ||
+    pathname.startsWith("/jobs") ||
+    pathname.startsWith("/records/") ||
+    pathname === "/tech" ||
+    pathname.startsWith("/tech/jobs") ||
+    pathname.startsWith("/estimates") ||
+    pathname.startsWith("/form/")
+  ) return "jobs";
   if (pathname.startsWith("/tech/customers")) return "jobs";
   // Legacy /inbox links redirect into the split Phone/SMS pages.
   if (pathname.startsWith("/inbox")) {
@@ -57,7 +70,7 @@ export const ALL_ACCESS_KEYS = [
 ] as const;
 
 const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = {
-  jobs: "/",
+  jobs: "/dispatch",
   phone: "/phone",
   sms: "/sms",
   inbox: "/sms",
@@ -72,7 +85,7 @@ export function getFirstAllowedRoute(allowedTabs: Set<string> | null, role?: str
   const isFieldRole = role === "tech" || role === "supervisor" || role === "installer";
 
   if (!allowedTabs || allowedTabs.size === 0) {
-    return isFieldRole ? "/tech" : "/";
+    return isFieldRole ? "/tech" : "/dispatch";
   }
 
   for (const key of ALL_ACCESS_KEYS) {
@@ -81,7 +94,7 @@ export function getFirstAllowedRoute(allowedTabs: Set<string> | null, role?: str
     return ACCESS_FALLBACK_ROUTE[key];
   }
 
-  return isFieldRole ? "/tech" : "/";
+  return isFieldRole ? "/tech" : "/dispatch";
 }
 
 export function useEmployeeTabAccess(): Set<string> | null {

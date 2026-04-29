@@ -14,6 +14,12 @@ During the transition, HCP remains useful as:
 
 The long-term goal is for UltraOffice2.0 to own customers, jobs, estimates, communications, payments, catalog/pricing, technician work, and operational follow-up.
 
+## Product Rules
+
+The canonical rebuild rules live in `docs/ultraoffice20-product-principles.md`.
+
+Do not duplicate or reinterpret them here. This file should track implementation decisions only.
+
 ## Workflow Engine
 
 Status: legacy/experimental.

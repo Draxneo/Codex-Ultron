@@ -32,7 +32,10 @@ export function resolveTemplate(
     job_type: job.job_type || "",
     scheduled_date: formatDateFriendly(job.scheduled_date),
     time_window: timeWindow,
+    arrival_window: timeWindow,
     address: job.address || "",
+    eta_minutes: job.eta_minutes ? String(job.eta_minutes) : "",
+    eta_text: job.eta_minutes ? `ETA is ${job.eta_minutes} minutes.` : "",
 
     // Tech fields
     assigned_to: job.assigned_to || "",
@@ -42,6 +45,7 @@ export function resolveTemplate(
     // Company fields
     company_name: company.company_name || "",
     company_phone: company.company_phone || "",
+    a2p_footer: company.a2p_footer || "Reply STOP to opt out.",
   };
 
   return templateBody.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
@@ -56,10 +60,11 @@ export async function loadCompanySettings(
   supabase: any,
   keys: string[]
 ): Promise<Record<string, string>> {
+  const uniqueKeys = Array.from(new Set(keys));
   const { data } = await supabase
     .from("company_settings")
     .select("key, value")
-    .in("key", keys);
+    .in("key", uniqueKeys);
 
   const map: Record<string, string> = {};
   for (const row of data || []) {

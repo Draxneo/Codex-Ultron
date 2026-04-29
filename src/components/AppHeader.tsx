@@ -21,12 +21,13 @@ import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
-  "/": { label: "Schedule", roles: null },
+  "/intake": { label: "Intake HQ", roles: null },
+  "/dispatch": { label: "Dispatch HQ", roles: null },
   "/phone": { label: "Inbox", roles: null },
   "/sms": { label: "Messages", roles: null },
-  "/team": { label: "Team Chat", roles: null },
-  "/customers": { label: "Customers", roles: null },
-  "/quick-quote": { label: "Estimates", roles: null },
+  "/team": { label: "Team HQ", roles: null },
+  "/customers": { label: "Customer HQ", roles: null },
+  "/quick-quote": { label: "Quote HQ", roles: null },
   "/catalog": { label: "Price Book", roles: null },
   "/pay": { label: "Payments", roles: null },
   "/reports": { label: "Reporting", roles: null },
@@ -96,10 +97,14 @@ export function AppHeader() {
           {navItems.map((item) => {
             const active = item.to === "/"
               ? location.pathname === "/" || location.pathname.startsWith("/jobs")
+              : item.to === "/intake"
+                ? location.pathname === "/intake" || location.pathname.startsWith("/operations-v2")
+              : item.to === "/dispatch"
+                ? location.pathname === "/dispatch" || location.pathname.startsWith("/dispatch-v2") || location.pathname.startsWith("/schedule-v2")
               : item.to === "/phone"
                 ? location.pathname.startsWith("/phone") || location.pathname.startsWith("/calls") || location.pathname.startsWith("/inbox")
               : item.to === "/quick-quote"
-                ? location.pathname.startsWith("/quick-quote") || location.pathname.startsWith("/estimates")
+                ? location.pathname.startsWith("/quick-quote") || location.pathname.startsWith("/quote-builder") || location.pathname.startsWith("/estimates")
               : location.pathname.startsWith(item.to);
             const unread = unreadMap[item.to] || 0;
             return (

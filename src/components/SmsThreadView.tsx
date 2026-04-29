@@ -619,6 +619,12 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
           />
           <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
           <DictateButton
+            size="sm"
+            showLabel
+            hideOnMobile={false}
+            autoStopOnSilence={false}
+            provider="openai"
+            title="Dictate message"
             onTranscript={(text) => {
               const el = bodyInputRef.current;
               const { value, caret } = insertAtSelection(body, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);

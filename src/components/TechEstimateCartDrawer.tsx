@@ -272,7 +272,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
 
       if (customerPhone) {
         const firstName = customerName?.split(" ")[0] || "there";
-        const body = `Hi ${firstName}, ${techName || "your technician"} from Carnes and Sons prepared options for today's visit.\n\nReview and choose here: ${link}`;
+        const body = `Hi ${firstName}, ${techName || "your technician"} from the Carnes family put together options for today's visit.\n\nYou can review them here and text us back with any questions: ${link}`;
 
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({

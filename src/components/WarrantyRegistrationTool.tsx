@@ -281,11 +281,11 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
                   setSendingEmailSms(true);
                   try {
                     const firstName = customerName?.split(" ")[0] || "there";
-                    const msg = `Hey ${firstName}! 👋 This is ${companySettings.company_name || "your HVAC team"}. We just wrapped up your install and want to make sure your warranty is registered properly. Could you send us your email address so we can get that taken care of for you? Thanks! 🙌`;
+                    const msg = `Hi ${firstName}, this is ${companySettings.company_name || "the Carnes family"}. We just wrapped up your install and want to make sure your warranty is registered the right way. Could you send us your email address so we can take care of that for you?`;
                     const { sendSmsImpl } = await import("@/hooks/useSendSms");
                     const result = await sendSmsImpl({
                       to: phone, body: msg, jobId, contactName: customerName || null,
-                      contactType: "customer", source: "warranty_email_request", silent: true,
+                      contactType: "customer", source: "warranty_email_request", hitlApproved: true, silent: true,
                     });
                     if (!result.success) throw new Error(result.error || "Send failed");
                     toast({ title: "SMS Sent", description: `Asked ${firstName} for their email` });

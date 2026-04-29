@@ -1,0 +1,1181 @@
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  addDays,
+  eachDayOfInterval,
+  endOfWeek,
+  format,
+  isSameDay,
+  isToday,
+  parseISO,
+  startOfWeek,
+  subDays,
+} from "date-fns";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Filter,
+  MapPin,
+  MessageSquare,
+  Navigation,
+  Phone,
+  Plus,
+  Route,
+  Search,
+  Sparkles,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
+import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
+import { NewJobDialog } from "@/components/NewJobDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEmployees } from "@/hooks/useEmployees";
+import { useEstimates } from "@/hooks/useEstimates";
+import { useJobs } from "@/hooks/useJobs";
+import { toast } from "@/hooks/use-toast";
+import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
+import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
+import { formatPhone, toE164 } from "@/lib/formatters";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { cn } from "@/lib/utils";
+
+type ScheduleItem = {
+  id: string;
+  item_type: "job" | "estimate";
+  customer_name: string | null;
+  customer_id: string | null;
+  address: string | null;
+  description: string | null;
+  assigned_to: string | null;
+  scheduled_date: string | null;
+  arrival_start: string | null;
+  arrival_end: string | null;
+  job_type: string;
+  status?: string | null;
+  work_status?: string | null;
+  job_number?: string | null;
+  hcp_job_number?: string | null;
+  customer_phone?: string | null;
+};
+
+type CommunicationItem = {
+  id: string;
+  kind: "call" | "sms";
+  direction: "inbound" | "outbound";
+  name: string;
+  phone: string;
+  summary: string;
+  detail: string;
+  time: string;
+  createdAt: string;
+  status: string;
+  latestJobId?: string | null;
+  raw: CallConversation | SmsConversation;
+};
+
+type DispatchMode = "ai" | "human";
+
+const FILTERS = [
+  { value: "all", label: "All" },
+  { value: "estimate", label: "Estimates" },
+  { value: "install", label: "Installs" },
+  { value: "service", label: "Service" },
+  { value: "maintenance", label: "Maint." },
+];
+
+const STATUS_DONE = new Set(["done", "invoiced", "canceled", "cancelled", "completed"]);
+
+function normalizeTime(value?: string | null) {
+  if (!value) return "Any time";
+  if (value.includes("T")) return format(parseISO(value), "h:mm a");
+  const [hourRaw, minute = "00"] = value.split(":");
+  const hour = Number(hourRaw);
+  if (Number.isNaN(hour)) return value;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute.padStart(2, "0")} ${suffix}`;
+}
+
+function itemTone(item: ScheduleItem) {
+  const type = item.item_type === "estimate" ? "estimate" : item.job_type;
+  if (type === "install") return "border-l-primary bg-primary/5";
+  if (type === "estimate") return "border-l-sky-500 bg-sky-50/70 dark:bg-sky-950/20";
+  if (type === "maintenance") return "border-l-[hsl(var(--success))] bg-[hsl(var(--complete-bg))]/60";
+  return "border-l-[hsl(var(--accent))] bg-[hsl(var(--warm-light))]/60";
+}
+
+function itemLabel(item: ScheduleItem) {
+  if (item.item_type === "estimate") return "Estimate";
+  if (!item.job_type) return "Job";
+  return item.job_type.charAt(0).toUpperCase() + item.job_type.slice(1);
+}
+
+function getEmployeeName(employees: any[] = [], assignedTo?: string | null) {
+  if (!assignedTo) return "Unassigned";
+  return employees.find((employee) => employee.id === assignedTo)?.name || assignedTo;
+}
+
+function buildTimeRange(item: ScheduleItem) {
+  if (!item.arrival_start && !item.arrival_end) return "Any time";
+  if (item.arrival_start && item.arrival_end) {
+    return `${normalizeTime(item.arrival_start)} - ${normalizeTime(item.arrival_end)}`;
+  }
+  return normalizeTime(item.arrival_start || item.arrival_end);
+}
+
+function formatCallTime(value?: string | null) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return format(date, "MMM d, h:mm a");
+}
+
+function summarizeCallIntent(conversation: CallConversation) {
+  const call = conversation.lastCall;
+  const extracted = call.extracted_data || {};
+  const guessed =
+    extracted.intent ||
+    extracted.customer_intent ||
+    extracted.action ||
+    extracted.booking_intent ||
+    null;
+  if (typeof guessed === "string" && guessed.trim()) return guessed.replaceAll("_", " ");
+  if (call.ai_summary) return call.ai_summary;
+  if (call.transcription) return call.transcription;
+  if (call.direction === "inbound" && call.status === "completed") return "Incoming call ready for review";
+  if (call.direction === "outbound") return "Outbound call";
+  return call.status || "Call logged";
+}
+
+function summarizeSmsIntent(conversation: SmsConversation) {
+  const latest = conversation.lastMessage;
+  if (conversation.status === "needs_reply") return "Needs reply";
+  if (conversation.latestJobId || conversation.jobContext) return "Customer text tied to a job";
+  if (latest.direction === "inbound") return "Incoming text";
+  return "Outbound text";
+}
+
+function buildSmsUrl(phone?: string | null, draft?: string) {
+  if (!phone) return "/sms";
+  const params = new URLSearchParams();
+  params.set("phone", toE164(phone) || phone);
+  if (draft) params.set("draft", draft);
+  return `/sms?${params.toString()}`;
+}
+
+function callConversationToItem(conversation: CallConversation): CommunicationItem {
+  const call = conversation.lastCall;
+  const name = conversation.contactName || formatPhone(conversation.phoneNumber) || conversation.phoneNumber;
+  return {
+    id: `call-${call.id}`,
+    kind: "call",
+    direction: call.direction,
+    name,
+    phone: conversation.phoneNumber,
+    summary: summarizeCallIntent(conversation),
+    detail: call.ai_summary || call.transcription || "Open the call context to review what happened and what dispatch should do next.",
+    time: call.time_ct || formatCallTime(call.created_at),
+    createdAt: call.created_at,
+    status: call.status || "logged",
+    latestJobId: (call as any).related_job_id || null,
+    raw: conversation,
+  };
+}
+
+function smsConversationToItem(conversation: SmsConversation): CommunicationItem {
+  const latest = conversation.lastMessage;
+  const name = conversation.contactName || formatPhone(conversation.phoneNumber) || conversation.phoneNumber;
+  return {
+    id: `sms-${latest.id}`,
+    kind: "sms",
+    direction: latest.direction,
+    name,
+    phone: conversation.phoneNumber,
+    summary: summarizeSmsIntent(conversation),
+    detail: latest.body || "Open the text context to review the latest message.",
+    time: latest.time_ct || formatCallTime(latest.created_at),
+    createdAt: latest.created_at,
+    status: conversation.status,
+    latestJobId: conversation.latestJobId,
+    raw: conversation,
+  };
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: typeof CalendarDays;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary text-primary">
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function JobCard({
+  item,
+  employees,
+  compact = false,
+  onClick,
+}: {
+  item: ScheduleItem;
+  employees: any[];
+  compact?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-lg border border-l-4 bg-card p-3 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md",
+        itemTone(item),
+        compact && "p-2.5"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-foreground">{item.customer_name || "No customer name"}</p>
+            <Badge variant="outline" className="shrink-0 text-[10px]">{itemLabel(item)}</Badge>
+          </div>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{item.address || "No address on file"}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-semibold text-foreground">{buildTimeRange(item)}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {item.job_number || item.hcp_job_number || item.id.slice(0, 6)}
+          </p>
+        </div>
+      </div>
+      {!compact && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <UserRound className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{getEmployeeName(employees, item.assigned_to)}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Call">
+              <Phone className="h-3.5 w-3.5" />
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Text">
+              <MessageSquare className="h-3.5 w-3.5" />
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Route">
+              <Navigation className="h-3.5 w-3.5" />
+            </span>
+          </div>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function RailSection({
+  title,
+  detail,
+  children,
+}: {
+  title: string;
+  detail?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-lg border bg-card shadow-sm">
+      <div className="border-b px-4 py-3">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {detail && <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>}
+      </div>
+      <div className="p-3">{children}</div>
+    </section>
+  );
+}
+
+function BoardCommandRail({
+  mode,
+  criticalItems,
+  unscheduledItems,
+  dayItems,
+  routeReadyCount,
+  employees,
+  onItemClick,
+  onCommunicationClick,
+}: {
+  mode: DispatchMode;
+  criticalItems: ScheduleItem[];
+  unscheduledItems: ScheduleItem[];
+  dayItems: ScheduleItem[];
+  routeReadyCount: number;
+  employees: any[];
+  onItemClick: (item: ScheduleItem) => void;
+  onCommunicationClick: (item: CommunicationItem) => void;
+}) {
+  const navigate = useNavigate();
+  const { conversations, loading: callsLoading } = useCallLog();
+  const { conversations: smsConversations, loading: smsLoading } = useSmsLog();
+  const openSlots = Math.max(0, (employees || []).filter((employee: any) => employee.is_active !== false).length * 3 - dayItems.length);
+  const unassigned = dayItems.filter((item) => !item.assigned_to);
+  const firstCritical = criticalItems[0] || null;
+  const firstBacklog = unscheduledItems[0] || null;
+  const communicationItems = useMemo(() => {
+    const callItems = conversations.slice(0, 8).map(callConversationToItem);
+    const smsItems = smsConversations.slice(0, 8).map(smsConversationToItem);
+    return [...callItems, ...smsItems]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 7);
+  }, [conversations, smsConversations]);
+
+  return (
+    <aside className="space-y-3">
+      <RailSection
+        title={mode === "ai" ? "JARVIS Day Prep" : "Human Dispatch Controls"}
+        detail={mode === "ai" ? "Prepared moves wait for approval." : "Macro buttons for manual recovery."}
+      >
+        {mode === "ai" ? (
+          <div className="space-y-3">
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Prepared brief
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {criticalItems.length === 0
+                  ? `${routeReadyCount} stops are route-ready. ${openSlots} likely openings remain.`
+                  : `${criticalItems.length} scheduled jobs need a tech or arrival window before routes are clean.`}
+              </p>
+            </div>
+
+            {firstCritical ? (
+              <button
+                type="button"
+                onClick={() => onItemClick(firstCritical)}
+                className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  Approve dispatch cleanup
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {firstCritical.customer_name || "Unnamed job"} needs {!firstCritical.assigned_to ? "a technician" : "an arrival window"}.
+                </p>
+              </button>
+            ) : (
+              <div className="rounded-md border border-[hsl(var(--success))]/30 bg-[hsl(var(--complete-bg))] p-3 text-sm">
+                No missing tech or arrival-window issues on this day.
+              </div>
+            )}
+
+            {firstBacklog && (
+              <button
+                type="button"
+                onClick={() => onItemClick(firstBacklog)}
+                className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Place next backlog item
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {firstBacklog.customer_name || "Unscheduled work"} is ready to fit into an open window.
+                </p>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toast({ title: "Gap finder", description: `${openSlots} likely openings based on active tech capacity.` })}>
+              <Clock className="h-4 w-4" />
+              Find gap
+            </Button>
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toast({ title: "Route check", description: `${routeReadyCount} stops have technician and address data.` })}>
+              <Route className="h-4 w-4" />
+              Check route
+            </Button>
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => firstCritical ? onItemClick(firstCritical) : toast({ title: "No cleanup needed", description: "Every scheduled job has the minimum dispatch data." })}>
+              <UserRound className="h-4 w-4" />
+              Assign tech
+            </Button>
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => firstBacklog ? onItemClick(firstBacklog) : toast({ title: "Backlog clear", description: "No unscheduled work in this filter." })}>
+              <Plus className="h-4 w-4" />
+              Place job
+            </Button>
+          </div>
+        )}
+      </RailSection>
+
+      <RailSection title="Today At Risk" detail="When or where is not clean yet.">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open</p>
+            <p className="mt-1 text-xl font-semibold">{openSlots}</p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unassigned</p>
+            <p className="mt-1 text-xl font-semibold">{unassigned.length}</p>
+          </div>
+          <div className="rounded-md border bg-background p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Backlog</p>
+            <p className="mt-1 text-xl font-semibold">{unscheduledItems.length}</p>
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          {criticalItems.slice(0, 3).map((item) => (
+            <JobCard key={item.id} item={item} employees={employees} compact onClick={() => onItemClick(item)} />
+          ))}
+          {criticalItems.length === 0 && (
+            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No schedule cleanup waiting.</p>
+          )}
+        </div>
+      </RailSection>
+
+      <RailSection title="Calls And Texts" detail="People who may change today's when/where.">
+        <div className="space-y-2">
+          {callsLoading || smsLoading ? (
+            <Skeleton className="h-20 rounded-md" />
+          ) : communicationItems.length === 0 ? (
+            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No recent calls or texts.</p>
+          ) : (
+            communicationItems.slice(0, 4).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onCommunicationClick(item)}
+                  className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={item.kind === "call" ? "secondary" : "outline"} className="text-[10px]">
+                          {item.kind === "call" ? "Call" : "Text"}
+                        </Badge>
+                        <Badge variant={item.direction === "inbound" ? "default" : "outline"} className="text-[10px]">
+                          {item.direction === "inbound" ? "Inbound" : "Outbound"}
+                        </Badge>
+                        <p className="truncate text-sm font-semibold">{item.name}</p>
+                      </div>
+                      <p className="mt-1 text-xs font-medium text-foreground">{item.summary}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{item.time}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Call back"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openPhoneConsole(toE164(item.phone) || item.phone, { contactName: item.name });
+                        }}
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Text customer"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(buildSmsUrl(item.phone));
+                        }}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </button>
+            ))
+          )}
+        </div>
+      </RailSection>
+    </aside>
+  );
+}
+
+function CommunicationContextDialog({
+  item,
+  open,
+  onOpenChange,
+}: {
+  item: CommunicationItem | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  if (!item) return null;
+
+  const isCall = item.kind === "call";
+  const fullPage = isCall ? "/phone" : "/sms";
+  const title = isCall ? "Call Context" : "Text Context";
+  const actionLabel = isCall ? "Open phone page" : "Open SMS page";
+  const call = isCall ? (item.raw as CallConversation).lastCall : null;
+  const sms = !isCall ? (item.raw as SmsConversation).lastMessage : null;
+  const transcript = call?.transcription || null;
+  const summary = call?.ai_summary || null;
+  const messageBody = sms?.body || null;
+  const smsMedia = normalizeMediaAttachments(sms?.media_urls);
+
+  const callBack = () => {
+    openPhoneConsole(toE164(item.phone) || item.phone, { contactName: item.name });
+  };
+  const textCustomer = () => {
+    navigate(buildSmsUrl(item.phone));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl p-0">
+        <DialogHeader className="border-b px-6 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <DialogTitle>{item.name}</DialogTitle>
+            <Badge variant={isCall ? "secondary" : "outline"}>{isCall ? "Call" : "Text"}</Badge>
+            <Badge variant={item.direction === "inbound" ? "default" : "outline"}>
+              {item.direction === "inbound" ? "Inbound" : "Outbound"}
+            </Badge>
+          </div>
+          <DialogDescription>
+            {title} &middot; {formatPhone(item.phone) || item.phone} &middot; {item.time}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_240px]">
+          <div className="space-y-4">
+            <section className="rounded-lg border bg-card p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What dispatch needs to know</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{item.summary}</p>
+              <p className="mt-2 rounded-md bg-muted/60 p-3 text-sm leading-6 text-muted-foreground">{item.detail}</p>
+            </section>
+
+            {summary && (
+              <section className="rounded-lg border bg-card p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Jarvis summary</p>
+                <p className="mt-2 text-sm leading-6 text-foreground">{summary}</p>
+              </section>
+            )}
+
+            {(messageBody || smsMedia.length > 0) && (
+              <section className="rounded-lg border bg-card p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Latest text</p>
+                {messageBody && <p className="mt-2 text-sm leading-6 text-foreground">{messageBody}</p>}
+                {smsMedia.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {smsMedia.map((media, index) => (
+                      <MmsMediaRenderer
+                        key={`${media.url}-${index}`}
+                        url={media.url}
+                        contentType={media.fileType || undefined}
+                        fileName={media.fileName}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {transcript && (
+              <section className="rounded-lg border bg-card p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Transcript</p>
+                <p className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{transcript}</p>
+              </section>
+            )}
+          </div>
+
+          <aside className="space-y-3">
+            <Button className="w-full justify-start gap-2" onClick={callBack}>
+              <Phone className="h-4 w-4" />
+              Call customer
+            </Button>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={textCustomer}>
+              <MessageSquare className="h-4 w-4" />
+              Text customer
+            </Button>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(fullPage)}>
+              <ExternalLink className="h-4 w-4" />
+              {actionLabel}
+            </Button>
+            {item.latestJobId && (
+              <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/jobs/${item.latestJobId}`)}>
+                <CalendarDays className="h-4 w-4" />
+                Open linked job
+              </Button>
+            )}
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Dispatch action", description: "Next pass can turn this into reschedule/book/add-note actions without leaving the board." })}>
+              <Sparkles className="h-4 w-4" />
+              Ask Jarvis
+            </Button>
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+              This pop-up is the model: answer the call/text, understand intent, act on the board, then open the full record only when needed.
+            </div>
+          </aside>
+        </div>
+
+        <DialogFooter className="border-t px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={() => navigate(fullPage)}>{actionLabel}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JobContextDialog({
+  item,
+  employees,
+  open,
+  onOpenChange,
+  onOpenRecord,
+}: {
+  item: ScheduleItem | null;
+  employees: any[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenRecord: (item: ScheduleItem) => void;
+}) {
+  const navigate = useNavigate();
+  if (!item) return null;
+
+  const status = item.status || item.work_status || "scheduled";
+  const recordLabel = item.item_type === "estimate" ? "Open estimate" : "Open job";
+  const dialableNumber = toE164(item.customer_phone) || item.customer_phone || "";
+  const callFromBoard = () => {
+    if (!dialableNumber) {
+      toast({ title: "No phone number", description: "This record does not have a customer phone number yet." });
+      return;
+    }
+    openPhoneConsole(dialableNumber, {
+      contactName: item.customer_name || undefined,
+      jobId: item.item_type === "job" ? item.id : undefined,
+      customerId: item.customer_id || undefined,
+    });
+  };
+  const textFromBoard = () => {
+    if (!item.customer_phone) {
+      toast({ title: "No phone number", description: "This record does not have a customer phone number yet." });
+      return;
+    }
+    navigate(buildSmsUrl(item.customer_phone));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl p-0">
+        <DialogHeader className="border-b px-6 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <DialogTitle>{item.customer_name || "No customer name"}</DialogTitle>
+            <Badge variant="outline">{itemLabel(item)}</Badge>
+            <Badge variant={item.assigned_to ? "secondary" : "destructive"}>
+              {item.assigned_to ? "Assigned" : "Needs tech"}
+            </Badge>
+          </div>
+          <DialogDescription>
+            {item.job_number || item.hcp_job_number || item.id.slice(0, 8)} &middot; {buildTimeRange(item)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_240px]">
+          <div className="space-y-4">
+            <section className="rounded-lg border bg-card p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Dispatch context</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Technician</p>
+                  <p className="text-sm font-semibold">{getEmployeeName(employees, item.assigned_to)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <p className="text-sm font-semibold capitalize">{status.replaceAll("_", " ")}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Arrival</p>
+                  <p className="text-sm font-semibold">{buildTimeRange(item)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Type</p>
+                  <p className="text-sm font-semibold">{itemLabel(item)}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border bg-card p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer and work</p>
+              <div className="mt-3 space-y-3 text-sm">
+                <div className="flex gap-2">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>{item.address || "No address on file"}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>{item.customer_phone || "No phone on this record"}</span>
+                </div>
+                <p className="rounded-md bg-muted/60 p-3 text-muted-foreground">
+                  {item.description || "No job description yet. This is where dispatch notes, booking reason, and customer concerns should be visible."}
+                </p>
+              </div>
+            </section>
+          </div>
+
+          <aside className="space-y-3">
+            <Button className="w-full justify-start gap-2" onClick={() => onOpenRecord(item)}>
+              <ExternalLink className="h-4 w-4" />
+              {recordLabel}
+            </Button>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={callFromBoard}>
+              <Phone className="h-4 w-4" />
+              Call customer
+            </Button>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={textFromBoard}>
+              <MessageSquare className="h-4 w-4" />
+              Text customer
+            </Button>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Route action", description: "Next pass can open map routing and fit-this-job suggestions." })}>
+              <Navigation className="h-4 w-4" />
+              Route / fit
+            </Button>
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+              Future dispatch pop-up data: open balance, club membership, parts readiness, recent calls/texts, warranty/callback risk, weather, and preferred tech.
+            </div>
+          </aside>
+        </div>
+
+        <DialogFooter className="border-t px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={() => onOpenRecord(item)}>{recordLabel}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function ScheduleV2() {
+  const navigate = useNavigate();
+  const { data: jobs, isLoading: jobsLoading } = useJobs();
+  const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
+  const { data: employees = [] } = useEmployees();
+  const [currentDay, setCurrentDay] = useState(() => new Date());
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [mode, setMode] = useState<DispatchMode>("ai");
+  const [newJobOpen, setNewJobOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
+  const [selectedCommunication, setSelectedCommunication] = useState<CommunicationItem | null>(null);
+
+  const scheduleItems = useMemo<ScheduleItem[]>(() => {
+    const realJobHcpIds = new Set(
+      (jobs || [])
+        .filter((job: any) => job.hcp_id && job.job_type !== "estimate")
+        .map((job: any) => job.hcp_id)
+    );
+
+    const jobItems = (jobs || []).map((job: any) => ({
+      ...job,
+      item_type: "job" as const,
+      job_type: job.job_type || "service",
+      job_number: job.job_number || job.hcp_job_number,
+      arrival_start: job.arrival_start || null,
+      arrival_end: job.arrival_end || null,
+    }));
+
+    const estimateItems = (estimates || [])
+      .filter((estimate: any) => !estimate.hcp_id || !realJobHcpIds.has(estimate.hcp_id))
+      .map((estimate: any) => ({
+        ...estimate,
+        item_type: "estimate" as const,
+        job_type: "estimate",
+        arrival_start: estimate.arrival_start || null,
+        arrival_end: estimate.arrival_end || null,
+      }));
+
+    return [...jobItems, ...estimateItems];
+  }, [jobs, estimates]);
+
+  const filteredItems = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return scheduleItems.filter((item) => {
+      const status = (item.status || item.work_status || "").toLowerCase();
+      if (STATUS_DONE.has(status)) return false;
+      if (filter === "estimate" && item.item_type !== "estimate") return false;
+      if (filter !== "all" && filter !== "estimate" && (item.item_type === "estimate" || item.job_type !== filter)) return false;
+      if (!search) return true;
+      return [item.customer_name, item.address, item.description, item.job_number, item.hcp_job_number]
+        .some((value) => String(value || "").toLowerCase().includes(search));
+    });
+  }, [scheduleItems, query, filter]);
+
+  const dayItems = useMemo(() => {
+    return filteredItems
+      .filter((item) => item.scheduled_date && isSameDay(parseISO(item.scheduled_date), currentDay))
+      .sort((a, b) => {
+        if (a.arrival_start && b.arrival_start) return a.arrival_start.localeCompare(b.arrival_start);
+        if (a.arrival_start) return -1;
+        if (b.arrival_start) return 1;
+        return (a.customer_name || "").localeCompare(b.customer_name || "");
+      });
+  }, [filteredItems, currentDay]);
+
+  const unscheduledItems = useMemo(
+    () => filteredItems.filter((item) => !item.scheduled_date).slice(0, 12),
+    [filteredItems]
+  );
+
+  const groupedByTech = useMemo(() => {
+    const activeNames = (employees || []).filter((employee: any) => employee.is_active !== false).map((employee: any) => employee.name);
+    const groups = new Map<string, ScheduleItem[]>();
+    for (const name of activeNames) groups.set(name, []);
+    groups.set("Unassigned", []);
+
+    for (const item of dayItems) {
+      const name = getEmployeeName(employees, item.assigned_to);
+      const key = groups.has(name) ? name : item.assigned_to ? name : "Unassigned";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)?.push(item);
+    }
+
+    return Array.from(groups.entries())
+      .sort(([nameA, itemsA], [nameB, itemsB]) => {
+        if (itemsA.length !== itemsB.length) return itemsB.length - itemsA.length;
+        if (nameA === "Unassigned") return -1;
+        if (nameB === "Unassigned") return 1;
+        return nameA.localeCompare(nameB);
+      })
+      .filter(([, items], index) => items.length > 0 || index < 6);
+  }, [dayItems, employees]);
+
+  const weekDays = eachDayOfInterval({
+    start: startOfWeek(currentDay, { weekStartsOn: 0 }),
+    end: endOfWeek(currentDay, { weekStartsOn: 0 }),
+  });
+
+  const criticalItems = dayItems.filter((item) => !item.assigned_to || !item.arrival_start);
+  const routeReadyCount = dayItems.filter((item) => item.assigned_to && item.address).length;
+  const loading = jobsLoading || estimatesLoading;
+
+  const openItem = (item: ScheduleItem) => {
+    setSelectedItem(item);
+  };
+
+  const openRecord = (item: ScheduleItem) => {
+    navigate(item.item_type === "estimate" ? `/estimates/${item.id}` : `/jobs/${item.id}`);
+  };
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <AppHeader />
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="border-b bg-card px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">Dispatch HQ</h1>
+                <Badge variant="secondary">Operations Brain</Badge>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Run the day around when work happens, where it is, and what needs approval before trucks move.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+                <Button
+                  type="button"
+                  variant={mode === "ai" ? "default" : "ghost"}
+                  size="sm"
+                  className="h-8 gap-2"
+                  onClick={() => setMode("ai")}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  AI
+                </Button>
+                <Button
+                  type="button"
+                  variant={mode === "human" ? "default" : "ghost"}
+                  size="sm"
+                  className="h-8 gap-2"
+                  onClick={() => setMode("human")}
+                >
+                  <UserRound className="h-4 w-4" />
+                  Human
+                </Button>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigate("/intake")}>
+                Intake HQ
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentDay(subDays(currentDay, 1))}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentDay(new Date())}>
+                Today
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button size="sm" onClick={() => setNewJobOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New Job
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search customer, address, job number, or notes"
+                className="h-10 pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto rounded-md border bg-background p-1">
+              <Filter className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+              {FILTERS.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={filter === option.value ? "default" : "ghost"}
+                  size="sm"
+                  className="h-8 whitespace-nowrap"
+                  onClick={() => setFilter(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid shrink-0 grid-cols-2 gap-3 border-b bg-muted/30 p-4 lg:grid-cols-4">
+          <MetricCard label="When" value={format(currentDay, "MMM d")} detail={isToday(currentDay) ? "Today" : format(currentDay, "EEEE")} icon={CalendarDays} />
+          <MetricCard label="Where" value={dayItems.length} detail={`${routeReadyCount} stops have tech and address`} icon={Route} />
+          <MetricCard label="Approve" value={criticalItems.length} detail="Missing tech or arrival window" icon={AlertTriangle} />
+          <MetricCard label="Place" value={unscheduledItems.length} detail="Backlog ready for the board" icon={Sparkles} />
+        </div>
+
+        <Tabs defaultValue="board" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b bg-card px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <TabsList className="h-10">
+                <TabsTrigger value="board" className="gap-2"><Users className="h-4 w-4" /> Board</TabsTrigger>
+                <TabsTrigger value="route" className="gap-2"><Route className="h-4 w-4" /> Route</TabsTrigger>
+              </TabsList>
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {weekDays.map((day) => {
+                  const active = isSameDay(day, currentDay);
+                  const count = filteredItems.filter((item) => item.scheduled_date && isSameDay(parseISO(item.scheduled_date), day)).length;
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      type="button"
+                      onClick={() => setCurrentDay(day)}
+                      className={cn(
+                        "flex h-10 min-w-16 flex-col items-center justify-center rounded-md border px-3 text-xs transition",
+                        active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <span className="font-semibold">{format(day, "EEE d")}</span>
+                      <span className={cn("text-[10px]", active ? "text-primary-foreground/80" : "text-muted-foreground")}>{count} jobs</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="grid flex-1 gap-3 overflow-hidden p-4 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-full min-h-96 rounded-lg" />)}
+            </div>
+          ) : (
+            <>
+              <TabsContent value="board" className="m-0 min-h-0 flex-1 overflow-auto p-4">
+                <div className="mb-3">
+                  <h2 className="text-sm font-semibold text-foreground">Day Board</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {mode === "ai"
+                      ? "JARVIS prepares cleanup and customer moves; dispatch approves from the rail."
+                      : "Manual lane control for assigning techs, placing backlog, and contacting customers."}
+                  </p>
+                </div>
+                <div className="grid min-w-[1320px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="grid gap-3 lg:grid-cols-3 2xl:grid-cols-4">
+                    {groupedByTech.map(([techName, items]) => (
+                      <section key={techName} className="flex min-h-[520px] flex-col rounded-lg border bg-card shadow-sm">
+                        <div className="border-b px-3 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="truncate text-sm font-semibold">{techName}</h3>
+                            <Badge variant={techName === "Unassigned" ? "destructive" : "secondary"}>{items.length}</Badge>
+                          </div>
+                        </div>
+                        <div className="flex-1 space-y-2 overflow-y-auto p-2">
+                          {items.length === 0 ? (
+                            <div className="flex h-28 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
+                              No jobs assigned
+                            </div>
+                          ) : (
+                            items.map((item) => (
+                              <JobCard key={item.id} item={item} employees={employees} onClick={() => openItem(item)} />
+                            ))
+                          )}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                  <BoardCommandRail
+                    mode={mode}
+                    criticalItems={criticalItems}
+                    unscheduledItems={unscheduledItems}
+                    dayItems={dayItems}
+                    routeReadyCount={routeReadyCount}
+                    employees={employees}
+                    onItemClick={openItem}
+                    onCommunicationClick={setSelectedCommunication}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="route" className="m-0 min-h-0 flex-1 overflow-auto p-4">
+                <div className="mb-3">
+                  <h2 className="text-sm font-semibold text-foreground">Route View</h2>
+                  <p className="text-xs text-muted-foreground">Stops, map position, and route health for the selected day.</p>
+                </div>
+                <div className="grid min-h-[620px] gap-4 lg:grid-cols-[360px_1fr_340px]">
+                  <section className="rounded-lg border bg-card shadow-sm">
+                    <div className="border-b px-4 py-3">
+                      <h3 className="text-sm font-semibold">Stops</h3>
+                      <p className="text-xs text-muted-foreground">Ordered by arrival window</p>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      {dayItems.map((item, index) => (
+                        <div key={item.id} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                              {index + 1}
+                            </div>
+                            {index < dayItems.length - 1 && <div className="h-10 w-px bg-border" />}
+                          </div>
+                          <div className="min-w-0 flex-1 pb-2">
+                            <JobCard item={item} employees={employees} compact onClick={() => openItem(item)} />
+                          </div>
+                        </div>
+                      ))}
+                      {dayItems.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No scheduled stops today.</p>}
+                    </div>
+                  </section>
+
+                  <section className="relative overflow-hidden rounded-lg border bg-card shadow-sm">
+                    <div className="absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--border))_1px,transparent_1px),linear-gradient(hsl(var(--border))_1px,transparent_1px)] bg-[size:36px_36px] opacity-35" />
+                    <div className="relative flex h-full min-h-[620px] flex-col">
+                      <div className="border-b bg-card/90 px-4 py-3 backdrop-blur">
+                        <h3 className="text-sm font-semibold">Where The Day Is</h3>
+                        <p className="text-xs text-muted-foreground">Stop clustering and travel warnings belong here.</p>
+                      </div>
+                      <div className="relative flex-1">
+                        {dayItems.slice(0, 8).map((item, index) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => openItem(item)}
+                            className="absolute flex max-w-[220px] items-center gap-2 rounded-lg border bg-background px-3 py-2 text-left shadow-md"
+                            style={{
+                              left: `${12 + (index % 4) * 21}%`,
+                              top: `${16 + Math.floor(index / 4) * 34 + (index % 2) * 7}%`,
+                            }}
+                          >
+                            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="truncate text-xs font-semibold">{item.customer_name || "Stop"}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-lg border bg-card shadow-sm">
+                    <div className="border-b px-4 py-3">
+                      <h3 className="text-sm font-semibold">Route Health</h3>
+                      <p className="text-xs text-muted-foreground">What dispatch should fix before sending the day.</p>
+                    </div>
+                    <div className="space-y-3 p-3">
+                      {criticalItems.length === 0 ? (
+                        <div className="rounded-lg border border-[hsl(var(--success))]/30 bg-[hsl(var(--complete-bg))] p-3 text-sm">
+                          The selected day looks route-ready.
+                        </div>
+                      ) : (
+                        criticalItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => openItem(item)}
+                            className="w-full rounded-lg border bg-background p-3 text-left hover:border-primary/40"
+                          >
+                            <div className="flex items-center gap-2 text-sm font-semibold">
+                              <AlertTriangle className="h-4 w-4 text-destructive" />
+                              {item.customer_name || "Unnamed job"}
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {!item.assigned_to ? "Needs technician" : "Needs arrival window"}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                </div>
+              </TabsContent>
+            </>
+          )}
+        </Tabs>
+      </main>
+
+      <NewJobDialog open={newJobOpen} onOpenChange={setNewJobOpen} defaultDate={format(currentDay, "yyyy-MM-dd")} />
+      <JobContextDialog
+        item={selectedItem}
+        employees={employees}
+        open={!!selectedItem}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItem(null);
+        }}
+        onOpenRecord={openRecord}
+      />
+      <CommunicationContextDialog
+        item={selectedCommunication}
+        open={!!selectedCommunication}
+        onOpenChange={(open) => {
+          if (!open) setSelectedCommunication(null);
+        }}
+      />
+    </div>
+  );
+}

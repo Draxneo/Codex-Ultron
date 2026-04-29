@@ -110,3 +110,56 @@ export async function geocodeAddress(
     return null;
   }
 }
+
+export type GoogleAddressVerification = {
+  input: string;
+  standardized: string;
+  confidence: number;
+  confidenceLabel: "high" | "medium" | "low";
+  lat: number;
+  lng: number;
+  locationType: string;
+};
+
+export async function verifyAddressWithGoogle(address: string): Promise<GoogleAddressVerification | null> {
+  if (!address || address.trim().length < 5) return null;
+
+  await loadGoogleMaps();
+  const geocoder = new google.maps.Geocoder();
+
+  try {
+    const result = await geocoder.geocode({
+      address,
+      bounds: {
+        north: 29.7,
+        south: 29.2,
+        east: -98.2,
+        west: -98.8,
+      },
+    });
+    const first = result.results?.[0];
+    const loc = first?.geometry?.location;
+    if (!first || !loc) return null;
+
+    const locationType = String(first.geometry?.location_type || "");
+    const confidence = locationType === "ROOFTOP"
+      ? 0.99
+      : locationType === "RANGE_INTERPOLATED"
+        ? 0.85
+        : locationType === "GEOMETRIC_CENTER"
+          ? 0.7
+          : 0.5;
+
+    return {
+      input: address,
+      standardized: first.formatted_address || address,
+      confidence,
+      confidenceLabel: confidence >= 0.8 ? "high" : confidence >= 0.65 ? "medium" : "low",
+      lat: loc.lat(),
+      lng: loc.lng(),
+      locationType,
+    };
+  } catch {
+    return null;
+  }
+}

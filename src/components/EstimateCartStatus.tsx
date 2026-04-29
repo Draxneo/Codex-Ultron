@@ -51,7 +51,7 @@ export function EstimateCartStatus({ estimateId, customerPhone, customerName }: 
     const { sendSmsImpl } = await import("@/hooks/useSendSms");
     await sendSmsImpl({
       to: customerPhone,
-      body: `Hi ${firstName} — just a reminder, your estimate is ready to review: ${link}`,
+      body: `Hi ${firstName}, the Carnes family has your estimate ready when you have a minute. You can review it here and text us back with any questions: ${link}`,
       contactName: customerName || null,
       contactType: "customer",
       source: "estimate_cart_resend",

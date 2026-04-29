@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { BookOpen, FileText, Wrench, Brain, BookMarked, Info, Terminal, MessageSquare, ArrowLeft } from "lucide-react";
+import { BookOpen, FileText, Wrench, Brain, BookMarked, Info, Terminal, MessageSquare, ArrowLeft, Activity } from "lucide-react";
 import { Link } from "react-router-dom";
 import { KnowledgeBase } from "@/components/agent/KnowledgeBase";
 import { InstructionsManager } from "@/components/agent/InstructionsManager";
@@ -12,11 +12,13 @@ import { ToolsRegistry } from "@/components/agent/ToolsRegistry";
 import { ModelConfigPanel } from "@/components/agent/ModelConfigPanel";
 import { LearningsLog } from "@/components/agent/LearningsLog";
 import { SmsRulesPanel } from "@/components/agent/SmsRulesPanel";
+import { JarvisCorePanel } from "@/components/agent/JarvisCorePanel";
 
 import { SystemPromptViewer } from "@/components/agent/SystemPromptViewer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const sections = [
+  { id: "core", label: "Core", icon: Activity, tooltip: "One control center for JARVIS's live rules, tools, approval queues, and knowledge layers." },
   { id: "prompt", label: "System Prompt", icon: Terminal, tooltip: "The full system prompt defining JARVIS's internal assistant identity, rules, and context injections." },
   { id: "knowledge", label: "Knowledge", icon: BookOpen, tooltip: "Classification rules, routing logic, and reference data JARVIS uses to understand inbound emails and calls." },
   { id: "instructions", label: "Instructions", icon: FileText, tooltip: "Behavioral rules for how JARVIS briefs the team, formats action items, summarizes jobs, and handles internal requests." },
@@ -29,6 +31,7 @@ const sections = [
 type Section = typeof sections[number]["id"];
 
 const sectionDescriptions: Record<Section, string> = {
+  core: "The live JARVIS control center: source of truth, company brains, tool drift, knowledge layers, and approval queues in one place.",
   prompt: "The full system prompt defining JARVIS's internal assistant identity, rules, and context injections. Loaded from the database on every request.",
   knowledge: "Classification rules, routing logic, and reference data JARVIS uses to understand inbound emails and calls.",
   instructions: "Behavioral rules for how JARVIS briefs the team, formats action items, summarizes jobs, and handles internal requests. These override default behavior.",
@@ -41,7 +44,7 @@ const sectionDescriptions: Record<Section, string> = {
 const AgentTraining = () => {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
-  const initialSection = (sections.find(s => s.id === searchParams.get("section"))?.id ?? "prompt") as Section;
+  const initialSection = (sections.find(s => s.id === searchParams.get("section"))?.id ?? "core") as Section;
   const [active, setActive] = useState<Section>(initialSection);
 
   useEffect(() => {
@@ -110,6 +113,7 @@ const AgentTraining = () => {
             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground leading-relaxed">{sectionDescriptions[active]}</p>
           </div>
+          {active === "core" && <JarvisCorePanel />}
           {active === "prompt" && <SystemPromptViewer />}
           {active === "knowledge" && <KnowledgeBase />}
           {active === "instructions" && <InstructionsManager />}

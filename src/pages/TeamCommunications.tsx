@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Briefcase,
@@ -36,6 +37,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { Input } from "@/components/ui/input";
 import { MediaItem } from "@/components/media";
@@ -45,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
+import { useQuickLinks } from "@/hooks/useQuickLinks";
 import { supabase } from "@/integrations/supabase/client";
 import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
 import { formatBytes } from "@/lib/fileTypes";
@@ -213,6 +216,8 @@ function SidebarEmpty({ children }: { children: string }) {
 export default function TeamCommunications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const requestedConversationId = searchParams.get("conversation");
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -220,8 +225,19 @@ export default function TeamCommunications() {
   const [newRoomName, setNewRoomName] = useState("");
   const [mutedCallIds, setMutedCallIds] = useState<Set<string>>(new Set());
   const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
+  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  const [resourceLabel, setResourceLabel] = useState("");
+  const [resourceHref, setResourceHref] = useState("");
+  const [resourceNote, setResourceNote] = useState("");
+  const [resourceCategory, setResourceCategory] = useState("Team Resources");
   const endRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const {
+    links: sharedLinks,
+    categories: sharedCategories,
+    isLoading: sharedLinksLoading,
+    addLink: addQuickLink,
+  } = useQuickLinks();
 
   const {
     data: teamUsers = [],
@@ -288,10 +304,14 @@ export default function TeamCommunications() {
   );
 
   useEffect(() => {
+    if (requestedConversationId && conversations.some((conversation) => conversation.id === requestedConversationId)) {
+      setSelectedConversationId(requestedConversationId);
+      return;
+    }
     if (!selectedConversationId && conversations[0]) {
       setSelectedConversationId(conversations[0].id);
     }
-  }, [conversations, selectedConversationId]);
+  }, [conversations, requestedConversationId, selectedConversationId]);
 
   const {
     data: messages = [],
@@ -704,6 +724,39 @@ export default function TeamCommunications() {
     composer.handleSend();
   };
 
+  const createTeamResource = () => {
+    const label = resourceLabel.trim();
+    const href = resourceHref.trim();
+    if (!label || !href) {
+      toast.error("Add a name and link");
+      return;
+    }
+    if (!/^https?:\/\//i.test(href)) {
+      toast.error("Use a full http or https link");
+      return;
+    }
+
+    addQuickLink.mutate(
+      {
+        label,
+        href,
+        sub: resourceNote.trim() || "Team resource",
+        iconName: "LinkIcon",
+        category: resourceCategory.trim() || "Team Resources",
+      },
+      {
+        onSuccess: () => {
+          setResourceLabel("");
+          setResourceHref("");
+          setResourceNote("");
+          setResourceCategory("Team Resources");
+          setResourceDialogOpen(false);
+          toast.success("Team resource added");
+        },
+      }
+    );
+  };
+
   const pinnedMessages = messages.filter((message) => message.is_pinned && !message.deleted_at);
   const pinnedLinks = Array.from(
     new Set(pinnedMessages.flatMap((message) => extractUrls(message.body)))
@@ -713,17 +766,33 @@ export default function TeamCommunications() {
   ).slice(-6);
   const sidebarLoading = teamUsersLoading || conversationsLoading || membersLoading;
   const pageHasError = teamUsersError || conversationsError;
+  const visibleSharedLinks = sharedLinks.length > 0 ? sharedLinks : usefulWebLinks.map((item, index) => ({
+    id: `fallback-${index}`,
+    href: item.href,
+    label: item.label,
+    sub: "Starter resource",
+    iconName: "LinkIcon",
+    category: "Starter Links",
+    sort_order: index,
+  }));
+  const sharedLinkGroups = visibleSharedLinks.reduce<Record<string, typeof visibleSharedLinks>>((groups, link) => {
+    const key = link.category || "Team Resources";
+    groups[key] = groups[key] || [];
+    groups[key].push(link);
+    return groups;
+  }, {});
+  const resourceCategories = Array.from(new Set(["Team Resources", "Permits", "Ordering", "Warranty", "Finance", ...sharedCategories]));
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="h-[calc(100vh-3rem)] overflow-hidden bg-muted/25">
-        <div className="grid h-full grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[260px_minmax(0,1fr)_250px]">
+        <div className="grid h-full grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[280px_minmax(0,1fr)_330px]">
           <aside className="min-h-0 border-b bg-card/95 lg:border-b-0 lg:border-r">
             <div className="flex h-14 items-center justify-between border-b px-3">
               <div>
-                <h1 className="text-base font-semibold">Chat</h1>
-                <p className="text-xs text-muted-foreground">Team messages and calls</p>
+                <h1 className="text-base font-semibold">Team HQ</h1>
+                <p className="text-xs text-muted-foreground">Chat, handoffs, calls, resources</p>
               </div>
               <Badge variant={unreadNotifications.length ? "default" : "secondary"} className="gap-1">
                 <Bell className="h-3 w-3" />
@@ -1267,6 +1336,61 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shared Resources</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => setResourceDialogOpen(true)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
+                  </div>
+                  {sharedLinksLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={`resource-loading-${index}`} className="h-10 rounded-md" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(sharedLinkGroups).slice(0, 5).map(([category, links]) => (
+                        <div key={category}>
+                          <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{category}</p>
+                          <div className="space-y-1">
+                            {links.slice(0, 5).map((link) => (
+                              <a
+                                key={link.id}
+                                href={link.href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-2 text-xs hover:bg-muted"
+                              >
+                                <LinkIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-semibold">{link.label}</span>
+                                  <span className="block truncate text-[10px] text-muted-foreground">{link.sub || link.href}</span>
+                                </span>
+                                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {sharedLinks.length === 0 && (
+                        <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                          Starter links are shown here. Add permitting, vendor ordering, utility, warranty, and financing links for the whole team.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <Separator />
+
+                <section>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Access</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     {quickAccessItems.map((item) => {
@@ -1288,13 +1412,12 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Links</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chat Links</p>
                   <div className="space-y-1.5">
-                    {[...pinnedLinks, ...usefulWebLinks.map((item) => item.href)]
+                    {pinnedLinks
                       .filter((href, index, list) => list.indexOf(href) === index)
                       .slice(0, 8)
                       .map((href) => {
-                        const useful = usefulWebLinks.find((item) => item.href === href);
                         return (
                           <a
                             key={href}
@@ -1304,10 +1427,13 @@ export default function TeamCommunications() {
                             className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-muted"
                           >
                             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{useful?.label ?? href}</span>
+                            <span className="truncate">{href}</span>
                           </a>
                         );
                       })}
+                    {pinnedLinks.length === 0 && recentLinks.length === 0 && (
+                      <SidebarEmpty>Links shared in chat will collect here.</SidebarEmpty>
+                    )}
                     {recentLinks.length > 0 && (
                       <div className="pt-1">
                         <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent from chat</p>
@@ -1346,6 +1472,64 @@ export default function TeamCommunications() {
           </aside>
         </div>
       </main>
+      <Dialog open={resourceDialogOpen} onOpenChange={setResourceDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add team resource</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</p>
+              <Input
+                value={resourceLabel}
+                onChange={(event) => setResourceLabel(event.target.value)}
+                placeholder="City permit portal, vendor order desk..."
+                maxLength={80}
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Link</p>
+              <Input
+                value={resourceHref}
+                onChange={(event) => setResourceHref(event.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</p>
+              <Input
+                value={resourceCategory}
+                onChange={(event) => setResourceCategory(event.target.value)}
+                list="team-resource-categories"
+                placeholder="Permits, Ordering, Warranty..."
+                maxLength={60}
+              />
+              <datalist id="team-resource-categories">
+                {resourceCategories.map((category) => (
+                  <option key={category} value={category} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Note</p>
+              <Input
+                value={resourceNote}
+                onChange={(event) => setResourceNote(event.target.value)}
+                placeholder="What the team uses this for"
+                maxLength={120}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setResourceDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={createTeamResource} disabled={addQuickLink.isPending}>
+                {addQuickLink.isPending ? "Adding..." : "Add resource"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

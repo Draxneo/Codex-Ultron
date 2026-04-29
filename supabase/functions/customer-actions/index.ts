@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getTaskModel } from "../_shared/getTaskModel.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { describeActiveWork, lookupActiveWorkContext } from "../_shared/jarvisContactIntent.ts";
 
 
 
@@ -337,6 +338,27 @@ serve(async (req) => {
       const effectiveJobType = body.job_type || "service";
       // Default tech to Jonathan Carnes for service calls unless explicitly specified
       const defaultTech = (!body.assigned_to && effectiveJobType === "service") ? "Jonathan Carnes" : (body.assigned_to || null);
+      const overrideActiveWork = body.override_active_work === true || body.allow_duplicate_work === true;
+      if (!overrideActiveWork) {
+        const activeWork = await lookupActiveWorkContext(sb, {
+          customerId: body.customer_id || null,
+          phone: body.customer_phone || customerPhone,
+          pendingWindowHours: 6,
+        });
+        if (activeWork.activeJob || activeWork.activeEstimate) {
+          const activeWorkLabel = describeActiveWork(activeWork) || "active work";
+          return new Response(JSON.stringify({
+            success: false,
+            blocked: true,
+            reason: "active_work_exists",
+            message: `JARVIS found ${activeWorkLabel}. Review or attach to that work instead of creating a duplicate job.`,
+            active_work: activeWork,
+          }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
       const jobRecord: any = {
         customer_id: body.customer_id,
@@ -408,7 +430,7 @@ serve(async (req) => {
         headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           to: phone,
-          body: `Hi! Please fill out this quick form so we can get you set up:\n${intakeUrl}\n\nIt only takes a minute!`,
+          body: `Hi, this is the Carnes family. To make sure we take good care of you, could you fill out this quick form when you have a minute?\n${intakeUrl}`,
         }),
       });
 

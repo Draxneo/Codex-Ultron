@@ -1,62 +1,178 @@
 # UltraOffice2.0 Product Principles
 
-These principles are the operating compass for all future UltraOffice2.0 work.
+These are the current rules for rebuilding UltraOffice2.0. Keep this file tight. If a future idea does not support these rules, it should not become core UI.
 
-## 1. One Source Of Truth
+## 1. Company Brains
 
-Every major business concept must have one canonical owner.
+UltraOffice is built around the real work loops of the company.
 
-- Customers, properties, jobs, estimates, invoices, payments, SMS, calls, attachments, catalog items, equipment, repairs, action items, and monitoring data should each have one primary table/service/view.
-- UI pages should read through the canonical source instead of inventing private query shapes.
-- If a second representation is needed for performance, it should be a cache, rollup, or view with a clear rebuild path.
+### Intake Brain: Who, What, Why
 
-## 2. Universal Utilities
+Intake HQ understands the customer and the reason for contact.
 
-Avoid lego-style duplicate helpers scattered across pages and Edge Functions.
+- Who is contacting us?
+- Are they known, unknown, a new lead, a vendor, or an employee?
+- What do they need?
+- Why are they calling or texting?
+- What information is missing or uncertain?
+- What action should be prepared for approval?
 
-- Phone formatting, money formatting, dates/timezone, permissions, model routing, SMS sending, media handling, and payment math should live in shared utility modules.
-- If browser and Edge Function code both need the same logic, create a shared/generated contract or clearly paired utility with tests.
-- New features should reuse the shared utilities before adding a local helper.
+Intake owns calls, SMS, customer matching, AI-filled intake forms, address verification, booking/estimate intent, and human-approved action buttons.
 
-## 3. One Work Queue: What's Next
+Calls, customer texts, and urgent team texts should surface in Intake HQ instead of a duplicate global slide-out. Deeper phone, SMS, team chat, and JARVIS tools can exist as full pages, but Intake is the operational triage surface.
 
-UltraOffice should run the company from a single operational queue.
+### Operations Brain: When, Where
 
-- `action_items` is the intended canonical queue for "What's next."
-- JARVIS, tech forms, invoices, carts, calls, SMS, estimates, jobs, and monitors should emit normalized action items.
-- Action items should auto-close when the expected real-world event happens, such as appointment scheduled, technician assigned, SMS sent, invoice paid, cart approved, or review requested.
-- The old workflow engine should not be the primary operating model unless it is rebuilt around the action-item lifecycle.
+Dispatch HQ runs the day.
 
-## 4. JARVIS Tracks The Flow
+- When can we do the work?
+- Where is the job?
+- Which technician should go?
+- What route makes sense?
+- What is late, unassigned, overloaded, inefficient, or at risk?
+- Who on the board needs a call or text update?
 
-JARVIS should be a dispatcher and tech assistant, not a loose chatbot.
+Operations owns the dispatch board, calendar, tech lanes, route health, backlog placement, schedule adjustments, and dispatch-specific JARVIS help.
 
-- JARVIS should understand whether a customer already has an active job, estimate, property, invoice, or cart before suggesting a new record.
-- For customers with multiple properties, JARVIS must clarify or infer the correct property from context instead of assuming the primary address.
-- JARVIS should draft and recommend by default, then execute only through an explicit permission/approval path.
-- JARVIS should explain the next best operational action and keep the shared action queue clean.
+### Field Brain: Who, What, When, Where, Why
 
-## 5. One Observability Home
+The technician mobile app turns the dispatch plan into completed, approved work.
 
-Debug logs, API usage, cost checks, retries, cron health, Twilio traces, and monitors should be unified.
+- Who is the customer?
+- What problem did the technician find?
+- When is the appointment, approval, repair, replacement, or install happening?
+- Where is the customer, equipment, attic, closet, condenser, panel, drain, or install constraint?
+- Why should the customer approve the repair or replacement?
 
-- System Log should become the single operational health center.
-- Cost monitoring should use retained detail rows plus daily/hourly rollups, not endless raw logs.
-- Duplicate panels that each show a different partial truth should be folded into one status model.
+Field owns arrival, diagnosis, photos, notes, JARVIS field help, repair options, replacement options, customer-ready presentations, approval links, payment links, financing links, and install handoff back to Dispatch HQ.
 
-## 6. Test Before Trust
+### Customer Brain: Relationship Memory
 
-Business-critical flows need quick verification after changes.
+Customer HQ remembers the whole relationship after the immediate work is done.
 
-- Phone, SMS/MMS, JARVIS actions, payments, carts, job creation, estimate approval, and invoice/payment status should have lightweight smoke tests.
-- Webhook URLs must be verified against the UltraOffice2.0 Supabase project before testing live numbers.
-- Secrets and service keys from discontinued projects must not be used for UltraOffice2.0.
+- Who is this customer or household?
+- What have we quoted, sold, installed, repaired, photographed, or promised?
+- When did work happen, when should we follow up, and when do memberships or warranties expire?
+- Where are their service locations, systems, attachments, and job records?
+- Why should we call, text, remarket, renew, protect, or prioritize them?
 
-## Current Consolidation Priorities
+Customer owns the master customer record, estimates, jobs, invoices, attachments, phone calls, SMS, Comfort Club status, warranty certificates, labor warranty, parts warranty, service history, private notes, and drip or remarketing context.
 
-1. Make `action_items` the only actionable work queue.
-2. Create one action lifecycle service for accept, dismiss, complete, auto-close, and audit.
-3. Route JARVIS, expected job items, invoice exceptions, tech proposals, SMS drafts, and cart approvals into the same queue.
-4. Build one observability hook/page for errors, traces, retries, cron, on-call, and API cost rollups.
-5. Consolidate shared utilities for phone, date/timezone, money, SMS, media, model routing, and permissions.
-6. Replace old workflow-engine surfaces with the "What's Next" action system.
+### Quote Brain: Follow-Up Pipeline
+
+Quote HQ turns outstanding estimates into a follow-up campaign.
+
+- Who has an open quote?
+- What did we propose?
+- When was it created, sent, viewed, followed up, approved, or declined?
+- Where does the quoted work belong in the customer and dispatch story?
+- Why has it not closed yet, and what human-approved touch should happen next?
+
+Quote owns open estimates, quote stages, presentation status, customer responses, approval links, financing links, follow-up drafts, close/lost outcomes, and human-approved drip actions.
+
+All brains share the same data. They are separate work modes, not separate systems.
+
+## 2. AI Mode And Human Mode Everywhere
+
+Every primary operating surface should support both modes.
+
+- AI Mode: JARVIS listens, extracts, fills, verifies, suggests, drafts, and queues action buttons.
+- Human Mode: a person can manually inspect, override, edit, create, move, or recover the workflow if AI is unavailable or wrong.
+- Switching modes should not lose the selected customer, job, conversation, transcript, or draft action.
+- Critical business state must never exist only inside AI.
+
+## 3. JARVIS Prepares, Humans Approve
+
+JARVIS should not silently mutate important operational or customer-facing records.
+
+- JARVIS prepares the work.
+- Humans approve the work.
+- Mutating actions should go through reviewable action cards or approval buttons.
+- Each approval should show what will happen, what data JARVIS used, and what is missing or uncertain.
+
+## 3A. Brand Voice
+
+Customer-facing communication should sound like personal service from the Carnes family to the customer's family.
+
+- Warm, neighborly, plainspoken, and useful.
+- Short enough for SMS.
+- Personal without sounding fake or overdone.
+- Prefer phrases like "our family taking care of yours" or "the Carnes family" when they fit naturally.
+- Avoid stiff corporate language unless a legal, billing, or safety context requires it.
+
+## 4. Macro Buttons Over Manual Data Entry
+
+The UI should behave more like smart spreadsheet macros than long manual forms.
+
+Good buttons include:
+
+- Confirm address
+- Text customer to confirm address
+- Create customer
+- Link customer
+- Book service call
+- Book estimate
+- Move job
+- Assign technician
+- Send ETA
+- Add note, gate code, or dog warning
+- Mark follow-up
+
+Each action card should let the user approve, edit, reject, or open deeper context.
+
+If a dispatcher is typing a lot, the UI is probably asking for too much manual work.
+
+## 5. Fewer Panels, Clearer Jobs
+
+Panels must earn their place.
+
+- Do not add panels just because data exists.
+- Prefer one focused workspace plus one action/assistant area over many competing sidebars.
+- If two panels answer the same question, merge them or choose the one that better supports the current brain.
+- Intake panels should support Who, What, and Why.
+- Operations panels should support When and Where.
+- Field panels should support Who, What, When, Where, and Why without burying the technician in menu navigation.
+- Customer panels should support the relationship memory: work done, work proposed, conversations, files, protection, and follow-up.
+- Quote panels should support open quotes, follow-up stage, prepared human-approved touch, and close/lost decision.
+
+## 6. Field Approval Loop
+
+The technician experience should be built around this loop:
+
+- Arrive at the job.
+- Diagnose the problem.
+- Capture notes, photos, and findings.
+- Build repair or replacement options.
+- Present the comfort, reliability, peace of mind, efficiency, warranty, rebate, and financing story.
+- Send the customer approval link.
+- Receive approval notification.
+- Convert approved repair work into invoice/payment.
+- Convert approved replacement work into an install job for Dispatch HQ.
+
+The cart is not the sales tool by itself. The proposal/presentation sells the work; the cart confirms what the customer approved.
+
+## 7. Customer Relationship Loop
+
+The customer experience should be built around this loop:
+
+- Recognize the customer from phone, SMS, job, estimate, or address.
+- See the active work and recent history immediately.
+- Review every estimate, job, invoice, photo, call, and text from one record.
+- Track Comfort Club status, warranty coverage, labor warranty, parts warranty, and expiration dates.
+- Keep notes and context that explain why the customer matters.
+- Trigger follow-up, renewal, remarketing, service reminders, and replacement opportunities from approved action buttons.
+
+The customer record is not a generic CRM profile. It is the company's long-term memory for that customer.
+
+## 8. Quote Follow-Up Loop
+
+The quote experience should be built around this loop:
+
+- Capture the estimate and presentation.
+- Send the customer a clear approval path.
+- Watch for viewed, approved, changed, declined, or stale status.
+- Prepare the next SMS, call, or quote revision as a human-approved action.
+- Keep every open quote visible until it is won, lost, canceled, or converted.
+- Convert approved replacement work into an install job for Dispatch HQ.
+
+Quote HQ is not just a quote builder. It is the sales follow-up pipeline for work we have already proposed.

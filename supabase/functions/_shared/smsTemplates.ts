@@ -41,9 +41,16 @@ export async function resolveSmsTemplateBody(opts: {
   const { supabase, templateKey, fallbackBody, job, employee, extraVars } = opts;
   const template = await loadSmsTemplateByKey(supabase, templateKey);
   const bodySource = template?.template_body || fallbackBody || "";
-  const company = await loadCompanySettings(supabase, ["company_name", "company_phone"]);
+  const company = await loadCompanySettings(supabase, ["company_name", "company_phone", "a2p_footer"]);
 
-  let body = resolveTemplate(bodySource, job || {}, company, employee);
+  let preparedBody = bodySource;
+  if (extraVars) {
+    preparedBody = preparedBody.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      const value = extraVars[key];
+      return value === null || value === undefined ? match : String(value);
+    });
+  }
+  let body = resolveTemplate(preparedBody, job || {}, company, employee);
   if (extraVars) {
     body = body.replace(/\{\{(\w+)\}\}/g, (_match, key) => extraVars[key] ?? "");
   }

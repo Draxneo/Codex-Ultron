@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight, MessageSquare, PhoneCall } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useCustomersPaginated } from "@/hooks/useCustomersPaginated";
+import { useCustomersPaginated, type CustomerDirectorySort, type EnrichedCustomer } from "@/hooks/useCustomersPaginated";
 import { useActiveJobCustomerIds } from "@/hooks/useCustomerHistory";
 import { CustomerCard } from "@/components/CustomerCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,9 +19,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ModuleWorkbench } from "@/components/workbench/ModuleWorkbench";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatRelativeDate } from "@/lib/formatters";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
 const PAGE_SIZE = 50;
+
+function lastContactLabel(customer: EnrichedCustomer) {
+  const at = customer.enrichment.last_contact_at;
+  if (!at) return "No recent contact";
+  const type = customer.enrichment.last_contact_type === "sms" ? "Text" : "Call";
+  const direction = customer.enrichment.last_contact_direction;
+  return `${type}${direction ? ` ${direction}` : ""} · ${formatRelativeDate(at)}`;
+}
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -30,7 +39,7 @@ export default function Customers() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [view, setView] = useState<"card" | "table">("table");
-  const [sortMode, setSortMode] = useState<"recent" | "az">("recent");
+  const [sortMode, setSortMode] = useState<CustomerDirectorySort>("recent_contact");
   const [page, setPage] = useState(0);
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -73,9 +82,9 @@ export default function Customers() {
 
   const handleSortChange = (v: string) => {
     if (v) {
-      setSortMode(v as "recent" | "az");
+      setSortMode(v as CustomerDirectorySort);
       setPage(0);
-      if (v === "recent") setLetterFilter(null);
+      if (v !== "az") setLetterFilter(null);
     }
   };
 
@@ -86,9 +95,9 @@ export default function Customers() {
       {!isMobile && <AppHeader />}
       <main className="flex-1 overflow-hidden flex">
         <ModuleWorkbench
-          title="Customers"
-          eyebrow="Customer workspace"
-          description="Find customers, start work, and review recent activity."
+          title="Customer HQ"
+          eyebrow="Relationship memory"
+          description="Find customers by recent call, recent text, recent job, name, address, email, or phone number."
           icon={<Users className="h-4.5 w-4.5" />}
           primaryAction={
             <Button size="sm" className="text-xs bg-[hsl(var(--sky))] text-white hover:bg-[hsl(var(--sky))]/90" onClick={() => setDialogOpen(true)}>
@@ -99,7 +108,7 @@ export default function Customers() {
             <div className="relative w-full min-w-[220px] max-w-sm sm:w-80">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search customers..."
+                placeholder="Search name, phone, address, email..."
                 value={search}
                 onChange={e => handleSearch(e.target.value)}
                 className="pl-8 h-9"
@@ -108,7 +117,10 @@ export default function Customers() {
           }
           filters={
             <ToggleGroup type="single" value={sortMode} onValueChange={handleSortChange} className="hidden sm:flex">
-              <ToggleGroupItem value="recent" aria-label="Sort by recent jobs" size="sm" title="Recent Jobs">
+              <ToggleGroupItem value="recent_contact" aria-label="Sort by recent contact" size="sm" title="Recent call or text">
+                <PhoneCall className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="recent_job" aria-label="Sort by recent jobs" size="sm" title="Recent jobs">
                 <Clock className="h-4 w-4" />
               </ToggleGroupItem>
               <ToggleGroupItem value="az" aria-label="Sort A-Z" size="sm" title="A-Z">
@@ -152,7 +164,10 @@ export default function Customers() {
             </div>
             <div className="flex items-center gap-2">
               <ToggleGroup type="single" value={sortMode} onValueChange={handleSortChange} className="hidden sm:flex">
-                <ToggleGroupItem value="recent" aria-label="Sort by recent jobs" size="sm" title="Recent Jobs">
+                <ToggleGroupItem value="recent_contact" aria-label="Sort by recent contact" size="sm" title="Recent call or text">
+                  <PhoneCall className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="recent_job" aria-label="Sort by recent jobs" size="sm" title="Recent jobs">
                   <Clock className="h-4 w-4" />
                 </ToggleGroupItem>
                 <ToggleGroupItem value="az" aria-label="Sort A-Z" size="sm" title="A–Z">
@@ -199,6 +214,7 @@ export default function Customers() {
                       <TableHead className="hidden sm:table-cell">Phone</TableHead>
                       <TableHead className="hidden md:table-cell">Email</TableHead>
                       <TableHead className="hidden lg:table-cell">City</TableHead>
+                      <TableHead className="hidden xl:table-cell">Last Contact</TableHead>
                       <TableHead className="text-right">Jobs</TableHead>
                       <TableHead className="text-right hidden sm:table-cell">Last Job</TableHead>
                     </TableRow>
@@ -228,6 +244,16 @@ export default function Customers() {
                           </TableCell>
                           <TableCell className="hidden lg:table-cell py-2 text-sm text-muted-foreground">
                             {c.city || "—"}
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell py-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              {c.enrichment.last_contact_type === "sms" ? (
+                                <MessageSquare className="h-3.5 w-3.5" />
+                              ) : c.enrichment.last_contact_type === "call" ? (
+                                <PhoneCall className="h-3.5 w-3.5" />
+                              ) : null}
+                              <span>{lastContactLabel(c)}</span>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right py-2 text-sm">
                             <span className="inline-flex items-center gap-1.5">
@@ -264,6 +290,16 @@ export default function Customers() {
                         </div>
                       </CustomerCard>
                       <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground ml-[42px]">
+                        {c.enrichment.last_contact_at && (
+                          <span className="flex items-center gap-1">
+                            {c.enrichment.last_contact_type === "sms" ? (
+                              <MessageSquare className="h-3 w-3" />
+                            ) : (
+                              <PhoneCall className="h-3 w-3" />
+                            )}
+                            {lastContactLabel(c)}
+                          </span>
+                        )}
                         {c.phone && (
                           <div className="flex items-center gap-1">
                             <ClickToCall phone={c.phone} contactName={[c.first_name, c.last_name].filter(Boolean).join(" ")} className="text-xs text-muted-foreground" iconClassName="h-3 w-3" />

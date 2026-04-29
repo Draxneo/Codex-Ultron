@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { getCompanySettings } from "@/lib/companySettings";
 import { sendSmsImpl } from "@/hooks/useSendSms";
 import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
+import { buildJobCompleteSms, buildReviewRequestSms } from "@/lib/smsCopy";
 
 type JobActionKey = "reminder" | "omw" | "start" | "finish" | "review" | "manual";
 
@@ -16,10 +17,6 @@ type JobLike = {
   assigned_employee_id?: string | null;
   employee_id?: string | null;
 };
-
-function firstName(name?: string | null) {
-  return name?.trim()?.split(/\s+/)[0] || "there";
-}
 
 export function useJobActions(jobId: string, job?: JobLike | null) {
   const queryClient = useQueryClient();
@@ -64,6 +61,29 @@ export function useJobActions(jobId: string, job?: JobLike | null) {
         "job_finished",
         "Job marked finished",
       );
+      if (job?.customer_phone) {
+        const body = buildJobCompleteSms({
+          customerName: job.customer_name,
+          companyName: "Carnes and Sons",
+        });
+        const sms = await sendSmsImpl({
+          to: job.customer_phone,
+          body,
+          jobId,
+          contactName: job.customer_name || null,
+          contactType: "customer",
+          source: "job_complete",
+          hitlApproved: true,
+          silent: true,
+        });
+        await supabase.from("activity_log").insert({
+          job_id: jobId,
+          action: sms.success ? "job_complete_sms_sent" : "job_complete_sms_failed",
+          details: sms.success
+            ? `Completion SMS sent to ${job.customer_name || job.customer_phone}`
+            : `Completion SMS failed for ${job.customer_name || job.customer_phone}: ${sms.error || "unknown error"}`,
+        });
+      }
       toast({ title: "Job finished" });
     } catch (e: any) {
       toast({ title: "Could not finish job", description: e.message, variant: "destructive" });
@@ -119,10 +139,7 @@ export function useJobActions(jobId: string, job?: JobLike | null) {
       const settings = await getCompanySettings(["company_name", "google_review_url", "review_url", "review_link"]);
       const companyName = settings.company_name || "Carnes and Sons Air Conditioning";
       const reviewLink = settings.google_review_url || settings.review_url || settings.review_link || "";
-      const name = firstName(job.customer_name);
-      const body = reviewLink
-        ? `Hi ${name}, thank you for choosing ${companyName}. Would you mind leaving us a quick review? ${reviewLink}`
-        : `Hi ${name}, thank you for choosing ${companyName}. If we did a great job, would you reply here and let us know?`;
+      const body = buildReviewRequestSms({ customerName: job.customer_name, companyName, reviewLink });
 
       const result = await sendSmsImpl({
         to: job.customer_phone,

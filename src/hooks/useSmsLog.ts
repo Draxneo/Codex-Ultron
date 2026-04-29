@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
@@ -10,6 +10,7 @@ import {
   toE164Key,
   type ContactLookupMap,
 } from "@/lib/communications";
+import { appendSmsSignature } from "@/lib/smsSignature";
 
 export type SmsMediaItem = {
   url: string;
@@ -112,6 +113,7 @@ interface UseSmsLogOptions {
 
 export function useSmsLog(options: UseSmsLogOptions = {}) {
   const { role, employeeId, userId, disabled = false } = options;
+  const channelNameRef = useRef(`sms_log_realtime_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`);
   const [messages, setMessages] = useState<SmsMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -430,7 +432,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     fetchMessages();
 
     const channel = supabase
-      .channel("sms_log_realtime")
+      .channel(channelNameRef.current)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "sms_log" },
@@ -593,6 +595,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
   const sendSms = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
     setSending(true);
+    const signedBody = appendSmsSignature(body);
 
     // Optimistic placeholder — shows instantly in the thread.
     // We tag it with a client_id (UUID) so the server-inserted row can
@@ -605,7 +608,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       id: optimisticId,
       direction: "outbound",
       phone_number: to,
-      body,
+      body: signedBody,
       twilio_sid: null,
       related_job_id: jobId || null,
       is_read: true,
@@ -626,7 +629,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
       const result = await sendSmsImpl({
         to,
-        body,
+        body: signedBody,
         jobId,
         mediaUrls,
         contactName,

@@ -129,14 +129,14 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         <Card className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sales presentation</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Field proposal</p>
               <h2 className="mt-1 text-xl font-bold text-foreground">
-                {primaryEquipment ? primaryEquipment.name : "Build the comfort story"}
+                {primaryEquipment ? primaryEquipment.name : "Build the approval story"}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {primaryEquipment
-                  ? "The cart is attached below for approval and payment."
-                  : `Start with the system pitch, then attach the cart for ${customerName || "the customer"}.`}
+                  ? "The approval items are attached below for the customer to accept, finance, or pay."
+                  : `Start with the repair or replacement story, then attach the approval items for ${customerName || "the customer"}.`}
               </p>
             </div>
             <Badge className={cn("border", cartToneClasses(statusInfo.tone))}>{statusInfo.label}</Badge>
@@ -147,10 +147,10 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <div className="border-b bg-primary/5 p-4">
             <div className="flex items-center gap-2">
               <Presentation className="h-5 w-5 text-primary" />
-              <p className="text-sm font-semibold text-foreground">Presentation first</p>
+              <p className="text-sm font-semibold text-foreground">Presentation first, cart second</p>
             </div>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
-              Sell comfort, reliability, peace of mind, and efficiency here. The cart only confirms what they chose.
+              Explain the problem, the outcome, and the customer benefit. The cart only confirms what they chose.
             </p>
           </div>
           {primaryEquipment ? (
@@ -196,8 +196,8 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           ) : (
             <div className="p-4">
               <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
-                <p className="text-sm font-semibold text-foreground">No system presentation yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">Tap Build Presentation and select brand, tonnage, type, tier, and location.</p>
+                <p className="text-sm font-semibold text-foreground">No proposal options yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Tap Build Options and select repair work or equipment by brand, tonnage, type, tier, and location.</p>
               </div>
             </div>
           )}
@@ -205,7 +205,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
 
         <div className="grid grid-cols-2 gap-2">
           <Button className="h-14 gap-2 text-sm" onClick={() => setPickerOpen(true)} disabled={!permissions.canEditItems}>
-            <Plus className="h-4 w-4" /> Build Presentation
+            <Plus className="h-4 w-4" /> Build Options
           </Button>
           {presentLink ? (
             <a
@@ -224,8 +224,8 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         {items.length === 0 ? (
           <Card className="p-6 text-center">
             <ShoppingCart className="mx-auto mb-2 h-10 w-10 text-muted-foreground/35" />
-            <p className="text-sm font-semibold text-foreground">No presentation/cart items yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Start with a system presentation, then add repairs or add-ons as needed.</p>
+            <p className="text-sm font-semibold text-foreground">No proposal options yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Start with the diagnosis, then add repair, replacement, or comfort options.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -274,7 +274,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
         )}
 
         <Button variant="outline" className="h-12 w-full gap-2" onClick={() => setCustomOpen((v) => !v)} disabled={!permissions.canEditItems}>
-          <Sparkles className="h-4 w-4" /> Add Custom Cart Item
+          <Sparkles className="h-4 w-4" /> Add Custom Option
         </Button>
 
         <Card className="p-3 space-y-3">
@@ -440,7 +440,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           disabled={sendDisabled}
         >
           <Send className="h-4 w-4" />
-          {sendToCustomer.isPending ? "Sending..." : "Send Cart for Approval"}
+          {sendToCustomer.isPending ? "Sending..." : "Send Proposal for Approval"}
         </Button>
         <Button variant="outline" className="h-11 w-full text-sm gap-2" onClick={handlePresent} disabled={!presentLink}>
           <Presentation className="h-4 w-4" /> Present on this phone first
@@ -545,7 +545,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground leading-tight">{cart?.estimate_number || "Customer Cart"}</p>
             <p className="text-xs text-muted-foreground leading-tight">
-              {itemCount} item{itemCount !== 1 ? "s" : ""} - {money(total)}
+              {itemCount} option{itemCount !== 1 ? "s" : ""} - {money(total)}
             </p>
           </div>
         </div>
@@ -556,7 +556,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground">Customer options</p>
             <p className="text-xs text-muted-foreground">
-              {itemCount} item{itemCount !== 1 ? "s" : ""} - {money(total)}
+              {itemCount} option{itemCount !== 1 ? "s" : ""} - {money(total)}
             </p>
           </div>
           <Button
@@ -628,7 +628,7 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
       ) : (
         <div className="px-3 py-3">
           <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-3 text-center">
-            <p className="text-xs text-muted-foreground">No items yet. Add from pricebook or create custom.</p>
+            <p className="text-xs text-muted-foreground">No options yet. Add from pricebook or create custom.</p>
           </div>
         </div>
       )}

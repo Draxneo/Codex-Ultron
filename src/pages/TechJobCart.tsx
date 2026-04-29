@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Presentation } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, CreditCard, Presentation, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TechCartCard } from "@/components/tech/TechCartCard";
 import { useCustomer } from "@/hooks/useCustomers";
@@ -64,12 +65,32 @@ export default function TechJobCart() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="truncate text-sm font-semibold text-foreground">Presentation - Job {jobNumber}</p>
+          <p className="truncate text-sm font-semibold text-foreground">Proposal Builder</p>
+          <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Job {jobNumber}</p>
         </div>
         <div className="w-9" />
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-3 pt-3">
+        <section className="rounded-lg border bg-background p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Badge variant="outline" className="mb-2">Customer approval flow</Badge>
+              <h1 className="text-xl font-bold leading-tight text-foreground">{customerName}</h1>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Build repair or replacement options, preview the customer story, then send the approval link.
+              </p>
+            </div>
+            <Presentation className="h-6 w-6 shrink-0 text-primary" />
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            <ProposalStep icon={ClipboardCheck} label="Diagnose" />
+            <ProposalStep icon={Presentation} label="Present" />
+            <ProposalStep icon={Send} label="Approve" />
+            <ProposalStep icon={CreditCard} label="Invoice" />
+          </div>
+        </section>
+
         <TechCartCard
           jobId={id!}
           customerId={job.customer_id || null}
@@ -78,6 +99,15 @@ export default function TechJobCart() {
           focused
         />
       </main>
+    </div>
+  );
+}
+
+function ProposalStep({ icon: Icon, label }: { icon: React.ComponentType<{ className?: string }>; label: string }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 px-2 py-3 text-center">
+      <Icon className="mx-auto h-4 w-4 text-primary" />
+      <p className="mt-1 text-[11px] font-semibold text-foreground">{label}</p>
     </div>
   );
 }

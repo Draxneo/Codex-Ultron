@@ -222,11 +222,12 @@ export function useJobCart(jobId: string | undefined) {
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
       await sendSmsImpl({
         to: phone,
-        body: `${greeting}here's your ${linkLabel}${estimateLabel} from Carnes and Sons Air Conditioning: ${link}`,
+        body: `${greeting}the Carnes family put together your ${linkLabel}${estimateLabel}. You can review it here, and text us back with any questions: ${link}`,
         jobId,
         contactName: customerName || null,
         contactType: "customer",
         source: "job_cart_send",
+        hitlApproved: true,
         silent: true,
       });
 

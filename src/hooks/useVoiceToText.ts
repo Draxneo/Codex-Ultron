@@ -1,9 +1,14 @@
 import { useState, useRef, useCallback } from "react";
 
+export type DictationProvider = "bridgevoice" | "openai" | "deepgram" | "mock";
+
 interface UseVoiceToTextOptions {
   onTranscript?: (text: string) => void;
   onError?: (error: string) => void;
   silenceTimeout?: number;
+  autoStopOnSilence?: boolean;
+  provider?: DictationProvider;
+  prompt?: string;
 }
 
 /**
@@ -24,7 +29,14 @@ interface UseVoiceToTextOptions {
  * PARALLEL PHOTO UPLOADS: Uploads now fire simultaneously instead of
  * waiting for each to finish — much faster on weak cell signal.
  */
-export function useVoiceToText({ onTranscript, onError, silenceTimeout = 3000 }: UseVoiceToTextOptions = {}) {
+export function useVoiceToText({
+  onTranscript,
+  onError,
+  silenceTimeout = 3000,
+  autoStopOnSilence = true,
+  provider,
+  prompt,
+}: UseVoiceToTextOptions = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -107,6 +119,8 @@ export function useVoiceToText({ onTranscript, onError, silenceTimeout = 3000 }:
         try {
           const formData = new FormData();
           formData.append("file", blob, "recording.webm");
+          if (provider) formData.append("provider", provider);
+          if (prompt) formData.append("prompt", prompt);
           const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`;
           const resp = await fetch(url, {
             method: "POST",
@@ -118,7 +132,7 @@ export function useVoiceToText({ onTranscript, onError, silenceTimeout = 3000 }:
             throw new Error(errData?.error || `Transcription failed: ${resp.status}`);
           }
           const data = await resp.json();
-          const text = data?.transcription || "";
+          const text = data?.cleanedText || data?.transcription || data?.text || "";
           setTranscript(text);
           onTranscript?.(text);
         } catch (err: any) {
@@ -131,6 +145,8 @@ export function useVoiceToText({ onTranscript, onError, silenceTimeout = 3000 }:
       recorder.start(250);
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
+
+      if (!autoStopOnSilence) return;
 
       // Set up analyser for adaptive silence detection
       const audioCtx = new AudioContext();
@@ -184,7 +200,7 @@ export function useVoiceToText({ onTranscript, onError, silenceTimeout = 3000 }:
     } catch (err: any) {
       onError?.(err?.message || "Microphone access denied");
     }
-  }, [onTranscript, onError, silenceTimeout, clearSilenceDetection]);
+  }, [onTranscript, onError, silenceTimeout, autoStopOnSilence, provider, prompt, clearSilenceDetection]);
 
   const stop = useCallback(() => {
     clearSilenceDetection();

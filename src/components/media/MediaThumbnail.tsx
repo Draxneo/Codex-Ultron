@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Play, File, Music, FileSpreadsheet, ImageOff } from "lucide-react";
 import { getFileCategory, type FileCategory } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,10 @@ export function MediaThumbnail({
   const Comp = onClick ? "button" : "div";
   const [imageFailed, setImageFailed] = useState(false);
   const shouldPreviewImage = (cat === "image" || cat === "gif") && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [url]);
 
   return (
     <Comp

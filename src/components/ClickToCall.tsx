@@ -49,7 +49,7 @@ export function ClickToCall({
     const e164 = toE164(phone) || phone;
 
     startCallSession(e164, contactName);
-    openPhoneConsole(e164);
+    openPhoneConsole(e164, { contactName, jobId, customerId });
   };
 
   return (

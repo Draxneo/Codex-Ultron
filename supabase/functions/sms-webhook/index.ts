@@ -3,8 +3,82 @@ import { getTaskModel } from "../_shared/getTaskModel.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
 import { verifyAddress } from "../_shared/verifyContact.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
+import {
+  buildJarvisIntentMetadata,
+  classifyCustomerContactIntent,
+  describeActiveWork,
+  lookupActiveWorkContext,
+} from "../_shared/jarvisContactIntent.ts";
+import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 
 import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
+
+function normalize10(value: string | null | undefined): string {
+  return (value || "").replace(/\D/g, "").slice(-10);
+}
+
+function settingNumbers(value: string | null | undefined): string[] {
+  return (value || "")
+    .split(/[,;\n]/)
+    .map((v) => normalize10(v))
+    .filter((v) => v.length === 10);
+}
+
+function isGoogleRelayInbound(fromDigits: string, body: string, settings: Record<string, string>): boolean {
+  const configured = [
+    ...settingNumbers(settings["google_lsa_relay_numbers"]),
+    ...settingNumbers(settings["google_ads_relay_numbers"]),
+  ];
+  if (configured.includes(fromDigits)) return true;
+
+  const text = (body || "").toLowerCase();
+  const hasGoogleSource =
+    /\bgoogle\b/.test(text) ||
+    text.includes("local services") ||
+    text.includes("google screened") ||
+    text.includes("google guarantee");
+  const hasRelayLanguage =
+    text.includes("respond to this thread") ||
+    text.includes("reply to this thread") ||
+    text.includes("respond to this message") ||
+    text.includes("reply to this message") ||
+    text.includes("customer's phone number") ||
+    text.includes("customer phone number") ||
+    text.includes("lead from google") ||
+    text.includes("message from google");
+
+  return hasGoogleSource && hasRelayLanguage;
+}
+
+async function sendGoogleRelayCaptureSms(
+  supabase: any,
+  to: string,
+  jobId: string | null,
+  settings: Record<string, string>,
+) {
+  const companyPhone = settings["company_phone"] || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+  const fallbackBody =
+    `Thanks for reaching Carnes and Sons Air Conditioning. We are a local family company, and we want to make sure we can reach you directly. Google may hide your phone number in this thread, so please reply with your best callback number or text/call us at ${companyPhone}.`;
+  const resolved = await resolveSmsTemplateBody({
+    supabase,
+    templateKey: "google_lsa_relay_capture",
+    fallbackBody,
+    job: {},
+    extraVars: { company_phone: companyPhone },
+  });
+  const result = await supabase.functions.invoke("send-sms", {
+    body: {
+      to,
+      body: resolved.body,
+      job_id: jobId,
+      source: "google_lsa_relay_capture",
+      template_key: resolved.templateKey,
+    },
+    headers: { "x-source-function": "google_lsa_relay_capture", "x-hitl-approved": "true" },
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
 
 // ── Structured extraction tool for SMS contact info ──
 const smsExtractTool = {
@@ -24,10 +98,17 @@ const smsExtractTool = {
         state: { type: "string", description: "State if provided (2-letter)" },
         zip: { type: "string", description: "ZIP code if provided" },
         lockbox_code: { type: "string", description: "Lockbox or gate code if mentioned" },
+        callback_phone: { type: "string", description: "Phone number the customer asks us to call or text instead of the texting number" },
+        access_code: { type: "string", description: "Gate, lockbox, garage, or door code if mentioned" },
+        access_notes: { type: "string", description: "Other access instructions such as side gate, key location, parking, or entry instructions" },
+        pet_warning: { type: "string", description: "Dog, cat, pet, backyard, or safety warning if mentioned" },
+        requested_eta: { type: "string", description: "ETA or arrival timing question/request if mentioned" },
+        requested_schedule_change: { type: "string", description: "Requested new date/time/window for an existing appointment" },
+        cancel_reason: { type: "string", description: "Reason for canceling an existing appointment if provided" },
         intent: {
           type: "string",
-          enum: ["booking", "reschedule", "cancel", "question", "complaint", "confirmation", "info_reply", "other"],
-          description: "Customer's primary intent. 'info_reply' = they are providing contact info in response to a prior call or request.",
+          enum: ["booking", "reschedule", "cancel", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "question", "complaint", "confirmation", "info_reply", "other"],
+          description: "Customer's primary intent. Use the specific update intents for existing-work updates. 'info_reply' = they are providing contact info in response to a prior call or request.",
         },
         service_type: {
           type: "string",
@@ -269,7 +350,14 @@ Deno.serve(async (req) => {
     const { data: jarvisSettings } = await supabase
       .from("company_settings")
       .select("key, value")
-      .in("key", ["jarvis_alert_phone", "sms_alert_enabled", "answering_service_phone"]);
+      .in("key", [
+        "jarvis_alert_phone",
+        "sms_alert_enabled",
+        "answering_service_phone",
+        "google_lsa_relay_numbers",
+        "google_ads_relay_numbers",
+        "company_phone",
+      ]);
 
     const jarvisSettingsMap: Record<string, string> = {};
     for (const row of (jarvisSettings || []) as any[]) jarvisSettingsMap[row.key] = row.value;
@@ -283,6 +371,7 @@ Deno.serve(async (req) => {
     // Never auto-create a customer for this number; never overwrite the contact label.
     const answeringServiceDigits = (jarvisSettingsMap["answering_service_phone"] || "").replace(/\D/g, "").slice(-10);
     const isAnsweringService = answeringServiceDigits.length === 10 && normalizedFrom === answeringServiceDigits;
+    const isGoogleRelay = isGoogleRelayInbound(normalizedFrom, body, jarvisSettingsMap);
 
     // Find recent outbound SMS to link reply to a job
     const { data: recentOutbound } = await supabase.from("sms_log")
@@ -295,7 +384,7 @@ Deno.serve(async (req) => {
 
     const threadedJobId = recentOutbound?.[0]?.related_job_id || null;
 
-    const { contactName, contactType, matchedEmployee } = await resolveContact(supabase, from);
+    let { contactName, contactType, matchedEmployee } = await resolveContact(supabase, from);
     let isEmployee = !!matchedEmployee;
 
     // Force contact label for answering service relay (group under Vendors in inbox)
@@ -581,6 +670,54 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
       );
     }
+
+    // Google LSA / Ads SMS relays hide the customer's real phone number.
+    // Reply to the relay asking for a direct callback number, then keep the
+    // item on the dispatcher's board as a lead that needs identity capture.
+    if (isGoogleRelay && !testModeOn) {
+      try {
+        const { data: recentCapture } = await supabase
+          .from("sms_log")
+          .select("id")
+          .eq("direction", "outbound")
+          .eq("phone_number", from)
+          .eq("source_function", "google_lsa_relay_capture")
+          .gte("created_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (!recentCapture) {
+          await sendGoogleRelayCaptureSms(supabase, from, linkedJobId, jarvisSettingsMap);
+        }
+
+        await supabase.from("action_items").insert({
+          title: "Google lead needs direct phone number",
+          description: `Google relay text received. Ask the customer for their best callback number before creating a real customer thread.\n\n${body.slice(0, 300)}`,
+          category: "new_lead",
+          priority: "high",
+          source: "google_lsa",
+          status: "pending",
+          customer_phone: from,
+          job_id: linkedJobId,
+          suggested_action: "Capture the customer's real phone number, then link or create the customer.",
+          metadata: {
+            relay_phone: from,
+            relay_source: "google",
+            auto_capture_sms_sent: !recentCapture,
+            message_preview: body.slice(0, 300),
+          },
+        });
+        console.log(`[Google Relay] Captured relay SMS from ${from}; requested direct callback number`);
+      } catch (googleRelayErr) {
+        console.error("[Google Relay] Handler failed:", googleRelayErr);
+      }
+
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+      );
+    }
+
     // Skip "new_lead" action items for known non-customer contacts (vendors, marketing, spam, etc.)
     const NON_LEAD_TYPES = ["vendor", "marketing", "answering_service", "spam", "tech_partner"];
     const isKnownNonLead = NON_LEAD_TYPES.includes(contactType);
@@ -707,6 +844,12 @@ Latest message: "${body}"
 
 IMPORTANT RULES:
 - Extract ALL contact details: name, email, address, city, state, zip, lockbox/gate codes
+- If the message gives a gate/lockbox/door/garage code or access instructions, classify as "access_instructions"
+- If the message warns about dogs, pets, backyard access, or animals, classify as "pet_warning"
+- If the message asks when we will arrive, asks for ETA, or asks for a heads-up, classify as "eta_request"
+- If the message gives a different callback/text number, classify as "callback_number_update"
+- If the message asks to move an existing appointment, classify as "reschedule"
+- If the message asks us not to come or says to cancel, classify as "cancel"
 - If the customer is REPLYING to a prior phone call with their info, set intent to "info_reply"
 - If a recent call discussed scheduling/booking AND this SMS provides address or contact info, that's a BOOKING intent
 - If our last outbound message asked for contact info or scheduling details, and this SMS provides that, classify as BOOKING intent
@@ -848,10 +991,6 @@ IMPORTANT RULES:
           // STRICT: only an explicit booking/reschedule from the SMS extractor counts.
           // info_reply (customer just sending name/email/address) is NOT a new booking —
           // it's CRM info that should merge into any existing pending card, never create a new one.
-          const isExplicitBookingIntent =
-            extracted.intent === "booking" || extracted.intent === "reschedule";
-          const isInfoReply = extracted.intent === "info_reply";
-
           // Merge service_type from call if SMS didn't provide one
           const effectiveServiceType = (extracted.service_type && extracted.service_type !== "other")
             ? extracted.service_type
@@ -878,29 +1017,60 @@ IMPORTANT RULES:
           // out silently and we'd create yet another duplicate forever. This is the bug that
           // produced 4 stacked Justo/Jesus Lopez cards.
           const existingBooking = existingBookings?.[0] || null;
+          const activeWorkLookup = await lookupActiveWorkContext(supabase, {
+            customerId: resolvedCustomerId || promptCustomerId,
+            phone: from,
+            pendingWindowHours: 2,
+          });
+          const activeWorkContext = {
+            activeJob: customerJob || activeWorkLookup.activeJob,
+            activeEstimate: upcomingEstimate || activeWorkLookup.activeEstimate,
+            pendingBooking: existingBooking || activeWorkLookup.pendingBooking,
+          };
+          const intentDecision = classifyCustomerContactIntent({
+            text: body,
+            extracted,
+            activeWork: activeWorkContext,
+            channel: "sms",
+          });
+          console.log(`SMS intent for ${from}:`, JSON.stringify({
+            intent: intentDecision.intent,
+            category: intentDecision.actionCategory,
+            confidence: intentDecision.confidence,
+            active_work: describeActiveWork(activeWorkContext),
+          }));
+          const isExplicitBookingIntent =
+            intentDecision.actionCategory === "new_appointment" && intentDecision.shouldCreateNewWork;
+          const isInfoReply =
+            extracted.intent === "info_reply" || intentDecision.intent === "customer_info_update";
 
           // ACTIVE-WORK SUPPRESSION: if customer has an open job OR an upcoming/today
           // estimate, this SMS is a follow-up on existing work, NOT a new booking.
           // Append the SMS as a note on the HCP record (job or estimate) and create a
           // `follow_up` card — do not spawn a Book It Now.
-          const hasActiveJob = !!customerJob;
-          const hasUpcomingEstimate = !!upcomingEstimate;
+          const hasActiveJob = !!activeWorkContext.activeJob;
+          const hasUpcomingEstimate = !!activeWorkContext.activeEstimate;
           const shouldSuppressBooking =
-            (isExplicitBookingIntent || isInfoReply) && (hasActiveJob || hasUpcomingEstimate);
+            intentDecision.shouldAttachToExistingWork && (hasActiveJob || hasUpcomingEstimate);
 
           if (shouldSuppressBooking) {
             const target = hasActiveJob ? "job" : "estimate";
-            const targetRecord = hasActiveJob ? customerJob : upcomingEstimate;
+            const targetRecord = hasActiveJob ? activeWorkContext.activeJob : activeWorkContext.activeEstimate;
             const ref = hasActiveJob
-              ? (customerJob.hcp_job_number ? `Job #${customerJob.hcp_job_number}` : "open job")
-              : `upcoming estimate ${upcomingEstimate.scheduled_date || ""}`.trim();
+              ? (activeWorkContext.activeJob.hcp_job_number ? `Job #${activeWorkContext.activeJob.hcp_job_number}` : "open job")
+              : `upcoming estimate ${activeWorkContext.activeEstimate.scheduled_date || ""}`.trim();
 
             // Build the note from the SMS + AI extraction
             const noteParts: string[] = [`Customer SMS: "${body.slice(0, 400)}"`];
             if (extracted.summary) noteParts.push(`AI summary: ${extracted.summary}`);
+            noteParts.push(`Jarvis intent: ${intentDecision.intent} (${intentDecision.confidence})`);
             if (extracted.scheduling_preference) noteParts.push(`Scheduling pref: ${extracted.scheduling_preference}`);
-            if (extracted.scheduled_date) noteParts.push(`Requested date: ${extracted.scheduled_date}${extracted.scheduled_time ? " " + extracted.scheduled_time : ""}`);
-            if (extracted.lockbox_code) noteParts.push(`Lockbox: ${extracted.lockbox_code}`);
+            if (extracted.requested_schedule_change) noteParts.push(`Requested schedule change: ${extracted.requested_schedule_change}`);
+            if (extracted.requested_eta) noteParts.push(`ETA request: ${extracted.requested_eta}`);
+            if (extracted.lockbox_code || extracted.access_code) noteParts.push(`Access code: ${extracted.access_code || extracted.lockbox_code}`);
+            if (extracted.access_notes) noteParts.push(`Access notes: ${extracted.access_notes}`);
+            if (extracted.pet_warning) noteParts.push(`Pet warning: ${extracted.pet_warning}`);
+            if (extracted.callback_phone || extracted.phone) noteParts.push(`Callback phone: ${extracted.callback_phone || extracted.phone}`);
             if (extracted.address) noteParts.push(`Address provided: ${extracted.address}`);
             if (extracted.email) noteParts.push(`Email: ${extracted.email}`);
             const noteContent = noteParts.join("\n");
@@ -912,12 +1082,12 @@ IMPORTANT RULES:
               const { data: jobCustomer } = await supabase
                 .from("jobs")
                 .select("customer_id")
-                .eq("id", customerJob.id)
+                .eq("id", activeWorkContext.activeJob.id)
                 .maybeSingle();
               noteCustomerId = (jobCustomer as any)?.customer_id || null;
             }
             if (!noteCustomerId && hasUpcomingEstimate) {
-              noteCustomerId = (upcomingEstimate as any)?.customer_id || null;
+              noteCustomerId = (activeWorkContext.activeEstimate as any)?.customer_id || null;
             }
             if (noteCustomerId) {
               await supabase.from("customer_notes").insert({
@@ -930,7 +1100,7 @@ IMPORTANT RULES:
             }
             if (hasActiveJob) {
               await supabase.from("activity_log").insert({
-                job_id: customerJob.id,
+                job_id: activeWorkContext.activeJob.id,
                 action: "sms_follow_up_note",
                 performed_by: "JARVIS",
                 details: noteContent,
@@ -941,25 +1111,25 @@ IMPORTANT RULES:
             await supabase.from("action_items").insert({
               title: `${customerName} texted about ${ref}`,
               description: extracted.summary || `Follow-up SMS on existing ${target} — note added locally`,
-              category: "follow_up",
-              priority: "normal",
+              category: intentDecision.actionCategory === "new_appointment" ? "follow_up" : intentDecision.actionCategory,
+              priority: ["schedule_change", "pet_warning", "eta_request"].includes(intentDecision.actionCategory) ? "high" : "normal",
               source: "sms",
               status: "pending",
               customer_phone: from,
-              job_id: hasActiveJob ? customerJob.id : null,
+              job_id: hasActiveJob ? activeWorkContext.activeJob.id : null,
               suggested_action: `Review ${ref} — customer messaged with new info`,
-              metadata: {
+              metadata: buildJarvisIntentMetadata(intentDecision, {
                 customer_name: customerName,
                 customer_id: resolvedCustomerId,
                 phone: from,
                 suppressed_booking: true,
                 suppressed_reason: hasActiveJob ? "active_job_in_progress" : "upcoming_estimate",
                 local_note_added: !!noteCustomerId,
-                active_job_id: hasActiveJob ? customerJob.id : null,
-                upcoming_estimate_id: hasUpcomingEstimate ? upcomingEstimate.id : null,
+                active_job_id: hasActiveJob ? activeWorkContext.activeJob.id : null,
+                upcoming_estimate_id: hasUpcomingEstimate ? activeWorkContext.activeEstimate.id : null,
                 sms_extraction: extracted,
                 thread_snippet: body.slice(0, 200),
-              },
+              }),
             });
             console.log(`SMS: SUPPRESSED booking for ${from} — appended to ${target} ${targetRecord.id}`);
           } else if (isInfoReply && existingBooking) {
@@ -972,7 +1142,13 @@ IMPORTANT RULES:
               email: extracted.email || (existingBooking.metadata as any)?.email || null,
               address: extracted.address || (existingBooking.metadata as any)?.address || null,
               lockbox_code: extracted.lockbox_code || (existingBooking.metadata as any)?.lockbox_code || null,
+              access_code: extracted.access_code || (existingBooking.metadata as any)?.access_code || null,
+              access_notes: extracted.access_notes || (existingBooking.metadata as any)?.access_notes || null,
+              pet_warning: extracted.pet_warning || (existingBooking.metadata as any)?.pet_warning || null,
+              callback_phone: extracted.callback_phone || extracted.phone || (existingBooking.metadata as any)?.callback_phone || null,
               sms_extraction: extracted,
+              jarvis_intent: intentDecision.intent,
+              jarvis_intent_confidence: intentDecision.confidence,
             };
             await supabase.from("action_items")
               .update({ metadata: mergedMeta })
@@ -1000,6 +1176,10 @@ IMPORTANT RULES:
               email: extracted.email || null,
               address: extracted.address || null,
               lockbox_code: extracted.lockbox_code || null,
+              access_code: extracted.access_code || extracted.lockbox_code || null,
+              access_notes: extracted.access_notes || null,
+              pet_warning: extracted.pet_warning || null,
+              callback_phone: extracted.callback_phone || extracted.phone || null,
               job_type: effectiveServiceType === "estimate" ? "estimate" : effectiveServiceType,
               service_type: effectiveServiceType,
               scheduling_preference: effectiveScheduling,
@@ -1009,6 +1189,9 @@ IMPORTANT RULES:
               sms_extraction: extracted,
               call_extraction: callExtraction || null,
               correlated_call: recentCalls?.[0]?.id || null,
+              jarvis_intent: intentDecision.intent,
+              jarvis_intent_confidence: intentDecision.confidence,
+              jarvis_intent_reason: intentDecision.reason,
               // FIX #4: Include MMS media URLs in metadata
               ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
             };
@@ -1105,6 +1288,33 @@ IMPORTANT RULES:
 
             // (To-Do creation removed — lockbox codes / scheduling notes now flow through action_items + booking card only.)
 
+          } else if (!isInfoReply && intentDecision.actionCategory !== "new_appointment" && intentDecision.intent !== "general_question") {
+            await supabase.from("action_items")
+              .delete()
+              .eq("category", "new_lead")
+              .eq("customer_phone", from)
+              .eq("status", "pending")
+              .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+            await supabase.from("action_items").insert({
+              title: `${customerName} - ${intentDecision.intent.replaceAll("_", " ")}`,
+              description: intentDecision.summary || extracted.summary || body.slice(0, 200),
+              category: intentDecision.actionCategory,
+              priority: ["schedule_change", "pet_warning", "eta_request"].includes(intentDecision.actionCategory) ? "high" : "normal",
+              source: "sms",
+              status: "pending",
+              customer_phone: from,
+              job_id: linkedJobId,
+              suggested_action: intentDecision.suggestedAction,
+              metadata: buildJarvisIntentMetadata(intentDecision, {
+                customer_name: customerName,
+                customer_id: resolvedCustomerId,
+                phone: from,
+                sms_extraction: extracted,
+                inbound_message: body,
+                thread_snippet: body.slice(0, 200),
+              }),
+            });
+            console.log(`SMS: created ${intentDecision.actionCategory} action_item for ${from} (${intentDecision.intent})`);
           } else if (extracted.intent !== "other" && extracted.intent !== "confirmation") {
             // Non-booking but actionable intent
             if (customerJob) {

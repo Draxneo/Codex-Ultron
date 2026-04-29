@@ -1,48 +1,49 @@
-import { Mic, Loader2 } from "lucide-react";
+import { Loader2, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useVoiceToText } from "@/hooks/useVoiceToText";
+import { type DictationProvider, useVoiceToText } from "@/hooks/useVoiceToText";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface DictateButtonProps {
-  /** Called with the transcribed text once Deepgram returns. */
   onTranscript: (text: string) => void;
-  /** Hide on mobile (default true — Gboard already provides native dictation). */
   hideOnMobile?: boolean;
-  /** Visual size of the icon button. */
   size?: "xs" | "sm" | "md";
+  provider?: DictationProvider;
+  prompt?: string;
+  autoStopOnSilence?: boolean;
+  showLabel?: boolean;
+  idleLabel?: string;
+  recordingLabel?: string;
+  loadingLabel?: string;
   className?: string;
   title?: string;
 }
 
-/**
- * Universal dictation mic button.
- *
- * Wraps the existing useVoiceToText hook (Deepgram nova-3 with keyterm
- * boosting) into a one-line drop-in for any composer or note field.
- *
- * Idle  → blue mic
- * Listening → red pulsing mic (auto-stops on silence via the hook)
- * Transcribing → spinner
- *
- * Defaults to desktop-only because mobile keyboards already have a native
- * mic key — doubling up confuses users.
- */
 export function DictateButton({
   onTranscript,
   hideOnMobile = true,
   size = "sm",
+  provider,
+  prompt,
+  autoStopOnSilence = true,
+  showLabel = false,
+  idleLabel = "Talk",
+  recordingLabel = "Stop",
+  loadingLabel = "Transcribing",
   className,
-  title = "Dictate (voice to text)",
+  title = "Dictate voice to text",
 }: DictateButtonProps) {
   const isMobile = useIsMobile();
 
   const { isRecording, loading, toggle } = useVoiceToText({
+    provider,
+    prompt,
+    autoStopOnSilence,
     onTranscript: (text) => {
       const trimmed = (text || "").trim();
       if (!trimmed) {
-        toast.info("Didn't catch that — try again");
+        toast.info("Didn't catch that. Try again.");
         return;
       }
       onTranscript(trimmed);
@@ -54,15 +55,45 @@ export function DictateButton({
 
   const dims =
     size === "xs" ? "h-6 w-6" : size === "sm" ? "h-8 w-8" : "h-9 w-9";
+  const labelDims =
+    size === "xs" ? "h-7 px-2 text-xs" : size === "sm" ? "h-8 px-2.5 text-xs" : "h-9 px-3 text-sm";
   const iconDims =
     size === "xs" ? "h-3 w-3" : size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+  const currentTitle = loading ? "Transcribing..." : isRecording ? "Recording - click to stop" : title;
+
+  if (showLabel) {
+    return (
+      <Button
+        type="button"
+        variant={isRecording ? "destructive" : "outline"}
+        title={currentTitle}
+        onClick={toggle}
+        disabled={loading}
+        className={cn(
+          labelDims,
+          "shrink-0 gap-1.5 transition-colors",
+          isRecording && "animate-pulse",
+          className,
+        )}
+      >
+        {loading ? (
+          <Loader2 className={cn(iconDims, "animate-spin")} />
+        ) : isRecording ? (
+          <MicOff className={iconDims} />
+        ) : (
+          <Mic className={iconDims} />
+        )}
+        <span>{loading ? loadingLabel : isRecording ? recordingLabel : idleLabel}</span>
+      </Button>
+    );
+  }
 
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
-      title={loading ? "Transcribing…" : isRecording ? "Listening — click to stop" : title}
+      title={currentTitle}
       onClick={toggle}
       disabled={loading}
       className={cn(

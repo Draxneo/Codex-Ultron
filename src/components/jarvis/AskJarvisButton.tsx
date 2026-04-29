@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCopilotPanel, type JarvisContextPayload } from "@/contexts/CopilotPanelContext";
+import type { JarvisContextPayload } from "@/contexts/CopilotPanelContext";
+import { useJarvisLauncher } from "@/hooks/useJarvisLauncher";
 import { cn } from "@/lib/utils";
 
 type AskJarvisButtonProps = {
@@ -28,7 +29,7 @@ export function AskJarvisButton({
   iconOnly = false,
   stopPropagation = true,
 }: AskJarvisButtonProps) {
-  const { startRecordSession } = useCopilotPanel();
+  const { launchJarvis } = useJarvisLauncher();
 
   return (
     <Button
@@ -43,7 +44,14 @@ export function AskJarvisButton({
           event.stopPropagation();
           event.preventDefault();
         }
-        startRecordSession({ contextType, contextId, label, prompt, context });
+        launchJarvis({
+          trigger: contextType,
+          source: "ask_jarvis_button",
+          contextId,
+          label,
+          prompt,
+          context,
+        });
       }}
     >
       <Sparkles className={cn(iconOnly ? "h-3.5 w-3.5" : "h-4 w-4")} />

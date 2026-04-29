@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         : "";
 
     const numberStr = invoiceNumber ? ` #${invoiceNumber}` : "";
-    const body = `Hi ${firstName}, here is your invoice${numberStr}.${amountStr} Tap to view & pay: ${payUrl}`;
+    const body = `Hi ${firstName}, thank you for letting our family help yours. Your invoice${numberStr} is ready.${amountStr} You can view and pay here: ${payUrl}`;
 
     // Route through centralized send-sms (HITL bypass since this is a manual user-triggered send)
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

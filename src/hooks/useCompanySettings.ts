@@ -21,7 +21,7 @@
  * - Various edge functions that need company phone/email
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -136,14 +136,15 @@ const DEFAULTS: CompanySettings = {
   ai_sms_auto_draft: "true",
   jarvis_max_daily_alerts: "50",
   missed_call_sms_enabled: "true",
-  missed_call_sms_during_hours: "Hi! Sorry we missed you. We'll call you right back. Need us sooner? Just text us here.",
+  missed_call_sms_during_hours: "Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here with your name, service address, and what is going on.",
   missed_call_sms_during_hours_template_key: "",
-  missed_call_sms_after_hours: "Hi! Thanks for calling. We're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here.",
+  missed_call_sms_after_hours: "Hi, thanks for calling Carnes and Sons. Our office is closed right now, but you can text us here with your name, service address, and what is going on. For emergencies, text EMERGENCY and our family will follow up as quickly as we can.",
   missed_call_sms_after_hours_template_key: "",
 };
 
 export function useCompanySettings() {
   const queryClient = useQueryClient();
+  const channelNameRef = useRef(`company_settings_sync_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`);
 
   // Fetch all settings rows and merge into a single typed object
   const query = useQuery({
@@ -170,7 +171,7 @@ export function useCompanySettings() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("company_settings_sync")
+      .channel(channelNameRef.current)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "company_settings" },

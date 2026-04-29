@@ -77,6 +77,7 @@ export function TechAttachmentsCard({
     if (attachment.url) return attachment.url;
     const path = attachment.file_path || attachment.path;
     if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
     return supabase.storage.from("job-photos").getPublicUrl(path).data.publicUrl;
   };
 

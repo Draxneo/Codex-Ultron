@@ -9,6 +9,7 @@ export interface HcpAttachment {
   created_at?: string;
   file_path?: string;
   path?: string;
+  hcp_attachment_id?: string | null;
   hidden_from_tech_share?: boolean;
 }
 
@@ -34,11 +35,14 @@ export function useJobAttachments(hcpId: string | undefined, jobId?: string) {
         return [];
       };
 
+      const isHttpUrl = (value?: string | null) => /^https?:\/\//i.test(value || "");
+
       const ensureUrl = (list: HcpAttachment[]): HcpAttachment[] =>
         list.map((attachment: any) => {
           if (attachment.url) return attachment;
           const path = attachment.file_path || attachment.path;
           if (!path) return attachment;
+          if (isHttpUrl(path)) return { ...attachment, path, url: path };
           const { data: publicUrl } = supabase.storage.from("job-photos").getPublicUrl(path);
           return { ...attachment, path, url: publicUrl.publicUrl };
         });
@@ -46,7 +50,7 @@ export function useJobAttachments(hcpId: string | undefined, jobId?: string) {
       const localResult = jobId
         ? await (supabase as any)
           .from("job_attachments")
-          .select("id,file_name,file_path,file_type,created_at,hidden_from_tech_share")
+          .select("id,file_name,file_path,file_type,created_at,hcp_attachment_id,hidden_from_tech_share")
           .eq("job_id", jobId)
           .order("created_at", { ascending: false })
         : { data: [], error: null };
@@ -63,37 +67,28 @@ export function useJobAttachments(hcpId: string | undefined, jobId?: string) {
       const mergeAttachments = (remoteAttachments: HcpAttachment[]) => {
         const seen = new Set<string>();
         return [...localAttachments, ...remoteAttachments].filter((attachment: any) => {
-          const key = attachment.id || attachment.hcp_attachment_id || attachment.url || attachment.file_path || attachment.path;
+          const attachmentId = attachment.hcp_attachment_id || attachment.id;
+          const urlOrPath = attachment.url || attachment.file_path || attachment.path || "";
+          const key = attachmentId
+            ? `id:${attachmentId}`
+            : urlOrPath
+              ? `url:${String(urlOrPath).split("?")[0]}`
+              : `name:${attachment.file_name || ""}:${attachment.created_at || ""}`;
           if (!key || seen.has(key)) return false;
           seen.add(key);
           return true;
         });
       };
 
-      const { data: cached } = await (supabase
-        .from("job_attachment_cache" as any)
-        .select("attachments")
-        .eq("hcp_id", hcpId)
-        .maybeSingle() as any);
-
-      if ((cached as any)?.attachments) {
-        return mergeAttachments(ensureUrl(normalize((cached as any).attachments)));
+      const { data, error } = await supabase.functions.invoke("fetch-job-attachments", {
+        body: { hcp_id: hcpId, job_id: jobId || null },
+      });
+      if (error) {
+        console.warn("fetch-job-attachments failed; showing local attachments only", error);
+        return localAttachments;
       }
 
-      const { data, error } = await supabase.functions.invoke("fetch-job-attachments", {
-        body: { hcp_id: hcpId },
-      });
-      if (error) throw error;
-
       const remoteAttachments = ensureUrl(normalize(data?.attachments));
-
-      supabase
-        .from("job_attachment_cache" as any)
-        .upsert(
-          { hcp_id: hcpId, attachments: remoteAttachments as any, fetched_at: new Date().toISOString() } as any,
-          { onConflict: "hcp_id" },
-        )
-        .then(() => {});
 
       return mergeAttachments(remoteAttachments);
     },

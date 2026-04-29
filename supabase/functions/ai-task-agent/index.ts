@@ -1185,7 +1185,6 @@ const JARVIS_HITL_MUTATING_TOOLS = new Set([
   "send_chat_message",
   "create_customer",
   "update_customer",
-  "create_job",
   "update_job_field",
   "create_quote",
   "generate_install_quote",
@@ -1197,8 +1196,6 @@ const JARVIS_HITL_MUTATING_TOOLS = new Set([
   "invoke_invoicing",
   "create_parts_order",
   "update_warranty_status",
-  "create_todo",
-  "complete_todo",
   "move_photos_to_job",
 ]);
 
@@ -1222,8 +1219,6 @@ const JARVIS_HITL_TOOL_LABELS: Record<string, string> = {
   invoke_invoicing: "Create invoice/payment action",
   create_parts_order: "Create parts order",
   update_warranty_status: "Update warranty status",
-  create_todo: "Create task",
-  complete_todo: "Complete task",
   move_photos_to_job: "Move SMS photos to job",
 };
 
@@ -2995,14 +2990,32 @@ serve(async (req) => {
         ).join("\n")
       : "\n\nNo employees configured yet.";
 
-    // Build AGENT TOOLS section from enabled tools in the database
+    const implementedAgentToolNames = new Set([
+      "web_search", "scrape_url", "update_instruction", "log_learning",
+      "lookup_equipment", "verify_address",
+      "send_sms_to_employee", "send_tech_form_link", "search_sms_history",
+      "search_call_history", "read_chat_messages", "send_chat_message",
+      "create_quote", "generate_install_quote", "convert_estimate_to_job",
+      "generate_letterhead_document",
+      "get_travel_times", "check_scheduling_fit", "suggest_schedule_optimization",
+      "search_customer", "create_customer", "update_customer", "create_job",
+      "invoke_repair_quote", "invoke_supplyhouse", "invoke_carrier_enterprise",
+      "invoke_invoicing", "update_job_field", "create_parts_order",
+      "update_warranty_status", "get_live_transcript", "suggest_actions",
+      "move_photos_to_job",
+    ]);
+
+    // Build AGENT TOOLS section from enabled tools in the database, filtered
+    // to tools the current ai-task-agent actually implements.
     const { data: enabledAgentTools } = await sb
       .from("agent_tools")
       .select("name, function_name, description")
       .eq("is_enabled", true)
       .order("name");
-    const agentToolsSection = (enabledAgentTools && enabledAgentTools.length > 0)
-      ? "\n\nAGENT TOOLS (enabled):\n" + enabledAgentTools.map((t: any) =>
+    const visibleAgentTools = (enabledAgentTools || [])
+      .filter((t: any) => implementedAgentToolNames.has(t.function_name));
+    const agentToolsSection = visibleAgentTools.length > 0
+      ? "\n\nAGENT TOOLS (enabled):\n" + visibleAgentTools.map((t: any) =>
           `- ${t.name} (${t.function_name}): ${t.description || "No description"}`
         ).join("\n")
       : "\n\nAGENT TOOLS: No tools enabled in the tools registry.";
@@ -3131,10 +3144,10 @@ TOOL ROUTING RULES (follow strictly)
     // by trimming ~40 full JSON tool definitions down to ~10-15. The agent can still
     // call any DB-enabled tool by name — but the model only "sees" the relevant ones.
     //
-    // Tools always available (every page): search_customer, create_todo, complete_todo,
-    // suggest_actions, web_search, lookup_equipment, verify_address.
+    // Tools always available (every page): lookup, suggestion, learning, and verification tools.
+    // Deprecated todo tools are intentionally not exposed.
     const ALWAYS_ON_TOOLS = new Set([
-      "search_customer", "create_todo", "complete_todo", "suggest_actions",
+      "search_customer", "suggest_actions",
       "web_search", "lookup_equipment", "verify_address",
       "update_instruction", "log_learning",
     ]);
@@ -3186,9 +3199,7 @@ TOOL ROUTING RULES (follow strictly)
         .select("function_name")
         .eq("is_enabled", true);
 
-      const enabledNames = enabledTools && enabledTools.length > 0
-        ? new Set(enabledTools.map((t: any) => t.function_name))
-        : new Set(Object.keys(allToolsMap)); // fallback: all tools enabled
+      const enabledNames = new Set((enabledTools || []).map((t: any) => t.function_name));
 
       const routeAllowed = getRouteTools(pageContext);
 

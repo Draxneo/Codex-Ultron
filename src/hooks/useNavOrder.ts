@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 
 // Default nav order by route path
 const DEFAULT_ORDER = [
-  "/", "/phone", "/sms", "/customers", "/quick-quote", "/catalog", "/pay", "/reports", "/copilot", "/admin",
+  "/intake", "/dispatch", "/team", "/customers", "/quick-quote",
 ];
 
 function migrateLegacyOrder(order: string[]) {
@@ -12,6 +12,12 @@ function migrateLegacyOrder(order: string[]) {
   for (const path of order) {
     if (path === "/inbox") {
       migrated.push("/phone", "/sms");
+    } else if (path === "/") {
+      migrated.push("/intake", "/dispatch");
+    } else if (path === "/operations-v2") {
+      migrated.push("/intake");
+    } else if (path === "/dispatch-v2" || path === "/schedule-v2") {
+      migrated.push("/dispatch");
     } else {
       migrated.push(path);
     }

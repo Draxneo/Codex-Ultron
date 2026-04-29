@@ -1,7 +1,7 @@
-import { loadCompanyInfo } from "../_shared/companyInfo.ts";
 import { formatDateFriendly, formatTimeWindow } from "../_shared/formatters.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 
 
 
@@ -17,16 +17,32 @@ function buildReminderSms(job: any, dateLabel: string): string {
   const friendlyDate = formatDateFriendly(job.scheduled_date);
 
   if (isPhoneCall) {
-    return `Hi ${firstName}, just a reminder — we'll be calling you${friendlyDate ? ` on ${friendlyDate}` : ""}${timeWindow}. Reply R to reschedule.`;
+    return `Hi ${firstName}, just a reminder from the Carnes family: we'll be calling you${friendlyDate ? ` on ${friendlyDate}` : ""}${timeWindow}. Reply R if you need to reschedule.`;
   }
-  return `Hi ${firstName}, this is a friendly reminder that your ${typeLabel} appointment is ${dateLabel}${friendlyDate ? ` (${friendlyDate})` : ""}${timeWindow}. Reply C to confirm or R to reschedule.`;
+  return `Hi ${firstName}, this is a friendly reminder from the Carnes family that your ${typeLabel} appointment is ${dateLabel}${friendlyDate ? ` (${friendlyDate})` : ""}${timeWindow}. You'll get a 30-minute heads up when we're on the way. Reply C to confirm, R to reschedule, or send any gate code, pet note, or access instructions here.`;
+}
+
+async function buildReminderSmsFromTemplate(
+  supabase: any,
+  job: any,
+  dateLabel: string,
+  templateKey = "appointment_reminder_day_before",
+): Promise<{ body: string; templateKey: string | null }> {
+  const fallbackBody = buildReminderSms(job, dateLabel);
+  const resolved = await resolveSmsTemplateBody({
+    supabase,
+    templateKey,
+    fallbackBody,
+    job,
+    extraVars: { date_label: dateLabel },
+  });
+  return { body: resolved.body.trim(), templateKey: resolved.templateKey };
 }
 
 /** Send SMS for a single job, update job_reminders */
 async function sendReminderForJob(
   supabase: any,
   jobId: string,
-  company: { name: string; phone: string },
   dateLabel: string,
 ): Promise<boolean> {
   const { data: job } = await supabase.from("jobs")
@@ -35,10 +51,10 @@ async function sendReminderForJob(
 
   if (!job?.customer_phone) return false;
 
-  const smsBody = buildReminderSms(job, dateLabel);
+  const { body: smsBody, templateKey } = await buildReminderSmsFromTemplate(supabase, job, dateLabel);
 
   const smsResult = await supabase.functions.invoke("send-sms", {
-    body: { to: job.customer_phone, body: smsBody, job_id: jobId },
+    body: { to: job.customer_phone, body: smsBody, job_id: jobId, template_key: templateKey },
     headers: { "x-source-function": "job-reminders", "x-hitl-approved": "true" },
   });
   if (smsResult.error) {
@@ -73,8 +89,6 @@ Deno.serve(async (req) => {
   try {
             const supabase = getSupabaseAdmin();
 
-    const company = await loadCompanyInfo(supabase);
-
     let body: any = {};
     try { body = await req.json(); } catch { /* cron calls with no body */ }
 
@@ -94,10 +108,15 @@ Deno.serve(async (req) => {
       }
 
       const friendlyDate = formatDateFriendly(job.scheduled_date);
-      const smsBody = buildReminderSms(job, friendlyDate ? `on ${friendlyDate}` : "soon");
+      const { body: smsBody, templateKey } = await buildReminderSmsFromTemplate(
+        supabase,
+        job,
+        friendlyDate ? `on ${friendlyDate}` : "soon",
+        "appointment_confirmation",
+      );
 
       const smsResult = await supabase.functions.invoke("send-sms", {
-        body: { to: job.customer_phone, body: smsBody, job_id: manualJobId },
+        body: { to: job.customer_phone, body: smsBody, job_id: manualJobId, template_key: templateKey },
         headers: { "x-source-function": "job-reminders", "x-hitl-approved": "true" },
       });
       if (smsResult.error) throw smsResult.error;
@@ -121,7 +140,7 @@ Deno.serve(async (req) => {
     if (batchJobIds.length > 0) {
       let sentCount = 0;
       for (const jobId of batchJobIds) {
-        const sent = await sendReminderForJob(supabase, jobId, company, "tomorrow");
+        const sent = await sendReminderForJob(supabase, jobId, "tomorrow");
         if (sent) sentCount++;
       }
       return new Response(JSON.stringify({ sent: sentCount, batch: true }), {
@@ -192,7 +211,7 @@ Deno.serve(async (req) => {
         jobId: reminder.job_id,
         customerName: job.customer_name || "Unknown",
         phone: job.customer_phone,
-        smsPreview: buildReminderSms(job, "tomorrow"),
+        smsPreview: (await buildReminderSmsFromTemplate(supabase, job, "tomorrow")).body,
       });
     }
 
@@ -219,7 +238,8 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("send-job-reminders error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500,
     });
   }

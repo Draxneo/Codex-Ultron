@@ -276,7 +276,12 @@ export function SmsContactCard({ conversation, isExpanded, onToggle, sending, on
             <div className="flex items-center gap-1">
               <EmojiPicker onSelect={(emoji) => setBody((prev) => prev + emoji)} />
               <DictateButton
-                size="xs"
+                size="sm"
+                showLabel
+                hideOnMobile={false}
+                autoStopOnSilence={false}
+                provider="openai"
+                title="Dictate message"
                 onTranscript={(text) => {
                   const el = bodyInputRef.current;
                   const { value, caret } = insertAtSelection(body, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);

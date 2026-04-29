@@ -114,19 +114,21 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
       const { data, error } = await supabase.functions.invoke("jarvis-context-builder", { body: args });
       if (!error && data && !data.error) {
         pendingContextRef.current = data as JarvisContextPayload;
+        return data as JarvisContextPayload;
       }
     } catch (e) {
       console.warn("jarvis-context-builder failed", e);
     }
+    return null;
   }, []);
 
   const startCallSession = useCallback((phone: string, contactName?: string, callSid?: string) => {
     pendingCallRef.current = { phone, contactName, callSid };
     setActiveCallPreview({ phone, contactName });
     pendingQueryRef.current = `Caller on the line: ${phone}${contactName ? ` (${contactName})` : ""}. Use the JARVIS context payload (already attached) — do not re-look-up. Give me a 3-line snapshot: who they are, last interaction, suggested next move.`;
-    setPendingVersion((v) => v + 1);
     setOpen(true);
-    void fetchContext({ trigger: "call", phone, contact_name: contactName, call_sid: callSid });
+    void fetchContext({ trigger: "call", phone, contact_name: contactName, call_sid: callSid })
+      .finally(() => setPendingVersion((v) => v + 1));
   }, [fetchContext]);
 
   const consumePendingCallSession = useCallback(() => {
@@ -138,9 +140,9 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
   const startSmsSession = useCallback((phone: string, contactName?: string) => {
     pendingSmsRef.current = { phone, contactName };
     pendingQueryRef.current = `Texting ${phone}${contactName ? ` (${contactName})` : ""}. Use the attached JARVIS context — give me a 2-line snapshot and one suggested reply if appropriate.`;
-    setPendingVersion((v) => v + 1);
     setOpen(true);
-    void fetchContext({ trigger: "sms", phone, contact_name: contactName });
+    void fetchContext({ trigger: "sms", phone, contact_name: contactName })
+      .finally(() => setPendingVersion((v) => v + 1));
   }, [fetchContext]);
 
   const consumePendingSmsSession = useCallback(() => {
@@ -153,9 +155,9 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
   const startVoicemailSession = useCallback((voicemailId: string, phone: string, contactName?: string) => {
     pendingVoicemailRef.current = { voicemailId, phone, contactName };
     pendingQueryRef.current = `Voicemail from ${phone}${contactName ? ` (${contactName})` : ""}. Use the attached JARVIS context (transcription included) — tell me what they need and recommend the response.`;
-    setPendingVersion((v) => v + 1);
     setOpen(true);
-    void fetchContext({ trigger: "voicemail", voicemail_id: voicemailId, phone, contact_name: contactName });
+    void fetchContext({ trigger: "voicemail", voicemail_id: voicemailId, phone, contact_name: contactName })
+      .finally(() => setPendingVersion((v) => v + 1));
   }, [fetchContext]);
 
   const consumePendingVoicemailSession = useCallback(() => {

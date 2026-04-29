@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withRetry, isRetryable, logSystemError, enqueueRetry, pageOnCall } from "../_shared/resilience.ts";
 import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
+import { appendSmsSignature } from "../_shared/smsSignature.ts";
 
 type MediaInput = string | { url: string; content_type?: string };
 
@@ -236,7 +237,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const finalBody = (correctedBody || "").slice(0, 1600);
+    const finalBody = appendSmsSignature(correctedBody || "", 1600);
 
     // ── Send SMS via Twilio REST API (with retry on transient failures) ──
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
@@ -358,7 +359,7 @@ Deno.serve(async (req) => {
           .from("action_items")
           .select("id, customer_phone, metadata")
           .eq("status", "pending")
-          .in("category", ["new_lead", "new_appointment", "missed_call", "follow_up"]);
+          .in("category", ["new_lead", "new_appointment", "missed_call", "follow_up", "thread_attention", "schedule_change", "eta_request", "access_note", "pet_warning", "contact_update", "reschedule", "confirmation", "dispatch_callback"]);
         const toResolve = (matches || []).filter((row: any) => {
           const d = String(row.customer_phone || "").replace(/\D/g, "").slice(-10);
           return d === last10;

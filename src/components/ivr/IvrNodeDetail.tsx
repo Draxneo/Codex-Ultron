@@ -605,7 +605,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         description="Pick a governed template for this department, then keep the resolved body here as the legacy-safe preview/fallback."
         value={option.dept_after_hours_sms || ""}
         templateKey={option.dept_after_hours_sms_template_key}
-        placeholder={`e.g. Thanks for calling ${option.label}. We're currently closed but will get back to you as soon as we can.`}
+        placeholder={`e.g. Thanks for calling ${option.label}. We are a local family company and will get back to you as soon as we can.`}
         categoryFilter={["ivr", "ivr_after_hours", "voice", "general"]}
         onSaveText={(v) => onSaveSilent({ digit: option.digit, dept_after_hours_sms: v })}
         onSelectTemplate={(template) => onSave({
@@ -620,7 +620,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         description="Use a department-specific governed template for missed live calls during open hours."
         value={option.dept_missed_call_sms || ""}
         templateKey={option.dept_missed_call_sms_template_key}
-        placeholder="e.g. Sorry we missed your call! We're here and available — we'll call you right back."
+        placeholder="e.g. Sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can."
         categoryFilter={["ivr", "ivr_missed_call", "voice", "general"]}
         onSaveText={(v) => onSaveSilent({ digit: option.digit, dept_missed_call_sms: v })}
         onSelectTemplate={(template) => onSave({
@@ -1017,8 +1017,8 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                   value={isAfterHoursSms ? (menuOption.dept_after_hours_sms || "") : (menuOption.dept_missed_call_sms || "")}
                   templateKey={isAfterHoursSms ? menuOption.dept_after_hours_sms_template_key : menuOption.dept_missed_call_sms_template_key}
                   placeholder={isAfterHoursSms
-                    ? `e.g. Thanks for calling ${menuOption.label}. We're currently closed but will get back to you first thing tomorrow.`
-                    : `e.g. Sorry we missed your call! We're here and available — we'll call you right back.`}
+                    ? `e.g. Thanks for calling ${menuOption.label}. We are a local family company and will get back to you first thing tomorrow.`
+                    : `e.g. Sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can.`}
                   categoryFilter={isAfterHoursSms ? ["ivr", "ivr_after_hours", "voice", "general"] : ["ivr", "ivr_missed_call", "voice", "general"]}
                   onSaveText={(v) => {
                     const field = isAfterHoursSms ? "dept_after_hours_sms" : "dept_missed_call_sms";
@@ -1056,7 +1056,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                         description="Single source of truth — replaces the legacy global missed-call SMS settings."
                         value={menuOption.dept_no_vm_missed_call_sms || ""}
                         templateKey={null}
-                        placeholder="Hi! Sorry we missed you — we'll call you right back. Need us sooner? Just text us here."
+                        placeholder="Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here."
                         categoryFilter={["ivr", "missed_call", "voice", "general"]}
                         onSaveText={(v) => onUpdateDept({ digit: menuOption.digit, dept_no_vm_missed_call_sms: v }, true)}
                         onSelectTemplate={(t) => onUpdateDept({ digit: menuOption.digit, dept_no_vm_missed_call_sms: t.template_body }, true)}
@@ -1233,7 +1233,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                   description="Sent when a live inbound call is missed while your office is open."
                   value={missedCallSettings.duringHoursTemplate}
                   templateKey={missedCallSettings.duringHoursTemplateKey}
-                  placeholder="Hi! Sorry we missed you — we'll call you right back. Need us sooner? Just text us here."
+                  placeholder="Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here."
                   categoryFilter={["ivr", "missed_call", "voice", "general"]}
                   onSaveText={(v) => onUpdateMissedCallSettings({ missed_call_sms_during_hours: v })}
                   onSelectTemplate={(template) => onUpdateMissedCallSettings({
@@ -1250,7 +1250,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                   description="Sent when the missed call lands outside your configured business hours." 
                   value={missedCallSettings.afterHoursTemplate}
                   templateKey={missedCallSettings.afterHoursTemplateKey}
-                  placeholder="Hi! Thanks for calling — we're closed right now. We'll get back to you first thing. For emergencies, just text EMERGENCY here."
+                  placeholder="Hi, thanks for calling Carnes and Sons. Our office is closed right now, but our family will follow up as quickly as we can. For emergencies, text EMERGENCY."
                   categoryFilter={["ivr", "after_hours", "missed_call", "voice", "general"]}
                   onSaveText={(v) => onUpdateMissedCallSettings({ missed_call_sms_after_hours: v })}
                   onSelectTemplate={(template) => onUpdateMissedCallSettings({

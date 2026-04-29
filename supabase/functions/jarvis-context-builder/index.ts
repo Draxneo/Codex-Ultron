@@ -19,6 +19,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
 import { detectAddressDivergence } from "../_shared/verifyContact.ts";
+import { describeActiveWork, lookupActiveWorkContext } from "../_shared/jarvisContactIntent.ts";
 
 interface BuildRequest {
   trigger: "call" | "sms" | "email" | "voicemail";
@@ -49,6 +50,7 @@ serve(async (req) => {
       recent_history: { jobs: [], calls: [], sms: [], emails: [] },
       suggested_actions: [],
       property_divergence: null, // Set when caller mentions a different address than their home record
+      active_work: null,
     };
 
     // ── 1. Resolve the contact (phone-based triggers) ───────────────────────
@@ -171,6 +173,22 @@ serve(async (req) => {
         calls: callsRes.data || [],
         sms: smsRes.data || [],
         emails: emailsRes.data || [],
+      };
+
+      const activeWork = await lookupActiveWorkContext(sb, {
+        customerId,
+        phone: phoneForLookup,
+        pendingWindowHours: 6,
+      });
+      payload.active_work = {
+        open_job: activeWork.activeJob,
+        open_estimate: activeWork.activeEstimate,
+        pending_booking: activeWork.pendingBooking,
+        label: describeActiveWork(activeWork),
+        should_create_new_work: !(activeWork.activeJob || activeWork.activeEstimate),
+        rule: activeWork.activeJob || activeWork.activeEstimate
+          ? "Treat ambiguous calls/SMS as updates to existing work unless the customer clearly asks for a separate new visit."
+          : "No active work found; new booking may be appropriate if the customer intent supports it.",
       };
 
       // ── Address divergence detection (multi-property aware) ─────────────

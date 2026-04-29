@@ -1,15 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ThemeProvider } from "next-themes";
-import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useEmployeeTabAccess, getFirstAllowedRoute } from "@/hooks/useEmployeeTabAccess";
-import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog";
-import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -23,26 +21,26 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
 import { usePreWarmCache } from "@/hooks/usePreWarmCache";
 import { useAppResume } from "@/hooks/useAppResume";
+import { useCallerLookup } from "@/hooks/useCallerLookup";
+import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { onMainMessage } from "@/lib/electron";
-import { SoftphoneStrip } from "./components/SoftphoneStrip";
-import { useSoftphoneContext } from "./components/SoftphoneProvider";
+import { PhoneOnlySoftphone } from "./components/PhoneOnlySoftphone";
 import { CallerInfoCenter } from "./components/softphone/CallerInfoCenter";
 import { IntakeActionCards } from "./components/softphone/IntakeActionCards";
-import { useCallerLookup } from "@/hooks/useCallerLookup";
-import { useLiveTranscript } from "@/hooks/useLiveTranscript";
-import Dashboard from "./pages/Index";
+import { ScrollArea } from "./components/ui/scroll-area";
 
 import TechMySchedule from "./pages/TechMySchedule";
 import TechJobDetail from "./pages/TechJobDetail";
 import TechJobCart from "./pages/TechJobCart";
 import TechCustomerDetail from "./pages/TechCustomerDetail";
 import Jobs from "./pages/Jobs";
+import ScheduleV2 from "./pages/ScheduleV2";
+import OperationsDeskV2 from "./pages/OperationsDeskV2";
 import JobDetail from "./pages/JobDetail";
 import RecordDocument from "./pages/RecordDocument";
 
 
 import CopilotPage from "./pages/CopilotPage";
-import { ActionItemCards } from "./components/copilot/ActionItemCards";
 import { BookingIntentAlert } from "./components/BookingIntentAlert";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -96,16 +94,14 @@ import Leads from "./pages/Leads";
 import RepairCatalog from "./pages/RepairCatalog";
 import Catalog from "./pages/Catalog";
 import QuickQuote from "./pages/QuickQuote";
+import QuoteHeadquarters from "./pages/QuoteHeadquarters";
 import QuickQuoteCustomerView from "./pages/QuickQuoteCustomerView";
 import { SoftphoneProvider } from "./components/SoftphoneProvider";
 import { ViewAsProvider } from "./contexts/ViewAsContext";
 import { AdminViewAsBar } from "./components/AdminViewAsBar";
 import { SmsPanel } from "./components/SmsPanel";
 import { useUnreadSmsCount } from "./hooks/useUnreadSmsCount";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
-import { Badge } from "./components/ui/badge";
-import { Phone as PhoneIcon, MessageSquare, Sparkles, Headphones } from "lucide-react";
-import { ScrollArea } from "./components/ui/scroll-area";
+import { PHONE_CONSOLE_OPEN_EVENT, type PhoneConsoleOpenDetail } from "@/lib/phoneConsoleBridge";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -162,151 +158,23 @@ function NotificationListeners() {
   return <PrivateAppListeners />;
 }
 
-/**
- * Compact softphone-only view for the Electron pop-out window.
- * Rendered when the URL has ?view=softphone.
- *
- * Now a UNIFIED window combining: Dialer + Live Call (caller info + transcript)
- * + Quick Actions, replacing the previous separate "CSR Intake" popup.
- */
 function SoftphoneOnlyView() {
-  const softphone = useSoftphoneContext();
-  const { startCallSession } = useCopilotPanel();
-  const phoneNumber = softphone.callerInfo?.number ?? null;
-  const callerName = softphone.callerInfo?.name;
-  const prevStatusRef = useRef<string>("idle");
-
-  // Active-call state
-  const isOnCall = softphone.status === "on-call";
-  const isRinging = softphone.status === "ringing";
-  const isConnecting = softphone.status === "connecting";
-  const isCallActive = isOnCall || isRinging || isConnecting;
-
-  // Caller customer record (for action cards)
-  const { data: customer } = useCallerLookup(phoneNumber);
-  const resolvedName = customer
-    ? [customer.first_name, customer.last_name].filter(Boolean).join(" ")
-    : callerName;
-
-  // Live transcript driven by the active Twilio call object (this window
-  // owns the Twilio Device, so the in-process call stream is available).
-  const { liveTranscript, transcriptEndRef, liveTranscriptionEnabled } =
-    useLiveTranscript(softphone.activeCall, isOnCall);
-
-  // Tabbed UI state — auto-switch when call lifecycle changes
-  const [activeTab, setActiveTab] = useState<"phone" | "live" | "actions">("phone");
-  useEffect(() => {
-    if (isCallActive) {
-      setActiveTab("live");
-    } else if (prevStatusRef.current === "on-call") {
-      // Just hung up — bring user back to dialer
-      setActiveTab("phone");
-    }
-    prevStatusRef.current = softphone.status;
-  }, [softphone.status, isCallActive]);
-
-  // Auto-trigger copilot when a call connects
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    if (prev !== "on-call" && softphone.status === "on-call" && phoneNumber) {
-      startCallSession(phoneNumber, callerName);
-    }
-  }, [softphone.status, phoneNumber, callerName, startCallSession]);
-
-  // Auto-switch to Phone tab when a dial-number arrives via IPC
-  useEffect(() => {
-    if (softphone.pendingDialNumber) {
-      setActiveTab("phone");
-    }
-  }, [softphone.pendingDialNumber]);
+  const [searchParams] = useSearchParams();
+  const bootDialNumber = searchParams.get("dial") || "";
+  const bootJobId = searchParams.get("jobId") || undefined;
+  const bootCustomerId = searchParams.get("customerId") || undefined;
 
   return (
-    <div className="h-screen w-screen bg-background flex flex-col overflow-hidden">
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-        className="flex-1 flex flex-col min-h-0"
-      >
-        <TabsList className="grid grid-cols-3 mx-2 mt-2 shrink-0">
-          <TabsTrigger value="phone" className="text-xs gap-1.5">
-            <PhoneIcon className="h-3.5 w-3.5" />
-            Phone
-          </TabsTrigger>
-          <TabsTrigger value="live" className="text-xs gap-1.5 relative">
-            <Headphones className="h-3.5 w-3.5" />
-            Live Call
-            {isCallActive && (
-              <span className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ${
-                isRinging ? "bg-[hsl(var(--success))] animate-pulse" : "bg-[hsl(var(--success))]"
-              }`} />
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="actions" className="text-xs gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Actions
-          </TabsTrigger>
-        </TabsList>
-
-        {/* PHONE — dialer + answer/decline + in-call controls */}
-        <TabsContent value="phone" className="flex-1 min-h-0 m-0 flex overflow-hidden">
-          <SoftphoneStrip alwaysExpanded />
-        </TabsContent>
-
-        {/* LIVE CALL — caller info card + live transcript + compact controls */}
-        <TabsContent value="live" className="flex-1 min-h-0 m-0 flex flex-col">
-          {/* Caller identity / history */}
-          <div className="shrink-0 max-h-[55%] overflow-hidden flex flex-col border-b">
-            <CallerInfoCenter phoneNumber={phoneNumber} callerName={resolvedName} />
-          </div>
-
-          {/* Live transcript */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-4 pt-2 pb-1 shrink-0">
-              {isOnCall ? "Live Transcript" : isCallActive ? "Connecting…" : "Last Call Transcript"}
-            </p>
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="px-4 pb-3 space-y-0.5 text-xs text-foreground">
-                {liveTranscript.length > 0 ? (
-                  <>
-                    {liveTranscript.map((t, i) => (
-                      <p key={i} className={t.is_final ? "opacity-100" : "opacity-50 italic"}>
-                        {t.text}
-                      </p>
-                    ))}
-                    <div ref={transcriptEndRef} />
-                  </>
-                ) : (
-                  <p className="text-muted-foreground/60 italic text-[11px] py-6 text-center">
-                    {!liveTranscriptionEnabled
-                      ? "Live transcription disabled"
-                      : isOnCall
-                        ? "Waiting for speech…"
-                        : isCallActive
-                          ? "Waiting for call to connect…"
-                          : "No active call"}
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-        </TabsContent>
-
-        {/* ACTIONS — JARVIS booking intents + Quick Actions fallback */}
-        <TabsContent value="actions" className="flex-1 min-h-0 m-0 overflow-y-auto">
-          <div className="px-3 pb-4 pt-2">
-            <IntakeActionCards
-              phoneNumber={phoneNumber || undefined}
-              callerName={resolvedName}
-              customerId={customer?.id}
-            />
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+    <PhoneOnlySoftphone
+      initialNumber={bootDialNumber}
+      contactName={searchParams.get("name") || undefined}
+      jobId={bootJobId}
+      customerId={bootCustomerId}
+    />
   );
 }
 
-/** Redirects tech users to /tech, everyone else sees Dashboard */
+/** Redirects tech users to /tech, everyone else to Dispatch HQ. */
 function RoleAwareHome() {
   const location = useLocation();
   const { role, loading } = useEffectiveAuth();
@@ -319,7 +187,15 @@ function RoleAwareHome() {
     }
   }
   if (role === "tech" || role === "supervisor") return <Navigate to="/tech" replace />;
-  return <ProtectedRoute><Dashboard /></ProtectedRoute>;
+  return <Navigate to="/dispatch" replace />;
+}
+
+/** Top nav opens Quote HQ. Existing quote-building links with query context still open the builder. */
+function QuoteRoute() {
+  const [searchParams] = useSearchParams();
+  const builderParams = ["estimate_id", "job_id", "customer_name", "customer_phone", "customer_email"];
+  const shouldOpenBuilder = builderParams.some((key) => Boolean(searchParams.get(key)));
+  return shouldOpenBuilder ? <QuickQuote /> : <QuoteHeadquarters />;
 }
 
 /** Gentle fade-in on route change — no exit animation to avoid flicker on heavy pages */
@@ -427,6 +303,41 @@ function PostCallActionsView() {
   );
 }
 
+function PhoneConsolePopup() {
+  const [phoneUrl, setPhoneUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOpen = (event: Event) => {
+      const customEvent = event as CustomEvent<PhoneConsoleOpenDetail>;
+      event.preventDefault();
+      setPhoneUrl(customEvent.detail.url);
+    };
+
+    window.addEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
+    return () => window.removeEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
+  }, []);
+
+  return (
+    <Dialog open={!!phoneUrl} onOpenChange={(open) => !open && setPhoneUrl(null)}>
+      <DialogContent className="h-[720px] max-h-[92vh] w-[420px] max-w-[95vw] gap-0 overflow-hidden p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Phone</DialogTitle>
+          <DialogDescription>Softphone dialer</DialogDescription>
+        </DialogHeader>
+        {phoneUrl && (
+          <iframe
+            key={phoneUrl}
+            title="Phone"
+            src={phoneUrl}
+            className="h-full w-full border-0 bg-background"
+            allow="microphone; autoplay"
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Detects ?view=softphone and renders the compact phone UI instead of the full app.
  */
@@ -450,6 +361,7 @@ function AppRouter() {
   return (
     <>
       <NotificationListeners />
+      <PhoneConsolePopup />
       <PageTransition>
       <Routes>
         {/* Public routes */}
@@ -468,6 +380,11 @@ function AppRouter() {
 
         {/* Protected routes */}
         <Route path="/" element={<RoleAwareHome />} />
+        <Route path="/intake" element={<ProtectedRoute><OperationsDeskV2 /></ProtectedRoute>} />
+        <Route path="/dispatch" element={<ProtectedRoute><ScheduleV2 /></ProtectedRoute>} />
+        <Route path="/operations-v2" element={<Navigate to="/intake" replace />} />
+        <Route path="/dispatch-v2" element={<Navigate to="/dispatch" replace />} />
+        <Route path="/schedule-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/tech" element={<ProtectedRoute><TechMySchedule /></ProtectedRoute>} />
         
         <Route path="/tech/jobs/:id" element={<ProtectedRoute><TechJobDetail /></ProtectedRoute>} />
@@ -495,6 +412,7 @@ function AppRouter() {
         <Route path="/estimates/:id" element={<ProtectedRoute><EstimateDetail /></ProtectedRoute>} />
         <Route path="/settings" element={<Navigate to="/admin?section=company" replace />} />
         <Route path="/agent-training" element={<ProtectedRoute><AgentTraining /></ProtectedRoute>} />
+        <Route path="/jarvis-core" element={<Navigate to="/agent-training?section=core" replace />} />
         <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/customers/:id" element={<ProtectedRoute><CustomerDetail /></ProtectedRoute>} />
         <Route path="/sales-presentations" element={<Navigate to="/catalog" replace />} />
@@ -521,7 +439,8 @@ function AppRouter() {
         <Route path="/repair-catalog" element={<Navigate to="/catalog" replace />} />
         <Route path="/shopping-cart" element={<Navigate to="/catalog" replace />} />
         <Route path="/catalog" element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
-        <Route path="/quick-quote" element={<ProtectedRoute><QuickQuote /></ProtectedRoute>} />
+        <Route path="/quick-quote" element={<ProtectedRoute><QuoteRoute /></ProtectedRoute>} />
+        <Route path="/quote-builder" element={<ProtectedRoute><QuickQuote /></ProtectedRoute>} />
         <Route path="/pay" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
 
         {/* Redirects */}

@@ -18,6 +18,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { appendSmsSignature } from "@/lib/smsSignature";
 
 export interface SendSmsArgs {
   to: string;
@@ -69,10 +70,11 @@ export async function sendSmsImpl(args: SendSmsArgs): Promise<SendSmsResult> {
     contactName, contactType, relatedVendorId, relatedCustomerId,
     source, hitlApproved, clientId,
   } = args;
+  const signedBody = appendSmsSignature(body);
 
   const payload: Record<string, unknown> = {
     to,
-    body,
+    body: signedBody,
     job_id: jobId ?? null,
     client_id: clientId || genClientId(),
   };
