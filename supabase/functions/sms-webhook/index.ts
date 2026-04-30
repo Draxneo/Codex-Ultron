@@ -385,7 +385,9 @@ Deno.serve(async (req) => {
 
     const threadedJobId = recentOutbound?.[0]?.related_job_id || null;
 
-    let { contactName, contactType, matchedEmployee } = await resolveContact(supabase, from);
+    const resolvedContact = await resolveContact(supabase, from);
+    let { contactName, contactType } = resolvedContact;
+    const { matchedEmployee } = resolvedContact;
     let isEmployee = !!matchedEmployee;
 
     // Force contact label for answering service relay (group under Vendors in inbox)
