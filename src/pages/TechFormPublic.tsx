@@ -556,7 +556,7 @@ export default function TechFormPublic() {
         }
       } catch { /* EXIF not available — skip */ }
 
-      const { data: photoRow } = await supabase.from("tech_form_photos").insert({
+      const { data: photoRow, error: photoInsertError } = await supabase.from("tech_form_photos").insert({
         tech_form_id: techFormId,
         file_path: path,
         photo_type: field?.label || "general",
@@ -566,12 +566,28 @@ export default function TechFormPublic() {
         photo_taken_at: photoTakenAt,
       }).select("id").single();
 
+      if (photoInsertError || !photoRow?.id) {
+        console.error("Photo database save failed:", photoInsertError);
+        await supabase.storage.from("tech-form-photos").remove([path]);
+        queuePhoto(fieldId, photo, field?.label || "general");
+        setUploadedPhotos(prev => ({
+          ...prev,
+          [fieldId]: prev[fieldId].map(p => p.id === tempId ? { ...p, status: "error" as const } : p),
+        }));
+        toast({
+          title: "Photo needs retry",
+          description: "The image uploaded, but it did not attach to the job record. Please tap it again when signal is better.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data: urlData } = supabase.storage.from("tech-form-photos").getPublicUrl(path);
 
       setUploadedPhotos(prev => ({
         ...prev,
         [fieldId]: prev[fieldId].map(p =>
-          p.id === tempId ? { ...p, id: photoRow?.id || tempId, file_path: path, status: "done" as const, preview: urlData.publicUrl } : p
+          p.id === tempId ? { ...p, id: photoRow.id, file_path: path, status: "done" as const, preview: urlData.publicUrl } : p
         ),
       }));
 

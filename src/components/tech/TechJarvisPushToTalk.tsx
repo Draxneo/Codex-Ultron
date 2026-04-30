@@ -206,7 +206,7 @@ export function TechJarvisPushToTalk({
         setLastReply(reply);
         setProposedCartActions(suggestedItems);
         if (transcriptId) {
-          await (supabase as any)
+          const { error: transcriptUpdateError } = await (supabase as any)
             .from("job_transcripts")
             .update({
               ai_processed_at: new Date().toISOString(),
@@ -222,6 +222,40 @@ export function TechJarvisPushToTalk({
               })),
             })
             .eq("id", transcriptId);
+          if (transcriptUpdateError) {
+            console.warn("[TechJarvisPushToTalk] Could not save JARVIS response", transcriptUpdateError);
+            toast.warning("JARVIS answered, but the office may not see this field note until it syncs.");
+          }
+        }
+        if (suggestedItems.length > 0) {
+          const { error: actionError } = await (supabase as any)
+            .from("action_items")
+            .insert({
+              title: `Review tech proposal for ${customerName || jobNumber || "job"}`,
+              description: `${suggestedItems.length} proposal item${suggestedItems.length === 1 ? "" : "s"} detected from the tech voice note.\n\n${question.slice(0, 500)}`,
+              category: "tech_field_update",
+              priority: "high",
+              source: "tech_jarvis_voice",
+              status: "pending",
+              job_id: jobId,
+              suggested_action: "Review the tech's proposal items, then approve/send the customer presentation.",
+              metadata: {
+                transcript_id: transcriptId,
+                job_number: jobNumber || null,
+                customer_name: customerName || null,
+                suggested_item_count: suggestedItems.length,
+                suggested_items: suggestedItems.map((item) => ({
+                  name: item.name,
+                  unit_price: item.unitPrice,
+                  kind: item.kind,
+                  tier: item.tier,
+                })),
+              },
+            });
+          if (actionError) {
+            console.warn("[TechJarvisPushToTalk] Could not surface proposal review card", actionError);
+            toast.warning("Proposal items were detected, but the office Now card did not save.");
+          }
         }
         announce(reply);
       } catch (e: any) {

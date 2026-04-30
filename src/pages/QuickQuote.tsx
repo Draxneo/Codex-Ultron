@@ -53,8 +53,6 @@ const LOCATION_ORIENTATIONS: Record<string, string[]> = {
   Closet: ["Multiposition", "Vertical"],
 };
 
-const PUBLISHED_DOMAIN = "https://codex-ultron.onrender.com";
-
 export default function QuickQuote() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -407,7 +405,7 @@ export default function QuickQuote() {
     }
   };
 
-  const presentationUrl = presentationToken ? `${PUBLISHED_DOMAIN}/presentation/${presentationToken}` : null;
+  const presentationUrl = presentationToken ? `${window.location.origin}/presentation/${presentationToken}` : null;
 
   const handleTextToCustomer = () => {
     if (!presentationUrl || !customerPhone) return;

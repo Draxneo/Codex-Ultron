@@ -234,8 +234,7 @@ export default function CustomerCart() {
                     if (item.label === "Appointments") toast.info("Appointment details are handled by the office and your technician.");
                     if (item.label === "Invoices") document.getElementById("customer-payment")?.scrollIntoView({ behavior: "smooth", block: "start" });
                     if (item.label === "Message") {
-                      if (company.phone) window.location.href = `sms:${company.phone}`;
-                      else handlePay("contact");
+                      handlePay("contact");
                     }
                   }}
                 >

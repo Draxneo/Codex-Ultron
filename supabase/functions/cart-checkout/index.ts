@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 
 async function logQuoteCartEvent(supabase: any, event: Record<string, unknown>) {
   const { error } = await supabase.from("quote_cart_events").insert(event);
@@ -79,6 +80,23 @@ Deno.serve(async (req) => {
           metadata: { source: "cart-checkout", total },
         });
 
+        await upsertLiveActionItem(supabase, {
+          title: "Customer declined estimate",
+          description: `Customer declined cart ${cart.estimate_number || cart.public_token}. Total: $${total.toFixed(2)}`,
+          category: "follow_up",
+          priority: "high",
+          source: "cart-checkout",
+          status: "pending",
+          job_id: cart.job_id,
+          suggested_action: "Review the declined option and follow up with a friendly call or text.",
+          metadata: {
+            cart_id: cart.id,
+            public_token: cart.public_token,
+            quote_cart_event: "customer_declined",
+            total,
+          },
+        });
+
         return new Response(JSON.stringify({ success: true, payment_method, message: "Estimate declined. We'll note this for the office." }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -97,6 +115,23 @@ Deno.serve(async (req) => {
         job_id: cart.job_id,
         presentation_id: cart.source_presentation_id,
         metadata: { source: "cart-checkout", total },
+      });
+
+      await upsertLiveActionItem(supabase, {
+        title: "Customer has a question about estimate",
+        description: `Customer requested contact about cart ${cart.estimate_number || cart.public_token}. Total: $${total.toFixed(2)}`,
+        category: "thread_attention",
+        priority: "high",
+        source: "cart-checkout",
+        status: "pending",
+        job_id: cart.job_id,
+        suggested_action: "Call or text the customer before the estimate goes cold.",
+        metadata: {
+          cart_id: cart.id,
+          public_token: cart.public_token,
+          quote_cart_event: "customer_contact_requested",
+          total,
+        },
       });
 
       return new Response(JSON.stringify({ success: true, payment_method, message: "Thanks. We'll reach out shortly." }), {

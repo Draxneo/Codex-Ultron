@@ -447,7 +447,7 @@ Deno.serve(async (req) => {
         const actionTitle = normalizedBody === "C"
           ? `${contactName || from} confirmed their appointment`
           : `${contactName || from} wants to reschedule`;
-        await supabase.from("action_items").insert({
+        await upsertLiveActionItem(supabase, {
           title: actionTitle,
           description: normalizedBody === "C"
             ? "Customer replied C to confirm. Send them a confirmation text."
@@ -458,6 +458,11 @@ Deno.serve(async (req) => {
           status: "pending",
           customer_phone: from,
           job_id: matchedReminder.job_id,
+          metadata: {
+            jarvis_intent: normalizedBody === "C" ? "appointment_confirmed" : "reschedule_requested",
+            source_event_id: messageSid,
+            inbound_message: body,
+          },
         });
 
         return new Response(
@@ -728,7 +733,7 @@ Deno.serve(async (req) => {
         const callbackPhone = callerPhoneRaw || "(no callback number provided)";
 
         // Surface to dispatcher
-        await supabase.from("action_items").insert({
+        await upsertLiveActionItem(supabase, {
           title: `📞 Answering Service: ${displayName} — ${callType || "inquiry"}`,
           description: `Real caller: ${displayName}\nCallback: ${callbackPhone}${callerCompany && callerCompany !== "N/A" ? `\nCompany: ${callerCompany}` : ""}\n\n${comments}`,
           category: "new_lead",
@@ -743,6 +748,8 @@ Deno.serve(async (req) => {
             existing_customer_id: realCustomerId,
             urgency,
             call_type: callType,
+            source_event_id: messageSid,
+            inbound_message: body,
           },
         });
 
@@ -780,7 +787,7 @@ Deno.serve(async (req) => {
           await sendGoogleRelayCaptureSms(supabase, from, linkedJobId, jarvisSettingsMap);
         }
 
-        await supabase.from("action_items").insert({
+        await upsertLiveActionItem(supabase, {
           title: "Google lead needs direct phone number",
           description: `Google relay text received. Ask the customer for their best callback number before creating a real customer thread.\n\n${body.slice(0, 300)}`,
           category: "new_lead",
@@ -795,6 +802,8 @@ Deno.serve(async (req) => {
             relay_source: "google",
             auto_capture_sms_sent: !recentCapture,
             message_preview: body.slice(0, 300),
+            source_event_id: messageSid,
+            inbound_message: body,
           },
         });
         console.log(`[Google Relay] Captured relay SMS from ${from}; requested direct callback number`);

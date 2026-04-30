@@ -1,5 +1,5 @@
 /**
- * useQuickQuoteLinks.ts — Create + fetch customer-facing quote links.
+ * useQuickQuoteLinks.ts - Create + fetch customer-facing quote links.
  *
  * Each row in `quick_quote_links` snapshots one matchup + rendered quote so the
  * customer page (/q/:token) can display + accept payment-option approval without
@@ -87,7 +87,14 @@ export function useApproveQuickQuote() {
         .rpc("approve_public_quick_quote" as any, { p_token: token, p_option: option });
       if (error) throw error;
 
-      // Auto-create / update HCP job + dispatcher notification — non-blocking
+      const { data: autoCreate, error: autoCreateError } = await supabase.functions.invoke("quick-quote-auto-create", {
+        body: { token },
+      });
+      if (autoCreateError) throw autoCreateError;
+      if (autoCreate && (autoCreate as any).ok === false) {
+        throw new Error((autoCreate as any).error || "Quick quote was approved, but the office handoff needs review.");
+      }
+
       return data as unknown as QuickQuoteLink;
     },
     onSuccess: (_, { token }) => {

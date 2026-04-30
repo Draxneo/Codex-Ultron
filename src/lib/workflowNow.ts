@@ -306,15 +306,25 @@ function resolveActionLinks(step: WorkflowStepDefinition, row: any): WorkflowAct
 function mapExpectedKeyToTemplateKey(item: ExpectedJobItem, workflowType: WorkflowType) {
   if (workflowType === "install") {
     const map: Record<string, string> = {
+      equipment_ordered: "equipment_ordered",
       scheduled: "schedule_install",
       assigned: "assign_installer",
+      deposit: "deposit",
+      preinstall: "appointment_reminder",
       confirmation: "appointment_reminder",
       dispatch: "installer_details",
       on_site: "on_site",
       completion: "completion_checklist",
+      cart_sent: "invoice",
+      cart_approved: "payment",
+      financing_pending: "finance",
+      pay_after_work: "payment",
       invoice: "invoice",
       payment: "payment",
       review: "review",
+      warranty: "warranty",
+      inspection: "inspection",
+      rebate: "rebate",
       follow_up: "quality_check",
     };
     return map[item.key] || item.key;
@@ -327,12 +337,37 @@ function mapExpectedKeyToTemplateKey(item: ExpectedJobItem, workflowType: Workfl
     dispatch: "tech_details",
     on_site: "on_site",
     completion: "service_checklist",
+    cart_sent: "invoice",
+    cart_approved: "payment",
+    financing_pending: "payment",
+    pay_after_work: "payment",
     invoice: "invoice",
     payment: "payment",
     review: "review",
     follow_up: "quality_check",
+    maintenance_report: "service_checklist",
+    next_visit: "quality_check",
   };
   return map[item.key] || item.key;
+}
+
+function resolveTemplateStep(template: WorkflowStepDefinition[], key: string, fallback: ExpectedJobItem) {
+  const foundIndex = template.findIndex((step) => step.key === key);
+  if (foundIndex >= 0) {
+    return {
+      stepIndex: foundIndex,
+      step: template[foundIndex],
+    };
+  }
+
+  return {
+    stepIndex: Math.max(0, Math.min(template.length, template.length - 1)),
+    step: {
+      key: fallback.key,
+      title: fallback.label,
+      owner: fallback.owner,
+    } as WorkflowStepDefinition,
+  };
 }
 
 function openItem(items: ExpectedJobItem[]) {
@@ -359,12 +394,7 @@ export function buildJobWorkflowCard(
   if (terminal && !closeoutKeys.has(active.key)) return null;
 
   const templateKey = mapExpectedKeyToTemplateKey(active, workflowType);
-  const stepIndex = Math.max(0, template.findIndex((step) => step.key === templateKey));
-  const step = template[stepIndex] || {
-    key: active.key,
-    title: active.label,
-    owner: active.owner,
-  };
+  const { stepIndex, step } = resolveTemplateStep(template, templateKey, active);
   const dueAt = job.scheduled_date || job.created_at || null;
   const recordLabel = `job #${job.job_number || job.hcp_job_number || String(job.id).slice(0, 8)}`;
 
@@ -420,7 +450,11 @@ export function buildEstimateWorkflowCard(estimate: any, templateOverrides?: Wor
   if (!key) return null;
   const template = templatesWithOverrides(templateOverrides).estimate;
   const stepIndex = Math.max(0, template.findIndex((step) => step.key === key));
-  const step = template[stepIndex];
+  const step = template[stepIndex] || {
+    key,
+    title: key.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+    owner: "office" as WorkflowOwner,
+  };
   const dueAt = estimate.scheduled_date || estimate.created_at || null;
   const recordLabel = `estimate #${estimate.estimate_number || String(estimate.id).slice(0, 8)}`;
   const subtitle = key === "won_lost"
@@ -513,8 +547,8 @@ function actionItemStep(item: any) {
 
   if (metadata.requires_property_selection || category === "address_verify") return "review";
   if (["new_appointment", "booking_confirm"].includes(category)) return "convert";
-  if (["new_lead", "thread_attention", "follow_up"].includes(category)) return "review";
-  if (["schedule_change", "eta_request", "access_note", "pet_warning", "contact_update", "confirmation"].includes(category)) return "review";
+  if (["new_lead", "thread_attention", "follow_up", "tech_field_update"].includes(category)) return "review";
+  if (["schedule_change", "reschedule", "eta_request", "access_note", "pet_warning", "contact_update", "confirmation"].includes(category)) return "review";
   return "understand";
 }
 
@@ -524,7 +558,7 @@ function actionItemGroup(item: any): WorkflowGroup {
   const metadata = (item.metadata || {}) as any;
   if (priority === "critical" || priority === "high") return "ready";
   if (metadata.requires_property_selection || category === "address_verify") return "ready";
-  if (["new_appointment", "booking_confirm", "schedule_change", "eta_request", "confirmation"].includes(category)) return "ready";
+  if (["new_appointment", "booking_confirm", "schedule_change", "reschedule", "eta_request", "confirmation", "tech_field_update"].includes(category)) return "ready";
   if (["follow_up", "thread_attention", "new_lead"].includes(category)) return "follow_up";
   return "ready";
 }

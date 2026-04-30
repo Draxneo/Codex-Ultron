@@ -315,6 +315,11 @@ function WorkflowCard({
                 Mark handled <CheckCircle2 className="h-4 w-4" />
               </Button>
             )}
+            {card.recordType !== "action" && card.recordType !== "alert" && (
+              <Button variant="secondary" className="justify-between" disabled={isBusy} onClick={() => onResolve(card)}>
+                Acknowledge 24h <CheckCircle2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -448,6 +453,45 @@ export default function NowHQ() {
       }));
     },
   });
+  const { data: jobInvoices = [], isLoading: jobInvoicesLoading, isError: jobInvoicesError, error: jobInvoicesQueryError } = useQuery({
+    queryKey: ["now-hq-job-invoices", jobCartKey],
+    enabled: nowJobIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_invoices" as any)
+        .select("id, job_id, status, sent_at, paid_at, total, created_at")
+        .in("job_id", nowJobIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const { data: partsOrders = [], isLoading: partsOrdersLoading, isError: partsOrdersError, error: partsOrdersQueryError } = useQuery({
+    queryKey: ["now-hq-parts-orders", jobCartKey],
+    enabled: nowJobIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("parts_orders" as any)
+        .select("id, job_id, status, ordered_at, picked_up_at, created_at")
+        .in("job_id", nowJobIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const { data: workflowCardAcks = [], isLoading: workflowCardAcksLoading, isError: workflowCardAcksError, error: workflowCardAcksQueryError } = useQuery({
+    queryKey: ["now-hq-workflow-card-acks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workflow_card_acknowledgements" as any)
+        .select("card_id, expires_at")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
   const { data: workflowTemplates = {}, isLoading: workflowTemplatesLoading, isError: workflowTemplatesError, error: workflowTemplatesQueryError } = useQuery({
     queryKey: ["workflow-definitions-active"],
     queryFn: async () => {
@@ -472,9 +516,12 @@ export default function NowHQ() {
       { table: "jobs", queryKeys: [["jobs"], ["now-hq-closeout-jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
       { table: "job_carts", queryKeys: [["now-hq-job-carts"], ["jobs"], ["hud_attention_counts"]] },
       { table: "job_cart_items", queryKeys: [["now-hq-job-carts"], ["hud_attention_counts"]] },
+      { table: "customer_invoices", queryKeys: [["now-hq-job-invoices"], ["hud_attention_counts"]] },
+      { table: "parts_orders", queryKeys: [["now-hq-parts-orders"], ["hud_attention_counts"]] },
       { table: "estimates", queryKeys: [["estimates"], ["hud_attention_counts"]] },
       { table: "leads", queryKeys: [["now-hq-leads"], ["hud_attention_counts"]] },
       { table: "workflow_definitions", queryKeys: [["workflow-definitions-active"]] },
+      { table: "workflow_card_acknowledgements", queryKeys: [["now-hq-workflow-card-acks"], ["hud_attention_counts"]] },
     ],
     "now-hq-workflow-sync"
   );
@@ -484,6 +531,9 @@ export default function NowHQ() {
     queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-alerts"] });
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-job-carts"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-job-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-parts-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-card-acks"] });
     queryClient.invalidateQueries({ queryKey: ["estimates"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-leads"] });
     queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
@@ -514,31 +564,22 @@ export default function NowHQ() {
         return;
       }
 
-      const { error } = await supabase
-        .from("action_items" as any)
-        .insert({
-          source: "now_hq",
-          category: "manual_workflow_review",
-          priority: "normal",
-          title: `Handled: ${card.title}`,
-          description: `${card.customerName} - ${card.subtitle}`,
-          status: "accepted",
-          job_id: card.recordType === "job" ? card.recordId : null,
-          customer_phone: card.customerPhone || null,
-          resolved_at: new Date().toISOString(),
-          resolved_by: user?.id || null,
-          metadata: {
-            workflow_card_id: card.id,
-            record_type: card.recordType,
-            record_id: card.recordId,
-            marked_from: "now_hq",
-          },
-        });
+      const { data, error } = await supabase.rpc("acknowledge_workflow_card_once" as any, {
+        p_card_id: card.id,
+        p_record_type: card.recordType,
+        p_record_id: card.recordId,
+        p_workflow_type: card.workflowType,
+        p_step_key: card.id.split("-").slice(2).join("-") || card.title,
+        p_note: `${card.title}: ${card.subtitle}`,
+        p_acknowledged_by_name: user?.email || "Now HQ",
+        p_hours: 24,
+      });
       if (error) throw error;
+      if (data && !(data as any).ok) throw new Error((data as any).reason || "Could not acknowledge this workflow card.");
     },
     onSuccess: () => {
       refreshNowFeeds();
-      toast({ title: "Handled", description: "That card is cleared from the Now queue." });
+      toast({ title: "Acknowledged", description: "That card is hidden for 24 hours unless the real workflow state changes." });
     },
     onError: (error) => {
       toast({
@@ -580,29 +621,57 @@ export default function NowHQ() {
     for (const cart of (jobCarts as any[])) {
       if (cart.job_id && !jobCartByJobId.has(cart.job_id)) jobCartByJobId.set(cart.job_id, cart);
     }
+    const invoicesByJobId = new Map<string, any[]>();
+    for (const invoice of (jobInvoices as any[])) {
+      if (!invoice.job_id) continue;
+      const list = invoicesByJobId.get(invoice.job_id) || [];
+      list.push(invoice);
+      invoicesByJobId.set(invoice.job_id, list);
+    }
+    const partsOrdersByJobId = new Map<string, any[]>();
+    for (const order of (partsOrders as any[])) {
+      if (!order.job_id) continue;
+      const list = partsOrdersByJobId.get(order.job_id) || [];
+      list.push(order);
+      partsOrdersByJobId.set(order.job_id, list);
+    }
+    const acknowledgedCardIds = new Set((workflowCardAcks as any[]).map((ack) => ack.card_id).filter(Boolean));
     const actionCards = (actionItems as any[]).map((item) => buildActionItemWorkflowCard(item, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const alertCards = (workflowAlerts as any[]).map((alert) => buildWorkflowAlertCard(alert, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const alertedJobIds = new Set((workflowAlerts as any[]).map((alert) => alert.job_id).filter(Boolean));
     const jobCards = (jobs as any[])
       .filter((job) => !alertedJobIds.has(job.id))
-      .map((job) => buildJobWorkflowCard(job, workflowTemplates, { cart: jobCartByJobId.get(job.id) || null }))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates, {
+        cart: jobCartByJobId.get(job.id) || null,
+        invoices: invoicesByJobId.get(job.id) || [],
+        partsOrders: partsOrdersByJobId.get(job.id) || [],
+      }))
       .filter(Boolean) as WorkflowNowCard[];
     const closeoutJobCards = (closeoutJobs as any[])
       .filter((job) => !alertedJobIds.has(job.id))
-      .map((job) => buildJobWorkflowCard(job, workflowTemplates, { cart: jobCartByJobId.get(job.id) || null }))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates, {
+        cart: jobCartByJobId.get(job.id) || null,
+        invoices: invoicesByJobId.get(job.id) || [],
+        partsOrders: partsOrdersByJobId.get(job.id) || [],
+      }))
       .filter(Boolean) as WorkflowNowCard[];
     const estimateCards = (estimates as any[]).map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const leadCards = (leads as any[]).map((lead) => buildLeadWorkflowCard(lead, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
-    return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards].sort(workflowSort);
-  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, estimates, leads, workflowTemplates]);
+    return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards]
+      .filter((card) => card.recordType === "action" || card.recordType === "alert" || !acknowledgedCardIds.has(card.id))
+      .sort(workflowSort);
+  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, jobInvoices, partsOrders, workflowCardAcks, estimates, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || jobInvoicesLoading || partsOrdersLoading || workflowCardAcksLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
   const dataErrors = [
     { label: "workflow cards", active: actionItemsError, error: actionItemsQueryError },
     { label: "workflow alerts", active: workflowAlertsError, error: workflowAlertsQueryError },
     { label: "jobs", active: jobsError, error: jobsQueryError },
     { label: "job closeout", active: closeoutJobsError, error: closeoutJobsQueryError },
     { label: "job carts", active: jobCartsError, error: jobCartsQueryError },
+    { label: "job invoices", active: jobInvoicesError, error: jobInvoicesQueryError },
+    { label: "parts orders", active: partsOrdersError, error: partsOrdersQueryError },
+    { label: "workflow acknowledgements", active: workflowCardAcksError, error: workflowCardAcksQueryError },
     { label: "estimates", active: estimatesError, error: estimatesQueryError },
     { label: "leads", active: leadsError, error: leadsQueryError },
     { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },
