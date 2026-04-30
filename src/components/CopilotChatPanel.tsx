@@ -25,6 +25,7 @@ import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { EquipmentPickerCard } from "@/components/copilot/EquipmentPickerCard";
 import { ContextPicker } from "@/components/copilot/ContextPicker";
 import { SmartSuggestions } from "@/components/copilot/SmartSuggestions";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 interface ActiveContext {
   contextType: "customer" | "job" | "call" | "sms";
@@ -1079,7 +1080,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
                       return;
                     }
                     if ((action.type === "send_text" || action.type === "reply_sms") && action.phone) {
-                      navigate(`/sms?phone=${encodeURIComponent(action.phone)}`);
+                      openSmsComposer(action.phone, { contactName: action.customer_name });
                       return;
                     }
                     if (action.type === "view_job" && action.job_id) {

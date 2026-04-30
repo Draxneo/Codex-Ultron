@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
 import { UniversalMediaPlayer } from "@/components/media";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "0:00";
@@ -20,7 +20,6 @@ function formatDuration(seconds: number | null): string {
 export function VoicemailPanel() {
   const { voicemails, loading, markAsRead, deleteVoicemail } = useVoicemails();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const navigate = useNavigate();
   const { startVoicemailSession } = useCopilotPanel();
 
   const handleAskJarvis = (vm: Voicemail) => {
@@ -116,7 +115,7 @@ export function VoicemailPanel() {
                   className="h-8 w-8"
                   title="Send SMS"
                   onClick={() => {
-                    navigate(`/sms?phone=${encodeURIComponent(vm.phone_number)}`);
+                    openSmsComposer(vm.phone_number, { contactName: vm.contact_name || undefined });
                   }}
                 >
                   <MessageSquare className="h-3.5 w-3.5 text-primary" />

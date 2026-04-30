@@ -25,6 +25,7 @@ import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { onMainMessage } from "@/lib/electron";
 import { PhoneOnlySoftphone } from "./components/PhoneOnlySoftphone";
+import { SmsComposerPopup } from "./components/SmsComposerPopup";
 import { CallerInfoCenter } from "./components/softphone/CallerInfoCenter";
 import { IntakeActionCards } from "./components/softphone/IntakeActionCards";
 import { ScrollArea } from "./components/ui/scroll-area";
@@ -363,6 +364,7 @@ function AppRouter() {
     <>
       <NotificationListeners />
       <PhoneConsolePopup />
+      <SmsComposerPopup />
       <PageTransition>
       <Routes>
         {/* Public routes */}

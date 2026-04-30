@@ -30,6 +30,7 @@ import {
   resolveActionItem,
   type ActionItemResolutionStatus,
 } from "@/lib/actionItemLifecycle";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   new_appointment:  { label: "New Job",  icon: CalendarPlus,  color: "text-green-500" },
@@ -473,7 +474,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   closeAsAccepted();
                 };
                 const textPhone = () => {
-                  if (phone) navigate(`/sms?phone=${encodeURIComponent(phone)}`);
+                  if (phone) openSmsComposer(phone);
                   closeAsAccepted();
                 };
 

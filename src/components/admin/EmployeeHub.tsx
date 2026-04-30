@@ -31,6 +31,7 @@ import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { ClickToCall } from "@/components/ClickToCall";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const CANONICAL_ROLES: RoleKey[] = ["admin", "office", "supervisor", "tech", "installer"];
 
@@ -175,7 +176,7 @@ function RosterTab() {
                               </ClickToCall>
                               <button
                                 onClick={() => {
-                                  navigate(`/sms?phone=${encodeURIComponent(emp.phone)}`);
+                                  openSmsComposer(emp.phone, { contactName: emp.name });
                                 }}
                                 className="hover:text-primary"
                                 title={`SMS ${emp.name}`}

@@ -35,6 +35,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEstimates, type Estimate } from "@/hooks/useEstimates";
 import { supabase } from "@/integrations/supabase/client";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
 type QuoteStage = "needs_quote" | "needs_send" | "waiting" | "viewed" | "aging" | "approved";
@@ -433,7 +434,10 @@ export default function QuoteHeadquarters() {
   const openSmsDraft = (item: QuotePipelineItem) => {
     const phone = item.estimate.customer_phone;
     if (!phone) return;
-    navigate(`/sms?phone=${encodeURIComponent(phone)}&draft=${encodeURIComponent(item.draft)}`);
+    openSmsComposer(phone, {
+      contactName: item.estimate.customer_name || undefined,
+      draft: item.draft,
+    });
   };
 
   return (

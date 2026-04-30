@@ -5,7 +5,7 @@
  * Reuses existing hooks; deeper editing happens on dispatch UI.
  */
 
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, MapPin, Phone, MessageSquare, Calendar, Wrench, ChevronRight } from "lucide-react";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useCustomerJobs } from "@/hooks/useCustomerHistory";
@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
 import { format, parseISO } from "date-fns";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 export default function TechCustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -111,13 +112,14 @@ export default function TechCustomerDetail() {
                 >
                   <Phone className="h-4 w-4" /> {phone}
                 </button>
-                <Link
-                  to={`/sms?phone=${encodeURIComponent(phone)}`}
+                <button
+                  type="button"
+                  onClick={() => openSmsComposer(phone, { contactName: fullName, customerId: id })}
                   className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center"
                   aria-label="Send SMS"
                 >
                   <MessageSquare className="h-4 w-4" />
-                </Link>
+                </button>
               </div>
             )}
 

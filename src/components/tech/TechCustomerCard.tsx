@@ -8,17 +8,17 @@
  *   [ Call ] [ Text ] [ Dispatch ] [ Navigate ]   ← large tap targets
  *   Customer History (n) -> /tech/customers/:id
  *
- * "Dispatch" sends an SMS to the office dispatch line (210-600-5091)
- * via our existing /sms compose route.
+ * "Dispatch" opens the shared SMS composer to the office dispatch line.
  */
 
 import { Card } from "@/components/ui/card";
 import { Phone, MessageSquare, Radio, ChevronRight, Building2, Navigation } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { StreetViewThumbnail } from "./StreetViewThumbnail";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const DISPATCH_LINE = "+12106005091";
 
@@ -45,13 +45,12 @@ export function TechCustomerCard({
   jobId,
   bare = false,
 }: TechCustomerCardProps) {
-  const navigate = useNavigate();
   const softphone = useSoftphoneContext();
   const { isNative } = useCapacitor();
 
   const handleSms = () => {
     if (!customerPhone) return;
-    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}`);
+    openSmsComposer(customerPhone, { contactName: customerName || undefined, customerId: customerId || undefined, jobId });
   };
 
   const handleDispatch = () => {
@@ -61,8 +60,7 @@ export function TechCustomerCard({
       address || null,
       jobId ? `job ${jobId.slice(0, 8)}` : null,
     ].filter(Boolean).join(" - ");
-    const draftParam = encodeURIComponent(`${draft}: `);
-    navigate(`/sms?phone=${encodeURIComponent(DISPATCH_LINE)}&draft=${draftParam}`);
+    openSmsComposer(DISPATCH_LINE, { contactName: "Dispatch", draft: `${draft}: `, jobId });
   };
 
   const handleCall = () => {

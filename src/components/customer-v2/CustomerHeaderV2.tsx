@@ -1,12 +1,12 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ChevronRight, Phone, MoreHorizontal, ArrowLeft, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ClickToCall } from "@/components/ClickToCall";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
-import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { CustomerEditDialog } from "./CustomerEditDialog";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 interface Props {
   customerId: string;
@@ -17,9 +17,6 @@ interface Props {
 }
 
 export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, primaryPhone, customer }: Props) {
-  const navigate = useNavigate();
-  const telephony = useTelephonyMode();
-
   return (
     <div className="border-b bg-background">
       <div className="max-w-[1600px] mx-auto px-6 pt-4 pb-3">
@@ -65,8 +62,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 variant="outline"
                 className="gap-1.5"
                 onClick={() => {
-                  // Always open the in-app SMS thread.
-                  navigate(`/sms?phone=${encodeURIComponent(primaryPhone)}`);
+                  openSmsComposer(primaryPhone, { contactName: fullName, customerId });
                 }}
               >
                 <MessageSquare className="h-4 w-4" />

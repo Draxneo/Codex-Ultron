@@ -38,6 +38,7 @@ import { useJob } from "@/hooks/useJobs";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/google-maps";
 import { launchNavigation } from "@/lib/launchNavigation";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
 function cleanLabel(value?: string | null) {
@@ -134,7 +135,11 @@ export default function TechJobDetail() {
 
   const openSms = () => {
     if (!customerPhone) return;
-    navigate(`/sms?phone=${encodeURIComponent(customerPhone)}`);
+    openSmsComposer(customerPhone, {
+      contactName: customerName,
+      jobId: id,
+      customerId: job.customer_id || undefined,
+    });
   };
 
   const callCustomer = () => {

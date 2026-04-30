@@ -68,6 +68,7 @@ import { verifyAddressWithGoogle, type GoogleAddressVerification } from "@/lib/g
 import { insertAtSelection } from "@/lib/insertAtCursor";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
 import { cn } from "@/lib/utils";
 
@@ -518,14 +519,6 @@ function smsSummary(conversation: SmsConversation) {
   if (conversation.latestJobId || conversation.jobContext) return "Text tied to active work";
   if (conversation.lastMessage.direction === "inbound") return "Incoming text";
   return "Outbound text";
-}
-
-function buildSmsUrl(phone?: string | null, draft?: string) {
-  if (!phone) return "/sms";
-  const params = new URLSearchParams();
-  params.set("phone", toE164(phone) || phone);
-  if (draft) params.set("draft", draft);
-  return `/sms?${params.toString()}`;
 }
 
 function callToDeskItem(conversation: CallConversation): DeskConversation {
@@ -1427,9 +1420,13 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
             ))
           )}
         </div>
-        <Button variant="outline" className="w-full gap-2" onClick={() => navigate(buildSmsUrl(selected.phone))}>
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          onClick={() => openSmsComposer(toE164(selected.phone) || selected.phone, { contactName: selected.name || undefined })}
+        >
           <ExternalLink className="h-4 w-4" />
-          Open full SMS thread
+          Open SMS composer
         </Button>
       </div>
     </Section>
@@ -2426,7 +2423,11 @@ function ActionPanel({
       ? `Hi, this is Carnes and Sons. I may have heard the service address incorrectly. Is this the correct address: ${candidate}?`
       : "Hi, this is Carnes and Sons. I may have heard the service address incorrectly. Can you please text me the correct service address?";
     setAddressDialogOpen(false);
-    navigate(buildSmsUrl(selected.phone, message));
+    openSmsComposer(toE164(selected.phone) || selected.phone, {
+      contactName: displayName,
+      customerId: customer?.id,
+      draft: message,
+    });
   };
   const acceptAddress = () => {
     const accepted = liveAddressVerification?.standardized || addressDraft.trim() || addressVerification.standardized || addressVerification.address;
@@ -2838,7 +2839,10 @@ function ManualActionPanel({
       toast({ title: "No phone number", description: "Select a call or text first." });
       return;
     }
-    navigate(buildSmsUrl(selected.phone));
+    openSmsComposer(toE164(selected.phone) || selected.phone, {
+      contactName: displayName || undefined,
+      customerId: customer?.id,
+    });
   };
 
   return (
@@ -3016,7 +3020,11 @@ function HumanModeDesk({
       toast({ title: "No phone number", description: "This job does not have a customer phone number." });
       return;
     }
-    navigate(buildSmsUrl(job.customer_phone));
+    openSmsComposer(toE164(job.customer_phone) || job.customer_phone, {
+      contactName: job.customer_name || undefined,
+      jobId: job.id,
+      customerId: job.customer_id || undefined,
+    });
   };
 
   const callSelectedConversation = () => {
@@ -3036,7 +3044,10 @@ function HumanModeDesk({
       toast({ title: "No phone number", description: "Select a call or text first." });
       return;
     }
-    navigate(buildSmsUrl(selectedConversation.phone));
+    openSmsComposer(toE164(selectedConversation.phone) || selectedConversation.phone, {
+      contactName: selectedConversationName || undefined,
+      customerId: selectedConversationCustomer?.id,
+    });
   };
 
   return (

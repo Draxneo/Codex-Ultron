@@ -47,6 +47,7 @@ import {
   type WorkflowType,
 } from "@/lib/workflowNow";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
 type UIMode = "ai" | "human";
@@ -295,10 +296,13 @@ function WorkflowCard({
               </Button>
             )}
             {card.customerPhone && (
-              <Button asChild variant="outline" className="justify-between">
-                <Link to={`/sms?phone=${encodeURIComponent(card.customerPhone)}`}>
-                  Text customer <MessageSquare className="h-4 w-4" />
-                </Link>
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-between"
+                onClick={() => openSmsComposer(card.customerPhone, { contactName: card.customerName })}
+              >
+                Text customer <MessageSquare className="h-4 w-4" />
               </Button>
             )}
             {card.recordType === "alert" && (

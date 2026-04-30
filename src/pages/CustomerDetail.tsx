@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const tabTriggerClass =
   "h-10 rounded-md px-4 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground";
@@ -258,10 +259,10 @@ function CommunicationsPanel({
             <Button
               size="sm"
               className="gap-2"
-              onClick={() => navigate(`/sms?phone=${encodeURIComponent(primaryPhone)}`)}
+              onClick={() => openSmsComposer(primaryPhone, { contactName: fullName, customerId })}
             >
               <ExternalLink className="h-4 w-4" />
-              Open SMS
+              Text
             </Button>
           )}
         </CardHeader>
@@ -485,7 +486,7 @@ export default function CustomerDetail() {
                 <Button
                   variant="outline"
                   className="gap-2"
-                  onClick={() => navigate(`/sms?phone=${encodeURIComponent(primaryPhone)}`)}
+                  onClick={() => openSmsComposer(primaryPhone, { contactName: fullName, customerId: id })}
                 >
                   <MessageSquare className="h-4 w-4" />
                   Text

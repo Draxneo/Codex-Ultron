@@ -51,6 +51,7 @@ import { usePresentationsForEstimate, useResponsesForEstimate } from "@/hooks/us
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getExpectedJobItems } from "@/lib/expectedJobItems";
 import { paymentPreferenceLabel } from "@/lib/paymentOptions";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_SHORT_NAME } from "@/lib/companyDefaults";
 import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
@@ -339,7 +340,11 @@ function EstimateActionBar({
             const body = presentationUrl
               ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${presentationUrl}`
               : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
-            navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+            openSmsComposer(customerPhone, {
+              contactName: customerName,
+              customerId: estimate.customer_id || undefined,
+              draft: body,
+            });
           }}
         >
           <Send className="h-5 w-5" />
@@ -612,7 +617,11 @@ export default function EstimateDetail() {
               const body = presentationUrl
                 ? `Hi ${firstName}, here is your estimate from ${DEFAULT_COMPANY_NAME}: ${window.location.origin}${presentationUrl}`
                 : `Hi ${firstName}, your ${DEFAULT_COMPANY_SHORT_NAME} estimate is ready. I will send the proposal link shortly.`;
-              navigate(`/sms?phone=${encodeURIComponent(customerPhone)}&draft=${encodeURIComponent(body)}`);
+              openSmsComposer(customerPhone, {
+                contactName: customerName,
+                customerId: estimate.customer_id || undefined,
+                draft: body,
+              });
             }}
           />
           <MobileActionPill icon={ArrowRight} label={linkedJobId ? "Job" : "Convert"} onClick={linkedJobId ? () => navigate(`/jobs/${linkedJobId}`) : handleConvert} />

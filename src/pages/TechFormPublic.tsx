@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Camera, Loader2, Phone, ChevronDown, ChevronUp, Circle, AlertCircle, X, MapPin, ImagePlus, Keyboard, BookOpen, WifiOff, Wifi, Home, MessageSquare, ShieldCheck, Sparkles, Navigation, Wrench } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { launchNavigation } from "@/lib/launchNavigation";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { TechFormCopilot } from "@/components/TechFormCopilot";
@@ -983,7 +984,11 @@ export default function TechFormPublic() {
               variant="outline"
               className="flex-1 h-9 gap-1 text-xs text-[hsl(var(--primary))] border-primary/30 hover:bg-primary/10"
               onClick={() => {
-                navigate(`/sms?phone=${encodeURIComponent(job.customer_phone)}`);
+                openSmsComposer(job.customer_phone, {
+                  contactName: job.customer_name || undefined,
+                  jobId: job.id,
+                  customerId: job.customer_id || undefined,
+                });
               }}
             >
               <MessageSquare className="h-4 w-4" />

@@ -63,6 +63,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatPhone, toE164 } from "@/lib/formatters";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
 type ScheduleItem = {
@@ -224,14 +225,6 @@ function summarizeSmsIntent(conversation: SmsConversation) {
   if (conversation.latestJobId || conversation.jobContext) return "Customer text tied to a job";
   if (latest.direction === "inbound") return "Incoming text";
   return "Outbound text";
-}
-
-function buildSmsUrl(phone?: string | null, draft?: string) {
-  if (!phone) return "/sms";
-  const params = new URLSearchParams();
-  params.set("phone", toE164(phone) || phone);
-  if (draft) params.set("draft", draft);
-  return `/sms?${params.toString()}`;
 }
 
 function buildQuickQuoteUrl(item: ScheduleItem) {
@@ -645,7 +638,7 @@ function BoardCommandRail({
                         title="Text customer"
                         onClick={(event) => {
                           event.stopPropagation();
-                          navigate(buildSmsUrl(item.phone));
+                          openSmsComposer(toE164(item.phone) || item.phone, { contactName: item.name });
                         }}
                       >
                         <MessageSquare className="h-3.5 w-3.5" />
@@ -675,8 +668,7 @@ function CommunicationContextDialog({
   if (!item) return null;
 
   const isCall = item.kind === "call";
-  const fullPage = isCall ? "/phone" : "/sms";
-  const actionLabel = isCall ? "Open phone page" : "Open SMS page";
+  const actionLabel = isCall ? "Open phone history" : "Text customer";
   const visual = communicationVisual(item);
   const VisualIcon = visual.Icon;
   const DirectionIcon = visual.DirectionIcon;
@@ -691,7 +683,7 @@ function CommunicationContextDialog({
     openPhoneConsole(toE164(item.phone) || item.phone, { contactName: item.name });
   };
   const textCustomer = () => {
-    navigate(buildSmsUrl(item.phone));
+    openSmsComposer(toE164(item.phone) || item.phone, { contactName: item.name });
   };
 
   return (
@@ -761,7 +753,7 @@ function CommunicationContextDialog({
               <MessageSquare className="h-4 w-4" />
               Text customer
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(fullPage)}>
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={isCall ? () => navigate("/phone") : textCustomer}>
               <ExternalLink className="h-4 w-4" />
               {actionLabel}
             </Button>
@@ -783,7 +775,7 @@ function CommunicationContextDialog({
 
         <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={() => navigate(fullPage)}>{actionLabel}</Button>
+          <Button onClick={isCall ? () => navigate("/phone") : textCustomer}>{actionLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -830,7 +822,11 @@ function JobContextDialog({
       toast({ title: "No phone number", description: "This record does not have a customer phone number yet." });
       return;
     }
-    navigate(buildSmsUrl(item.customer_phone));
+    openSmsComposer(toE164(item.customer_phone) || item.customer_phone, {
+      contactName: item.customer_name || undefined,
+      jobId: item.item_type === "job" ? item.id : undefined,
+      customerId: item.customer_id || undefined,
+    });
   };
   const startQuickQuote = () => {
     navigate(buildQuickQuoteUrl(item));
