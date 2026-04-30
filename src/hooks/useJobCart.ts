@@ -220,7 +220,7 @@ export function useJobCart(jobId: string | undefined) {
       const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "estimate";
       const estimateLabel = cartQuery.data.estimate_number ? ` ${cartQuery.data.estimate_number}` : "";
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
-      await sendSmsImpl({
+      const smsResult = await sendSmsImpl({
         to: phone,
         body: `${greeting}the Carnes family put together your ${linkLabel}${estimateLabel}. You can review it here, and text us back with any questions: ${link}`,
         jobId,
@@ -230,6 +230,9 @@ export function useJobCart(jobId: string | undefined) {
         hitlApproved: true,
         silent: true,
       });
+      if (!smsResult.success) {
+        throw new Error(smsResult.error || "SMS could not be sent, so the estimate was not marked sent.");
+      }
 
       if (permissions.canSendForApproval) {
         const { error } = await (supabase as any)

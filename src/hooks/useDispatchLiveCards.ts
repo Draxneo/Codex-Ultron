@@ -157,7 +157,9 @@ export function useDispatchLiveCards(jobIds: string[]) {
       if (attachmentsRes.error) throw attachmentsRes.error;
       if (formsRes.error) throw formsRes.error;
       if (cartsRes.error) throw cartsRes.error;
-      if (repairItemsRes.error) throw repairItemsRes.error;
+      if (repairItemsRes.error) {
+        console.warn("Repair item context unavailable for dispatch live cards:", repairItemsRes.error.message);
+      }
 
       const forms = ((formsRes.data || []) as TechFormRow[]);
       const formToJob = new Map(forms.map((form) => [form.id, form.job_id]));
@@ -264,7 +266,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
       }
 
       const repairCountByJob = new Map<string, number>();
-      for (const repair of ((repairItemsRes.data || []) as any[])) {
+      for (const repair of ((repairItemsRes.error ? [] : repairItemsRes.data || []) as any[])) {
         if (!repair.job_id) continue;
         repairCountByJob.set(repair.job_id, (repairCountByJob.get(repair.job_id) || 0) + 1);
       }

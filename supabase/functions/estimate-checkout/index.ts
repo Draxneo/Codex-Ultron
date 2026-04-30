@@ -139,7 +139,17 @@ async function resolveJobId(supabase: any, presentation: any) {
   return estimate?.source_job_id || null;
 }
 
-async function upsertRememberedCart(supabase: any, presentation: any, jobId: string, selectedOptionKey: string, timing: string, lines: CartLine[], selectedSnapshot: any) {
+async function upsertRememberedCart(
+  supabase: any,
+  presentation: any,
+  jobId: string,
+  selectedOptionKey: string,
+  timing: string,
+  paymentMethod: string | null,
+  lines: CartLine[],
+  selectedSnapshot: any
+) {
+  const rememberedPaymentMethod = timing === "pay_now" ? "stripe" : paymentMethod || timing;
   const { data: existing } = await supabase
     .from("job_carts")
     .select("id")
@@ -160,7 +170,7 @@ async function upsertRememberedCart(supabase: any, presentation: any, jobId: str
         source_presentation_id: presentation.id,
         selected_option_key: selectedOptionKey,
         payment_timing: timing,
-        payment_method: timing === "pay_now" ? "stripe" : timing,
+        payment_method: rememberedPaymentMethod,
         approved_at: new Date().toISOString(),
         sent_at: new Date().toISOString(),
         approved_scope_snapshot: selectedSnapshot,
@@ -177,7 +187,7 @@ async function upsertRememberedCart(supabase: any, presentation: any, jobId: str
         source_presentation_id: presentation.id,
         selected_option_key: selectedOptionKey,
         payment_timing: timing,
-        payment_method: timing === "pay_now" ? "stripe" : timing,
+        payment_method: rememberedPaymentMethod,
         approved_at: new Date().toISOString(),
         sent_at: new Date().toISOString(),
         approved_scope_snapshot: selectedSnapshot,
@@ -266,7 +276,7 @@ Deno.serve(async (req) => {
     }).eq("id", presentation_id);
 
     if (jobId) {
-      cartId = await upsertRememberedCart(supabase, pres, jobId, selected_option_key, timing, selected.lines, selected.selectedSnapshot);
+      cartId = await upsertRememberedCart(supabase, pres, jobId, selected_option_key, timing, payment_method || null, selected.lines, selected.selectedSnapshot);
       await supabase.rpc("refresh_job_cart_pricing", { p_cart_id: cartId });
       const { data: cart } = await supabase
         .from("job_carts")

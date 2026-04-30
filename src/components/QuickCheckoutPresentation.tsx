@@ -164,6 +164,7 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
       { key: "critical", label: "Option A: Critical", Icon: AlertTriangle, desc: "Restore safe operation today", warning: "Declining critical repairs may result in complete system failure.", borderColor: "border-red-500/40", bgColor: "bg-red-500/5" },
       { key: "recommended", label: "Option B: Recommended", Icon: CheckCircle2, desc: "Fix the failure and reduce repeat issues", borderColor: "border-amber-500/40", bgColor: "bg-amber-500/5" },
       { key: "reconditioning", label: "Option C: Reconditioning", Icon: Shield, desc: "Best repair scope for reliability and comfort", borderColor: "border-emerald-500/40", bgColor: "bg-emerald-500/5" },
+      { key: "premium", label: "Option D: Premium", Icon: Star, desc: "Maximum protection and peace of mind", borderColor: "border-blue-500/40", bgColor: "bg-blue-500/5" },
     ];
 
     const activeTiers = tierConfig.filter(t => tiers[t.key]?.length > 0);
