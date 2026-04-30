@@ -391,30 +391,7 @@ export default function QuickQuote() {
   const handleCreatePresentation = async () => {
     if (!estimateId || results.length === 0) return;
     try {
-      const pricingSnapshot = results.map((m) => ({
-        id: m.id,
-        brand: m.brand,
-        tier: m.tier,
-        tonnage: m.tonnage,
-        system_type: m.system_type,
-        application: m.application,
-        condenser_model: m.condenser_model,
-        coil_model: m.coil_model,
-        furnace_model: m.furnace_model,
-        heat_kit: m.heat_kit,
-        ahri_number: m.ahri_number,
-        seer2: m.seer2,
-        eer2: m.eer2,
-        hspf2: m.hspf2,
-        cooling_cap: m.cooling_cap,
-        afue: m.afue,
-        total_price: m.total_price,
-        monthly_payment: m.monthly_payment,
-        factory_rebate_price: m.factory_rebate_price,
-        early_rebate: m.early_rebate,
-        burnout_rebate: m.burnout_rebate,
-        cps_rebate_tier: m.cps_rebate_tier,
-      }));
+      const pricingSnapshot = buildPresentationSnapshot(results);
 
       const presentation = await createPresentation.mutateAsync({
         estimate_id: estimateId,
@@ -790,4 +767,84 @@ export default function QuickQuote() {
       </div>
     );
   }
+}
+
+function tierKey(tier?: string | null) {
+  const lower = (tier || "").toLowerCase();
+  if (lower.includes("ultimate") || lower.includes("best")) return "best";
+  if (lower.includes("performance") || lower.includes("better") || lower.includes("plus")) return "better";
+  return "good";
+}
+
+function normalizeQuoteFeatures(features: EquipmentMatchup["features_benefits"]) {
+  if (!features) return [];
+  if (Array.isArray(features)) {
+    return features
+      .map((feature: any) => typeof feature === "string" ? { icon: "check", text: feature } : feature)
+      .filter((feature: any) => feature?.text);
+  }
+  if (typeof features === "string") {
+    try {
+      const parsed = JSON.parse(features);
+      if (Array.isArray(parsed)) return normalizeQuoteFeatures(parsed as any);
+    } catch {
+      return features
+        .split(/\n|;|\|/)
+        .map((text) => text.trim())
+        .filter(Boolean)
+        .map((text) => ({ icon: "check", text }));
+    }
+  }
+  return [];
+}
+
+function presentationOption(m: EquipmentMatchup) {
+  const systemLabel = (m.system_type || "Comfort System").replace(/_/g, " ");
+  return {
+    id: m.id,
+    brand: m.brand,
+    tier: m.tier,
+    label: `${m.brand} ${m.tonnage ? `${m.tonnage} Ton ` : ""}${m.tier || ""} ${systemLabel}`.replace(/\s+/g, " ").trim(),
+    description: m.notes || `${m.brand} ${m.tier || ""} system focused on comfort, reliability, efficiency, and peace of mind.`.replace(/\s+/g, " ").trim(),
+    tonnage: m.tonnage,
+    system_type: m.system_type,
+    application: m.application,
+    condenser_model: m.condenser_model,
+    coil_model: m.coil_model,
+    furnace_model: m.furnace_model,
+    heat_kit: m.heat_kit,
+    seer2: m.seer2,
+    eer2: m.eer2,
+    hspf2: m.hspf2,
+    cooling_cap: m.cooling_cap,
+    afue: m.afue,
+    ahri_number: m.ahri_number,
+    price: Number(m.total_price || 0),
+    total_price: Number(m.total_price || 0),
+    monthly_payment: m.monthly_payment,
+    monthly_payment_120: m.monthly_payment_120,
+    factory_rebate_price: m.factory_rebate_price,
+    early_rebate: m.early_rebate,
+    burnout_rebate: m.burnout_rebate,
+    cps_rebate_tier: m.cps_rebate_tier,
+    features_benefits: normalizeQuoteFeatures(m.features_benefits),
+  };
+}
+
+function buildPresentationSnapshot(matchups: EquipmentMatchup[]) {
+  const systemOptions: Record<string, any> = {};
+
+  for (const matchup of matchups) {
+    const baseKey = tierKey(matchup.tier);
+    const key = systemOptions[baseKey] ? `${baseKey}_${matchup.id.slice(0, 6)}` : baseKey;
+    systemOptions[key] = presentationOption(matchup);
+  }
+
+  return {
+    cart_type: "new_system",
+    system_options: systemOptions,
+    addons: [],
+    generated_from: "quick_quote",
+    option_count: Object.keys(systemOptions).length,
+  };
 }

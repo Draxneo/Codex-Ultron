@@ -657,11 +657,17 @@ export default function TechFormPublic() {
 
     setSubmitting(true);
 
+    const submittedAt = new Date().toISOString();
     await supabase.from("tech_forms").update({ status: "submitted", is_service_agreement: isServiceAgreement } as any).eq("id", techFormId);
 
     if (job.job_type === "estimate") {
       const tierField = fields.find(f => f.field_type === "multi_button_group");
       const selectedTiers = tierField ? (values[tierField.id] || "").split(",").filter(Boolean) : [];
+
+      await supabase.from("estimates" as any).update({
+        completion_form_sent_at: submittedAt,
+        work_status: "pending_review",
+      }).eq("id", job.id);
 
       await supabase.from("estimate_reviews" as any).insert({
         tech_form_id: techFormId,
@@ -801,6 +807,21 @@ export default function TechFormPublic() {
       } as any);
     }
 
+    await supabase.from("jobs").update({
+      completion_form_sent_at: submittedAt,
+      completed_at: job.completed_at || submittedAt,
+      status: ["done", "completed", "complete", "closed", "invoiced"].includes(String(job.status || "").toLowerCase())
+        ? job.status
+        : "done",
+    } as any).eq("id", job.id);
+
+    await supabase.from("activity_log").insert({
+      job_id: job.id,
+      action: "tech_form_submitted",
+      performed_by: employee.name || "Technician",
+      details: `${employee.name || "Technician"} submitted the ${job.job_type || "service"} completion form.`,
+    } as any);
+
     const completedTaskTitles: string[] = ["Tech form submitted"];
     setAutoCompletedTasks(completedTaskTitles);
 
@@ -877,6 +898,20 @@ export default function TechFormPublic() {
 
     await supabase.from("tech_forms").update({ status: "draft" }).eq("id", techFormId);
     await supabase.from("paysheet_entries").delete().eq("tech_form_id", techFormId);
+    await supabase.from("time_entries" as any).delete().eq("tech_form_id", techFormId);
+    await supabase.from("estimate_reviews" as any).delete().eq("tech_form_id", techFormId);
+    if (job.job_type === "estimate") {
+      await supabase.from("estimates" as any).update({
+        completion_form_sent_at: null,
+        work_status: "in_progress",
+      }).eq("id", job.id);
+    } else {
+      await supabase.from("jobs").update({
+        completion_form_sent_at: null,
+        completed_at: null,
+        status: "in_progress",
+      } as any).eq("id", job.id);
+    }
 
     setSubmitting(false);
     setSubmitted(false);

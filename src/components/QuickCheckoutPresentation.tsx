@@ -31,10 +31,41 @@ function DotIndicator({ count, active }: { count: number; active: number }) {
   );
 }
 
+function fallbackTierKey(tier?: string | null) {
+  const lower = (tier || "").toLowerCase();
+  if (lower.includes("ultimate") || lower.includes("best")) return "best";
+  if (lower.includes("performance") || lower.includes("better") || lower.includes("plus")) return "better";
+  return "good";
+}
+
+function normalizeLegacyPresentationSnapshot(snapshot: any) {
+  if (!Array.isArray(snapshot)) return snapshot;
+
+  const systemOptions: Record<string, any> = {};
+  for (const option of snapshot) {
+    const baseKey = fallbackTierKey(option?.tier);
+    const key = systemOptions[baseKey] ? `${baseKey}_${String(option?.id || Object.keys(systemOptions).length).slice(0, 6)}` : baseKey;
+    systemOptions[key] = {
+      ...option,
+      label: option?.label || `${option?.brand || "System"} ${option?.tonnage ? `${option.tonnage} Ton ` : ""}${option?.tier || ""}`.replace(/\s+/g, " ").trim(),
+      description: option?.description || option?.notes || "Comfort system option prepared by Carnes and Sons.",
+      price: Number(option?.price || option?.total_price || 0),
+      features_benefits: Array.isArray(option?.features_benefits) ? option.features_benefits : [],
+    };
+  }
+
+  return {
+    cart_type: "new_system",
+    system_options: systemOptions,
+    addons: [],
+    generated_from: "legacy_quick_quote_snapshot",
+  };
+}
+
 export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
   const [searchParams] = useSearchParams();
   const isPaid = searchParams.get("paid") === "true";
-  const snapshot = presentation.pricing_snapshot;
+  const snapshot = normalizeLegacyPresentationSnapshot(presentation.pricing_snapshot);
   const isRepair = snapshot?.cart_type === "repair";
   const isSystem = snapshot?.cart_type === "new_system";
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
