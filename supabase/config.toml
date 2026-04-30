@@ -97,6 +97,9 @@ verify_jwt = false
 [functions.send-sms]
 verify_jwt = false
 
+[functions.request-owner-input]
+verify_jwt = false
+
 [functions.sms-webhook]
 verify_jwt = false
 

@@ -358,6 +358,7 @@ Deno.serve(async (req) => {
         "google_lsa_relay_numbers",
         "google_ads_relay_numbers",
         "company_phone",
+        "owner_input_phone",
       ]);
 
     const jarvisSettingsMap: Record<string, string> = {};
@@ -365,6 +366,7 @@ Deno.serve(async (req) => {
 
     const smsAlertEnabled = jarvisSettingsMap["sms_alert_enabled"] !== "false"; // default true
     const jarvisPhone = smsAlertEnabled ? (jarvisSettingsMap["jarvis_alert_phone"]?.trim() || null) : null;
+    const ownerInputDigits = (jarvisSettingsMap["owner_input_phone"] || "").replace(/\D/g, "").slice(-10);
 
     // ── Answering Service Relay Guard ──
     // The answering service uses a single relay number to forward customer inquiries to us.
@@ -522,6 +524,74 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Failed to persist inbound SMS before side effects" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
+    }
+
+    if (ownerInputDigits.length === 10 && normalizedFrom === ownerInputDigits) {
+      const cleanReply = (enrichedBody || body || "").trim();
+      const { data: pendingRequest } = await supabase
+        .from("owner_input_requests")
+        .select("id, prompt, source_context")
+        .eq("owner_phone_last10", ownerInputDigits)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let actionItemId: string | null = null;
+      const { data: actionItem, error: actionError } = await supabase
+        .from("action_items")
+        .insert({
+          source: "owner_sms_instruction",
+          category: "owner_instruction",
+          priority: "high",
+          status: "pending",
+          title: pendingRequest ? "Owner replied to Codex request" : "Owner sent an instruction by SMS",
+          description: cleanReply || "Owner replied by SMS.",
+          suggested_action: "Review this owner instruction. This does not execute automatically.",
+          customer_phone: from,
+          metadata: {
+            owner_input_request_id: pendingRequest?.id || null,
+            owner_phone_last10: ownerInputDigits,
+            prompt: pendingRequest?.prompt || null,
+            inbound_sms_log_id: logEntry.id,
+            remote_control_blocked: true,
+            source_context: pendingRequest?.source_context || {},
+          },
+        })
+        .select("id")
+        .single();
+      if (!actionError && actionItem?.id) actionItemId = actionItem.id;
+      else console.error("[Owner input] Failed to create action item:", actionError);
+
+      if (pendingRequest?.id) {
+        await supabase
+          .from("owner_input_requests")
+          .update({
+            status: "responded",
+            response_text: cleanReply,
+            responded_at: new Date().toISOString(),
+            action_item_id: actionItemId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", pendingRequest.id);
+      } else {
+        await supabase
+          .from("owner_input_requests")
+          .insert({
+            owner_phone_last10: ownerInputDigits,
+            prompt: "Unprompted owner SMS instruction",
+            status: "responded",
+            response_text: cleanReply,
+            responded_at: new Date().toISOString(),
+            action_item_id: actionItemId,
+            source_context: { inbound_sms_log_id: logEntry.id, unprompted: true },
+          });
+      }
+
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
       );
     }
 

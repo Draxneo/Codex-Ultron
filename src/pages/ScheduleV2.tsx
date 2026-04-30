@@ -59,6 +59,7 @@ import { useTechStatusMap, type TechStatusInfo } from "@/hooks/useTechStatusMap"
 import { toast } from "@/hooks/use-toast";
 import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
 import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
+import { supabase } from "@/integrations/supabase/client";
 import { formatPhone, toE164 } from "@/lib/formatters";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
@@ -807,6 +808,7 @@ function JobContextDialog({
   onOpenMedia?: (item: ScheduleItem) => void;
 }) {
   const navigate = useNavigate();
+  const [sendingToNow, setSendingToNow] = useState(false);
   if (!item) return null;
 
   const status = item.status || item.work_status || "scheduled";
@@ -832,6 +834,81 @@ function JobContextDialog({
   };
   const startQuickQuote = () => {
     navigate(buildQuickQuoteUrl(item));
+  };
+  const sendFieldContextToNow = async () => {
+    if (!item || item.item_type !== "job") return;
+    const summary = liveContext?.liveSummary || liveContext?.latestTechNote?.text || liveContext?.latestActivity?.details;
+    if (!summary || summary === "Waiting for field updates.") {
+      toast({ title: "No field update yet", description: "Jarvis is waiting for a tech note, checklist response, photo, or attachment before creating a Now card." });
+      return;
+    }
+
+    setSendingToNow(true);
+    try {
+      const metadata = {
+        job_id: item.id,
+        job_number: item.job_number || item.hcp_job_number || null,
+        customer_name: item.customer_name,
+        customer_phone: item.customer_phone,
+        address: item.address,
+        latest_tech_note: liveContext?.latestTechNote || null,
+        latest_activity: liveContext?.latestActivity || null,
+        attachment_count: liveContext?.attachmentCount || 0,
+        response_count: liveContext?.responseCount || 0,
+        suggested_item_count: liveContext?.suggestedItemCount || 0,
+        source_url: `/dispatch?job=${item.id}`,
+        updated_from: "dispatch_live_card",
+      };
+
+      const { data: existing, error: existingError } = await supabase
+        .from("action_items" as any)
+        .select("id")
+        .eq("source", "dispatch_live_cards")
+        .eq("category", "tech_finding_review")
+        .eq("status", "pending")
+        .eq("job_id", item.id)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      if ((existing as any)?.id) {
+        const { error } = await supabase
+          .from("action_items" as any)
+          .update({
+            title: `Review field update: ${item.customer_name || "Job"}`,
+            description: summary,
+            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job workflow moving.",
+            customer_phone: item.customer_phone || null,
+            metadata,
+          })
+          .eq("id", (existing as any).id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("action_items" as any)
+          .insert({
+            source: "dispatch_live_cards",
+            category: "tech_finding_review",
+            priority: liveContext?.liveTone === "attention" ? "high" : "normal",
+            title: `Review field update: ${item.customer_name || "Job"}`,
+            description: summary,
+            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job workflow moving.",
+            job_id: item.id,
+            customer_phone: item.customer_phone || null,
+            metadata,
+          });
+        if (error) throw error;
+      }
+
+      toast({ title: "Sent to Now", description: "Dispatch and managers will see this field update as an action card." });
+    } catch (error) {
+      toast({
+        title: "Could not send to Now",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingToNow(false);
+    }
   };
 
   return (
@@ -956,6 +1033,12 @@ function JobContextDialog({
               <Button variant="outline" className="w-full justify-start gap-2" onClick={() => onOpenMedia?.(item)}>
                 <Camera className="h-4 w-4" />
                 Attachments / photos
+              </Button>
+            )}
+            {item.item_type === "job" && (
+              <Button variant="outline" className="w-full justify-start gap-2" disabled={sendingToNow} onClick={sendFieldContextToNow}>
+                <Sparkles className="h-4 w-4" />
+                Send field update to Now
               </Button>
             )}
             <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Route action", description: "Next pass can open map routing and fit-this-job suggestions." })}>

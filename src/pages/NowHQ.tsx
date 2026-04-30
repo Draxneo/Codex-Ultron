@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import {
@@ -26,9 +26,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveActionItem } from "@/lib/actionItemLifecycle";
 import {
   buildEstimateWorkflowCard,
   buildJobWorkflowCard,
@@ -155,13 +158,29 @@ function parseWorkflowSteps(value: any): WorkflowStepDefinition[] {
   return [];
 }
 
-function WorkflowCard({ card, featured = false }: { card: WorkflowNowCard; featured?: boolean }) {
+type WorkflowCardActionHandlers = {
+  onResolve: (card: WorkflowNowCard) => void;
+  onRetry: (card: WorkflowNowCard) => void;
+  busyId?: string | null;
+};
+
+function WorkflowCard({
+  card,
+  featured = false,
+  onResolve,
+  onRetry,
+  busyId,
+}: {
+  card: WorkflowNowCard;
+  featured?: boolean;
+} & WorkflowCardActionHandlers) {
   const workflow = WORKFLOW_META[card.workflowType];
   const group = GROUP_META[card.group];
   const WorkflowIcon = workflow.icon;
   const GroupIcon = group.icon;
   const secondaryUrl = workflowUrl(card);
   const secondaryLabel = card.recordType === "action" ? "Open in Intake" : card.recordType === "alert" ? "Open record" : "Quick quote";
+  const isBusy = busyId === card.id;
   const contextItems = [
     { label: "Record", value: recordLabel(card), href: card.route },
     { label: "Customer", value: card.customerName },
@@ -282,6 +301,16 @@ function WorkflowCard({ card, featured = false }: { card: WorkflowNowCard; featu
                 </Link>
               </Button>
             )}
+            {card.recordType === "alert" && (
+              <Button variant="outline" className="justify-between" disabled={isBusy} onClick={() => onRetry(card)}>
+                Retry workflow <Zap className="h-4 w-4" />
+              </Button>
+            )}
+            {(card.recordType === "action" || card.recordType === "alert") && (
+              <Button variant="secondary" className="justify-between" disabled={isBusy} onClick={() => onResolve(card)}>
+                Mark handled <CheckCircle2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -314,6 +343,9 @@ function HumanModeFallback() {
 
 export default function NowHQ() {
   const [mode, setMode] = useState<UIMode>("ai");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data: jobs = [], isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useJobs();
   const { data: estimates = [], isLoading: estimatesLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(false);
   const { data: actionItems = [], isLoading: actionItemsLoading, isError: actionItemsError, error: actionItemsQueryError } = useQuery({
@@ -403,6 +435,101 @@ export default function NowHQ() {
     ],
     "now-hq-workflow-sync"
   );
+
+  const refreshNowFeeds = () => {
+    queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-alerts"] });
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["estimates"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-leads"] });
+    queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
+  };
+
+  const resolveCard = useMutation({
+    mutationFn: async (card: WorkflowNowCard) => {
+      setBusyId(card.id);
+
+      if (card.recordType === "action") {
+        await resolveActionItem({
+          id: card.recordId,
+          status: "accepted",
+          userId: user?.id,
+          title: card.title,
+          activityDetails: `${card.title} marked handled from Now HQ.`,
+        });
+        return;
+      }
+
+      if (card.recordType === "alert") {
+        const { data, error } = await supabase.rpc("resolve_workflow_alert_once" as any, {
+          p_id: card.recordId,
+          p_note: user?.email || "Now HQ",
+        });
+        if (error) throw error;
+        if (data && !(data as any).ok) throw new Error((data as any).reason || "That workflow alert is already handled.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("action_items" as any)
+        .insert({
+          source: "now_hq",
+          category: "manual_workflow_review",
+          priority: "normal",
+          title: `Handled: ${card.title}`,
+          description: `${card.customerName} - ${card.subtitle}`,
+          status: "accepted",
+          job_id: card.recordType === "job" ? card.recordId : null,
+          customer_phone: card.customerPhone || null,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id || null,
+          metadata: {
+            workflow_card_id: card.id,
+            record_type: card.recordType,
+            record_id: card.recordId,
+            marked_from: "now_hq",
+          },
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refreshNowFeeds();
+      toast({ title: "Handled", description: "That card is cleared from the Now queue." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not clear card",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => setBusyId(null),
+  });
+
+  const retryAlert = useMutation({
+    mutationFn: async (card: WorkflowNowCard) => {
+      setBusyId(card.id);
+      if (card.recordType !== "alert") return;
+      const { data, error } = await supabase.rpc("retry_workflow_alert_once" as any, {
+        p_id: card.recordId,
+        p_last_error: card.stuckReason,
+      });
+      if (error) throw error;
+      if (data && !(data as any).ok) throw new Error((data as any).reason || "Could not retry this workflow alert.");
+    },
+    onSuccess: () => {
+      refreshNowFeeds();
+      toast({ title: "Retry queued", description: "Jarvis will try that workflow step again and keep the card visible if it still needs help." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Retry failed",
+        description: error instanceof Error ? error.message : "The workflow alert stayed open.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => setBusyId(null),
+  });
 
   const cards = useMemo(() => {
     const actionCards = (actionItems as any[]).map((item) => buildActionItemWorkflowCard(item, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
@@ -538,7 +665,13 @@ export default function NowHQ() {
                   {isLoading ? (
                     <Skeleton className="h-64 w-full rounded-lg" />
                   ) : firstCard ? (
-                    <WorkflowCard card={firstCard} featured />
+                    <WorkflowCard
+                      card={firstCard}
+                      featured
+                      onResolve={(card) => resolveCard.mutate(card)}
+                      onRetry={(card) => retryAlert.mutate(card)}
+                      busyId={busyId}
+                    />
                   ) : (
                     <Card className="border-dashed">
                       <CardContent className="flex flex-col items-center justify-center gap-3 p-12 text-center">
@@ -554,7 +687,15 @@ export default function NowHQ() {
                   {remainingCards.length > 0 && (
                     <div className="space-y-3">
                       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Next up</h2>
-                      {remainingCards.map((card) => <WorkflowCard key={card.id} card={card} />)}
+                      {remainingCards.map((card) => (
+                        <WorkflowCard
+                          key={card.id}
+                          card={card}
+                          onResolve={(selected) => resolveCard.mutate(selected)}
+                          onRetry={(selected) => retryAlert.mutate(selected)}
+                          busyId={busyId}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
