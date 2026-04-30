@@ -314,9 +314,9 @@ function HumanModeFallback() {
 
 export default function NowHQ() {
   const [mode, setMode] = useState<UIMode>("ai");
-  const { data: jobs = [], isLoading: jobsLoading } = useJobs();
-  const { data: estimates = [], isLoading: estimatesLoading } = useEstimates(false);
-  const { data: actionItems = [], isLoading: actionItemsLoading } = useQuery({
+  const { data: jobs = [], isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useJobs();
+  const { data: estimates = [], isLoading: estimatesLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(false);
+  const { data: actionItems = [], isLoading: actionItemsLoading, isError: actionItemsError, error: actionItemsQueryError } = useQuery({
     queryKey: ["now-hq-action-items"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -329,7 +329,7 @@ export default function NowHQ() {
       return (data as any[]) || [];
     },
   });
-  const { data: workflowAlerts = [], isLoading: workflowAlertsLoading } = useQuery({
+  const { data: workflowAlerts = [], isLoading: workflowAlertsLoading, isError: workflowAlertsError, error: workflowAlertsQueryError } = useQuery({
     queryKey: ["now-hq-workflow-alerts"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -346,7 +346,7 @@ export default function NowHQ() {
       return (data as any[]) || [];
     },
   });
-  const { data: leads = [], isLoading: leadsLoading } = useQuery({
+  const { data: leads = [], isLoading: leadsLoading, isError: leadsError, error: leadsQueryError } = useQuery({
     queryKey: ["now-hq-leads"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -360,7 +360,22 @@ export default function NowHQ() {
       return (data as any[]) || [];
     },
   });
-  const { data: workflowTemplates = {}, isLoading: workflowTemplatesLoading } = useQuery({
+  const { data: closeoutJobs = [], isLoading: closeoutJobsLoading, isError: closeoutJobsError, error: closeoutJobsQueryError } = useQuery({
+    queryKey: ["now-hq-closeout-jobs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("jobs" as any)
+        .select("*")
+        .in("status", ["done", "completed", "complete", "invoiced"])
+        .not("completed_at", "is", null)
+        .gte("completed_at", NOW_HQ_LAUNCH_CUTOFF)
+        .order("completed_at", { ascending: false })
+        .limit(80);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const { data: workflowTemplates = {}, isLoading: workflowTemplatesLoading, isError: workflowTemplatesError, error: workflowTemplatesQueryError } = useQuery({
     queryKey: ["workflow-definitions-active"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -381,7 +396,7 @@ export default function NowHQ() {
     [
       { table: "action_items", queryKeys: [["now-hq-action-items"], ["hud_attention_counts"]] },
       { table: "workflow_alerts", queryKeys: [["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
-      { table: "jobs", queryKeys: [["jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
+      { table: "jobs", queryKeys: [["jobs"], ["now-hq-closeout-jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
       { table: "estimates", queryKeys: [["estimates"], ["hud_attention_counts"]] },
       { table: "leads", queryKeys: [["now-hq-leads"], ["hud_attention_counts"]] },
       { table: "workflow_definitions", queryKeys: [["workflow-definitions-active"]] },
@@ -397,12 +412,25 @@ export default function NowHQ() {
       .filter((job) => !alertedJobIds.has(job.id))
       .map((job) => buildJobWorkflowCard(job, workflowTemplates))
       .filter(Boolean) as WorkflowNowCard[];
+    const closeoutJobCards = (closeoutJobs as any[])
+      .filter((job) => !alertedJobIds.has(job.id))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates))
+      .filter(Boolean) as WorkflowNowCard[];
     const estimateCards = (estimates as any[]).map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const leadCards = (leads as any[]).map((lead) => buildLeadWorkflowCard(lead, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
-    return [...alertCards, ...actionCards, ...jobCards, ...estimateCards, ...leadCards].sort(workflowSort);
-  }, [actionItems, workflowAlerts, jobs, estimates, leads, workflowTemplates]);
+    return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards].sort(workflowSort);
+  }, [actionItems, workflowAlerts, jobs, closeoutJobs, estimates, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const dataErrors = [
+    { label: "workflow cards", active: actionItemsError, error: actionItemsQueryError },
+    { label: "workflow alerts", active: workflowAlertsError, error: workflowAlertsQueryError },
+    { label: "jobs", active: jobsError, error: jobsQueryError },
+    { label: "job closeout", active: closeoutJobsError, error: closeoutJobsQueryError },
+    { label: "estimates", active: estimatesError, error: estimatesQueryError },
+    { label: "leads", active: leadsError, error: leadsQueryError },
+    { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },
+  ].filter((item) => item.active);
   const humanCards = cards.filter(isHumanNeeded);
   const firstCard = humanCards[0] || cards[0] || null;
   const remainingCards = firstCard ? humanCards.filter((card) => card.id !== firstCard.id).slice(0, 12) : [];
@@ -458,6 +486,20 @@ export default function NowHQ() {
         </section>
 
         <section className="mx-auto max-w-7xl space-y-4 p-4">
+          {dataErrors.length > 0 && (
+            <Card className="border-red-500/40 bg-red-500/10">
+              <CardContent className="flex flex-col gap-3 p-4 text-sm md:flex-row md:items-start">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-300" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-red-900 dark:text-red-100">Now HQ could not load every work feed.</p>
+                  <p className="mt-1 text-red-800/80 dark:text-red-100/80">
+                    This board may be missing cards until the connection recovers. Failed feed{dataErrors.length === 1 ? "" : "s"}: {dataErrors.map((item) => item.label).join(", ")}.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {mode === "ai" ? (
             <>
               <div className="grid gap-3 md:grid-cols-4">

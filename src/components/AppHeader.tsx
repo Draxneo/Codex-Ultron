@@ -34,7 +34,7 @@ const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/customers": { label: "Customer HQ", roles: null },
   "/quick-quote": { label: "Quote HQ", roles: null },
   "/catalog": { label: "Price Book", roles: null },
-  "/pay": { label: "Payments", roles: null },
+  "/payments": { label: "Payments", roles: null },
   "/reports": { label: "Reporting", roles: null },
   "/copilot": { label: "JARVIS", roles: null },
   "/admin": { label: "Settings", roles: null },

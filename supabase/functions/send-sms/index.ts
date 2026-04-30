@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       relatedCustomerId,
       source: bodySource,
       template_key,
+      internal,
     } = reqBody;
     // Some callers (legacy) pass `message` instead of `body`. Accept both.
     const messageBody: string = body ?? reqBody.message ?? "";
@@ -102,7 +103,8 @@ Deno.serve(async (req) => {
     // universal `useSendSms` hook can pass it without setting custom headers.
     // x-source-function / x-hitl-approved are workflow hints only; authorization
     // above requires staff auth, service-role bearer, or x-internal-function-secret.
-    const sourceFunction = req.headers.get("x-source-function") || bodySource || "manual";
+    const isInternalAlert = internal === true;
+    const sourceFunction = req.headers.get("x-source-function") || bodySource || (isInternalAlert ? "internal_alert" : "manual");
     const isManual = sourceFunction === "manual";
     const isInternalCaller = auth.kind === "service_role" || auth.kind === "internal_secret";
     const isHitlApproved = isInternalCaller || req.headers.get("x-hitl-approved") === "true";
@@ -170,8 +172,8 @@ Deno.serve(async (req) => {
     // Persist caller-provided contact metadata up-front so per-vendor /
     // per-customer scoping (useVendorSms, useCustomerSms) works without a
     // second insert. Background contact resolution below will fill gaps.
-    if (contactName) initialInsert.contact_name = contactName;
-    if (contactType) initialInsert.contact_type = contactType;
+    if (contactName || isInternalAlert) initialInsert.contact_name = contactName || "Internal alert";
+    if (contactType || isInternalAlert) initialInsert.contact_type = isInternalAlert ? "internal" : contactType;
     if (relatedVendorId) initialInsert.related_vendor_id = relatedVendorId;
     if (relatedCustomerId) initialInsert.related_customer_id = relatedCustomerId;
     if (sourceFunction) initialInsert.source_function = sourceFunction;
@@ -351,7 +353,7 @@ Deno.serve(async (req) => {
     if (updateErr) console.error("sms_log post-send update failed:", updateErr);
 
     // ── Auto-dismiss lead-triage action_items for this recipient (best-effort) ──
-    (globalThis as any).EdgeRuntime?.waitUntil((async () => {
+    if (!isInternalAlert) (globalThis as any).EdgeRuntime?.waitUntil((async () => {
       try {
         const last10 = normalizedTo.replace(/\D/g, "").slice(-10);
         if (last10.length !== 10) return;
@@ -382,7 +384,7 @@ Deno.serve(async (req) => {
     // ── Resolve contact in the background (non-blocking) ──
     // Skip resolution entirely if the caller already provided contactName +
     // contactType (Vendor compose, etc.) — we already persisted those above.
-    if (!contactName || contactType === undefined) {
+    if (!isInternalAlert && (!contactName || contactType === undefined)) {
       (globalThis as any).EdgeRuntime?.waitUntil((async () => {
         try {
           const { resolveContact } = await import("../_shared/resolveContact.ts");

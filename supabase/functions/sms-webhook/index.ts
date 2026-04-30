@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
     }
 
     // Log inbound message (with MMS media if present)
-    const { data: logEntry } = await supabase.from("sms_log").insert({
+    const { data: logEntry, error: logInsertError } = await supabase.from("sms_log").insert({
       direction: "inbound",
       phone_number: from,
       body: enrichedBody,
@@ -507,6 +507,23 @@ Deno.serve(async (req) => {
       ...(relatedVendorId ? { related_vendor_id: relatedVendorId } : {}),
       ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
     } as any).select("id").single();
+
+    if (logInsertError || !logEntry) {
+      const isDuplicate = (logInsertError as any)?.code === "23505" && messageSid;
+      if (isDuplicate) {
+        console.log(`[SMS] Duplicate webhook ignored for MessageSid=${messageSid}`);
+        return new Response(
+          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+        );
+      }
+
+      console.error("[SMS] Failed to persist inbound sms_log row:", logInsertError);
+      return new Response(
+        JSON.stringify({ error: "Failed to persist inbound SMS before side effects" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
+    }
 
     // ── Push notification to all mobile users for inbound SMS ──
     try {

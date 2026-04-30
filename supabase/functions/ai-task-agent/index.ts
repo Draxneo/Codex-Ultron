@@ -2640,6 +2640,32 @@ serve(async (req) => {
         req,
         { actionItemId, token, metadata }
       );
+      const toolFailed = toolResult?.status === "error" || toolResult?.ok === false || Boolean(toolResult?.error);
+      if (toolFailed) {
+        const failureMessage = toolResult?.error || toolResult?.message || "JARVIS action failed during execution.";
+        await sb.from("action_items")
+          .update({
+            status: "pending",
+            metadata: {
+              ...metadata,
+              last_error: failureMessage,
+              last_failed_at: new Date().toISOString(),
+              attempt_count: Number(metadata.attempt_count || 0) + 1,
+              approval_result: toolResult,
+            },
+          })
+          .eq("id", actionItemId);
+        await sb.from("activity_log").insert({
+          action: "jarvis_action_failed",
+          details: `JARVIS action failed: ${metadata.tool_name} - ${failureMessage}`,
+          job_id: (metadata.tool_args || {}).job_id || null,
+        });
+        return new Response(JSON.stringify({ error: failureMessage, result: toolResult, tool_actions: [toolResult] }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       await sb.from("action_items")
         .update({
           status: "accepted",

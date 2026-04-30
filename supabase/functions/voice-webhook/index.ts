@@ -242,10 +242,12 @@ Deno.serve(async (req) => {
     const externalPhone = isInbound ? from : to;
 
     // FIXED: was loading all 2000 customers into memory — now single targeted DB query
-    const { contactName, contactType } = await resolveContact(
+    const resolvedContact = await resolveContact(
       supabase,
       externalPhone,
     );
+    let contactName = resolvedContact.contactName;
+    const contactType = resolvedContact.contactType;
 
     // Parse Twilio CNAM Add-on result as fallback for caller name
     if (!contactName) {

@@ -63,7 +63,7 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
   }
 
   if (!existing) {
-    return supabase.from("action_items").insert({
+    const result = await supabase.from("action_items").insert({
       title: input.title,
       description: input.description || null,
       category: input.category,
@@ -85,6 +85,8 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
         }],
       },
     });
+    if (result.error) throw result.error;
+    return result;
   }
 
   const previousMeta = existing.metadata || {};
@@ -107,7 +109,7 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
     ].slice(0, 12),
   };
 
-  return supabase
+  const result = await supabase
     .from("action_items")
     .update({
       title: input.title || existing.title,
@@ -121,4 +123,6 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
       metadata: nextMeta,
     })
     .eq("id", existing.id);
+  if (result.error) throw result.error;
+  return result;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -32,6 +32,8 @@ export function useRealtimeInvalidation(
 ) {
   const queryClient = useQueryClient();
   const subsRef = useRef(subscriptions);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const [reconnectSeq, setReconnectSeq] = useState(0);
   const instanceIdRef = useRef<string>();
   if (!instanceIdRef.current) {
     const randomId =
@@ -44,6 +46,7 @@ export function useRealtimeInvalidation(
 
   useEffect(() => {
     if (subsRef.current.length === 0) return;
+    let mounted = true;
 
     const baseName = channelName || `rt-invalidation-${subsRef.current.map(s => s.table).join("-")}`;
     const name = `${baseName}-${instanceIdRef.current}`;
@@ -73,10 +76,24 @@ export function useRealtimeInvalidation(
       );
     }
 
-    channel.subscribe();
+    channel.subscribe((status, error) => {
+      if (!mounted) return;
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        console.warn(`[realtime] ${baseName} disconnected (${status})`, error);
+        if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = window.setTimeout(() => {
+          if (mounted) setReconnectSeq((value) => value + 1);
+        }, 1500);
+      }
+    });
 
     return () => {
+      mounted = false;
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
-  }, [channelName, queryClient]);
+  }, [channelName, queryClient, reconnectSeq]);
 }

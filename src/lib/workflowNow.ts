@@ -342,7 +342,7 @@ function openItem(items: ExpectedJobItem[]) {
 }
 
 export function buildJobWorkflowCard(job: any, templateOverrides?: WorkflowTemplateMap): WorkflowNowCard | null {
-  if (isLegacyHcpImport(job) || isTerminalStatus(job?.status) || isTerminalStatus(job?.hcp_status)) return null;
+  if (isLegacyHcpImport(job)) return null;
 
   const type = normalized(job.job_type);
   const workflowType: WorkflowType = type === "install" ? "install" : "service";
@@ -350,6 +350,9 @@ export function buildJobWorkflowCard(job: any, templateOverrides?: WorkflowTempl
   const items = getExpectedJobItems(job);
   const active = openItem(items);
   if (!active) return null;
+  const terminal = isTerminalStatus(job?.status) || isTerminalStatus(job?.hcp_status);
+  const closeoutKeys = new Set(["invoice", "payment", "review", "follow_up", "warranty", "inspection", "rebate"]);
+  if (terminal && !closeoutKeys.has(active.key)) return null;
 
   const templateKey = mapExpectedKeyToTemplateKey(active, workflowType);
   const stepIndex = Math.max(0, template.findIndex((step) => step.key === templateKey));

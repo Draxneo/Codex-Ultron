@@ -97,8 +97,23 @@ export function useUpdateEstimateStatus() {
       if (status === "won") {
         try {
           await createJobFromEstimate(id);
-        } catch (e) {
-          console.error("Auto-create job from estimate failed:", e);
+        } catch (e: any) {
+          const message = e?.message || "Estimate was marked won, but the install job was not created.";
+          await supabase.from("action_items" as any).insert({
+            source: "quote_hq",
+            category: "estimate_won_job_creation_failed",
+            priority: "high",
+            status: "pending",
+            title: "Install job creation failed",
+            description: `Estimate was marked won, but the install job did not get created. ${message}`,
+            suggested_action: "Open the approved estimate, create the install job, and confirm it appears on Dispatch HQ.",
+            metadata: {
+              estimate_id: id,
+              failure: message,
+              living_card: true,
+            },
+          });
+          throw e;
         }
       }
     },
@@ -108,6 +123,17 @@ export function useUpdateEstimateStatus() {
       if (status === "won") {
         queryClient.invalidateQueries({ queryKey: ["jobs"] });
         queryClient.invalidateQueries({ queryKey: ["chat-channels"] });
+        queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
+      }
+    },
+    onError: (err: any, { status }) => {
+      if (status === "won") {
+        queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
+        toast.error("Estimate was marked won, but the install job needs attention", {
+          description: err?.message || "Jarvis created a Now card so this cannot disappear silently.",
+        });
+      } else {
+        toast.error("Could not update estimate", { description: err?.message });
       }
     },
   });

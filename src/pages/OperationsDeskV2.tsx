@@ -644,7 +644,7 @@ function isUnknownConversation(item: DeskConversation) {
 
 function isEmployeeConversation(item: DeskConversation) {
   const type = String(item.customerType || "").toLowerCase();
-  return type === "employee" || type.includes("employee") || type.includes("tech");
+  return type === "employee" || type === "internal" || type.includes("employee") || type.includes("tech") || type.includes("internal");
 }
 
 function isAnsweringServiceConversation(item: DeskConversation) {
