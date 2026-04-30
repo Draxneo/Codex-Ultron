@@ -411,6 +411,43 @@ export default function NowHQ() {
       return (data as any[]) || [];
     },
   });
+  const nowJobIds = useMemo(() => {
+    return Array.from(new Set([...(jobs as any[]), ...(closeoutJobs as any[])].map((job) => job.id).filter(Boolean))).sort();
+  }, [jobs, closeoutJobs]);
+  const jobCartKey = nowJobIds.join("|");
+  const { data: jobCarts = [], isLoading: jobCartsLoading, isError: jobCartsError, error: jobCartsQueryError } = useQuery({
+    queryKey: ["now-hq-job-carts", jobCartKey],
+    enabled: nowJobIds.length > 0,
+    queryFn: async () => {
+      const { data: carts, error } = await supabase
+        .from("job_carts" as any)
+        .select("*")
+        .in("job_id", nowJobIds)
+        .not("status", "in", '("canceled","declined","paid")')
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const rows = ((carts || []) as any[]);
+      const cartIds = rows.map((cart) => cart.id).filter(Boolean);
+      if (cartIds.length === 0) return rows;
+
+      const { data: cartItems, error: itemError } = await supabase
+        .from("job_cart_items" as any)
+        .select("cart_id")
+        .in("cart_id", cartIds);
+      if (itemError) throw itemError;
+
+      const itemCounts = ((cartItems || []) as any[]).reduce((acc, item) => {
+        acc.set(item.cart_id, (acc.get(item.cart_id) || 0) + 1);
+        return acc;
+      }, new Map<string, number>());
+
+      return rows.map((cart) => ({
+        ...cart,
+        item_count: Number(cart.item_count || itemCounts.get(cart.id) || 0),
+      }));
+    },
+  });
   const { data: workflowTemplates = {}, isLoading: workflowTemplatesLoading, isError: workflowTemplatesError, error: workflowTemplatesQueryError } = useQuery({
     queryKey: ["workflow-definitions-active"],
     queryFn: async () => {
@@ -433,6 +470,8 @@ export default function NowHQ() {
       { table: "action_items", queryKeys: [["now-hq-action-items"], ["hud_attention_counts"]] },
       { table: "workflow_alerts", queryKeys: [["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
       { table: "jobs", queryKeys: [["jobs"], ["now-hq-closeout-jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
+      { table: "job_carts", queryKeys: [["now-hq-job-carts"], ["jobs"], ["hud_attention_counts"]] },
+      { table: "job_cart_items", queryKeys: [["now-hq-job-carts"], ["hud_attention_counts"]] },
       { table: "estimates", queryKeys: [["estimates"], ["hud_attention_counts"]] },
       { table: "leads", queryKeys: [["now-hq-leads"], ["hud_attention_counts"]] },
       { table: "workflow_definitions", queryKeys: [["workflow-definitions-active"]] },
@@ -444,6 +483,7 @@ export default function NowHQ() {
     queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-alerts"] });
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-job-carts"] });
     queryClient.invalidateQueries({ queryKey: ["estimates"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-leads"] });
     queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
@@ -536,28 +576,33 @@ export default function NowHQ() {
   });
 
   const cards = useMemo(() => {
+    const jobCartByJobId = new Map<string, any>();
+    for (const cart of (jobCarts as any[])) {
+      if (cart.job_id && !jobCartByJobId.has(cart.job_id)) jobCartByJobId.set(cart.job_id, cart);
+    }
     const actionCards = (actionItems as any[]).map((item) => buildActionItemWorkflowCard(item, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const alertCards = (workflowAlerts as any[]).map((alert) => buildWorkflowAlertCard(alert, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const alertedJobIds = new Set((workflowAlerts as any[]).map((alert) => alert.job_id).filter(Boolean));
     const jobCards = (jobs as any[])
       .filter((job) => !alertedJobIds.has(job.id))
-      .map((job) => buildJobWorkflowCard(job, workflowTemplates))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates, { cart: jobCartByJobId.get(job.id) || null }))
       .filter(Boolean) as WorkflowNowCard[];
     const closeoutJobCards = (closeoutJobs as any[])
       .filter((job) => !alertedJobIds.has(job.id))
-      .map((job) => buildJobWorkflowCard(job, workflowTemplates))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates, { cart: jobCartByJobId.get(job.id) || null }))
       .filter(Boolean) as WorkflowNowCard[];
     const estimateCards = (estimates as any[]).map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const leadCards = (leads as any[]).map((lead) => buildLeadWorkflowCard(lead, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards].sort(workflowSort);
-  }, [actionItems, workflowAlerts, jobs, closeoutJobs, estimates, leads, workflowTemplates]);
+  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, estimates, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
   const dataErrors = [
     { label: "workflow cards", active: actionItemsError, error: actionItemsQueryError },
     { label: "workflow alerts", active: workflowAlertsError, error: workflowAlertsQueryError },
     { label: "jobs", active: jobsError, error: jobsQueryError },
     { label: "job closeout", active: closeoutJobsError, error: closeoutJobsQueryError },
+    { label: "job carts", active: jobCartsError, error: jobCartsQueryError },
     { label: "estimates", active: estimatesError, error: estimatesQueryError },
     { label: "leads", active: leadsError, error: leadsQueryError },
     { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },

@@ -32,6 +32,9 @@ export type DispatchLiveCardContext = {
   latestAttachment?: DispatchLiveAttachment;
   responseCount: number;
   suggestedItemCount: number;
+  cartItemCount: number;
+  repairItemCount: number;
+  cartStatus?: string | null;
   liveSummary: string;
   liveTone: "quiet" | "active" | "attention";
 };
@@ -81,6 +84,9 @@ export function useDispatchLiveCards(jobIds: string[]) {
       { table: "jobs", queryKeys: [["jobs"], ["dispatch-live-cards"]] },
       { table: "activity_log", queryKeys: [["activity_log"], ["dispatch-live-cards"]] },
       { table: "job_attachments", queryKeys: [["job_attachments"], ["dispatch-live-cards"]] },
+      { table: "job_carts", queryKeys: [["job_cart"], ["dispatch-live-cards"]] },
+      { table: "job_cart_items", queryKeys: [["job_cart_items"], ["dispatch-live-cards"]] },
+      { table: "job_repair_items", queryKeys: [["dispatch-live-cards"]] },
       { table: "job_transcripts", queryKeys: [["dispatch-live-cards"]] },
       { table: "tech_forms", queryKeys: [["dispatch-live-cards"]] },
       { table: "tech_form_photos", queryKeys: [["tech_form_photos"], ["dispatch-live-cards"]] },
@@ -101,12 +107,14 @@ export function useDispatchLiveCards(jobIds: string[]) {
           attachmentCount: 0,
           responseCount: 0,
           suggestedItemCount: 0,
+          cartItemCount: 0,
+          repairItemCount: 0,
           liveSummary: "Waiting for field updates.",
           liveTone: "quiet",
         });
       }
 
-      const [transcriptsRes, activityRes, attachmentsRes, formsRes] = await Promise.all([
+      const [transcriptsRes, activityRes, attachmentsRes, formsRes, cartsRes, repairItemsRes] = await Promise.all([
         (supabase as any)
           .from("job_transcripts")
           .select("id, job_id, transcript_text, ai_response, suggested_items, created_at")
@@ -129,12 +137,27 @@ export function useDispatchLiveCards(jobIds: string[]) {
           .from("tech_forms")
           .select("id, job_id")
           .in("job_id", stableJobIds),
+        (supabase as any)
+          .from("job_carts")
+          .select("id, job_id, status, total, sent_at, approved_at, paid_at, created_at")
+          .in("job_id", stableJobIds)
+          .not("status", "in", "(canceled,declined)")
+          .order("created_at", { ascending: false })
+          .limit(250),
+        (supabase as any)
+          .from("job_repair_items")
+          .select("id, job_id, created_at")
+          .in("job_id", stableJobIds)
+          .order("created_at", { ascending: false })
+          .limit(400),
       ]);
 
       if (transcriptsRes.error) throw transcriptsRes.error;
       if (activityRes.error) throw activityRes.error;
       if (attachmentsRes.error) throw attachmentsRes.error;
       if (formsRes.error) throw formsRes.error;
+      if (cartsRes.error) throw cartsRes.error;
+      if (repairItemsRes.error) throw repairItemsRes.error;
 
       const forms = ((formsRes.data || []) as TechFormRow[]);
       const formToJob = new Map(forms.map((form) => [form.id, form.job_id]));
@@ -159,6 +182,30 @@ export function useDispatchLiveCards(jobIds: string[]) {
 
       if (techPhotosRes.error) throw techPhotosRes.error;
       if (responsesRes.error) throw responsesRes.error;
+
+      const cartRows = ((cartsRes.data || []) as any[]);
+      const cartIds = cartRows.map((cart) => cart.id).filter(Boolean);
+      const cartItemsRes = cartIds.length
+        ? await (supabase as any)
+            .from("job_cart_items")
+            .select("cart_id")
+            .in("cart_id", cartIds)
+        : { data: [], error: null };
+      if (cartItemsRes.error) throw cartItemsRes.error;
+
+      const cartToJob = new Map<string, string>();
+      const latestCartByJob = new Map<string, any>();
+      for (const cart of cartRows) {
+        cartToJob.set(cart.id, cart.job_id);
+        if (cart.job_id && !latestCartByJob.has(cart.job_id)) latestCartByJob.set(cart.job_id, cart);
+      }
+
+      const cartItemCountByJob = new Map<string, number>();
+      for (const item of ((cartItemsRes.data || []) as any[])) {
+        const jobId = cartToJob.get(item.cart_id);
+        if (!jobId) continue;
+        cartItemCountByJob.set(jobId, (cartItemCountByJob.get(jobId) || 0) + 1);
+      }
 
       const transcriptsByJob = new Map<string, any[]>();
       for (const transcript of (transcriptsRes.data || []) as any[]) {
@@ -216,6 +263,12 @@ export function useDispatchLiveCards(jobIds: string[]) {
         responseCountByJob.set(jobId, (responseCountByJob.get(jobId) || 0) + 1);
       }
 
+      const repairCountByJob = new Map<string, number>();
+      for (const repair of ((repairItemsRes.data || []) as any[])) {
+        if (!repair.job_id) continue;
+        repairCountByJob.set(repair.job_id, (repairCountByJob.get(repair.job_id) || 0) + 1);
+      }
+
       for (const jobId of stableJobIds) {
         const current = contexts.get(jobId)!;
         const latestTranscript = latestByDate(transcriptsByJob.get(jobId) || []);
@@ -229,14 +282,29 @@ export function useDispatchLiveCards(jobIds: string[]) {
         const suggestedItemCount = (transcriptsByJob.get(jobId) || [])
           .reduce((sum, transcript) => sum + countSuggestedItems(transcript.suggested_items), 0);
         const responseCount = responseCountByJob.get(jobId) || 0;
+        const latestCart = latestCartByJob.get(jobId);
+        const cartItemCount = cartItemCountByJob.get(jobId) || 0;
+        const repairItemCount = repairCountByJob.get(jobId) || 0;
+        const proposalSummary = latestCart
+          ? latestCart.status === "approved"
+            ? `Customer approved proposal for $${Number(latestCart.total || 0).toFixed(2)}.`
+            : latestCart.status === "sent"
+              ? `Proposal sent to customer with ${cartItemCount || "no"} option${cartItemCount === 1 ? "" : "s"}.`
+              : cartItemCount > 0
+                ? `Proposal drafted with ${cartItemCount} option${cartItemCount === 1 ? "" : "s"}.`
+                : ""
+          : repairItemCount > 0
+            ? `${repairItemCount} repair item${repairItemCount === 1 ? "" : "s"} added by tech.`
+            : "";
         const liveSummary =
           shortText(latestTranscript?.ai_response, 135) ||
           shortText(latestTranscript?.transcript_text, 135) ||
+          shortText(proposalSummary, 135) ||
           shortText(latestActivity?.details, 135) ||
           (attachments.length ? `${attachments.length} field attachment${attachments.length === 1 ? "" : "s"} available.` : "Waiting for field updates.");
-        const liveTone = latestTranscript || suggestedItemCount > 0
+        const liveTone = latestTranscript || suggestedItemCount > 0 || latestCart?.status === "approved"
           ? "attention"
-          : attachments.length || responseCount > 0 || latestActivity
+          : attachments.length || responseCount > 0 || latestActivity || latestCart || repairItemCount > 0
             ? "active"
             : "quiet";
 
@@ -261,6 +329,9 @@ export function useDispatchLiveCards(jobIds: string[]) {
           latestAttachment: attachments[0],
           responseCount,
           suggestedItemCount,
+          cartItemCount,
+          repairItemCount,
+          cartStatus: latestCart?.status || null,
           liveSummary,
           liveTone,
         });

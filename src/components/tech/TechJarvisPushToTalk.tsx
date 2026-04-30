@@ -16,6 +16,7 @@ import { useJobCart, type JobCartItem, type NewCartItem } from "@/hooks/useJobCa
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { buildDefaultDecisionMetadata } from "@/lib/customerDecisionStory";
 import { toast } from "sonner";
 
 interface Props {
@@ -244,6 +245,7 @@ export function TechJarvisPushToTalk({
           unit_price: action.unitPrice,
           tier: action.tier,
           metadata: {
+            ...buildDefaultDecisionMetadata(action),
             source: "tech_jarvis_voice",
             job_id: jobId,
             customer_name: customerName,

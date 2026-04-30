@@ -341,13 +341,17 @@ function openItem(items: ExpectedJobItem[]) {
     || items.find((item) => item.status === "upcoming");
 }
 
-export function buildJobWorkflowCard(job: any, templateOverrides?: WorkflowTemplateMap): WorkflowNowCard | null {
+export function buildJobWorkflowCard(
+  job: any,
+  templateOverrides?: WorkflowTemplateMap,
+  context?: { invoices?: any[]; partsOrders?: any[]; cart?: any | null }
+): WorkflowNowCard | null {
   if (isLegacyHcpImport(job)) return null;
 
   const type = normalized(job.job_type);
   const workflowType: WorkflowType = type === "install" ? "install" : "service";
   const template = templatesWithOverrides(templateOverrides)[workflowType];
-  const items = getExpectedJobItems(job);
+  const items = getExpectedJobItems(job, context?.invoices || [], context?.partsOrders || [], context?.cart || null);
   const active = openItem(items);
   if (!active) return null;
   const terminal = isTerminalStatus(job?.status) || isTerminalStatus(job?.hcp_status);

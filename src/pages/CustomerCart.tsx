@@ -11,6 +11,7 @@ import { PaymentOptionStack } from "@/components/pricing/PaymentOptionStack";
 import { calcMonthly36, calcMonthly120 } from "@/lib/paymentOptions";
 import type { JobCart, JobCartItem } from "@/hooks/useJobCart";
 import { buildComfortClubCartSummary, type ComfortClubPublicInfo } from "@/lib/comfortClubCart";
+import { buildCustomerDecisionStory } from "@/lib/customerDecisionStory";
 import { cn } from "@/lib/utils";
 
 const KIND_ICON: Record<JobCartItem["kind"], React.ComponentType<{ className?: string }>> = {
@@ -186,6 +187,7 @@ export default function CustomerCart() {
   });
   const comfortClubPerks = comfortClub.perks.slice(0, 3);
   const isPresentMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("present") === "1";
+  const decisionStory = buildCustomerDecisionStory(items, job);
 
   return (
     <div className="min-h-screen bg-muted/30 pb-32">
@@ -288,11 +290,11 @@ export default function CustomerCart() {
         {canEditCart && (
           <div id="customer-estimate" className="space-y-1 scroll-mt-4">
             <h1 className="text-2xl font-bold">
-              {isPresentMode ? "Your comfort presentation" : job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
+              {isPresentMode ? decisionStory.headline : job?.customer_name ? `Hi ${job.customer_name.split(" ")[0]},` : "Your Estimate"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {isPresentMode
-                ? "Review the comfort story first. The cart and payment choices are attached below."
+                ? decisionStory.subheadline
                 : primaryEquipment
                 ? `Here is your ${primaryMeta.brand || ""} ${primaryMeta.tonnage ? `${primaryMeta.tonnage}-ton` : ""} comfort proposal from ${job?.assigned_to || "your tech"}.`
                 : `Here's Estimate ${cart.estimate_number || ""} from ${job?.assigned_to || "your tech"}. Review the options and choose how you'd like to proceed.`}
@@ -301,23 +303,32 @@ export default function CustomerCart() {
         )}
 
         {isPresentMode && (
-          <Card className="overflow-hidden border-primary/20 bg-background">
-            <div className="bg-primary text-primary-foreground px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Presentation mode</p>
-              <h2 className="mt-1 text-xl font-bold">Comfort, reliability, peace of mind, efficiency</h2>
+          <Card className="overflow-hidden border-primary/20 bg-background shadow-sm">
+            <div className="bg-primary px-4 py-4 text-primary-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Decision guide</p>
+              <h2 className="mt-1 text-xl font-bold">Clear enough to decide without knowing HVAC.</h2>
+              <p className="mt-1 text-sm text-primary-foreground/80">
+                We keep the technical proof attached, but the decision starts with what matters to your family.
+              </p>
             </div>
-            <div className="grid gap-3 p-4 sm:grid-cols-4">
-              {[
-                ["Comfort", "Better temperature control and less sticky air."],
-                ["Reliability", "Matched equipment with documented performance."],
-                ["Peace of mind", "Warranty and rebate paperwork support."],
-                ["Efficiency", "Clear energy numbers and payment options."],
-              ].map(([title, body]) => (
-                <div key={title} className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-sm font-semibold text-foreground">{title}</p>
-                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{body}</p>
+            <div className="grid gap-3 p-4 md:grid-cols-3">
+              {[decisionStory.whatWeFound, decisionStory.whyNow, decisionStory.riskIfWaiting].map((card) => (
+                <div key={card.title} className="rounded-lg border bg-muted/20 p-3">
+                  <p className="text-sm font-semibold text-foreground">{card.title}</p>
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{card.body}</p>
                 </div>
               ))}
+            </div>
+            <div className="border-t bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What this option is meant to protect</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {decisionStory.benefits.map((benefit) => (
+                  <div key={`${benefit.title}-${benefit.body}`} className="rounded-lg border bg-background p-3">
+                    <p className="text-sm font-semibold text-foreground">{benefit.title}</p>
+                    <p className="mt-1 text-xs leading-snug text-muted-foreground">{benefit.body}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
         )}
