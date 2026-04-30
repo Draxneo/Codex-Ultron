@@ -571,10 +571,40 @@ function actionItemTitle(item: any, stepTitle: string) {
   return item.title || stepTitle;
 }
 
+function actionItemJobId(item: any) {
+  const metadata = (item.metadata || {}) as any;
+  return item.job_id || item.related_job_id || metadata.job_id || metadata.related_job_id || metadata.target_job_id || null;
+}
+
+function actionItemWorkflowType(item: any): WorkflowType {
+  const metadata = (item.metadata || {}) as any;
+  const category = normalized(item.category);
+  const explicitType = normalized(metadata.workflow_type || metadata.job_type || item.workflow_type || item.job_type);
+  if (explicitType === "install") return "install";
+  if (explicitType === "estimate") return "estimate";
+  if (explicitType === "lead") return "lead";
+  if (explicitType === "intake") return "intake";
+  if (["tech_field_update", "tech_finding_review", "dispatch_callback"].includes(category)) return "service";
+  if (actionItemJobId(item)) return "service";
+  const sourceUrl = typeof metadata.source_url === "string" ? metadata.source_url : "";
+  if (sourceUrl.startsWith("/dispatch") || sourceUrl.startsWith("/jobs")) return "service";
+  return "intake";
+}
+
+function actionItemRoute(item: any, phone: string | null) {
+  const metadata = (item.metadata || {}) as any;
+  const sourceUrl = typeof metadata.source_url === "string" ? metadata.source_url : "";
+  if (sourceUrl.startsWith("/")) return sourceUrl;
+  const jobId = actionItemJobId(item);
+  if (jobId) return `/jobs/${jobId}`;
+  return phone ? `/intake?phone=${encodeURIComponent(phone)}` : "/intake";
+}
+
 export function buildActionItemWorkflowCard(item: any, templateOverrides?: WorkflowTemplateMap): WorkflowNowCard | null {
   if (!item || normalized(item.status || "pending") !== "pending") return null;
 
-  const template = templatesWithOverrides(templateOverrides).intake;
+  const workflowType = actionItemWorkflowType(item);
+  const template = templatesWithOverrides(templateOverrides)[workflowType] || templatesWithOverrides(templateOverrides).intake;
   const key = actionItemStep(item);
   const stepIndex = Math.max(0, template.findIndex((step) => step.key === key));
   const step = template[stepIndex] || template[3];
@@ -590,7 +620,7 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
 
   return {
     id: `action-${item.id}`,
-    workflowType: "intake",
+    workflowType,
     recordType: "action",
     recordId: item.id,
     recordNumber: String(item.id).slice(0, 8),
@@ -602,10 +632,10 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
     source: item.category,
     description,
     title: actionItemTitle(item, step.title),
-    subtitle: item.title || `Jarvis updated this live intake card from ${lastEvidence}.`,
+    subtitle: item.title || `Jarvis updated this ${workflowType} workflow card from ${lastEvidence}.`,
     owner: step.owner,
     group: actionItemGroup(item),
-    route: phone ? `/intake?phone=${encodeURIComponent(phone)}` : "/intake",
+    route: actionItemRoute(item, phone),
     stepNumber: stepIndex + 1,
     totalSteps: template.length,
     dueAt: item.created_at,
@@ -613,7 +643,7 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
     stuckReason: item.suggested_action || item.description || "Jarvis needs a human to approve the next move.",
     jarvisRecommendation:
       "Review the latest call/text context. If the customer changed direction, this same card should be updated instead of creating a duplicate.",
-    tags: ["intake", item.category, item.priority, lastEvidence].filter(Boolean),
+    tags: [workflowType, item.category, item.priority, lastEvidence].filter(Boolean),
     actionLinks: resolveActionLinks(step, item),
   };
 }

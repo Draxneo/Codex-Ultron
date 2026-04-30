@@ -500,7 +500,7 @@ export default function CustomerDetail() {
                   </Button>
                 </ClickToCall>
               )}
-              <Button className="gap-2" onClick={() => navigate(`/intake?customerId=${id}`)}>
+              <Button className="gap-2" onClick={() => navigate(primaryPhone ? `/intake?phone=${encodeURIComponent(primaryPhone)}` : "/intake")}>
                 <Sparkles className="h-4 w-4" />
                 Open in Intake
               </Button>

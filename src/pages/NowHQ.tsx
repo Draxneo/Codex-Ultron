@@ -365,7 +365,7 @@ export default function NowHQ() {
         .select("*")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -382,7 +382,7 @@ export default function NowHQ() {
         .in("alert_type", ["blocked", "escalated"])
         .is("resolved_at", null)
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -396,7 +396,7 @@ export default function NowHQ() {
         .not("status", "in", '("converted","lost","closed")')
         .gte("created_at", NOW_HQ_LAUNCH_CUTOFF)
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -411,7 +411,7 @@ export default function NowHQ() {
         .not("completed_at", "is", null)
         .gte("completed_at", NOW_HQ_LAUNCH_CUTOFF)
         .order("completed_at", { ascending: false })
-        .limit(80);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -677,7 +677,7 @@ export default function NowHQ() {
     { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },
   ].filter((item) => item.active);
   const humanCards = cards.filter(isHumanNeeded);
-  const firstCard = humanCards[0] || cards[0] || null;
+  const firstCard = humanCards[0] || null;
   const remainingCards = firstCard ? humanCards.filter((card) => card.id !== firstCard.id).slice(0, 12) : [];
   const jarvisWatching = Math.max(0, cards.length - humanCards.length);
   const counts = {

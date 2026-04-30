@@ -2,6 +2,8 @@
 
 These are the current rules for rebuilding UltraOffice2.0. Keep this file tight. If a future idea does not support these rules, it should not become core UI.
 
+The plain-English project doctrine lives in `docs/ultraoffice20-north-star.md`. That document is the north star; this file expands it into product rules.
+
 ## 1. Company Brains
 
 UltraOffice is built around the real work loops of the company.
@@ -19,7 +21,7 @@ Intake HQ understands the customer and the reason for contact.
 
 Intake owns calls, SMS, customer matching, AI-filled intake forms, address verification, booking/estimate intent, and human-approved action buttons.
 
-Calls, customer texts, and urgent team texts should surface in Intake HQ instead of a duplicate global slide-out. Deeper phone, SMS, team chat, and JARVIS tools can exist as full pages, but Intake is the operational triage surface.
+Calls and customer texts should surface in Intake HQ instead of a duplicate global slide-out. Team communication belongs in Team HQ; operational follow-up created from team context belongs in Now HQ as an action card. Deeper phone, SMS, team chat, and JARVIS tools can exist as full pages, but Intake is the customer communication triage surface.
 
 ### Operations Brain: When, Where
 

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 const GO_LIVE = '2026-03-24';
-export const GLOBAL_ACTION_NEEDED_ROUTE = "/copilot";
+export const GLOBAL_ACTION_NEEDED_ROUTE = "/now";
 
 function useAttentionCounts() {
   return useQuery({
@@ -333,27 +333,27 @@ export function useAttentionData() {
   }
 
   const items: AttentionItem[] = [
-    { label: "Ready to Schedule", count: counts?.readyToSchedule || 0,  icon: CalendarX,      color: "text-warm",         bg: "bg-warm/10",          route: "/jobs/backlog",             severity: "critical" },
-    { label: "Waiting on Parts",  count: counts?.waitingOnParts || 0,   icon: Receipt,        color: "text-orange-600",   bg: "bg-orange-600/10",    route: "/jobs/backlog",             severity: "warning" },
-    { label: "Parts Ready",       count: counts?.partsReady || 0,       icon: Receipt,        color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/?attention=parts_ready",   severity: "info" },
-    { label: "Missing Site Data", count: counts?.missingSite || 0,      icon: Camera,         color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/?attention=missing_site",  severity: "warning" },
-    { label: "Past Due",          count: counts?.overdue || 0,          icon: AlertTriangle,  color: "text-overdue",      bg: "bg-overdue/10",      route: "/?attention=overdue",       severity: "critical" },
-    { label: "Follow-Up",         count: followUpCount,                    icon: MessageSquare,  color: "text-sky",          bg: "bg-sky/10",          route: "/copilot",                  severity: "warning" },
-    { label: "Deposits",          count: counts?.deposits || 0,         icon: CreditCard,     color: "text-amber-600",    bg: "bg-amber-600/10",    route: "/?attention=deposits",      severity: "warning" },
-    { label: "Finance",           count: counts?.finance || 0,          icon: FileText,       color: "text-purple-600",   bg: "bg-purple-600/10",   route: "/?attention=finance",       severity: "warning" },
-    { label: "Invoices",          count: counts?.invoices || 0,         icon: FileCheck,      color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/?attention=invoices",      severity: "warning" },
+    { label: "Ready to Schedule", count: counts?.readyToSchedule || 0,  icon: CalendarX,      color: "text-warm",         bg: "bg-warm/10",          route: "/now",                      severity: "critical" },
+    { label: "Waiting on Parts",  count: counts?.waitingOnParts || 0,   icon: Receipt,        color: "text-orange-600",   bg: "bg-orange-600/10",    route: "/now",                      severity: "warning" },
+    { label: "Parts Ready",       count: counts?.partsReady || 0,       icon: Receipt,        color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/now",                      severity: "info" },
+    { label: "Missing Site Data", count: counts?.missingSite || 0,      icon: Camera,         color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/now",                      severity: "warning" },
+    { label: "Past Due",          count: counts?.overdue || 0,          icon: AlertTriangle,  color: "text-overdue",      bg: "bg-overdue/10",      route: "/now",                      severity: "critical" },
+    { label: "Follow-Up",         count: followUpCount,                    icon: MessageSquare,  color: "text-sky",          bg: "bg-sky/10",          route: "/now",                      severity: "warning" },
+    { label: "Deposits",          count: counts?.deposits || 0,         icon: CreditCard,     color: "text-amber-600",    bg: "bg-amber-600/10",    route: "/now",                      severity: "warning" },
+    { label: "Finance",           count: counts?.finance || 0,          icon: FileText,       color: "text-purple-600",   bg: "bg-purple-600/10",   route: "/now",                      severity: "warning" },
+    { label: "Invoices",          count: counts?.invoices || 0,         icon: FileCheck,      color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/now",                      severity: "warning" },
     { label: "Unpaid 7d+",        count: counts?.unpaid || 0,           icon: Receipt,        color: "text-destructive",  bg: "bg-destructive/10",  route: "/payments",                 severity: "critical" },
-    { label: "Warranty",          count: counts?.warranty || 0,         icon: Shield,         color: "text-blue-600",     bg: "bg-blue-600/10",     route: "/?attention=warranty",      severity: "warning" },
-    { label: "Inspection",        count: counts?.inspection || 0,       icon: Receipt,        color: "text-orange-600",   bg: "bg-orange-600/10",   route: "/?attention=inspection",    severity: "warning" },
-    { label: "Tech Proposals",    count: counts?.techProposals || 0,    icon: ClipboardCheck, color: "text-violet-600",   bg: "bg-violet-600/10",   route: "/copilot",                  severity: "critical" },
+    { label: "Warranty",          count: counts?.warranty || 0,         icon: Shield,         color: "text-blue-600",     bg: "bg-blue-600/10",     route: "/now",                      severity: "warning" },
+    { label: "Inspection",        count: counts?.inspection || 0,       icon: Receipt,        color: "text-orange-600",   bg: "bg-orange-600/10",   route: "/now",                      severity: "warning" },
+    { label: "Tech Proposals",    count: counts?.techProposals || 0,    icon: ClipboardCheck, color: "text-violet-600",   bg: "bg-violet-600/10",   route: "/now",                      severity: "critical" },
     
-    { label: "Unmatched",         count: counts?.unmatchedInvoices || 0, icon: FileQuestion,   color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "warning" },
-    { label: "SMS in Queue",      count: counts?.pendingSms || 0,       icon: MessageCircle,  color: "text-green-500",    bg: "bg-green-500/10",    route: "/copilot",                  severity: "warning" },
+    { label: "Unmatched",         count: counts?.unmatchedInvoices || 0, icon: FileQuestion,   color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/now",                      severity: "warning" },
+    { label: "SMS in Queue",      count: counts?.pendingSms || 0,       icon: MessageCircle,  color: "text-green-500",    bg: "bg-green-500/10",    route: "/now",                      severity: "warning" },
     { label: "Customer Decisions",count: counts?.customerResponses || 0,icon: ThumbsUp,       color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/quick-quote",              severity: "info" },
     { label: "Comfort Club",      count: activeAgreementsCount,            icon: Crown,          color: "text-teal-600",     bg: "bg-teal-600/10",     route: "/agreements",               severity: "info",   alwaysShow: true },
     { label: "Payment Failures",  count: counts?.paymentFailed || 0,    icon: CreditCard,     color: "text-destructive",  bg: "bg-destructive/10",  route: "/payments",                 severity: "critical" },
-    { label: "Action Items",      count: counts?.actionItems || 0,      icon: Bot,            color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "critical" },
-    { label: "New Leads",         count: counts?.newLeads || 0,         icon: User,           color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/copilot",                  severity: "critical", alwaysShow: true },
+    { label: "Action Items",      count: counts?.actionItems || 0,      icon: Bot,            color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/now",                      severity: "critical" },
+    { label: "New Leads",         count: counts?.newLeads || 0,         icon: User,           color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/now",                      severity: "critical", alwaysShow: true },
     
   ];
 
@@ -361,13 +361,13 @@ export function useAttentionData() {
   const hudItems = [
     // Communication-first: these are the app's primary value as HCP overlay
     { key: "unread_sms",       icon: MessageCircle, label: "Unread SMS",          count: counts?.unreadSms || 0,        color: "text-complete",     bgClass: "from-complete/10 to-card",   borderClass: "border-complete/30", route: "/sms" },
-    { key: "ai_handoff",       icon: Bot,           label: "AI Needs Handoff",    count: counts?.aiHandoff || 0,        color: "text-today",        bgClass: "from-today/10 to-card",      borderClass: "border-today/30",    route: "/copilot" },
-    { key: "sms_outbox",       icon: MessageCircle, label: "SMS in Queue",        count: counts?.pendingSms || 0,       color: "text-green-500",    bgClass: "from-green-500/10 to-card",  borderClass: "border-green-500/30", route: "/copilot" },
+    { key: "ai_handoff",       icon: Bot,           label: "AI Needs Handoff",    count: counts?.aiHandoff || 0,        color: "text-today",        bgClass: "from-today/10 to-card",      borderClass: "border-today/30",    route: "/now" },
+    { key: "sms_outbox",       icon: MessageCircle, label: "SMS in Queue",        count: counts?.pendingSms || 0,       color: "text-green-500",    bgClass: "from-green-500/10 to-card",  borderClass: "border-green-500/30", route: "/now" },
     // Operational items — secondary in HCP overlay mode
-    { key: "overdue",          icon: AlertTriangle, label: "Past Due",            count: counts?.overdue || 0,          color: "text-overdue",      bgClass: "from-overdue/10 to-card",    borderClass: "border-overdue/30",  route: "/?attention=overdue" },
-    { key: "ready_schedule",   icon: CalendarX,     label: "Ready to Schedule",   count: counts?.readyToSchedule || 0,  color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/jobs/backlog" },
-    { key: "waiting_parts",    icon: Receipt,       label: "Waiting on Parts",    count: counts?.waitingOnParts || 0,   color: "text-orange-600",   bgClass: "from-orange-600/10 to-card", borderClass: "border-orange-600/30", route: "/jobs/backlog" },
-    { key: "followup",         icon: MessageSquare, label: "Follow-Up",           count: followUpCount,                    color: "text-sky",          bgClass: "from-sky/10 to-card",        borderClass: "border-sky/30",      route: "/copilot" },
+    { key: "overdue",          icon: AlertTriangle, label: "Past Due",            count: counts?.overdue || 0,          color: "text-overdue",      bgClass: "from-overdue/10 to-card",    borderClass: "border-overdue/30",  route: "/now" },
+    { key: "ready_schedule",   icon: CalendarX,     label: "Ready to Schedule",   count: counts?.readyToSchedule || 0,  color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/now" },
+    { key: "waiting_parts",    icon: Receipt,       label: "Waiting on Parts",    count: counts?.waitingOnParts || 0,   color: "text-orange-600",   bgClass: "from-orange-600/10 to-card", borderClass: "border-orange-600/30", route: "/now" },
+    { key: "followup",         icon: MessageSquare, label: "Follow-Up",           count: followUpCount,                    color: "text-sky",          bgClass: "from-sky/10 to-card",        borderClass: "border-sky/30",      route: "/now" },
     { key: "payment_failed",   icon: CreditCard,    label: "Payment Failures",    count: counts?.paymentFailed || 0,   color: "text-destructive",  bgClass: "from-destructive/10 to-card", borderClass: "border-destructive/30", route: "/payments" },
     { key: "expiring",         icon: Shield,        label: "Expiring Agreements", count: expiringCount,                    color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/agreements" },
   ];
