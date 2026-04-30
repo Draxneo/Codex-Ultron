@@ -349,9 +349,9 @@ export function useAttentionData() {
     
     { label: "Unmatched",         count: counts?.unmatchedInvoices || 0, icon: FileQuestion,   color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "warning" },
     { label: "SMS in Queue",      count: counts?.pendingSms || 0,       icon: MessageCircle,  color: "text-green-500",    bg: "bg-green-500/10",    route: "/copilot",                  severity: "warning" },
-    { label: "Customer Decisions",count: counts?.customerResponses || 0,icon: ThumbsUp,       color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/estimates",                severity: "info" },
+    { label: "Customer Decisions",count: counts?.customerResponses || 0,icon: ThumbsUp,       color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/quick-quote",              severity: "info" },
     { label: "Comfort Club",      count: activeAgreementsCount,            icon: Crown,          color: "text-teal-600",     bg: "bg-teal-600/10",     route: "/agreements",               severity: "info",   alwaysShow: true },
-    { label: "Payment Failures",  count: counts?.paymentFailed || 0,    icon: CreditCard,     color: "text-destructive",  bg: "bg-destructive/10",  route: "/jobs?filter=payment_failed", severity: "critical" },
+    { label: "Payment Failures",  count: counts?.paymentFailed || 0,    icon: CreditCard,     color: "text-destructive",  bg: "bg-destructive/10",  route: "/payments",                 severity: "critical" },
     { label: "Action Items",      count: counts?.actionItems || 0,      icon: Bot,            color: "text-amber-500",    bg: "bg-amber-500/10",    route: "/copilot",                  severity: "critical" },
     { label: "New Leads",         count: counts?.newLeads || 0,         icon: User,           color: "text-emerald-600",  bg: "bg-emerald-600/10",  route: "/copilot",                  severity: "critical", alwaysShow: true },
     
@@ -368,7 +368,7 @@ export function useAttentionData() {
     { key: "ready_schedule",   icon: CalendarX,     label: "Ready to Schedule",   count: counts?.readyToSchedule || 0,  color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/jobs/backlog" },
     { key: "waiting_parts",    icon: Receipt,       label: "Waiting on Parts",    count: counts?.waitingOnParts || 0,   color: "text-orange-600",   bgClass: "from-orange-600/10 to-card", borderClass: "border-orange-600/30", route: "/jobs/backlog" },
     { key: "followup",         icon: MessageSquare, label: "Follow-Up",           count: followUpCount,                    color: "text-sky",          bgClass: "from-sky/10 to-card",        borderClass: "border-sky/30",      route: "/copilot" },
-    { key: "payment_failed",   icon: CreditCard,    label: "Payment Failures",    count: counts?.paymentFailed || 0,   color: "text-destructive",  bgClass: "from-destructive/10 to-card", borderClass: "border-destructive/30", route: "/jobs?filter=payment_failed" },
+    { key: "payment_failed",   icon: CreditCard,    label: "Payment Failures",    count: counts?.paymentFailed || 0,   color: "text-destructive",  bgClass: "from-destructive/10 to-card", borderClass: "border-destructive/30", route: "/payments" },
     { key: "expiring",         icon: Shield,        label: "Expiring Agreements", count: expiringCount,                    color: "text-warm",         bgClass: "from-warm/10 to-card",       borderClass: "border-warm/30",     route: "/agreements" },
   ];
 

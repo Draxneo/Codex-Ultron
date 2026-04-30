@@ -14,13 +14,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package, BarChart3 } from "lucide-react";
+import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package, BarChart3, ListChecks } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavOrder } from "@/hooks/useNavOrder";
 
 const NAV_META: Record<string, { icon: any; label: string }> = {
   "/": { icon: CalendarDays, label: "Schedule" },
+  "/now": { icon: ListChecks, label: "Now HQ" },
   "/phone": { icon: Phone, label: "Phone" },
   "/sms": { icon: MessageSquare, label: "SMS" },
   "/team": { icon: Users, label: "Team Chat" },

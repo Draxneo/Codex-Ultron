@@ -537,10 +537,10 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                               </span>
                             )}
                             {visibleFields?.customerTags !== false && <span className={cn(
-                              "shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
+                              "inline-flex shrink-0 items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
                               cardSolidColors[item.job_type || "service"]
                             )}>
-                              {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV"}
+                              {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? <Phone className="h-3 w-3" aria-label="Phone call" /> : "SERV"}
                             </span>}
                             {number && visibleFields?.jobNumber !== false && (
                               <span className="text-[11px] text-foreground/80 font-semibold truncate">{number}</span>
@@ -644,10 +644,10 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
                           </span>
                         )}
                         {visibleFields?.customerTags !== false && <span className={cn(
-                          "shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
+                          "inline-flex shrink-0 items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide",
                           cardSolidColors[item.job_type || "service"]
                         )}>
-                          {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV"}
+                          {item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? <Phone className="h-3 w-3" aria-label="Phone call" /> : "SERV"}
                         </span>}
                         {number && visibleFields?.jobNumber !== false && (
                           <span className="text-[11px] text-foreground/80 font-semibold truncate">{number}</span>

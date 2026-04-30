@@ -7,7 +7,6 @@ import {
   FileText,
   Headphones,
   LineChart,
-  Search,
   UserRound,
   Users,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import { ModuleWorkbench } from "@/components/workbench/ModuleWorkbench";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const REPORT_GROUPS = [
@@ -84,24 +82,17 @@ export default function Reports() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search reports"
+      />
       <main className="h-[calc(100vh-3rem)] min-h-0">
         <ModuleWorkbench
           title="Reporting"
           eyebrow="Business intelligence"
           description="Find the operational reports the office checks every day."
           icon={<BarChart3 className="h-4.5 w-4.5" />}
-          search={
-            <div className="relative w-full sm:w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search reports"
-                className="h-9 pl-8"
-              />
-            </div>
-          }
           primaryAction={
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link to="/admin?section=reports">

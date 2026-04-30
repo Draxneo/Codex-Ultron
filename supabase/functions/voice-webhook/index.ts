@@ -394,19 +394,12 @@ Deno.serve(async (req) => {
       .from("company_settings")
       .select("key, value")
       .in("key", [
-        "call_forwarding_enabled",
-        "call_forwarding_number",
         "live_transcription_enabled",
         "ivr_test_mode",
       ]);
     const csMap: Record<string, string> = {};
     for (const r of (fwdRows || []) as any[]) csMap[r.key] = r.value;
 
-    // Retired global "forward all calls" override. Availability now belongs to
-    // IVR department routing and per-person Away from Desk state so busy callers
-    // can overflow to the answering service predictably.
-    const callForwardingEnabled = false;
-    const callForwardingNumber = csMap["call_forwarding_number"] || "";
     const liveTranscribeEnabled =
       csMap["live_transcription_enabled"] === "true";
     const ivrTestMode = csMap["ivr_test_mode"] === "true";
@@ -423,103 +416,6 @@ Deno.serve(async (req) => {
         supabaseUrl.replace("https://", "")
       }/functions/v1/live-transcribe" track="inbound_track" /></Start>`
       : "";
-
-    // ── CALL FORWARDING CHECK (hours-aware) ──
-    // Only forward during main business hours; after hours let normal IVR/VM handle it
-    if (callForwardingEnabled && callForwardingNumber) {
-      // Load IVR config to check business hours
-      const { data: fwdIvrConfig } = await supabase.from("ivr_config").select(
-        "business_hours_start, business_hours_end, business_days",
-      ).limit(1).maybeSingle();
-      let withinBusinessHours = true; // default to forwarding if no hours configured
-      if (
-        fwdIvrConfig?.business_hours_start &&
-        fwdIvrConfig?.business_hours_end && fwdIvrConfig?.business_days
-      ) {
-        const c = getCentralNow();
-        const hour = c.getUTCHours();
-        const minute = c.getUTCMinutes();
-        const currentDay = c.getUTCDay();
-        const days: number[] = fwdIvrConfig.business_days;
-        const [startH, startM] = fwdIvrConfig.business_hours_start.split(":")
-          .map(Number);
-        const [endH, endM] = fwdIvrConfig.business_hours_end.split(":").map(
-          Number,
-        );
-        const currentMinutes = hour * 60 + minute;
-        withinBusinessHours = days.includes(currentDay) &&
-          currentMinutes >= startH * 60 + startM &&
-          currentMinutes < endH * 60 + endM;
-      }
-
-      if (withinBusinessHours) {
-        console.log(
-          `CALL FORWARDING ACTIVE (within business hours) — dialing ${callForwardingNumber}`,
-        );
-        await logSystemTrace({
-          sourceType: "voice",
-          sourceName: "voice-webhook",
-          eventKind: "route_selected",
-          summary:
-            `Call forwarded to away-from-desk number ${callForwardingNumber}`,
-          reason: "call_forwarding_enabled",
-          severity: "warning",
-          traceGroup: callSid,
-          entityType: "call",
-          entityId: callSid,
-          callSid,
-          metadata: {
-            target_number: callForwardingNumber,
-            within_business_hours: true,
-          },
-        });
-        const twilioNumber = getTwilioCallerId() || to;
-        const statusCallbackUrlFwd =
-          `${supabaseUrl}/functions/v1/voice-status-callback`;
-        const voicemailUrlFwd =
-          `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${
-            encodeURIComponent(callSid)
-          }&From=${encodeURIComponent(from)}&ContactName=${
-            encodeURIComponent(contactName || "")
-          }&ContactType=${encodeURIComponent(contactType)}`;
-        return new Response(
-          `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  ${streamTwiml}
-  <Dial timeout="25" answerOnBridge="true" action="${escapeXml(voicemailUrlFwd)}" callerId="${
-            escapeXml(twilioNumber)
-          }" record="record-from-answer-dual" recordingStatusCallback="${
-            escapeXml(statusCallbackUrlFwd)
-          }" recordingStatusCallbackEvent="completed" statusCallback="${
-            escapeXml(statusCallbackUrlFwd)
-          }" statusCallbackEvent="initiated ringing answered completed">
-    <Number>${escapeXml(callForwardingNumber)}</Number>
-  </Dial>
-</Response>`,
-          {
-            headers: { ...corsHeaders, "Content-Type": "text/xml" },
-            status: 200,
-          },
-        );
-      } else {
-        console.log(
-          `CALL FORWARDING enabled but AFTER HOURS — skipping, using normal IVR flow`,
-        );
-        await logSystemTrace({
-          sourceType: "voice",
-          sourceName: "voice-webhook",
-          eventKind: "route_decision",
-          summary: "Call forwarding skipped",
-          reason: "after_hours",
-          severity: "info",
-          traceGroup: callSid,
-          entityType: "call",
-          entityId: callSid,
-          callSid,
-          metadata: { target_number: callForwardingNumber },
-        });
-      }
-    }
 
     // Load IVR config
     const { data: ivrConfig } = await supabase.from("ivr_config").select("*")
@@ -694,73 +590,18 @@ Deno.serve(async (req) => {
         "No IVR menu configured here — checking direct-routing availability before dialing",
       );
 
-      const { data: oooEmployees } = await supabase
-        .from("employees")
-        .select("name, ooo_enabled, ooo_forward_number")
-        .eq("is_active", true)
-        .eq("ooo_enabled", true);
-
-      const oooWithNumber = (oooEmployees || []).filter((e: any) =>
-        e.ooo_forward_number
-      );
-
-      if (oooWithNumber.length > 0) {
-        const twilioNumber = getTwilioCallerId() || to;
-        const dialCallerId = twilioNumber;
-
-        console.log(
-          `OOO active for ${
-            oooWithNumber.map((e: any) => e.name).join(", ")
-          } — forwarding`,
-        );
-        await logSystemTrace({
-          sourceType: "voice",
-          sourceName: "voice-webhook",
-          eventKind: "route_selected",
-          summary: `Forwarded to OOO number for ${
-            oooWithNumber.map((e: any) => e.name).join(", ")
-          }`,
-          reason: "ooo_forwarding",
-          severity: "warning",
-          traceGroup: callSid,
-          entityType: "call",
-          entityId: callSid,
-          callSid,
-          metadata: {
-            employees: oooWithNumber.map((e: any) => e.name),
-            forwards: oooWithNumber.map((e: any) => e.ooo_forward_number),
-          },
-        });
-        const numberTags = oooWithNumber.map((e: any) =>
-          `<Number>${escapeXml(e.ooo_forward_number)}</Number>`
-        ).join("\n    ");
-
-        return new Response(
-          `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  ${streamTwiml}
-  ${greetingTwiml(config.greeting_audio_url, config.greeting_text)}
-  <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
-            escapeXml(voicemailUrl)
-          }" callerId="${
-            escapeXml(dialCallerId)
-          }" record="record-from-answer-dual" recordingStatusCallback="${
-            escapeXml(statusCallbackUrl)
-          }" recordingStatusCallbackEvent="completed" statusCallback="${
-            escapeXml(statusCallbackUrl)
-          }" statusCallbackEvent="initiated ringing answered completed">
-    ${numberTags}
-  </Dial>
-</Response>`,
-          {
-            headers: { ...corsHeaders, "Content-Type": "text/xml" },
-            status: 200,
-          },
-        );
-      }
+      const preparedGeneralDialList = await buildDepartmentDialList(supabase, "general", {
+        callSid,
+        traceGroup: callSid,
+        sourceName: "voice-webhook",
+      });
 
       const generalForwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, "general");
-      if (generalForwardingNumbers.length > 0) {
+      if (
+        generalForwardingNumbers.length > 0 &&
+        preparedGeneralDialList.clientIdentities.length === 0 &&
+        preparedGeneralDialList.evaluation.reason !== "all_busy"
+      ) {
         console.log(`[voice-webhook] No-IVR path: forwarding to ${generalForwardingNumbers.length} general cell number(s)`);
         await logSystemTrace({
           sourceType: "voice",
@@ -807,13 +648,8 @@ Deno.serve(async (req) => {
       }
 
       // ── Department routing (no IVR menu): use 'general' department rules ──
-      // Skip anyone busy/away. If everyone unavailable → voicemail.
-      const { clientIdentities, chosenEmployees, evaluation } =
-        await buildDepartmentDialList(supabase, "general", {
-          callSid,
-          traceGroup: callSid,
-          sourceName: "voice-webhook",
-        });
+      // Skip anyone busy or whose Desk calls toggle is off. If everyone unavailable → voicemail.
+      const { clientIdentities, chosenEmployees, evaluation } = preparedGeneralDialList;
 
       if (clientIdentities.length === 0) {
         if (evaluation.reason === "all_busy" && overflowEnabled && overflowNumber && overflowOnBusy) {

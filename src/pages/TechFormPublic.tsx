@@ -68,10 +68,7 @@ export default function TechFormPublic() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  // Demo mode detection
-  const isDemo = token?.startsWith("demo_") ?? false;
-  const demoJobType = isDemo ? token!.replace("demo_", "") : null;
+  const isDemo = false;
 
   const [job, setJob] = useState<any>(null);
   const [employee, setEmployee] = useState<any>(null);
@@ -171,7 +168,6 @@ export default function TechFormPublic() {
   }, [techFormId, isOnline, flushQueue]);
 
   useEffect(() => {
-    if (isDemo) return;
     if (!navigator.geolocation) {
       setGeoStatus("error");
       return;
@@ -191,40 +187,10 @@ export default function TechFormPublic() {
       () => setGeoStatus("denied"),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [techFormId, isDemo]);
+  }, [techFormId]);
 
   useEffect(() => {
-    if (!isDemo || !demoJobType) return;
-    const mockJob = {
-      id: "demo",
-      hcp_job_number: "DEMO-001",
-      job_number: "DEMO-001",
-      customer_name: "Jane Smith (Demo)",
-      job_type: demoJobType,
-      address: "123 Demo Street, San Antonio, TX 78205",
-      customer_phone: "(210) 555-0100",
-      system_type: "gas_heat",
-      description: `Demo ${demoJobType} job for form preview`,
-      brand: "Trane",
-      tonnage: 3,
-    };
-    setJob(mockJob);
-    setEmployee({ id: "demo", name: "Demo Tech", role: "tech" });
-    setTechFormId("demo");
-
-    supabase
-      .from("tech_form_fields")
-      .select("*")
-      .eq("job_type", demoJobType)
-      .order("sort_order")
-      .then(({ data }) => {
-        setFields((data as FormField[]) || []);
-        setLoading(false);
-      });
-  }, [isDemo, demoJobType]);
-
-  useEffect(() => {
-    if (!token || isDemo) return;
+    if (!token) return;
     const sepIdx = token.indexOf("__");
     if (sepIdx < 1) { setLoading(false); return; }
     const jobId = token.slice(0, sepIdx);
@@ -232,7 +198,7 @@ export default function TechFormPublic() {
 
     Promise.all([
       supabase.from("jobs").select("*").eq("id", jobId).maybeSingle(),
-      supabase.from("employees").select("*").eq("id", empId).single(),
+      supabase.from("employees").select("id, name, role, phone, email, is_active").eq("id", empId).single(),
     ]).then(async ([jobRes, empRes]) => {
       let jobData = jobRes.data;
 
@@ -424,7 +390,7 @@ export default function TechFormPublic() {
 
       setLoading(false);
     });
-  }, [isDemo, token]);
+  }, [token]);
 
   const visibleFields = fields.filter(f => {
     if (!f.condition) return true;
@@ -472,10 +438,6 @@ export default function TechFormPublic() {
 
   const saveField = useCallback(async (fieldId: string, val: string) => {
     if (!techFormId || !val.trim()) return;
-    if (isDemo) {
-      setFieldStatuses(prev => ({ ...prev, [fieldId]: "saved" }));
-      return;
-    }
     setFieldStatuses(prev => ({ ...prev, [fieldId]: "saving" }));
     try {
       await supabase
@@ -498,7 +460,7 @@ export default function TechFormPublic() {
       setFieldStatuses(prev => ({ ...prev, [fieldId]: "error" }));
       queueSave(fieldId, val);
     }
-  }, [techFormId, isDemo, queueSave, fields, job]);
+  }, [techFormId, queueSave, fields, job]);
 
   const handleTextChange = (fieldId: string, val: string) => {
     const newValues = { ...values, [fieldId]: val };

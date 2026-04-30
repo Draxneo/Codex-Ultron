@@ -7,6 +7,7 @@ import {
   buildJarvisIntentMetadata,
   classifyCustomerContactIntent,
 } from "../_shared/jarvisContactIntent.ts";
+import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 
 
 
@@ -951,7 +952,7 @@ INTENT EXTRACTION:
             performed_by: "JARVIS",
             details: baseFollowUpNote,
           });
-          await supabase.from("action_items").insert({
+          await upsertLiveActionItem(supabase, {
             title: customerName
               ? `${customerName} called about active job ${jobRef}`
               : `Caller has active job ${jobRef} — review notes`,
@@ -987,7 +988,7 @@ INTENT EXTRACTION:
               body: baseFollowUpNote,
             });
           }
-          await supabase.from("action_items").insert({
+          await upsertLiveActionItem(supabase, {
             title: customerName
               ? `${customerName} called about estimate ${estimateRef}`
               : `Caller has estimate ${estimateRef} - review notes`,
@@ -1012,7 +1013,7 @@ INTENT EXTRACTION:
           shouldInjectBookingCard = false;
           console.log(`Call ${call_id}: SUPPRESSED booking - active estimate ${activeEstimate.id}; created follow_up instead`);
         } else if (needsPropertySelection && shouldCreateCallBooking) {
-          await supabase.from("action_items").insert({
+          await upsertLiveActionItem(supabase, {
             title: customerName
               ? `${customerName} called - choose service property`
               : `Caller has multiple properties - choose service property`,
@@ -1048,7 +1049,7 @@ INTENT EXTRACTION:
           const aiTitle = customerName
             ? `New ${extracted.service_type || "service"} request from ${customerName}`
             : `New ${extracted.service_type || "service"} request from ${call.phone_number}`;
-          await supabase.from("action_items").insert({
+          await upsertLiveActionItem(supabase, {
             title: aiTitle,
             description: extracted.problem_description || "Booking detected from phone call",
             category: "new_appointment",
@@ -1081,7 +1082,7 @@ INTENT EXTRACTION:
           });
           console.log(`Call ${call_id}: action_item created for booking (early path) — date=${extracted.scheduled_date || "none"}, time=${extracted.scheduled_time || "none"}, tech=Jonathan Carnes`);
         } else if (intentDecision.intent !== "general_question" && intentDecision.intent !== "unknown") {
-          await supabase.from("action_items").insert({
+          await upsertLiveActionItem(supabase, {
             title: customerName
               ? `${customerName} called - ${intentDecision.intent.replaceAll("_", " ")}`
               : `Caller ${call.phone_number} - ${intentDecision.intent.replaceAll("_", " ")}`,

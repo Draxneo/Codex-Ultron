@@ -280,7 +280,7 @@ export function SmsContactCard({ conversation, isExpanded, onToggle, sending, on
                 showLabel
                 hideOnMobile={false}
                 autoStopOnSilence={false}
-                provider="openai"
+                context="sms"
                 title="Dictate message"
                 onTranscript={(text) => {
                   const el = bodyInputRef.current;

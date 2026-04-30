@@ -29,7 +29,13 @@ export function addToRecent(item: SearchResult) {
   localStorage.setItem(RECENT_KEY, JSON.stringify([item, ...prev].slice(0, 5)));
 }
 
-export function SmartSearchBar() {
+type SmartSearchBarProps = {
+  value?: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+};
+
+export function SmartSearchBar({ value, onChange, placeholder = "Search jobs, estimates, customers..." }: SmartSearchBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -37,6 +43,7 @@ export function SmartSearchBar() {
   const [recent, setRecent] = useState<SearchResult[]>([]);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const controlled = typeof value === "string" && !!onChange;
 
   useEffect(() => {
     if (open) setRecent(getRecent());
@@ -95,6 +102,21 @@ export function SmartSearchBar() {
     debounceRef.current = setTimeout(() => search(val), 300);
   };
 
+  if (controlled) {
+    return (
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input
+          type="text"
+          placeholder={placeholder}
+          className="flex h-9 w-64 rounded-md border border-border/50 bg-muted/50 px-3 py-2 pl-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
+    );
+  }
+
   const go = (item: SearchResult) => {
     addToRecent(item);
     setOpen(false);
@@ -120,7 +142,7 @@ export function SmartSearchBar() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
-            placeholder="Search jobs, estimates, customers..."
+            placeholder={placeholder}
             className="flex h-9 w-64 rounded-md border border-border/50 bg-muted/50 px-3 py-2 pl-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             value={query}
             onChange={e => handleInput(e.target.value)}

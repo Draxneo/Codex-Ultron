@@ -33,8 +33,10 @@ import TechMySchedule from "./pages/TechMySchedule";
 import TechJobDetail from "./pages/TechJobDetail";
 import TechJobCart from "./pages/TechJobCart";
 import TechCustomerDetail from "./pages/TechCustomerDetail";
-import Jobs from "./pages/Jobs";
 import ScheduleV2 from "./pages/ScheduleV2";
+import DispatchCalendar from "./pages/DispatchCalendar";
+import NowHQ from "./pages/NowHQ";
+import WorkflowMaps from "./pages/WorkflowMaps";
 import OperationsDeskV2 from "./pages/OperationsDeskV2";
 import JobDetail from "./pages/JobDetail";
 import RecordDocument from "./pages/RecordDocument";
@@ -91,7 +93,6 @@ import NotFound from "./pages/NotFound";
 import IvrBuilder from "./pages/IvrBuilder";
 import CallRoutingSettings from "./pages/CallRoutingSettings";
 import Leads from "./pages/Leads";
-import RepairCatalog from "./pages/RepairCatalog";
 import Catalog from "./pages/Catalog";
 import QuickQuote from "./pages/QuickQuote";
 import QuoteHeadquarters from "./pages/QuoteHeadquarters";
@@ -381,7 +382,10 @@ function AppRouter() {
         {/* Protected routes */}
         <Route path="/" element={<RoleAwareHome />} />
         <Route path="/intake" element={<ProtectedRoute><OperationsDeskV2 /></ProtectedRoute>} />
+        <Route path="/now" element={<ProtectedRoute><NowHQ /></ProtectedRoute>} />
+        <Route path="/workflows" element={<ProtectedRoute><WorkflowMaps /></ProtectedRoute>} />
         <Route path="/dispatch" element={<ProtectedRoute><ScheduleV2 /></ProtectedRoute>} />
+        <Route path="/dispatch/calendar" element={<ProtectedRoute><DispatchCalendar /></ProtectedRoute>} />
         <Route path="/operations-v2" element={<Navigate to="/intake" replace />} />
         <Route path="/dispatch-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/schedule-v2" element={<Navigate to="/dispatch" replace />} />
@@ -399,7 +403,7 @@ function AppRouter() {
         <Route path="/phone" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
         <Route path="/calls" element={<CallsRedirectComponent />} />
         
-        <Route path="/jobs" element={<Navigate to="/" replace />} />
+        <Route path="/jobs" element={<Navigate to="/dispatch" replace />} />
         <Route path="/jobs/backlog" element={<ProtectedRoute><UnscheduledJobs /></ProtectedRoute>} />
         <Route path="/jobs/follow-up" element={<Navigate to="/jobs/backlog" replace />} />
         <Route path="/jobs/queue" element={<Navigate to="/jobs/backlog" replace />} />
@@ -445,7 +449,7 @@ function AppRouter() {
 
         {/* Redirects */}
         
-        <Route path="/estimates" element={<Navigate to="/" replace />} />
+        <Route path="/estimates" element={<Navigate to="/quick-quote" replace />} />
         <Route path="/paysheet" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
 
         <Route path="*" element={<NotFound />} />

@@ -143,12 +143,12 @@ const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
 const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389}", "\u{1F440}", "\u{1F4A1}", "\u{1F4CC}"];
 
 const quickAccessItems = [
-  { label: "Jobs", href: "/jobs", icon: Briefcase },
-  { label: "Schedule", href: "/schedule", icon: CalendarDays },
-  { label: "SMS", href: "/sms", icon: Inbox },
+  { label: "Dispatch", href: "/dispatch", icon: CalendarDays },
+  { label: "Intake", href: "/intake", icon: Inbox },
   { label: "Customers", href: "/customers", icon: Users },
-  { label: "Estimates", href: "/estimates", icon: ClipboardList },
-  { label: "Phone", href: "/phone", icon: PhoneCall },
+  { label: "Quotes", href: "/quick-quote", icon: ClipboardList },
+  { label: "Catalog", href: "/catalog", icon: Briefcase },
+  { label: "Payments", href: "/payments", icon: PhoneCall },
 ];
 
 const usefulWebLinks = [
@@ -792,9 +792,13 @@ export default function TeamCommunications() {
             <div className="flex h-14 items-center justify-between border-b px-3">
               <div>
                 <h1 className="text-base font-semibold">Team HQ</h1>
-                <p className="text-xs text-muted-foreground">Chat, handoffs, calls, resources</p>
               </div>
-              <Badge variant={unreadNotifications.length ? "default" : "secondary"} className="gap-1">
+              <Badge
+                variant={unreadNotifications.length ? "default" : "secondary"}
+                className="gap-1"
+                title={`${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? "" : "s"}`}
+                aria-label={`${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? "" : "s"}`}
+              >
                 <Bell className="h-3 w-3" />
                 {unreadNotifications.length}
               </Badge>
@@ -803,9 +807,9 @@ export default function TeamCommunications() {
             <ScrollArea className="h-44 lg:h-[calc(100vh-6.5rem)]">
               <div className="grid gap-3 p-3 sm:grid-cols-3 lg:block lg:space-y-5">
                 <section>
-                  <div className="mb-2 flex items-center justify-between px-1">
+                  <div className="mb-2 flex items-center gap-1.5 px-1">
+                    <Hash className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rooms</p>
-                    <Hash className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                   <div className="space-y-1">
                     {sidebarLoading &&
@@ -816,6 +820,7 @@ export default function TeamCommunications() {
                       <button
                         key={conversation.id}
                         onClick={() => setSelectedConversationId(conversation.id)}
+                        aria-label={`Open ${conversationTitle(conversation)}`}
                         className={cn(
                           "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
                           selectedConversation?.id === conversation.id
@@ -846,6 +851,7 @@ export default function TeamCommunications() {
                       onClick={() => createRoom.mutate()}
                       disabled={!newRoomName.trim() || createRoom.isPending}
                       title="Create room"
+                      aria-label="Create room"
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
@@ -853,9 +859,9 @@ export default function TeamCommunications() {
                 </section>
 
                 <section>
-                  <div className="mb-2 flex items-center justify-between px-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct Messages</p>
-                    <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="mb-2 flex items-center gap-1.5 px-1">
+                    <UserRound className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct</p>
                   </div>
                   <div className="space-y-1">
                     {sidebarLoading &&
@@ -876,6 +882,7 @@ export default function TeamCommunications() {
                               ? setSelectedConversationId(conversation.id)
                               : getOrCreateDirect.mutate(employee.profile_id!)
                           }
+                          aria-label={`Open direct message with ${employee.name}`}
                           className={cn(
                             "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
                             selectedConversation?.id === conversation?.id
@@ -888,7 +895,9 @@ export default function TeamCommunications() {
                           </Avatar>
                           <span className="min-w-0 flex-1 truncate">{employee.name}</span>
                           {currentMemberIds.has(employee.profile_id!) && (
-                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" title="Available">
+                              <span className="sr-only">Available</span>
+                            </span>
                           )}
                         </button>
                       );
@@ -900,9 +909,9 @@ export default function TeamCommunications() {
                 </section>
 
                 <section>
-                  <div className="mb-2 flex items-center justify-between px-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent Calls</p>
-                    <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="mb-2 flex items-center gap-1.5 px-1">
+                    <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent</p>
                   </div>
                   <div className="space-y-1.5">
                     {calls.slice(0, 5).map((call) => {
@@ -911,13 +920,18 @@ export default function TeamCommunications() {
                         <button
                           key={call.id}
                           onClick={() => setSelectedConversationId(call.conversation_id)}
+                          aria-label={`Open ${conversation ? conversationTitle(conversation) : "audio call"} from ${messageTime(call.started_at)}`}
                           className="w-full rounded-md px-2.5 py-2 text-left text-xs hover:bg-muted"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate font-medium">
                               {conversation ? conversationTitle(conversation) : "Audio Call"}
                             </span>
-                            {!call.ended_at && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                            {!call.ended_at && (
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" title="Live">
+                                <span className="sr-only">Live</span>
+                              </span>
+                            )}
                           </div>
                           <p className="text-muted-foreground">{messageTime(call.started_at)}</p>
                         </button>
@@ -946,33 +960,29 @@ export default function TeamCommunications() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {activeCall && (
-                  <Badge variant="secondary" className="gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Audio Call
-                  </Badge>
-                )}
                 <Button
-                  size="sm"
-                  className="gap-2"
+                  size="icon"
+                  className="h-9 w-9"
                   onClick={() => startCall.mutate()}
                   disabled={!selectedConversation || startCall.isPending}
+                  title="Start call"
+                  aria-label="Start call"
                 >
                   <PhoneCall className="h-4 w-4" />
-                  <span className="hidden sm:inline">Start Call</span>
                 </Button>
               </div>
             </header>
 
             {activeCall && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100 sm:px-4">
-                <div className="min-w-0">
-                  <p className="font-medium">Audio Call is active</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <PhoneCall className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <p className="font-medium">Live call</p>
                   <p className="truncate text-xs opacity-80">{activeCall.call_url}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                   <Button size="sm" variant="secondary" onClick={() => joinCall.mutate(activeCall)}>
-                    Join Call
+                    Join
                   </Button>
                   <Button
                     size="icon"
@@ -990,13 +1000,21 @@ export default function TeamCommunications() {
                       })
                     }
                     title={mutedCallIds.has(activeCall.id) ? "Unmute" : "Mute"}
+                    aria-label={mutedCallIds.has(activeCall.id) ? "Unmute call" : "Mute call"}
                   >
                     {mutedCallIds.has(activeCall.id) ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => leaveCall.mutate(activeCall)}>
                     Leave
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => endCall.mutate(activeCall)} title="End call">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => endCall.mutate(activeCall)}
+                    title="End call"
+                    aria-label="End call"
+                  >
                     <PhoneOff className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1044,8 +1062,10 @@ export default function TeamCommunications() {
                         <div className={cn("mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground", own && "justify-end")}>
                           <span className="font-medium text-foreground">{own ? "You" : sender?.name ?? "Team member"}</span>
                           <span>{messageTime(message.created_at)}</span>
-                          {message.edited_at && !deleted && <span>edited</span>}
-                          {message.is_pinned && !deleted && <Pin className="h-3 w-3" />}
+                          {message.edited_at && !deleted && (
+                            <Edit3 className="h-3 w-3" aria-label="Edited" />
+                          )}
+                          {message.is_pinned && !deleted && <Pin className="h-3 w-3" aria-label="Pinned" />}
                         </div>
                         <div
                           className={cn(
@@ -1063,13 +1083,22 @@ export default function TeamCommunications() {
                                 maxLength={4000}
                               />
                               <div className="flex justify-end gap-1">
-                                <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => saveEdit.mutate()}>
+                                <Button
+                                  size="icon"
+                                  variant="secondary"
+                                  className="h-7 w-7"
+                                  onClick={() => saveEdit.mutate()}
+                                  title="Save edit"
+                                  aria-label="Save edit"
+                                >
                                   <Check className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"
                                   className="h-7 w-7"
+                                  title="Cancel edit"
+                                  aria-label="Cancel edit"
                                   onClick={() => {
                                     setEditingMessageId(null);
                                     setEditingText("");
@@ -1116,6 +1145,7 @@ export default function TeamCommunications() {
                               className="h-7 w-7"
                               onClick={() => togglePin.mutate(message)}
                               title={message.is_pinned ? "Unpin message" : "Pin message"}
+                              aria-label={message.is_pinned ? "Unpin message" : "Pin message"}
                             >
                               {message.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                             </Button>
@@ -1130,6 +1160,7 @@ export default function TeamCommunications() {
                                     setEditingText(message.body);
                                   }}
                                   title="Edit message"
+                                  aria-label="Edit message"
                                 >
                                   <Edit3 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1139,6 +1170,7 @@ export default function TeamCommunications() {
                                   className="h-7 w-7 text-destructive hover:text-destructive"
                                   onClick={() => deleteMessage.mutate(message.id)}
                                   title="Delete message"
+                                  aria-label="Delete message"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1185,12 +1217,13 @@ export default function TeamCommunications() {
                         <button
                           type="button"
                           className="rounded-sm p-0.5 hover:bg-muted"
+                          title="Remove file"
+                          aria-label={`Remove ${attachment.name}`}
                           onClick={() =>
                             setPendingAttachments((previous) =>
                               previous.filter((item) => item.path !== attachment.path)
                             )
                           }
-                          title="Remove file"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -1216,15 +1249,19 @@ export default function TeamCommunications() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!selectedConversation || uploadAttachments.isPending}
                     title="Attach files"
+                    aria-label="Attach files"
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-1 overflow-x-auto pb-0.5">
-                      <Badge variant="secondary" className="shrink-0 gap-1 text-[11px]">
-                        <Sparkles className="h-3 w-3" />
-                        Grammar assist
-                      </Badge>
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground"
+                        title="Grammar assist"
+                        aria-label="Grammar assist"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </span>
                       {commonEmojis.map((emoji) => (
                         <button
                           key={emoji}
@@ -1232,11 +1269,12 @@ export default function TeamCommunications() {
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm hover:bg-muted"
                           onClick={() => setDraft((value) => `${value}${emoji}`)}
                           title={`Insert ${emoji}`}
+                          aria-label={`Insert ${emoji}`}
                         >
                           {emoji}
                         </button>
                       ))}
-                      <Smile className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Smile className="h-3.5 w-3.5 text-muted-foreground" aria-label="Emoji" />
                     </div>
                     <Textarea
                       ref={composer.inputRef}
@@ -1265,6 +1303,7 @@ export default function TeamCommunications() {
                     }
                     onClick={sendCurrentDraft}
                     title="Send"
+                    aria-label="Send message"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -1276,12 +1315,19 @@ export default function TeamCommunications() {
           <aside className="hidden min-h-0 border-l bg-card/95 xl:block">
             <div className="flex h-14 items-center justify-between border-b px-3">
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
+                <Users className="h-4 w-4" aria-hidden="true" />
                 <p className="text-sm font-semibold">Members</p>
               </div>
               {unreadNotifications.length > 0 && (
-                <Button size="sm" variant="ghost" onClick={() => markNotificationsRead.mutate()}>
-                  Mark read
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={() => markNotificationsRead.mutate()}
+                  title="Mark notifications read"
+                  aria-label="Mark notifications read"
+                >
+                  <Check className="h-4 w-4" />
                 </Button>
               )}
             </div>
@@ -1299,7 +1345,7 @@ export default function TeamCommunications() {
                       </Avatar>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{member.name}</p>
-                        <p className="text-xs text-muted-foreground">{member.role || "team"}</p>
+                        {member.role && <p className="text-xs text-muted-foreground">{member.role}</p>}
                       </div>
                     </div>
                   ))}
@@ -1311,7 +1357,10 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</p>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Pin className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</p>
+                  </div>
                   <div className="space-y-2">
                     {pinnedMessages.slice(0, 4).map((message) => (
                       <button
@@ -1319,9 +1368,9 @@ export default function TeamCommunications() {
                         type="button"
                         className="w-full rounded-md border bg-background px-3 py-2 text-left text-xs hover:bg-muted"
                         onClick={() => document.getElementById(`team-message-${message.id}`)?.scrollIntoView({ block: "center" })}
+                        aria-label={`Show pinned message from ${userByAuthId.get(message.sender_id)?.name ?? "team member"}`}
                       >
                         <div className="mb-1 flex items-center gap-1 font-medium">
-                          <Pin className="h-3 w-3" />
                           <span className="truncate">{userByAuthId.get(message.sender_id)?.name ?? "Team member"}</span>
                         </div>
                         <p className="line-clamp-2 text-muted-foreground">
@@ -1337,15 +1386,19 @@ export default function TeamCommunications() {
 
                 <section>
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shared Resources</p>
+                    <div className="flex items-center gap-1.5">
+                      <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resources</p>
+                    </div>
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="ghost"
-                      className="h-7 gap-1 px-2 text-xs"
+                      className="h-7 w-7"
                       onClick={() => setResourceDialogOpen(true)}
+                      title="Add resource"
+                      aria-label="Add resource"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Add
                     </Button>
                   </div>
                   {sharedLinksLoading ? (
@@ -1367,13 +1420,13 @@ export default function TeamCommunications() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-2 text-xs hover:bg-muted"
+                                aria-label={`Open ${link.label}`}
                               >
-                                <LinkIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate font-semibold">{link.label}</span>
                                   <span className="block truncate text-[10px] text-muted-foreground">{link.sub || link.href}</span>
                                 </span>
-                                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                               </a>
                             ))}
                           </div>
@@ -1391,7 +1444,10 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Access</p>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Access</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {quickAccessItems.map((item) => {
                       const Icon = item.icon;
@@ -1400,8 +1456,9 @@ export default function TeamCommunications() {
                           key={item.href}
                           href={item.href}
                           className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-2 text-xs font-medium hover:bg-muted"
+                          aria-label={`Open ${item.label}`}
                         >
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                           <span className="truncate">{item.label}</span>
                         </a>
                       );
@@ -1412,7 +1469,10 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chat Links</p>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Links</p>
+                  </div>
                   <div className="space-y-1.5">
                     {pinnedLinks
                       .filter((href, index, list) => list.indexOf(href) === index)
@@ -1425,8 +1485,9 @@ export default function TeamCommunications() {
                             target="_blank"
                             rel="noreferrer"
                             className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-muted"
+                            aria-label={`Open ${href}`}
                           >
-                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                             <span className="truncate">{href}</span>
                           </a>
                         );
@@ -1436,15 +1497,16 @@ export default function TeamCommunications() {
                     )}
                     {recentLinks.length > 0 && (
                       <div className="pt-1">
-                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent from chat</p>
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent</p>
                         {recentLinks.slice(0, 3).map((href) => (
                           <button
                             key={href}
                             type="button"
                             className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-xs hover:bg-muted"
                             onClick={() => setDraft((value) => `${value}${value ? " " : ""}${href}`)}
+                            aria-label={`Add ${href} to message`}
                           >
-                            <LinkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <LinkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                             <span className="truncate">{href}</span>
                           </button>
                         ))}
@@ -1456,7 +1518,10 @@ export default function TeamCommunications() {
                 <Separator />
 
                 <section>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notifications</p>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Bell className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unread</p>
+                  </div>
                   <div className="space-y-2">
                     {unreadNotifications.map((notification) => (
                       <div key={notification.id} className="rounded-md border bg-background px-3 py-2 text-xs">

@@ -20,10 +20,12 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (
     pathname === "/" ||
     pathname.startsWith("/intake") ||
+    pathname.startsWith("/now") ||
     pathname.startsWith("/dispatch") ||
     pathname.startsWith("/operations-v2") ||
     pathname.startsWith("/dispatch-v2") ||
     pathname.startsWith("/schedule-v2") ||
+    pathname.startsWith("/workflows") ||
     pathname.startsWith("/jobs") ||
     pathname.startsWith("/records/") ||
     pathname === "/tech" ||

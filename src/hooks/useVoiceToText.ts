@@ -1,12 +1,18 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
+import {
+  getDictationConfig,
+  type DictationContext,
+  type DictationProvider,
+} from "@/lib/dictation";
 
-export type DictationProvider = "bridgevoice" | "openai" | "deepgram" | "mock";
+export type { DictationContext, DictationProvider } from "@/lib/dictation";
 
 interface UseVoiceToTextOptions {
   onTranscript?: (text: string) => void;
   onError?: (error: string) => void;
   silenceTimeout?: number;
   autoStopOnSilence?: boolean;
+  context?: DictationContext;
   provider?: DictationProvider;
   prompt?: string;
 }
@@ -34,6 +40,7 @@ export function useVoiceToText({
   onError,
   silenceTimeout = 3000,
   autoStopOnSilence = true,
+  context = "general",
   provider,
   prompt,
 }: UseVoiceToTextOptions = {}) {
@@ -45,6 +52,10 @@ export function useVoiceToText({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const dictationConfig = useMemo(
+    () => getDictationConfig({ context, provider, prompt }),
+    [context, provider, prompt],
+  );
 
   const clearSilenceDetection = useCallback(() => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
@@ -119,8 +130,8 @@ export function useVoiceToText({
         try {
           const formData = new FormData();
           formData.append("file", blob, "recording.webm");
-          if (provider) formData.append("provider", provider);
-          if (prompt) formData.append("prompt", prompt);
+          formData.append("provider", dictationConfig.provider);
+          formData.append("prompt", dictationConfig.prompt);
           const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`;
           const resp = await fetch(url, {
             method: "POST",
@@ -200,7 +211,7 @@ export function useVoiceToText({
     } catch (err: any) {
       onError?.(err?.message || "Microphone access denied");
     }
-  }, [onTranscript, onError, silenceTimeout, autoStopOnSilence, provider, prompt, clearSilenceDetection]);
+  }, [onTranscript, onError, silenceTimeout, autoStopOnSilence, dictationConfig, clearSilenceDetection]);
 
   const stop = useCallback(() => {
     clearSilenceDetection();

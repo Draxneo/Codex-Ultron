@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, FileText, Eye, Camera, GripVertical } from "lucide-react";
+import { Plus, Trash2, FileText, Camera, GripVertical } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -339,14 +339,6 @@ export function FormFieldsEditor() {
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> Add Field
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={() => window.open(`/form/demo_${activeType}`, "_blank")}
-            disabled={fields.length === 0}
-          >
-            <Eye className="h-4 w-4 mr-2" /> Live Preview
           </Button>
         </div>
 

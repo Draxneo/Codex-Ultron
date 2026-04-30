@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { EMPLOYEE_SELECT } from "@/hooks/useEmployees";
 
 /**
  * Pre-warms React Query cache on app boot with key data that rarely changes.
@@ -14,7 +15,7 @@ export function usePreWarmCache() {
     queryClient.prefetchQuery({
       queryKey: ["employees"],
       queryFn: async () => {
-        const { data, error } = await supabase.from("employees").select("*").order("name");
+        const { data, error } = await supabase.from("employees").select(EMPLOYEE_SELECT).order("name");
         if (error) throw error;
         return data;
       },

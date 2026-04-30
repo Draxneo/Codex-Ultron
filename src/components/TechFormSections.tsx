@@ -702,6 +702,7 @@ function VoiceFirstTextarea({ fieldId, value, onTextChange, isDemo }: {
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { isRecording, loading, start, stop } = useVoiceToText({
+    context: "tech_notes",
     onTranscript: (text) => {
       const existing = value.trim();
       const combined = existing ? `${existing} ${text}` : text;

@@ -65,8 +65,8 @@ const DEFAULT_START_HOUR = 6;
 const DEFAULT_END_HOUR = 21;
 const BUSINESS_START_HOUR = 7;
 const BUSINESS_END_HOUR = 19;
-const HOUR_HEIGHT = 64;
-const HEADER_HEIGHT = 116;
+const DEFAULT_HOUR_HEIGHT = 64;
+const DEFAULT_HEADER_HEIGHT = 116;
 
 function getStartEnd(item: BoardItem) {
   if (!item.arrival_start) return null;
@@ -107,9 +107,11 @@ interface WeekCalendarBoardProps {
   visibleFields?: CalendarVisibleFields;
   businessHoursOnly?: boolean;
   showHolidays?: boolean;
+  hourHeight?: number;
+  headerHeight?: number;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
@@ -186,7 +188,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
     });
   }, [days, dayItemsMap]);
 
-  const totalHeight = (endHour - startHour) * HOUR_HEIGHT;
+  const totalHeight = (endHour - startHour) * hourHeight;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeDayRef = useRef<HTMLDivElement>(null);
   const [edgePadding, setEdgePadding] = useState({ left: 0, right: 0 });
@@ -239,13 +241,13 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
       <div className="flex w-max">
         {/* Time gutter — sticky so it floats over scrolling days */}
         <div className="w-[60px] shrink-0 sticky left-0 z-30 bg-card">
-          <div style={{ height: HEADER_HEIGHT }} className="border-b border-r bg-card" />
+          <div style={{ height: headerHeight }} className="border-b border-r bg-card" />
           <div className="relative border-r bg-card" style={{ height: totalHeight }}>
             {hours.map((hour) => (
               <div
                 key={hour}
                 className="absolute w-full border-b border-border/30 flex items-start justify-end pr-2 pt-0.5"
-                style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                style={{ top: (hour - startHour) * hourHeight, height: hourHeight }}
               >
                 <span className="text-[10px] text-muted-foreground font-medium">
                   {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
@@ -278,7 +280,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
 
             return (
               <div key={key} ref={isCurrentDay ? activeDayRef : undefined} className="shrink-0" style={{ width: columnWidth }}>
-                <div className="px-1 pt-1 pb-0.5 border-b border-r bg-background" style={{ height: HEADER_HEIGHT }}>
+                <div className="px-1 pt-1 pb-0.5 border-b border-r bg-background" style={{ height: headerHeight }}>
                   <button
                     onClick={() => onDayClick(day)}
                     className={cn(
@@ -316,7 +318,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   style={{ height: totalHeight }}
                 >
                   {hours.map((hour) => (
-                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
+                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * hourHeight, height: hourHeight }} />
                   ))}
 
                   {/* Untimed items */}
@@ -330,8 +332,8 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
 
                   {/* Timed cards */}
                   {laid.map(({ item, startH, endH, col, totalCols }) => {
-                    const top = (startH - startHour) * HOUR_HEIGHT;
-                    const height = Math.max((endH - startH) * HOUR_HEIGHT, 40);
+                    const top = (startH - startHour) * hourHeight;
+                    const height = Math.max((endH - startH) * hourHeight, 34);
                     const colWidth = 100 / totalCols;
                     const left = col * colWidth;
                     return (

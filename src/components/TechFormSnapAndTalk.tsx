@@ -96,6 +96,7 @@ export function TechFormSnapAndTalk({
   const [autoExtractPending, setAutoExtractPending] = useState(false);
 
   const { isRecording, loading: voiceLoading, start: startRecording, stop: stopRecording } = useVoiceToText({
+    context: "tech_notes",
     onTranscript: (text) => {
       setVoiceTranscript(prev => prev ? `${prev}\n${text}` : text);
       setAutoExtractPending(true);

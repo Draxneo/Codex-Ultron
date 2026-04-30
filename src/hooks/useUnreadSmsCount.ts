@@ -18,8 +18,7 @@ export function useUnreadSmsCount() {
   });
 
   useRealtimeInvalidation(
-    [{ table: "sms_log", queryKeys: [["unread_sms_count"]] }],
-    "rt-unread-sms"
+    [{ table: "sms_log", queryKeys: [["unread_sms_count"]] }]
   );
 
   return count;

@@ -2379,8 +2379,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
-          ooo_enabled: boolean
-          ooo_forward_number: string | null
+          desktop_calls_enabled: boolean
           pay_model: string | null
           phone: string | null
           profile_id: string | null
@@ -2394,8 +2393,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
-          ooo_enabled?: boolean
-          ooo_forward_number?: string | null
+          desktop_calls_enabled?: boolean
           pay_model?: string | null
           phone?: string | null
           profile_id?: string | null
@@ -2409,8 +2407,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
-          ooo_enabled?: boolean
-          ooo_forward_number?: string | null
+          desktop_calls_enabled?: boolean
           pay_model?: string | null
           phone?: string | null
           profile_id?: string | null

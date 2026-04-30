@@ -34,6 +34,7 @@ export interface Estimate {
 }
 
 const ESTIMATE_LIST_FIELDS = "id, hcp_id, estimate_number, customer_id, customer_name, customer_phone, customer_email, address, assigned_to, work_status, scheduled_date, description, hcp_customer_id, options, created_at, arrival_start, arrival_end, status, confirmation_sent_at, dispatch_sent_at, on_my_way_sent_at, completion_form_sent_at, brochure_sent, presentation_sent_at, customer_approved_at";
+const TERMINAL_ESTIMATE_WORK_STATUSES = '("won","lost","canceled","cancelled","completed","complete","closed","legacy_complete","created job from estimate","pro canceled","user canceled","complete rated","complete unrated")';
 
 export function useEstimates(showLost = false) {
   return useQuery({
@@ -57,7 +58,7 @@ export function useEstimates(showLost = false) {
       const query = supabase
         .from("estimates" as any)
         .select(ESTIMATE_LIST_FIELDS)
-        .not("work_status", "in", '("won","lost","canceled")')
+        .not("work_status", "in", TERMINAL_ESTIMATE_WORK_STATUSES)
         .order("created_at", { ascending: false });
 
       const { data, error } = await query;

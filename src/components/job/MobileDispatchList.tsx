@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Clock, Car, ChevronDown, AlertTriangle } from "lucide-react";
+import { Clock, Car, ChevronDown, AlertTriangle, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddressLink } from "@/components/AddressLink";
 import { ClickToCall } from "@/components/ClickToCall";
@@ -283,7 +283,7 @@ export function MobileDispatchList({ dayItems, employees, routeOrders, cardDensi
                 {items.map(item => {
                   const time = formatTime(item);
                   const ro = routeOrders.get(item.id);
-                  const typeLabel = item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? "📞 CALL" : "SERV";
+                  const typeLabel = item.job_type === "estimate" ? "EST" : item.job_type === "install" ? "INST" : item.job_type === "maintenance" ? "MAINT" : item.job_type === "phone_call" ? <Phone className="h-3 w-3" aria-label="Phone call" /> : "SERV";
                   const lifecycle = getLifecycleInfo({
                     ...item,
                     ...(item.item_type === "estimate" ? { job_type: "estimate", status: item.work_status } : {}),
@@ -306,7 +306,7 @@ export function MobileDispatchList({ dayItems, employees, routeOrders, cardDensi
                           </span>
                         )}
                         {visibleFields?.customerTags !== false && (
-                          <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", typeBadgeColors[item.job_type || "service"])}>
+                          <span className={cn("inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", typeBadgeColors[item.job_type || "service"])} title={item.job_type === "phone_call" ? "Phone call" : undefined}>
                             {typeLabel}
                           </span>
                         )}

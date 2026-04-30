@@ -94,7 +94,7 @@ export function useJobs() {
       const { data, error } = await supabase
         .from("jobs")
         .select("*")
-        .not("status", "in", '("canceled")')
+        .not("status", "in", '("canceled","cancelled","done","invoiced","completed","complete","closed")')
         .or(`scheduled_date.gte.${cutoff},scheduled_date.is.null,status.in.("new","scheduled","in_progress","on_hold")`)
         .order("scheduled_date", { ascending: false });
       if (error) throw error;

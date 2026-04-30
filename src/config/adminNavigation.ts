@@ -10,11 +10,16 @@
  *  - `section` for settings = the ?section= query param Admin.tsx switches on
  */
 import {
-  Brain, Package, Phone, CreditCard,
-  MapPin, Settings2, BarChart3,
-  Users, Route, ClipboardList, Calculator, Activity,
-  Bell, ClipboardCheck, FileText, ListChecks,
-  ReceiptText, Shield, Tags, UserPlus,
+  Brain,
+  GitBranch,
+  Package,
+  Phone,
+  CreditCard,
+  Settings2,
+  BarChart3,
+  Users,
+  Activity,
+  Database,
 } from "lucide-react";
 
 export type ToolEntry = {
@@ -48,52 +53,30 @@ export type AdminSettingSection = {
 
 /* Tools & Builders (links to standalone routes) */
 export const TOOL_CARDS: ToolEntry[] = [
-  { label: "JARVIS",            icon: Brain,         path: "/copilot",                     color: "text-violet-500",  bg: "bg-violet-500/10" },
-  { label: "Catalog & Pricebook", icon: Package,     path: "/catalog",                     color: "text-orange-500",  bg: "bg-orange-500/10" },
-  { label: "IVR Builder",       icon: Phone,         path: "/ivr-builder",                 color: "text-cyan-500",    bg: "bg-cyan-500/10" },
-  { label: "Call Routing",      icon: Route,         path: "/admin/call-routing",          color: "text-cyan-600",    bg: "bg-cyan-600/10" },
-  { label: "LSA Leads",         icon: MapPin,        path: "/leads?source=google_lsa",     color: "text-blue-500",    bg: "bg-blue-500/10" },
-  { label: "Payments",          icon: CreditCard,    path: "/payments",                    color: "text-sky-500",     bg: "bg-sky-500/10" },
-  { label: "Agreements",        icon: ClipboardList, path: "/agreements",                  color: "text-rose-500",    bg: "bg-rose-500/10" },
-  { label: "Quick Quote",       icon: Calculator,    path: "/quick-quote",                 color: "text-amber-600",   bg: "bg-amber-600/10" },
+  { label: "JARVIS", icon: Brain, path: "/copilot", color: "text-violet-500", bg: "bg-violet-500/10" },
+  { label: "Workflow Maps", icon: GitBranch, path: "/workflows", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  { label: "Catalog & Pricebook", icon: Package, path: "/catalog", color: "text-orange-500", bg: "bg-orange-500/10" },
+  { label: "IVR Builder", icon: Phone, path: "/ivr-builder", color: "text-cyan-500", bg: "bg-cyan-500/10" },
 ];
 
 /* Settings (each card opens an Admin section) */
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
-    title: "Global Settings",
+    title: "Core Settings",
     icon: Settings2,
     cards: [
       { label: "Company", icon: Settings2, section: "company", color: "text-muted-foreground", bg: "bg-muted" },
-      { label: "Billing", icon: CreditCard, section: "billing", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-      { label: "Notifications", icon: Bell, section: "notifications", color: "text-amber-500", bg: "bg-amber-500/10" },
       { label: "Team & Permissions", icon: Users, section: "employees", color: "text-[hsl(var(--sky))]", bg: "bg-[hsl(var(--sky))]/10" },
+      { label: "Voice & Phone", icon: Phone, section: "voice", color: "text-cyan-500", bg: "bg-cyan-500/10" },
+      { label: "Payments & Invoices", icon: CreditCard, section: "payments", color: "text-emerald-500", bg: "bg-emerald-500/10" },
     ],
   },
   {
-    title: "Feature Configurations",
-    icon: Settings2,
+    title: "Data & Operations",
+    icon: Activity,
     cards: [
-      { label: "Leads", icon: MapPin, section: "leads", color: "text-blue-500", bg: "bg-blue-500/10" },
-      { label: "Communications", icon: Phone, section: "voice", color: "text-cyan-500", bg: "bg-cyan-500/10" },
-      { label: "Customer Intake", icon: UserPlus, section: "customer-intake", color: "text-violet-500", bg: "bg-violet-500/10" },
-      { label: "Estimates", icon: FileText, section: "estimates", color: "text-amber-600", bg: "bg-amber-600/10" },
-      { label: "Invoices", icon: ReceiptText, section: "payments", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-      { label: "Jobs", icon: ClipboardCheck, section: "jobs", color: "text-rose-500", bg: "bg-rose-500/10" },
-      { label: "Price Book", icon: Package, section: "pricebook", color: "text-orange-500", bg: "bg-orange-500/10" },
-      { label: "Service Plans", icon: Shield, section: "service-plans", color: "text-emerald-600", bg: "bg-emerald-600/10" },
-    ],
-  },
-  {
-    title: "Tags & Tools",
-    icon: Tags,
-    cards: [
-      { label: "Checklists", icon: ListChecks, section: "checklists", color: "text-lime-600", bg: "bg-lime-600/10" },
-      { label: "Lead Sources", icon: MapPin, section: "lead-sources", color: "text-blue-500", bg: "bg-blue-500/10" },
-      { label: "Tags", icon: Tags, section: "tags", color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
-      { label: "Data Tools", icon: Activity, section: "data", color: "text-orange-500", bg: "bg-orange-500/10" },
-      { label: "Apps & Tools", icon: Package, section: "tools", color: "text-primary", bg: "bg-primary/10" },
-      { label: "Reports", icon: BarChart3, section: "reports", color: "text-amber-500", bg: "bg-amber-500/10" },
+      { label: "Data Tools", icon: Database, section: "data", color: "text-orange-500", bg: "bg-orange-500/10" },
+      { label: "API Costs", icon: BarChart3, section: "reports", color: "text-amber-500", bg: "bg-amber-500/10" },
       { label: "Dev / Ops", icon: Activity, section: "dev", color: "text-orange-500", bg: "bg-orange-500/10" },
     ],
   },

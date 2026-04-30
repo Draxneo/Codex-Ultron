@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
   BellRing,
   Bot,
   Briefcase,
@@ -17,6 +19,8 @@ import {
   MessageSquare,
   Paperclip,
   Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
   Plus,
   Search,
   Send,
@@ -24,11 +28,11 @@ import {
   UserPlus,
   UserRound,
   X,
+  Zap,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
-import { InlineBookingWizard } from "@/components/copilot/InlineBookingWizard";
 import { UniversalMediaPlayer } from "@/components/media";
 import { NewJobDialog } from "@/components/NewJobDialog";
 import { SmsThreadView } from "@/components/SmsThreadView";
@@ -39,6 +43,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DictateButton } from "@/components/voice/DictateButton";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
@@ -82,6 +87,11 @@ type DeskConversation = {
 };
 
 type UIMode = "ai" | "human";
+type InboxView = "now" | "answering" | "active" | "all";
+
+const INTAKE_ACTIONS_CLEARED_BEFORE = new Date("2026-04-30T08:30:00-05:00").getTime();
+
+type IconType = typeof Phone;
 
 type BookingIntentSuggestion = {
   type: "book_job" | "book_estimate" | "book_maintenance" | "create_customer";
@@ -150,6 +160,16 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown";
   return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatFeedTimestamp(value?: string | null) {
+  if (!value) return { date: "Unknown", time: "" };
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: "Unknown", time: "" };
+  return {
+    date: date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+    time: date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  };
 }
 
 function formatDate(value?: string | null) {
@@ -536,6 +556,284 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
   };
 }
 
+function conversationVisual(item: Pick<DeskConversation, "kind" | "direction">) {
+  if (item.kind === "call" && item.direction === "inbound") {
+    return {
+      label: "Incoming call",
+      shortLabel: "Call",
+      icon: PhoneIncoming,
+      directionIcon: ArrowDownLeft,
+      ringClass: "bg-sky-700 text-white",
+      badgeClass: "border-sky-300 bg-sky-50 text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-100",
+      cardClass: "border-l-sky-700 bg-card hover:bg-muted/30",
+      selectedClass: "border-primary bg-card ring-2 ring-primary/25 shadow-md",
+    };
+  }
+  if (item.kind === "call" && item.direction === "outbound") {
+    return {
+      label: "Outgoing call",
+      shortLabel: "Call",
+      icon: PhoneOutgoing,
+      directionIcon: ArrowUpRight,
+      ringClass: "bg-indigo-700 text-white",
+      badgeClass: "border-indigo-300 bg-indigo-50 text-indigo-950 dark:border-indigo-800/70 dark:bg-indigo-950/30 dark:text-indigo-100",
+      cardClass: "border-l-indigo-700 bg-card hover:bg-muted/30",
+      selectedClass: "border-primary bg-card ring-2 ring-primary/25 shadow-md",
+    };
+  }
+  if (item.kind === "sms" && item.direction === "inbound") {
+    return {
+      label: "Incoming text",
+      shortLabel: "Text",
+      icon: MessageSquare,
+      directionIcon: ArrowDownLeft,
+      ringClass: "bg-teal-700 text-white",
+      badgeClass: "border-teal-300 bg-teal-50 text-teal-950 dark:border-teal-800/70 dark:bg-teal-950/30 dark:text-teal-100",
+      cardClass: "border-l-teal-700 bg-card hover:bg-muted/30",
+      selectedClass: "border-primary bg-card ring-2 ring-primary/25 shadow-md",
+    };
+  }
+  return {
+    label: "Outgoing text",
+    shortLabel: "Text",
+    icon: Send,
+    directionIcon: ArrowUpRight,
+    ringClass: "bg-slate-700 text-white",
+    badgeClass: "border-slate-300 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100",
+    cardClass: "border-l-slate-500 bg-card hover:bg-muted/30",
+    selectedClass: "border-primary bg-card ring-2 ring-primary/25 shadow-md",
+  };
+}
+
+function isChannelOnlyText(value?: string | null) {
+  const text = String(value || "").trim().toLowerCase();
+  return [
+    "incoming call",
+    "inbound call",
+    "outbound call",
+    "outgoing call",
+    "incoming text",
+    "inbound text",
+    "outbound text",
+    "outgoing text",
+  ].includes(text);
+}
+
+function cleanConversationDetail(value?: string | null) {
+  const text = String(value || "").trim();
+  if (/^open this (call|text)/i.test(text)) return "Review context and decide the next dispatch action.";
+  return text;
+}
+
+function isUnknownConversation(item: DeskConversation) {
+  const type = String(item.customerType || "").toLowerCase();
+  return !item.name || type.includes("unknown") || type.includes("lead") || type.includes("new");
+}
+
+function isEmployeeConversation(item: DeskConversation) {
+  const type = String(item.customerType || "").toLowerCase();
+  return type === "employee" || type.includes("employee") || type.includes("tech");
+}
+
+function isAnsweringServiceConversation(item: DeskConversation) {
+  if (item.kind !== "sms") return false;
+  const text = `${item.name || ""} ${item.customerType || ""} ${item.summary || ""} ${item.detail || ""}`.toLowerCase();
+  return text.includes("answering service") || text.includes("answering_service");
+}
+
+function isHandledConversation(item: DeskConversation) {
+  return String(item.status || "").toLowerCase() === "done";
+}
+
+function isRecentWithinDays(value: string | null | undefined, days: number) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return Date.now() - timestamp <= days * 24 * 60 * 60 * 1000;
+}
+
+function isOpenWorkStatus(status?: string | null) {
+  const text = String(status || "").toLowerCase();
+  if (!text) return false;
+  return !/\b(done|complete|completed|closed|cancel|canceled|cancelled|lost|won|paid|invoiced|archived)\b/.test(text);
+}
+
+function hasCurrentWorkDate(value?: string | null) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return timestamp >= Date.now() - 24 * 60 * 60 * 1000;
+}
+
+function hasActiveWorkSignal(item: DeskConversation) {
+  if (isHandledConversation(item)) return false;
+  if (isEmployeeConversation(item)) return false;
+  if (new Date(item.createdAt).getTime() <= INTAKE_ACTIONS_CLEARED_BEFORE) return false;
+  if (item.kind === "sms") {
+    const conversation = item.raw as SmsConversation;
+    if (
+      conversation.jobContext &&
+      isOpenWorkStatus(conversation.jobContext.status) &&
+      hasCurrentWorkDate(conversation.jobContext.scheduledDate)
+    ) {
+      return true;
+    }
+    if (
+      conversation.estimateContext &&
+      isOpenWorkStatus(conversation.estimateContext.status) &&
+      hasCurrentWorkDate(conversation.estimateContext.scheduledDate)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getAttentionBadges(item: DeskConversation) {
+  const text = `${item.summary || ""} ${item.detail || ""} ${item.status || ""}`.toLowerCase();
+  if (isHandledConversation(item)) return [];
+  if (isEmployeeConversation(item)) return [];
+  const eligibleForAction = new Date(item.createdAt).getTime() > INTAKE_ACTIONS_CLEARED_BEFORE;
+  const badges: {
+    label: string;
+    prefix?: string;
+    className: string;
+    icon: IconType;
+    group: "needs_action" | "active" | "recent";
+  }[] = [];
+
+  const inbound = item.direction === "inbound";
+  const unhandledSms = item.kind === "sms" && inbound && (item.status === "needs_reply" || item.unread);
+  const unhandledCall = item.kind === "call" && inbound && item.unread;
+  const urgent = eligibleForAction && (unhandledSms || unhandledCall) && /\burgent\b|\bemergency\b|no cool|not cooling|a\/c not working|ac not working|no heat|water leak|burning|smoke/.test(text);
+  const needsReply = eligibleForAction && unhandledSms;
+  const missedCall = eligibleForAction && unhandledCall && /missed|voicemail|no.?answer|busy|failed/.test(text);
+  const unknown = isUnknownConversation(item);
+  const freshUnknownInbound = eligibleForAction && unknown && inbound && item.unread && isRecentWithinDays(item.createdAt, 2);
+
+  if (urgent) {
+    badges.push({
+      label: "Urgent",
+      prefix: "Urgent",
+      className: "border-red-300 bg-red-50 text-red-950 dark:border-red-800/70 dark:bg-red-950/30 dark:text-red-100",
+      icon: AlertTriangle,
+      group: "needs_action",
+    });
+  }
+  if (needsReply) {
+    badges.push({
+      label: "Needs reply",
+      prefix: "Needs reply",
+      className: "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100",
+      icon: MessageSquare,
+      group: "needs_action",
+    });
+  }
+  if (missedCall) {
+    badges.push({
+      label: "Missed",
+      prefix: "Missed call",
+      className: "border-red-300 bg-red-50 text-red-950 dark:border-red-800/70 dark:bg-red-950/30 dark:text-red-100",
+      icon: PhoneIncoming,
+      group: "needs_action",
+    });
+  }
+  if (freshUnknownInbound) {
+    badges.push({
+      label: "New lead",
+      prefix: badges.length ? undefined : "New lead",
+      className: "border-violet-300 bg-violet-50 text-violet-950 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-100",
+      icon: UserPlus,
+      group: "needs_action",
+    });
+  }
+  if (eligibleForAction && item.unread && badges.length === 0) {
+    badges.push({
+      label: "New",
+      prefix: "New",
+      className: "border-primary/30 bg-primary/5 text-primary",
+      icon: BellRing,
+      group: "needs_action",
+    });
+  }
+
+  return badges;
+}
+
+function conversationMatchesInboxView(item: DeskConversation, view: InboxView, selectedId?: string) {
+  if (view === "all") return true;
+  if (view === "answering") return isAnsweringServiceConversation(item) && !isHandledConversation(item);
+  if (view === "active") return hasActiveWorkSignal(item);
+  return getConversationGroup(item, selectedId) === "needs_action";
+}
+
+function getConversationGroup(item: DeskConversation, selectedId?: string) {
+  const badges = getAttentionBadges(item);
+  if (badges.some((badge) => badge.group === "needs_action")) return "needs_action";
+  if (item.id === selectedId) return "active";
+  return "recent";
+}
+
+function groupConversationItems(items: DeskConversation[], selectedId?: string) {
+  const groups = [
+    { key: "needs_action", label: "Needs Action", items: [] as DeskConversation[] },
+    { key: "active", label: "Active", items: [] as DeskConversation[] },
+    { key: "recent", label: "Recent", items: [] as DeskConversation[] },
+  ];
+  const byKey = new Map(groups.map((group) => [group.key, group.items]));
+  for (const item of items) {
+    byKey.get(getConversationGroup(item, selectedId))?.push(item);
+  }
+  return groups.filter((group) => group.items.length > 0);
+}
+
+function StepHeader({
+  step,
+  title,
+  detail,
+  icon: Icon,
+  tone = "primary",
+  action,
+}: {
+  step: string;
+  title: string;
+  detail: string;
+  icon: IconType;
+  tone?: "primary" | "signal" | "context" | "action";
+  action?: React.ReactNode;
+}) {
+  const toneClass =
+    tone === "signal"
+      ? "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/20 dark:text-sky-100"
+      : tone === "context"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100"
+        : tone === "action"
+          ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100"
+          : "border-primary/20 bg-primary/5 text-foreground";
+
+  return (
+    <div className={cn("rounded-lg border p-3", toneClass)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background/80 shadow-sm">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                {step}
+              </span>
+              <h2 className="text-sm font-semibold">{title}</h2>
+            </div>
+            <p className="mt-1 text-xs leading-5 opacity-80">{detail}</p>
+          </div>
+        </div>
+        {action}
+      </div>
+    </div>
+  );
+}
+
 function Section({
   title,
   detail,
@@ -653,11 +951,11 @@ function TeamInboxSignal() {
   const href = latestMessage ? `/team?conversation=${latestMessage.conversation_id}` : "/team";
 
   return (
-    <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 shadow-sm">
+    <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-100">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <BellRing className="h-4 w-4 shrink-0 text-amber-700" />
+            <BellRing className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <p className="truncate text-sm font-semibold">
               {notifications.length > 0
                 ? `${notifications.length} team alert${notifications.length === 1 ? "" : "s"} need attention`
@@ -666,7 +964,7 @@ function TeamInboxSignal() {
           </div>
           {latestMessage ? (
             <div className="mt-2 text-xs">
-              <div className="flex items-center gap-1 text-amber-900/80">
+              <div className="flex items-center gap-1 text-amber-900/80 dark:text-amber-100/80">
                 <span className="font-semibold">{sender}</span>
                 <span>·</span>
                 <Hash className="h-3 w-3" />
@@ -685,7 +983,7 @@ function TeamInboxSignal() {
             Open
           </Link>
           {notifications.length > 0 && (
-            <button type="button" onClick={markRead} className="rounded-md px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+            <button type="button" onClick={markRead} className="rounded-md px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-950/40">
               Clear
             </button>
           )}
@@ -700,6 +998,7 @@ function ConversationList({
   selectedId,
   loading,
   search,
+  tutorialMode,
   onSearch,
   onSelect,
 }: {
@@ -707,30 +1006,93 @@ function ConversationList({
   selectedId?: string;
   loading: boolean;
   search: string;
+  tutorialMode: boolean;
   onSearch: (value: string) => void;
   onSelect: (item: DeskConversation) => void;
 }) {
+  const PAGE_SIZE = 20;
   const hasSearch = search.trim().length > 0;
-  const priorityItems = useMemo(() => {
-    if (hasSearch) return items;
-    const urgent = items.filter((item) => item.unread || item.direction === "inbound").slice(0, 6);
-    const urgentIds = new Set(urgent.map((item) => item.id));
-    const recent = items.filter((item) => !urgentIds.has(item.id)).slice(0, 4);
-    const selected = selectedId ? items.find((item) => item.id === selectedId && !urgentIds.has(item.id) && !recent.some((candidate) => candidate.id === item.id)) : null;
-    return selected ? [selected, ...urgent, ...recent] : [...urgent, ...recent];
-  }, [hasSearch, items, selectedId]);
-  const quickLimit = hasSearch ? 20 : 10;
-  const visibleItems = priorityItems.slice(0, quickLimit);
-  const hiddenCount = Math.max(0, items.length - visibleItems.length);
+  const [inboxView, setInboxView] = useState<InboxView>("now");
+  const viewOptions: { key: InboxView; label: string; description: string }[] = [
+    { key: "now", label: "Now", description: "Only contacts that need attention." },
+    { key: "answering", label: "Answering", description: "Overflow calls captured by the answering service." },
+    { key: "active", label: "Active", description: "Open work and recent customers." },
+    { key: "all", label: "Recent", description: "All recent calls and texts." },
+  ];
+  const currentViewLabel = hasSearch
+    ? "Search"
+    : viewOptions.find((option) => option.key === inboxView)?.label || "Now";
+  const viewCounts = useMemo(() => ({
+    now: items.filter((item) => conversationMatchesInboxView(item, "now", selectedId)).length,
+    answering: items.filter((item) => conversationMatchesInboxView(item, "answering", selectedId)).length,
+    active: items.filter((item) => conversationMatchesInboxView(item, "active", selectedId)).length,
+    all: items.length,
+  }), [items, selectedId]);
+  const queueItems = useMemo(() => {
+    const viewItems = hasSearch
+      ? items
+      : items.filter((item) => conversationMatchesInboxView(item, inboxView, selectedId));
+    const needsAction = viewItems.filter((item) => getConversationGroup(item, selectedId) === "needs_action");
+    const actionIds = new Set(needsAction.map((item) => item.id));
+    const active = selectedId
+      ? viewItems.filter((item) => item.id === selectedId && !actionIds.has(item.id))
+      : [];
+    const activeIds = new Set(active.map((item) => item.id));
+    const recent = viewItems.filter((item) => !actionIds.has(item.id) && !activeIds.has(item.id));
+    const selected = selectedId
+      ? viewItems.find((item) => item.id === selectedId && !actionIds.has(item.id) && !activeIds.has(item.id) && !recent.some((candidate) => candidate.id === item.id))
+      : null;
+    return selected ? [selected, ...needsAction, ...active, ...recent] : [...needsAction, ...active, ...recent];
+  }, [hasSearch, inboxView, items, selectedId]);
+  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
+  const visibleItems = queueItems.slice(0, visibleLimit);
+  const visibleGroups = useMemo(() => groupConversationItems(visibleItems, selectedId), [selectedId, visibleItems]);
+  const totalGroups = useMemo(() => groupConversationItems(queueItems, selectedId), [queueItems, selectedId]);
+  const totalGroupCounts = useMemo(
+    () => new Map(totalGroups.map((group) => [group.key, group.items.length])),
+    [totalGroups]
+  );
+  const remainingCount = Math.max(0, queueItems.length - visibleItems.length);
+
+  useEffect(() => {
+    setVisibleLimit(PAGE_SIZE);
+  }, [PAGE_SIZE, inboxView, search]);
+
+  const handleQueueScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (distanceFromBottom > 180) return;
+    setVisibleLimit((current) => Math.min(current + PAGE_SIZE, queueItems.length));
+  }, [PAGE_SIZE, queueItems.length]);
 
   return (
-    <aside className="flex min-h-0 flex-col border-r bg-card">
-      <div className="border-b p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-sm font-semibold">Live Inbox</h2>
-            <Badge variant="secondary">{hasSearch ? "Search" : "Now Queue"}</Badge>
+    <aside className="flex min-h-0 flex-col border-r bg-background">
+      <div className="border-b bg-card p-4">
+        {tutorialMode ? (
+          <StepHeader
+            step="Step 1"
+            title="Start Here: Live Signals"
+            detail={hasSearch ? "Search the wider communication history." : "Pick the newest call or text, then move right."}
+            icon={BellRing}
+            tone="signal"
+            action={
+              <Badge variant="secondary" className="shrink-0">
+                {currentViewLabel}
+              </Badge>
+            }
+          />
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <BellRing className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold">Live Signals</h2>
+                <Badge variant="secondary">{currentViewLabel}</Badge>
+              </div>
+            </div>
           </div>
+        )}
+        <div className={cn("flex justify-end", tutorialMode ? "mt-3" : "mt-2")}>
           <Link
             to="/phone"
             className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
@@ -738,9 +1100,25 @@ function ConversationList({
             Open inbox
           </Link>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {hasSearch ? "Search the wider communication history." : "Only the active handful stays here."}
-        </p>
+        <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg border bg-muted/40 p-1">
+          {viewOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              title={option.description}
+              onClick={() => setInboxView(option.key)}
+              className={cn(
+                "rounded-md px-2 py-1.5 text-xs font-semibold transition",
+                inboxView === option.key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+              )}
+            >
+              <span className="block truncate">{option.label}</span>
+              <span className="block text-[10px] font-medium opacity-70">{viewCounts[option.key]}</span>
+            </button>
+          ))}
+        </div>
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -753,56 +1131,102 @@ function ConversationList({
         <TeamInboxSignal />
       </div>
 
-      <div className="shrink-0 overflow-y-auto p-3" style={{ maxHeight: "min(58vh, 620px)" }}>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-6" onScroll={handleQueueScroll}>
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((item) => <Skeleton key={item} className="h-20 rounded-lg" />)}
           </div>
-        ) : items.length === 0 ? (
+        ) : queueItems.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No conversations match this search.
+            {hasSearch
+              ? "No conversations match this search."
+              : inboxView === "now"
+                ? "Zero inbox. No contacts need attention right now."
+                : inboxView === "answering"
+                  ? "No answering service messages found."
+                : inboxView === "active"
+                  ? "No active work contacts in this view."
+                  : "No recent conversations found."}
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              {visibleItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelect(item)}
-                  className={cn(
-                    "w-full rounded-lg border px-3 py-2 text-left transition hover:border-primary/40 hover:bg-muted/30",
-                    selectedId === item.id ? "border-primary bg-primary/5" : "bg-background",
-                    item.unread && "border-l-4 border-l-primary"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Badge variant={item.kind === "call" ? "secondary" : "outline"} className="shrink-0 text-[10px]">
-                        {item.kind === "call" ? "Call" : "Text"}
-                      </Badge>
-                      <Badge variant={item.direction === "inbound" ? "default" : "outline"} className="shrink-0 text-[10px]">
-                        {item.direction === "inbound" ? "In" : "Out"}
-                      </Badge>
-                      <p className="truncate text-sm font-semibold">
-                        {item.name || formatPhone(item.phone) || item.phone}
-                      </p>
+            {visibleGroups.map((group) => (
+              <div key={group.key} className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {inboxView === "answering"
+                      ? "Answering Service"
+                      : inboxView === "active" && group.key === "recent"
+                        ? "Active Work"
+                        : group.label}
+                  </p>
+                  <Badge variant="outline" className="h-5 text-[10px]">{totalGroupCounts.get(group.key) || group.items.length}</Badge>
+                </div>
+              {group.items.map((item) => {
+                const visual = conversationVisual(item);
+                const Icon = visual.icon;
+                const DirectionIcon = visual.directionIcon;
+                const feedTime = formatFeedTimestamp(item.createdAt);
+                const badges = getAttentionBadges(item);
+                const primaryBadge = badges[0] || null;
+                const name = item.name || formatPhone(item.phone) || item.phone;
+                const summaryText = isChannelOnlyText(item.summary) ? "Review context" : item.summary;
+                const detailText = cleanConversationDetail(item.detail);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelect(item)}
+                    title={visual.label}
+                    className={cn(
+                      "w-full rounded-lg border border-l-4 px-3 py-2 text-left shadow-sm transition hover:border-primary/40",
+                      selectedId === item.id ? visual.selectedClass : visual.cardClass,
+                      primaryBadge?.label === "Urgent" && selectedId !== item.id && "border-red-300 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20",
+                      primaryBadge?.label === "Needs reply" && selectedId !== item.id && "border-amber-300 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20",
+                      item.unread && "ring-1 ring-primary/15"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div
+                          className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md", visual.ringClass)}
+                          aria-label={visual.label}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {badges.slice(0, 2).map((badge) => {
+                              const BadgeIcon = badge.icon;
+                              return (
+                                <span key={badge.label} className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold", badge.className)}>
+                                  <BadgeIcon className="h-3 w-3" />
+                                  {badge.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-right text-[10px] leading-4 text-muted-foreground">
+                        <span className="block font-medium text-foreground/70">{feedTime.date}</span>
+                        <span className="block">{feedTime.time || item.timeLabel}</span>
+                      </span>
                     </div>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{item.timeLabel}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs font-medium text-foreground">{item.summary}</p>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{item.detail}</p>
-                </button>
-              ))}
-            </div>
-            {hiddenCount > 0 && (
+                    <p className="mt-2 truncate text-xs font-medium text-foreground">{summaryText}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{detailText}</p>
+                  </button>
+                );
+              })}
+              </div>
+            ))}
+            {remainingCount > 0 && (
               <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-center">
                 <p className="text-xs text-muted-foreground">
-                  Showing {visibleItems.length} active item{visibleItems.length === 1 ? "" : "s"}. {hiddenCount} older conversation{hiddenCount === 1 ? "" : "s"} stay in the full inbox.
+                  Scroll for {remainingCount} more conversation{remainingCount === 1 ? "" : "s"}.
                 </p>
-                <Link to="/phone" className="mt-2 inline-flex rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10">
-                  Open full inbox
-                </Link>
               </div>
             )}
           </div>
@@ -823,25 +1247,40 @@ function MiniConversationRail({
 }) {
   return (
     <div className="space-y-2">
-      {items.slice(0, 8).map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onSelect(item)}
-          className={cn(
-            "w-full rounded-md border bg-background p-2 text-left transition hover:border-primary/40",
-            selectedId === item.id && "border-primary bg-primary/5"
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Badge variant={item.kind === "call" ? "secondary" : "outline"} className="text-[10px]">
-              {item.kind === "call" ? "Call" : "Text"}
-            </Badge>
-            <p className="truncate text-xs font-semibold">{item.name || formatPhone(item.phone) || item.phone}</p>
-          </div>
-          <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.summary}</p>
-        </button>
-      ))}
+      {items.slice(0, 8).map((item) => {
+        const visual = conversationVisual(item);
+        const Icon = visual.icon;
+        const DirectionIcon = visual.directionIcon;
+        const badges = getAttentionBadges(item);
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onSelect(item)}
+            title={visual.label}
+            className={cn(
+              "w-full rounded-md border border-l-4 p-2 text-left transition hover:border-primary/40",
+              selectedId === item.id ? visual.selectedClass : visual.cardClass
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <div className={cn("relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md", visual.ringClass)} aria-label={visual.label}>
+                <Icon className="h-3 w-3" />
+                <DirectionIcon className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border border-background bg-background p-0.5 text-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold">{item.name || formatPhone(item.phone) || item.phone}</p>
+                {badges[0] && (
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {badges[0].label}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.summary}</p>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1252,7 +1691,7 @@ function InlineSmsReplyComposer({
                 showLabel
                 hideOnMobile={false}
                 autoStopOnSilence={false}
-                provider="openai"
+                context="sms"
                 title="Dictate reply"
                 onTranscript={(text) => {
                   const el = inputRef.current;
@@ -1279,20 +1718,32 @@ function InlineSmsReplyComposer({
 
 function CustomerWorkspace({
   selected,
+  tutorialMode,
   smsSending,
   onSendSms,
   onMarkSmsRead,
+  onMarkCallRead,
   onSetSmsThreadStatus,
+  onHandled,
 }: {
   selected: DeskConversation | null;
+  tutorialMode: boolean;
   smsSending: boolean;
   onSendSms: SendSmsHandler;
   onMarkSmsRead: (phone: string) => void | Promise<void>;
+  onMarkCallRead: (phone: string) => void | Promise<void>;
   onSetSmsThreadStatus: ReturnType<typeof useSmsLog>["setThreadStatus"];
+  onHandled: (conversationId: string) => void;
 }) {
   const navigate = useNavigate();
-  const { startCallSession, startSmsSession } = useCopilotPanel();
+  const queryClient = useQueryClient();
+  const { user, employeeId } = useAuth();
+  const { data: employees = [] } = useEmployees();
+  const { startCallSession, startSmsSession, startRecordSession } = useCopilotPanel();
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [jarvisDialogOpen, setJarvisDialogOpen] = useState(false);
+  const [handledStamp, setHandledStamp] = useState<{ id: string; label: string; at: string } | null>(null);
+  const [handling, setHandling] = useState(false);
   const lookup = useCallerLookup(selected?.phone);
   const customer = lookup.data;
   const customerId = customer?.id;
@@ -1308,10 +1759,28 @@ function CustomerWorkspace({
   const recentRecords = useMemo(() => {
     return [...(jobs || []).slice(0, 3), ...(estimates || []).slice(0, 2)].slice(0, 4);
   }, [jobs, estimates]);
+  const keepUnreadUntilHandled = useCallback((_phone: string) => undefined, []);
 
   if (!selected) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
+      <main className="flex min-h-0 flex-1 flex-col bg-background p-4">
+        {tutorialMode ? (
+          <StepHeader
+            step="Step 2"
+            title="Understand the Customer"
+            detail="After you choose a signal, this area shows who they are, what happened, and why it matters."
+            icon={UserRound}
+            tone="context"
+          />
+        ) : (
+          <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <UserRound className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Customer Context</h2>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-1 items-center justify-center">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <MessageSquare className="h-6 w-6" />
@@ -1321,43 +1790,184 @@ function CustomerWorkspace({
             Pick a call or text to identify the customer, see active work, and decide what dispatch should do next.
           </p>
         </div>
+        </div>
       </main>
     );
   }
 
   const displayName = customerName(customer) || selected.name || formatPhone(selected.phone) || selected.phone;
+  const employeeName = employees.find((employee: any) => employee.id === employeeId)?.name || user?.email || "Current user";
   const address = customer
     ? [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(", ")
     : null;
-  const contactReason = selected.summary || selected.detail || "Waiting for Jarvis summary";
-  const knownSignals = [
-    customer?.email,
-    address,
-    activeJobs.length ? `${activeJobs.length} active job${activeJobs.length === 1 ? "" : "s"}` : null,
-    overview?.agreement ? `${overview.agreement.plan_name} agreement` : null,
-  ].filter(Boolean);
+  const contactReason = isChannelOnlyText(selected.summary)
+    ? cleanConversationDetail(selected.detail) || "Review the selected conversation and decide the next step."
+    : selected.summary || cleanConversationDetail(selected.detail) || "Waiting for Jarvis summary";
   const dialable = toE164(selected.phone) || selected.phone;
+  const visual = conversationVisual(selected);
+  const ConversationIcon = visual.icon;
+  const attentionBadges = getAttentionBadges(selected);
+  const primaryAttention = attentionBadges[0] || null;
+  const riskLabel = primaryAttention?.label || (!customer ? "Unknown customer" : activeJobs.length > 0 ? "Active work" : "Normal");
+  const riskClass = primaryAttention?.className || (!customer ? "border-violet-300 bg-violet-50 text-violet-950 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-100" : "border-border bg-muted/30 text-foreground");
+  const bookingSuggestion = inferBookingIntent(selected, customer);
+  const addressVerification = addressVerificationFromContext(selected, customer);
+  const liveIntakeFields = buildLiveIntakeFields(selected, customer, bookingSuggestion, addressVerification);
+  const missingFields = liveIntakeFields.filter((field) => field.status !== "captured");
+  const capturedFields = liveIntakeFields.filter((field) => field.status === "captured");
   const openCall = () => {
     startCallSession(dialable, displayName);
     openPhoneConsole(dialable, { contactName: displayName, customerId: customer?.id, autoDial: false });
   };
   const openText = () => {
     startSmsSession(dialable, displayName);
-    if (selected.kind === "sms") void onMarkSmsRead(dialable);
     setSmsDialogOpen(true);
+  };
+  const markHandled = async () => {
+    if (!selected || handling) return;
+    if (!user?.id) {
+      toast({ title: "Sign in required", description: "We need your user account so the handled stamp is accountable." });
+      return;
+    }
+
+    setHandling(true);
+    const handledAt = new Date().toISOString();
+    const phoneLast10 = normalizeLast10(selected.phone);
+    const latestCall = selected.kind === "call" ? (selected.raw as CallConversation).lastCall : null;
+    const smsConversation = selected.kind === "sms" ? selected.raw as SmsConversation : null;
+    const communicationId = selected.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id;
+    const details = {
+      conversation_id: selected.id,
+      communication_id: communicationId || null,
+      communication_type: selected.kind,
+      direction: selected.direction,
+      phone_last10: phoneLast10 || null,
+      customer_id: customer?.id || null,
+      customer_name: customerName(customer) || selected.name || null,
+      job_id: selected.latestJobId || null,
+      summary: selected.summary || null,
+      handled_by_user_id: user.id,
+      handled_by_name: employeeName,
+      handled_at: handledAt,
+    };
+
+    try {
+      if (selected.kind === "sms") {
+        await onMarkSmsRead(selected.phone);
+        await onSetSmsThreadStatus(selected.phone, "done");
+      } else {
+        await onMarkCallRead(selected.phone);
+      }
+
+      const auditResults = await Promise.all([
+        supabase.from("copilot_button_clicks" as any).insert({
+          user_id: user.id,
+          context_type: "intake",
+          context_subtype: `${selected.kind}:${selected.direction}:${phoneLast10 || "unknown"}`,
+          action_key: "mark_handled",
+          action_label: "Marked intake conversation handled",
+          customer_id: customer?.id ?? null,
+          job_id: selected.latestJobId ?? null,
+        }),
+        supabase.from("activity_log" as any).insert({
+          job_id: selected.latestJobId ?? null,
+          action: "intake_conversation_handled",
+          performed_by: employeeName,
+          details: JSON.stringify(details),
+        }),
+        customer?.id
+          ? supabase.from("customer_activity_feed" as any).insert({
+              customer_id: customer.id,
+              related_job_id: selected.latestJobId ?? null,
+              event_type: "intake_conversation_handled",
+              title: "Intake conversation handled",
+              body: `${employeeName} marked this ${selected.kind === "call" ? "call" : "text thread"} handled.`,
+              source: "intake_hq",
+              actor_id: user.id,
+              actor_name: employeeName,
+              metadata: details,
+            })
+          : Promise.resolve({ error: null }),
+      ]);
+      const auditError = auditResults.find((result: any) => result?.error)?.error;
+      if (auditError) throw auditError;
+
+      setHandledStamp({ id: selected.id, label: employeeName, at: handledAt });
+      onHandled(selected.id);
+      queryClient.invalidateQueries({ queryKey: ["call_log"] });
+      queryClient.invalidateQueries({ queryKey: ["sms_log"] });
+      queryClient.invalidateQueries({ queryKey: ["activity_log"] });
+      if (customer?.id) queryClient.invalidateQueries({ queryKey: ["customer-activity-feed", customer.id] });
+      toast({ title: "Marked handled", description: `Stamped as handled by ${employeeName}.` });
+    } catch (error: any) {
+      toast({
+        title: "Could not mark handled",
+        description: error?.message || "The conversation was not updated.",
+        variant: "destructive",
+      });
+    } finally {
+      setHandling(false);
+    }
   };
   const handleModalSend: SendSmsHandler = async (to, text, jobId, contactName, mediaUrls) => {
     const success = await onSendSms(to, text, jobId, contactName || displayName, mediaUrls);
     if (success) setSmsDialogOpen(false);
     return success;
   };
+  const askJarvisAboutSelection = () => {
+    const contextText = getConversationContextText(selected);
+    const customerNameForContext = customerName(customer) || selected.name || null;
+    const latestCall = selected.kind === "call" ? (selected.raw as CallConversation).lastCall : null;
+    const smsConversation = selected.kind === "sms" ? selected.raw as SmsConversation : null;
+
+    startRecordSession({
+      contextType: selected.kind,
+      contextId: selected.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id,
+      label: `${selected.kind === "call" ? "Call" : "SMS"} with ${customerNameForContext || formatPhone(selected.phone) || selected.phone}`,
+      prompt: `Use the attached ${selected.kind === "call" ? "call transcript" : "SMS thread"} context. Identify who this is, what they need, why it matters, and prepare the next human-approved actions. If there is already an open Now card, update that card instead of creating duplicate work.`,
+      context: {
+        id: selected.id,
+        title: selected.summary,
+        phone: selected.phone,
+        customer_id: customer?.id || null,
+        customer_name: customerNameForContext,
+        address: customerAddress(customer) || addressVerification.standardized || addressVerification.address || null,
+        communication_type: selected.kind,
+        direction: selected.direction,
+        summary: selected.summary,
+        detail: selected.detail,
+        transcript_or_thread: contextText,
+        suggested_actions: [
+          "Summarize this selected conversation",
+          "Detect booking, estimate, maintenance, reschedule, customer-note, warranty, or billing intent",
+          "Create or update the related Now card",
+          "Draft an SMS reply if needed",
+        ],
+      },
+    });
+    navigate("/copilot");
+  };
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
+      {tutorialMode && (
+      <div className="mb-4">
+        <StepHeader
+          step="Step 2"
+          title="Understand the Customer"
+          detail="Match the phone number, review the thread, and see the customer record before taking action."
+          icon={UserRound}
+          tone="context"
+        />
+      </div>
+      )}
       <div className="mb-4 rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md", visual.ringClass)}>
+                <ConversationIcon className="h-4 w-4" />
+              </div>
               <h1 className="truncate text-xl font-semibold tracking-tight">{displayName}</h1>
               {customer ? (
                 <Badge variant="default">Existing customer</Badge>
@@ -1383,6 +1993,18 @@ function CustomerWorkspace({
               <MessageSquare className="h-4 w-4" />
               Text
             </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setJarvisDialogOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              Jarvis context
+            </Button>
+            <Button size="sm" className="gap-2" onClick={markHandled} disabled={handling}>
+              {handling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Handled
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate("/now")}>
+              <Zap className="h-4 w-4" />
+              Now
+            </Button>
             {customer ? (
               <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate(`/customers/${customer.id}`)}>
                 <ExternalLink className="h-4 w-4" />
@@ -1395,6 +2017,30 @@ function CustomerWorkspace({
             )}
           </div>
         </div>
+        {handledStamp?.id === selected.id && (
+          <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-100">
+            Handled by {handledStamp.label} at {formatDateTime(handledStamp.at)}.
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4 grid gap-2 md:grid-cols-5">
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer</p>
+          <p className="mt-1 truncate text-sm font-semibold">{customer ? "Known" : "Unknown lead"}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3 md:col-span-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Service Address</p>
+          <p className="mt-1 truncate text-sm font-semibold">{address || "Needs confirmation"}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Active Work</p>
+          <p className="mt-1 truncate text-sm font-semibold">{activeJobs.length ? `${activeJobs.length} active` : "None"}</p>
+        </div>
+        <div className={cn("rounded-lg border p-3", riskClass)}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">Risk</p>
+          <p className="mt-1 truncate text-sm font-semibold">{riskLabel}</p>
+        </div>
       </div>
 
       {selected.kind === "sms" && (
@@ -1403,51 +2049,25 @@ function CustomerWorkspace({
         </div>
       )}
 
-      <div className="mb-4">
-        <ConversationEvidence selected={selected} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Section title="Who" detail="Customer identity and match confidence.">
-          <div className="space-y-3">
-            <div className="rounded-md border bg-background p-3">
-              <p className="text-sm font-semibold">{displayName}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{formatPhone(selected.phone) || selected.phone}</p>
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+        <Section title="What happened" detail="The latest customer signal and the reason this is on the desk.">
+          <div className="rounded-md border bg-card p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Latest signal
             </div>
-            {knownSignals.length ? (
-              <div className="space-y-2">
-                {knownSignals.map((signal) => (
-                  <div key={String(signal)} className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                    {signal}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Unknown number. Jarvis should prepare a link or create-customer action.
-              </p>
-            )}
-          </div>
-        </Section>
-
-        <Section title="What" detail="The request Jarvis heard.">
-          <div className="space-y-3">
-            <div className="rounded-md border bg-primary/5 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="h-4 w-4 text-primary" />
-                {selected.kind === "sms" ? "Text intake" : "Call intake"}
-              </div>
-              <p className="mt-2 line-clamp-5 text-sm leading-6 text-muted-foreground">{contactReason}</p>
-            </div>
+            <p className="mt-2 line-clamp-5 text-sm leading-6 text-muted-foreground">
+              {contactReason}
+            </p>
             {selected.detail && selected.detail !== selected.summary && (
-              <p className="line-clamp-4 rounded-md border bg-background p-3 text-xs leading-5 text-muted-foreground">
+              <p className="mt-3 line-clamp-3 rounded-md bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
                 {selected.detail}
               </p>
             )}
           </div>
         </Section>
 
-        <Section title="Why" detail="Reason for action and nearby context.">
+        <Section title="Active work and memory" detail="Enough context to decide without opening the full record.">
           {overviewLoading ? (
             <Skeleton className="h-24 rounded-lg" />
           ) : !customer ? (
@@ -1499,6 +2119,10 @@ function CustomerWorkspace({
         </Section>
       </div>
 
+      <div className="mt-4">
+        <ConversationEvidence selected={selected} />
+      </div>
+
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
         <DialogContent className="flex h-[82vh] max-w-4xl flex-col overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b px-4 py-3">
@@ -1512,7 +2136,7 @@ function CustomerWorkspace({
               conversation={selected.kind === "sms" ? (selected.raw as SmsConversation) : null}
               sending={smsSending}
               onSend={handleModalSend}
-              onMarkRead={onMarkSmsRead}
+              onMarkRead={keepUnreadUntilHandled}
               onStatusChange={onSetSmsThreadStatus}
               onBack={() => setSmsDialogOpen(false)}
               newMessageMode={selected.kind !== "sms"}
@@ -1521,20 +2145,101 @@ function CustomerWorkspace({
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={jarvisDialogOpen} onOpenChange={setJarvisDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Jarvis context</DialogTitle>
+            <DialogDescription>
+              Quick read on this conversation. Action cards live in Now HQ.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Who</p>
+                <p className="mt-1 text-sm font-semibold">{displayName}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatPhone(selected.phone) || selected.phone}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What Jarvis thinks</p>
+                <p className="mt-1 text-sm font-semibold">{bookingSuggestion?.label || primaryAttention?.prefix || "Review conversation"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{bookingSuggestion?.preferredTiming || "No timing preference captured yet"}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Where</p>
+                <p className="mt-1 text-sm font-semibold">{addressVerification.standardized || addressVerification.address || address || "No address confirmed"}</p>
+                <Badge variant={addressVerification.confidence === "high" ? "secondary" : "outline"} className="mt-2 text-[10px]">
+                  {addressVerification.confidence === "unknown" ? "needs check" : `${addressVerification.confidence} confidence`}
+                </Badge>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Current work</p>
+                <p className="mt-1 text-sm font-semibold">{activeJobs.length ? `${activeJobs.length} active job${activeJobs.length === 1 ? "" : "s"}` : "No active job found"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{customer ? "Matched customer record" : "Unknown or new lead"}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conversation read</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{contactReason}</p>
+            </div>
+
+            {missingFields.length > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Missing or uncertain</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {missingFields.slice(0, 6).map((field) => (
+                    <Badge key={field.label} variant="outline">{field.label}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {capturedFields.length > 0 && (
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-sm font-semibold">Captured</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {capturedFields.slice(0, 6).map((field) => (
+                    <div key={field.label} className="rounded-md border bg-background px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{field.label}</p>
+                      <p className="mt-1 truncate text-xs font-medium">{field.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setJarvisDialogOpen(false)}>
+              Close
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={askJarvisAboutSelection}>
+              <Sparkles className="h-4 w-4" />
+              Ask Jarvis
+            </Button>
+            <Button className="gap-2" onClick={() => navigate("/now")}>
+              <Zap className="h-4 w-4" />
+              Open Now HQ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
 
 function ActionPanel({
   selected,
+  tutorialMode,
 }: {
   selected: DeskConversation | null;
+  tutorialMode: boolean;
 }) {
   const navigate = useNavigate();
   const { startRecordSession } = useCopilotPanel();
-  const [draft, setDraft] = useState("");
-  const [bookingWizardOpen, setBookingWizardOpen] = useState(false);
-  const [queuedBookingSummary, setQueuedBookingSummary] = useState<string | null>(null);
   const [liveAddressVerification, setLiveAddressVerification] = useState<GoogleAddressVerification | null>(null);
   const [acceptedAddressVerification, setAcceptedAddressVerification] = useState<AddressVerification | null>(null);
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -1563,6 +2268,34 @@ function ActionPanel({
     && liveIntakeFields.some((field) => field.label === "Phone" && field.status === "captured")
     && !!addressVerification.address
     && !addressNeedsReview;
+  const approvalState = !bookingSuggestion
+    ? {
+        label: "Waiting for intent",
+        detail: "Jarvis is still listening for booking, update, or follow-up context.",
+        className: "border-border bg-card text-foreground",
+        icon: Sparkles,
+      }
+    : minimumReady
+      ? {
+          label: "Ready for human review",
+          detail: "The required intake fields look ready. Nothing happens until you approve it.",
+          className: "border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-100",
+          icon: CheckCircle2,
+        }
+      : addressNeedsReview
+        ? {
+            label: "Blocked: address",
+            detail: "Confirm the service address before this becomes schedulable work.",
+            className: "border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100",
+            icon: AlertTriangle,
+          }
+        : {
+            label: "Needs a little more info",
+            detail: "Capture the missing intake details before approval.",
+            className: "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100",
+            icon: AlertTriangle,
+          };
+  const ApprovalIcon = approvalState.icon;
   const fieldPriority = new Set(["Address", "Preferred timing", "Issue", "Intent", "Customer", "Phone"]);
   const visibleIntakeFields = [
     ...liveIntakeFields.filter((field) => field.status !== "captured" && fieldPriority.has(field.label)),
@@ -1573,22 +2306,6 @@ function ActionPanel({
   const hiddenIntakeFieldCount = Math.max(0, liveIntakeFields.length - visibleIntakeFields.length);
 
   useEffect(() => {
-    if (!selected) {
-      setDraft("");
-      return;
-    }
-    if (selected.kind === "sms" && selected.direction === "inbound") {
-      setDraft("Thanks for reaching out. Let me take a look and get you helped.");
-    } else if (selected.kind === "call") {
-      setDraft("Thanks for calling Carnes and Sons. This is the Carnes family following up on our conversation. Text us back here if there is anything else you want us to know.");
-    } else {
-      setDraft("");
-    }
-  }, [selected?.id]);
-
-  useEffect(() => {
-    setBookingWizardOpen(false);
-    setQueuedBookingSummary(null);
     setLiveAddressVerification(null);
     setAcceptedAddressVerification(null);
     setAddressDialogOpen(false);
@@ -1625,7 +2342,23 @@ function ActionPanel({
 
   if (!selected) {
     return (
-      <aside className="flex min-h-0 flex-col border-l bg-card p-4">
+      <aside className="flex min-h-0 flex-col border-l bg-background p-4">
+        {tutorialMode ? (
+          <StepHeader
+            step="Step 3"
+            title="Approve the Action"
+            detail="Jarvis prepares the next move after you select a call or text."
+            icon={Bot}
+            tone="action"
+          />
+        ) : (
+          <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Jarvis Actions</h2>
+            </div>
+          </div>
+        )}
         <div className="flex flex-1 items-center justify-center text-center">
           <div>
             <Bot className="mx-auto h-8 w-8 text-muted-foreground" />
@@ -1637,11 +2370,6 @@ function ActionPanel({
     );
   }
 
-  const dialable = toE164(selected.phone) || selected.phone;
-  const openSms = () => navigate(buildSmsUrl(selected.phone, draft));
-  const bookingActionForReview = bookingSuggestion
-    ? { ...bookingSuggestion.action, address: addressVerification.standardized || addressVerification.address || bookingSuggestion.action.address }
-    : null;
   const reviewAddress = () => {
     setAddressDraft(addressVerification.standardized || addressVerification.address || "");
     setAddressDialogOpen(true);
@@ -1737,27 +2465,38 @@ function ActionPanel({
   };
 
   return (
-    <aside className="min-h-0 overflow-y-auto border-l bg-card">
+    <aside className="min-h-0 overflow-y-auto border-l bg-background">
       <div className="sticky top-0 z-10 border-b bg-card/95 p-4 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        {tutorialMode ? (
+          <StepHeader
+            step="Step 3"
+            title="Jarvis + Now Card"
+            detail="Intake listens and talks. Now HQ owns the action card that gets approved, updated, or converted."
+            icon={Bot}
+            tone="action"
+            action={
+              <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2 bg-background/80" onClick={askJarvisAboutSelection}>
+                <Sparkles className="h-4 w-4" />
+                Ask Jarvis
+              </Button>
+            }
+          />
+        ) : (
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Jarvis + Actions</h2>
+              <h2 className="text-sm font-semibold">Jarvis Context</h2>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {bookingSuggestion ? "Review the prepared action." : "Waiting for enough context."}
-            </p>
+            <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2" onClick={askJarvisAboutSelection}>
+              <Sparkles className="h-4 w-4" />
+              Ask Jarvis
+            </Button>
           </div>
-          <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2" onClick={askJarvisAboutSelection}>
-            <Sparkles className="h-4 w-4" />
-            Ask Jarvis
-          </Button>
-        </div>
+        )}
       </div>
 
       <div className="space-y-3 p-3">
-        <Section title="Jarvis Prepared Action" detail="Who, what, and why stay visible before approval.">
+        <Section title="Live Intake Context" detail="Talk here. The durable action belongs in Now HQ.">
           {bookingSuggestion ? (
             <div className="space-y-3">
               <div className="rounded-md border bg-background p-3">
@@ -1772,19 +2511,52 @@ function ActionPanel({
                   </Badge>
                   <Badge variant="outline">{bookingSuggestion.confidence} confidence</Badge>
                 </div>
+                <div className={cn("mt-3 rounded-lg border p-3 shadow-sm", approvalState.className)}>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background/70">
+                      <ApprovalIcon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">
+                        {minimumReady ? "Ready for Now HQ review" : approvalState.label}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 opacity-80">
+                        Jarvis should create or update one open Now card for this customer. If they call back and change direction, the same card should change with them.
+                      </p>
+                      <Button
+                        className="mt-3 w-full gap-2"
+                        onClick={() => navigate("/now")}
+                      >
+                        <Zap className="h-4 w-4" />
+                        Open Now HQ
+                      </Button>
+                    </div>
+                  </div>
+                </div>
                 <div className="mt-3 space-y-2">
                   {visibleIntakeFields.map((field) => (
-                    <div key={field.label} className="rounded-md border bg-muted/30 px-3 py-2">
+                    <div
+                      key={field.label}
+                      className={cn(
+                        "rounded-md border px-3 py-2",
+                        field.status === "missing"
+                          ? "border-amber-300 bg-amber-50/80 dark:border-amber-800/70 dark:bg-amber-950/25"
+                          : field.status === "listening"
+                            ? "bg-muted/30"
+                            : "bg-card"
+                      )}
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           {field.label}
                         </span>
-                        <Badge
-                          variant={field.status === "captured" ? "secondary" : field.status === "missing" ? "destructive" : "outline"}
-                          className="text-[10px]"
-                        >
-                          {field.status === "captured" ? "Captured" : field.status === "missing" ? "Needed" : "Listening"}
-                        </Badge>
+                        {field.status === "captured" ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-label="Captured" />
+                        ) : field.status === "missing" ? (
+                          <Badge variant="destructive" className="text-[10px]">Needed</Badge>
+                        ) : (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Listening" />
+                        )}
                       </div>
                       <p className={cn("mt-1 line-clamp-2 text-sm", field.value ? "text-foreground" : "text-muted-foreground")}>
                         {field.value || (field.status === "missing" ? "Ask customer" : "Waiting for transcript")}
@@ -1802,7 +2574,7 @@ function ActionPanel({
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold">Readiness</p>
-                      <p className="text-xs text-muted-foreground">Jarvis prepares; the operator approves.</p>
+                      <p className="text-xs text-muted-foreground">Jarvis prepares here; the operator approves from Now.</p>
                     </div>
                     <Badge variant={minimumReady ? "secondary" : "outline"}>
                       {capturedFieldCount}/{liveIntakeFields.length} captured
@@ -1814,10 +2586,10 @@ function ActionPanel({
                   className={cn(
                     "mt-3 rounded-md border p-3",
                     addressVerification.confidence === "high"
-                      ? "border-emerald-500/30 bg-emerald-500/10"
+                      ? "border-border bg-muted/20"
                       : addressVerification.confidence === "medium"
-                        ? "border-amber-500/40 bg-amber-500/10"
-                        : "border-destructive/30 bg-destructive/5"
+                        ? "border-amber-500/40 bg-amber-500/10 dark:border-amber-800/70 dark:bg-amber-950/25"
+                        : "border-destructive/30 bg-destructive/5 dark:border-red-900/70 dark:bg-red-950/20"
                   )}
                 >
                   <div className="flex items-start gap-2">
@@ -1868,45 +2640,12 @@ function ActionPanel({
                 <div className="mt-3 flex items-start gap-2 rounded-md border bg-primary/5 p-3 text-xs text-muted-foreground">
                   <Briefcase className="mt-0.5 h-3.5 w-3.5 text-primary" />
                   <span>
-                    If approved, this starts as {bookingSuggestion.type === "book_estimate" ? "an estimate" : "a service job"} with{" "}
-                    <strong className="text-foreground">{bookingSuggestion.defaultOwner}</strong> as the default owner.
+                    This is intake context only. The Now card is where we approve{" "}
+                    {bookingSuggestion.type === "book_estimate" ? "the estimate booking" : "the service workflow"} and hand it to{" "}
+                    <strong className="text-foreground">{bookingSuggestion.defaultOwner}</strong> when it is ready.
                   </span>
                 </div>
               </div>
-
-              {queuedBookingSummary && (
-                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
-                  <p className="font-semibold text-foreground">Queued for review</p>
-                  <p className="mt-1">{queuedBookingSummary}</p>
-                </div>
-              )}
-
-              {bookingWizardOpen ? (
-                <InlineBookingWizard
-                  action={bookingActionForReview || bookingSuggestion.action}
-                  onCancel={() => setBookingWizardOpen(false)}
-                  onComplete={(summary) => {
-                    setQueuedBookingSummary(summary);
-                    setBookingWizardOpen(false);
-                    toast({
-                      title: "Booking ready for approval",
-                      description: "Nothing was booked automatically from this screen.",
-                    });
-                  }}
-                />
-              ) : (
-                <div className="space-y-2">
-                  <Button className="w-full gap-2" onClick={() => setBookingWizardOpen(true)} disabled={!minimumReady}>
-                    <CalendarDays className="h-4 w-4" />
-                    {bookingSuggestion.buttonLabel}
-                  </Button>
-                  {!minimumReady && (
-                    <p className="text-center text-xs text-muted-foreground">
-                      Capture and verify the service address before opening the schedule step.
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -1922,54 +2661,22 @@ function ActionPanel({
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{selected.summary}</p>
               </div>
               {!isKnown && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground dark:border-red-900/70 dark:bg-red-950/20">
                   Unknown number. Jarvis should prepare a customer link or create-customer action first.
                 </div>
               )}
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Listening for booking or estimate intent. As the transcript mentions a repair, maintenance visit, quote,
-                address, or preferred time, this becomes a one-click review action.
+                Listening for booking, estimate, update, access note, pet warning, quote follow-up, warranty, or billing intent.
+                Once Jarvis has enough context, the open Now card should update instead of creating duplicate work.
               </div>
+              <Button variant="outline" className="w-full gap-2" onClick={() => navigate("/now")}>
+                <Zap className="h-4 w-4" />
+                Open Now HQ
+              </Button>
             </div>
           )}
         </Section>
 
-        <Section title="Approval Macros" detail="Fast actions without manual job creation clutter.">
-          {(isSms || draft) && (
-            <Textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Draft a customer reply..."
-              className="min-h-20 resize-none"
-            />
-          )}
-          <div className={cn("grid gap-2", (isSms || draft) && "mt-3")}>
-            <Button className="gap-2" onClick={openSms}>
-              <Send className="h-4 w-4" />
-              Review text reply
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={reviewAddress}>
-              <MapPin className="h-4 w-4" />
-              Confirm address
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={() => openPhoneConsole(dialable, { contactName: selected.name || undefined, customerId: customer?.id })}>
-              <Phone className="h-4 w-4" />
-              Call customer
-            </Button>
-            {customer && (
-              <Button variant="outline" className="gap-2" onClick={() => navigate(`/customers/${customer.id}`)}>
-                <UserRound className="h-4 w-4" />
-                Open customer
-              </Button>
-            )}
-            {selected.latestJobId && (
-              <Button variant="outline" className="gap-2" onClick={() => navigate(`/jobs/${selected.latestJobId}`)}>
-                <Briefcase className="h-4 w-4" />
-                Open related job
-              </Button>
-            )}
-          </div>
-        </Section>
       </div>
 
       <Dialog open={addressDialogOpen} onOpenChange={setAddressDialogOpen}>
@@ -2006,10 +2713,10 @@ function ActionPanel({
               className={cn(
                 "rounded-lg border p-4",
                 addressVerification.confidence === "high"
-                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  ? "border-emerald-500/30 bg-emerald-500/10 dark:border-emerald-800/70 dark:bg-emerald-950/25"
                   : addressVerification.confidence === "medium"
-                    ? "border-amber-500/40 bg-amber-500/10"
-                    : "border-destructive/30 bg-destructive/5"
+                    ? "border-amber-500/40 bg-amber-500/10 dark:border-amber-800/70 dark:bg-amber-950/25"
+                    : "border-destructive/30 bg-destructive/5 dark:border-red-900/70 dark:bg-red-950/20"
               )}
             >
               <div className="flex items-start gap-3">
@@ -2033,7 +2740,7 @@ function ActionPanel({
             </div>
 
             {addressNeedsReview && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800">
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-100">
                 Ask the customer to repeat the street number and street name. Once it looks right, accept it here and continue.
               </div>
             )}
@@ -2063,6 +2770,144 @@ function ActionPanel({
   );
 }
 
+function ManualActionPanel({
+  selected,
+  tutorialMode,
+  onCreateJob,
+}: {
+  selected: DeskConversation | null;
+  tutorialMode: boolean;
+  onCreateJob: () => void;
+}) {
+  const navigate = useNavigate();
+  const lookup = useCallerLookup(selected?.phone);
+  const customer = lookup.data;
+  const dialable = selected ? toE164(selected.phone) || selected.phone : "";
+  const displayName =
+    customerName(customer) ||
+    selected?.name ||
+    (selected ? formatPhone(selected.phone) || selected.phone : "");
+
+  const callCustomer = () => {
+    if (!selected || !dialable) {
+      toast({ title: "No phone number", description: "Select a call or text first." });
+      return;
+    }
+    openPhoneConsole(dialable, {
+      contactName: displayName || undefined,
+      customerId: customer?.id,
+      autoDial: false,
+    });
+  };
+
+  const textCustomer = () => {
+    if (!selected?.phone) {
+      toast({ title: "No phone number", description: "Select a call or text first." });
+      return;
+    }
+    navigate(buildSmsUrl(selected.phone));
+  };
+
+  return (
+    <aside className="min-h-0 overflow-y-auto border-l bg-background">
+      <div className="sticky top-0 z-10 border-b bg-card/95 p-4 backdrop-blur">
+        {tutorialMode ? (
+          <StepHeader
+            step="Step 3"
+            title="Manual Actions"
+            detail="Same customer context as AI Mode, but every action is operator-driven."
+            icon={UserRound}
+            tone="action"
+          />
+        ) : (
+          <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <UserRound className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Manual Actions</h2>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 p-3">
+        <Section title="Selected Conversation" detail="Human Mode keeps context visible and makes you press the buttons.">
+          {!selected ? (
+            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              Select a call or text from the live inbox to use manual controls.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-card p-3">
+                <div className="flex items-start gap-3">
+                  {(() => {
+                    const visual = conversationVisual(selected);
+                    const Icon = visual.icon;
+                    const DirectionIcon = visual.directionIcon;
+                    return (
+                      <div className={cn("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md", visual.ringClass)}>
+                        <Icon className="h-4 w-4" />
+                        <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" />
+                      </div>
+                    );
+                  })()}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{displayName || "Selected conversation"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatPhone(selected.phone) || selected.phone}</p>
+                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                      {isChannelOnlyText(selected.summary) ? cleanConversationDetail(selected.detail) : selected.summary}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button className="gap-2" onClick={callCustomer}>
+                  <Phone className="h-4 w-4" />
+                  Call
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={textCustomer}>
+                  <MessageSquare className="h-4 w-4" />
+                  Text
+                </Button>
+                <Button variant="outline" className="col-span-2 gap-2" onClick={onCreateJob}>
+                  <Plus className="h-4 w-4" />
+                  Create job
+                </Button>
+                {customer && (
+                  <Button
+                    variant="outline"
+                    className="col-span-2 gap-2"
+                    onClick={() => navigate(`/customers/${customer.id}`)}
+                  >
+                    <UserRound className="h-4 w-4" />
+                    Open customer
+                  </Button>
+                )}
+                {selected.latestJobId && (
+                  <Button
+                    variant="outline"
+                    className="col-span-2 gap-2"
+                    onClick={() => navigate(`/jobs/${selected.latestJobId}`)}
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    Open related job
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </Section>
+
+        <Section title="Manual Rule" detail="AI Mode prepares the answer. Human Mode exposes the macro buttons.">
+          <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+            Use this side when Jarvis is uncertain, offline, or you want to take over the intake by hand.
+          </div>
+        </Section>
+      </div>
+    </aside>
+  );
+}
+
 function HumanModeDesk({
   conversations,
   selectedConversation,
@@ -2079,9 +2924,18 @@ function HumanModeDesk({
   onCreateJob: () => void;
 }) {
   const navigate = useNavigate();
+  const selectedConversationLookup = useCallerLookup(selectedConversation?.phone);
+  const selectedConversationCustomer = selectedConversationLookup.data;
   const { data: jobs = [], isLoading: jobsLoading } = useJobs();
   const { data: employees = [] } = useEmployees();
   const selectedJob = selectedJobId ? (jobs as any[]).find((job: any) => job.id === selectedJobId) : null;
+  const selectedConversationDialable = selectedConversation
+    ? toE164(selectedConversation.phone) || selectedConversation.phone
+    : "";
+  const selectedConversationName =
+    customerName(selectedConversationCustomer) ||
+    selectedConversation?.name ||
+    (selectedConversation ? formatPhone(selectedConversation.phone) || selectedConversation.phone : "");
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const activeJobs = useMemo(() => {
@@ -2130,6 +2984,26 @@ function HumanModeDesk({
       return;
     }
     navigate(buildSmsUrl(job.customer_phone));
+  };
+
+  const callSelectedConversation = () => {
+    if (!selectedConversationDialable) {
+      toast({ title: "No phone number", description: "Select a call or text first." });
+      return;
+    }
+    openPhoneConsole(selectedConversationDialable, {
+      contactName: selectedConversationName || undefined,
+      customerId: selectedConversationCustomer?.id,
+      autoDial: false,
+    });
+  };
+
+  const textSelectedConversation = () => {
+    if (!selectedConversation?.phone) {
+      toast({ title: "No phone number", description: "Select a call or text first." });
+      return;
+    }
+    navigate(buildSmsUrl(selectedConversation.phone));
   };
 
   return (
@@ -2217,6 +3091,71 @@ function HumanModeDesk({
       </main>
 
       <aside className="min-h-0 overflow-y-auto border-l bg-card p-4">
+        <Section title="Manual Conversation">
+          {!selectedConversation ? (
+            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              Select a call or text from the left rail to use manual fallbacks.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-background p-3">
+                <div className="flex items-start gap-2">
+                  <div className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md", conversationVisual(selectedConversation).ringClass)}>
+                    {(() => {
+                      const visual = conversationVisual(selectedConversation);
+                      const Icon = visual.icon;
+                      const DirectionIcon = visual.directionIcon;
+                      return (
+                        <>
+                          <Icon className="h-4 w-4" />
+                          <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" />
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{selectedConversationName || "Selected conversation"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatPhone(selectedConversation.phone) || selectedConversation.phone}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button className="gap-2" onClick={callSelectedConversation}>
+                  <Phone className="h-4 w-4" />
+                  Call
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={textSelectedConversation}>
+                  <MessageSquare className="h-4 w-4" />
+                  Text
+                </Button>
+                {selectedConversationCustomer && (
+                  <Button
+                    variant="outline"
+                    className="col-span-2 gap-2"
+                    onClick={() => navigate(`/customers/${selectedConversationCustomer.id}`)}
+                  >
+                    <UserRound className="h-4 w-4" />
+                    Open customer
+                  </Button>
+                )}
+                {selectedConversation.latestJobId && (
+                  <Button
+                    variant="outline"
+                    className="col-span-2 gap-2"
+                    onClick={() => navigate(`/jobs/${selectedConversation.latestJobId}`)}
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    Open related job
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </Section>
+
+        <div className="mt-4">
         <h2 className="text-sm font-semibold">Selected Job</h2>
         <p className="mt-1 text-xs text-muted-foreground">Manual detail and override panel.</p>
 
@@ -2263,6 +3202,7 @@ function HumanModeDesk({
             </Section>
           </div>
         )}
+        </div>
       </aside>
     </div>
   );
@@ -2270,6 +3210,8 @@ function HumanModeDesk({
 
 export default function OperationsDeskV2() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user, role, employeeId } = useAuth();
   const { conversations: callConversations, loading: callsLoading, markAsRead: markCallsAsRead } = useCallLog();
   const {
     conversations: smsConversations,
@@ -2278,18 +3220,19 @@ export default function OperationsDeskV2() {
     sendSms,
     markAsRead: markSmsAsRead,
     setThreadStatus: setSmsThreadStatus,
-  } = useSmsLog();
-  const [uiMode, setUiMode] = useState<UIMode>("ai");
+  } = useSmsLog({ role, employeeId, userId: user?.id ?? null });
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DeskConversation | null>(null);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [newJobOpen, setNewJobOpen] = useState(false);
+  const [tutorialMode, setTutorialMode] = useState(() => localStorage.getItem("intake_tutorial_mode") === "true");
 
   const conversations = useMemo(() => {
     const items = [
       ...callConversations.map(callToDeskItem),
       ...smsConversations.map(smsToDeskItem),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    ]
+      .filter((item) => !isEmployeeConversation(item))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const q = search.trim().toLowerCase();
     if (!q) return items;
@@ -2309,17 +3252,37 @@ export default function OperationsDeskV2() {
 
   const selectConversation = (item: DeskConversation) => {
     setSelected(item);
-    if (item.kind === "call") {
-      void markCallsAsRead(item.phone);
-    } else {
-      void markSmsAsRead(item.phone);
-    }
+  };
+
+  const handleConversationHandled = (conversationId: string) => {
+    setSelected((current) => (current?.id === conversationId ? null : current));
   };
 
   useEffect(() => {
-    if (selected || conversations.length === 0) return;
-    setSelected(conversations[0]);
+    if (selected) return;
+    const nextActionable = conversations.find((item) => getConversationGroup(item) === "needs_action");
+    if (nextActionable) setSelected(nextActionable);
   }, [conversations, selected]);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (conversations.some((item) => item.id === selected.id)) return;
+    setSelected(conversations[0] || null);
+  }, [conversations, selected]);
+
+  useEffect(() => {
+    const phone = searchParams.get("phone");
+    if (!phone || conversations.length === 0) return;
+    const digits = normalizeLast10(phone);
+    const match = conversations.find((item) => normalizeLast10(item.phone) === digits);
+    if (match && selected?.id !== match.id) {
+      selectConversation(match);
+    }
+  }, [conversations, searchParams, selected?.id]);
+
+  useEffect(() => {
+    localStorage.setItem("intake_tutorial_mode", String(tutorialMode));
+  }, [tutorialMode]);
 
   const loading = callsLoading || smsLoading;
 
@@ -2331,76 +3294,54 @@ export default function OperationsDeskV2() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight">Intake HQ</h1>
-              <Badge variant="secondary">{uiMode === "ai" ? "AI Control" : "Human Control"}</Badge>
+              <Badge variant="secondary">Communication Desk</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Calls, texts, customer match, AI intake, and human-approved booking.
+              Talk, text, listen, and understand the customer. Now HQ owns the action cards.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-md border bg-background p-1">
-              <Button
-                variant={uiMode === "ai" ? "default" : "ghost"}
-                size="sm"
-                className="h-8 gap-2"
-                onClick={() => setUiMode("ai")}
-              >
-                <Bot className="h-4 w-4" />
-                AI Mode
-              </Button>
-              <Button
-                variant={uiMode === "human" ? "default" : "ghost"}
-                size="sm"
-                className="h-8 gap-2"
-                onClick={() => setUiMode("human")}
-              >
-                <UserRound className="h-4 w-4" />
-                Human Mode
-              </Button>
+            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+              <Switch
+                checked={tutorialMode}
+                onCheckedChange={setTutorialMode}
+                aria-label="Toggle intake tutorial mode"
+              />
+              <span className="text-sm font-medium">Tutorial</span>
             </div>
+            <Button variant="outline" size="sm" onClick={() => navigate("/now")}>
+              <Zap className="h-4 w-4" />
+              Now HQ
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/dispatch")}>
               <CalendarDays className="h-4 w-4" />
               Dispatch HQ
             </Button>
-            {uiMode === "human" && (
-              <Button size="sm" onClick={() => setNewJobOpen(true)}>
-                <Plus className="h-4 w-4" />
-                New job
-              </Button>
-            )}
           </div>
         </div>
       </div>
 
-      {uiMode === "ai" ? (
-        <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)_360px] overflow-hidden">
-          <ConversationList
-            items={conversations}
-            selectedId={selected?.id}
-            loading={loading}
-            search={search}
-            onSearch={setSearch}
-            onSelect={selectConversation}
-          />
-          <CustomerWorkspace
-            selected={selected}
-            smsSending={smsSending}
-            onSendSms={sendSms}
-            onMarkSmsRead={markSmsAsRead}
-            onSetSmsThreadStatus={setSmsThreadStatus}
-          />
-          <ActionPanel selected={selected} />
-        </div>
-      ) : (
-        <HumanModeDesk
-          conversations={conversations}
-          selectedConversation={selected}
-          selectedJobId={selectedJobId}
-          onSelectConversation={selectConversation}
-          onSelectJob={setSelectedJobId}
-          onCreateJob={() => setNewJobOpen(true)}
+      <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)] overflow-hidden">
+        <ConversationList
+          items={conversations}
+          selectedId={selected?.id}
+          loading={loading}
+          search={search}
+          tutorialMode={tutorialMode}
+          onSearch={setSearch}
+          onSelect={selectConversation}
         />
-      )}
+        <CustomerWorkspace
+          selected={selected}
+          tutorialMode={tutorialMode}
+          smsSending={smsSending}
+          onSendSms={sendSms}
+          onMarkSmsRead={markSmsAsRead}
+          onMarkCallRead={markCallsAsRead}
+          onSetSmsThreadStatus={setSmsThreadStatus}
+          onHandled={handleConversationHandled}
+        />
+      </div>
 
       <NewJobDialog open={newJobOpen} onOpenChange={setNewJobOpen} />
     </div>

@@ -2,26 +2,35 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertCircle,
+  AlertTriangle,
   ArrowRight,
   BadgeDollarSign,
+  Ban,
   CheckCircle2,
   Clock,
+  CircleDot,
   Eye,
+  FileCheck2,
   FileText,
+  Hourglass,
+  Mail,
+  MapPin,
   MessageSquare,
   Phone,
   Plus,
-  Search,
+  Send,
   Sparkles,
   TrendingUp,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 
 import { AppHeader } from "@/components/AppHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEstimates, type Estimate } from "@/hooks/useEstimates";
@@ -57,6 +66,12 @@ type QuotePipelineItem = {
   draft: string;
   presentation?: PresentationSummary;
   response?: ResponseSummary;
+};
+
+type SignalVisual = {
+  label: string;
+  Icon: LucideIcon;
+  className: string;
 };
 
 const STAGE_LABELS: Record<QuoteStage, string> = {
@@ -127,6 +142,136 @@ function draftFor(stage: QuoteStage, estimate: Estimate) {
   return `Hi ${name}, just following up on quote${number}. Do you have any questions or would you like help choosing the best option?`;
 }
 
+function stageVisual(stage: QuoteStage): SignalVisual {
+  if (stage === "approved") {
+    return {
+      label: "Approved",
+      Icon: CheckCircle2,
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+  if (stage === "aging") {
+    return {
+      label: "Aging",
+      Icon: AlertTriangle,
+      className: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+    };
+  }
+  if (stage === "viewed") {
+    return {
+      label: "Viewed",
+      Icon: Eye,
+      className: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    };
+  }
+  if (stage === "needs_send") {
+    return {
+      label: "Ready to send",
+      Icon: Send,
+      className: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  if (stage === "needs_quote") {
+    return {
+      label: "Needs quote",
+      Icon: FileText,
+      className: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "Waiting",
+    Icon: Hourglass,
+    className: "border-slate-500/40 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+  };
+}
+
+function followUpVisual(item: QuotePipelineItem): SignalVisual {
+  if (item.stage === "approved") {
+    return {
+      label: "Approved handoff",
+      Icon: FileCheck2,
+      className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+  if (item.stage === "aging") {
+    return {
+      label: "Follow-up needed",
+      Icon: AlertCircle,
+      className: "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+    };
+  }
+  if (item.stage === "viewed") {
+    return {
+      label: "Warm quote",
+      Icon: Phone,
+      className: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    };
+  }
+  if (item.stage === "needs_send") {
+    return {
+      label: "Send quote",
+      Icon: Send,
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  if (item.stage === "needs_quote") {
+    return {
+      label: "Build quote",
+      Icon: FileText,
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "Monitor",
+    Icon: Clock,
+    className: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+  };
+}
+
+function outcomeSignals(estimate: Estimate, response?: ResponseSummary): SignalVisual[] {
+  const rawStatus = `${estimate.work_status || ""} ${estimate.status || ""} ${response?.action || ""}`.toLowerCase();
+  const signals: SignalVisual[] = [];
+
+  if (response?.action === "approved" || estimate.customer_approved_at) {
+    signals.push({
+      label: "Customer approved",
+      Icon: CheckCircle2,
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    });
+  }
+  if (rawStatus.includes("blocked") || rawStatus.includes("hold")) {
+    signals.push({
+      label: "Blocked",
+      Icon: Ban,
+      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+    });
+  }
+  if (rawStatus.includes("won")) {
+    signals.push({
+      label: "Won",
+      Icon: BadgeDollarSign,
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    });
+  }
+  if (rawStatus.includes("lost") || rawStatus.includes("canceled")) {
+    signals.push({
+      label: rawStatus.includes("canceled") ? "Canceled" : "Lost",
+      Icon: XCircle,
+      className: "border-slate-500/40 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+    });
+  }
+
+  return signals;
+}
+
+function stageAccentClass(stage: QuoteStage) {
+  if (stage === "approved") return "border-l-emerald-500";
+  if (stage === "aging") return "border-l-orange-500";
+  if (stage === "viewed") return "border-l-blue-500";
+  if (stage === "needs_quote" || stage === "needs_send") return "border-l-amber-500";
+  return "border-l-slate-400";
+}
+
 function buildPipelineItem(
   estimate: Estimate,
   presentations: Map<string, PresentationSummary>,
@@ -174,21 +319,17 @@ function buildPipelineItem(
 }
 
 function StageBadge({ stage }: { stage: QuoteStage }) {
-  const className =
-    stage === "approved"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
-      : stage === "aging"
-        ? "border-orange-500/30 bg-orange-500/10 text-orange-700"
-        : stage === "viewed"
-          ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
-          : stage === "needs_quote" || stage === "needs_send"
-            ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
-            : "border-slate-500/30 bg-slate-500/10 text-slate-700";
+  const visual = stageVisual(stage);
+  const Icon = visual.Icon;
 
   return (
-    <Badge variant="outline" className={cn("rounded-sm text-[10px] font-semibold", className)}>
-      {STAGE_LABELS[stage]}
-    </Badge>
+    <span
+      title={visual.label}
+      aria-label={visual.label}
+      className={cn("inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border", visual.className)}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </span>
   );
 }
 
@@ -297,7 +438,11 @@ export default function QuoteHeadquarters() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      <AppHeader />
+      <AppHeader
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search quote pipeline"
+      />
       <main className="mx-auto max-w-[1600px] space-y-5 p-5">
         <section className="rounded-lg border bg-background p-4 shadow-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -338,16 +483,7 @@ export default function QuoteHeadquarters() {
         </section>
 
         <section className="rounded-lg border bg-background p-3 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative min-w-[260px] max-w-xl flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search customer, phone, quote number, address..."
-                className="pl-9"
-              />
-            </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
             <Tabs value={stageFilter} onValueChange={(value) => setStageFilter(value as QuoteStage | "all")}>
               <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -434,6 +570,10 @@ function QuotePipelineCard({
   const estimate = item.estimate;
   const quoteNumber = estimate.estimate_number ? `#${estimate.estimate_number}` : estimate.id.slice(0, 8);
   const canText = Boolean(estimate.customer_phone);
+  const amount = moneyFromEstimate(estimate);
+  const followUp = followUpVisual(item);
+  const FollowUpIcon = followUp.Icon;
+  const signals = outcomeSignals(estimate, item.response);
   const lastTouched =
     item.response?.responded_at ||
     item.presentation?.last_viewed_at ||
@@ -443,32 +583,64 @@ function QuotePipelineCard({
   const lastTouchedDate = safeDate(lastTouched);
 
   return (
-    <Card className="shadow-none transition-colors hover:border-primary/40">
-      <CardContent className="grid gap-4 p-4 xl:grid-cols-[1.2fr_0.8fr_1fr_auto] xl:items-center">
+    <Card
+      className={cn(
+        "border-l-4 shadow-none transition-colors hover:border-y-primary/40 hover:border-r-primary/40",
+        stageAccentClass(item.stage),
+      )}
+    >
+      <CardContent className="grid gap-4 p-4 xl:grid-cols-[1.25fr_0.75fr_1fr_auto] xl:items-center">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <StageBadge stage={item.stage} />
             <button className="text-left text-lg font-bold hover:underline" onClick={onOpen}>
               {estimate.customer_name || "Unnamed customer"}
             </button>
-            <StageBadge stage={item.stage} />
-            <Badge variant="outline" className="rounded-sm text-[10px]">
+            <Badge variant="outline" className="rounded-sm text-[10px] font-semibold">
               Quote {quoteNumber}
             </Badge>
+            {signals.map((signal) => {
+              const Icon = signal.Icon;
+              return (
+                <span
+                  key={signal.label}
+                  title={signal.label}
+                  aria-label={signal.label}
+                  className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full border", signal.className)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+              );
+            })}
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
             {estimate.description || estimate.address || "No quote description yet"}
           </p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span>{estimate.customer_phone || "No phone"}</span>
-            <span>{estimate.customer_email || "No email"}</span>
-            <span>{estimate.address || "No address"}</span>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <BadgeDollarSign className="h-3.5 w-3.5" />
+              <span className="font-semibold text-foreground">{amount > 0 ? `$${amount.toLocaleString()}` : "TBD"}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" />
+              {estimate.customer_phone || "No phone"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              {estimate.customer_email || "No email"}
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{estimate.address || "No address"}</span>
+            </span>
           </div>
         </div>
 
         <div className="grid gap-2 text-sm">
-          <InfoRow label="Created" value={shortDate(estimate.created_at)} />
-          <InfoRow label="Sent" value={shortDate(estimate.presentation_sent_at || item.presentation?.created_at)} />
+          <InfoRow icon={CircleDot} label="Created" value={shortDate(estimate.created_at)} />
+          <InfoRow icon={Send} label="Sent" value={shortDate(estimate.presentation_sent_at || item.presentation?.created_at)} />
           <InfoRow
+            icon={Eye}
             label="Viewed"
             value={
               item.presentation?.view_count
@@ -478,15 +650,18 @@ function QuotePipelineCard({
           />
         </div>
 
-        <div className="rounded-md border bg-muted/20 p-3">
+        <div className={cn("rounded-md border p-3", followUp.className)}>
           <div className="flex items-start gap-2">
-            <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
-            <div>
-              <p className="font-semibold">{item.nextAction}</p>
+            <FollowUpIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold text-foreground">{item.nextAction}</p>
+                <Sparkles className="h-3.5 w-3.5 text-current" aria-label={followUp.label} />
+              </div>
               <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.draft}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground/90">
                 {lastTouchedDate
-                  ? `Last activity ${formatDistanceToNow(lastTouchedDate, { addSuffix: true })}`
+                  ? formatDistanceToNow(lastTouchedDate, { addSuffix: true })
                   : "No activity timestamp"}
               </p>
             </div>
@@ -512,10 +687,13 @@ function QuotePipelineCard({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </span>
       <span className="font-semibold">{value}</span>
     </div>
   );

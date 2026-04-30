@@ -392,6 +392,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
   const isReadOnly = activeSession?.ended_at != null;
 
   const { isRecording, loading: voiceLoading, toggle: toggleRecording } = useVoiceToText({
+    context: "jarvis_chat",
     onTranscript: (text) => {
       if (text) {
         setInput(text);

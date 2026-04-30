@@ -1,16 +1,19 @@
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import logo from "@/assets/logo.png";
-import { LogOut, Settings, Moon, Sun, PhoneCall } from "lucide-react";
+import { LogOut, Settings, Moon, Sun, PhoneCall, MonitorSmartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useEmployeeTabAccess, routeToTabKey } from "@/hooks/useEmployeeTabAccess";
 import { useNavOrder } from "@/hooks/useNavOrder";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
+import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { SmartSearchBar } from "@/components/SmartSearchBar";
 import { NewItemDropdown } from "@/components/NewItemDropdown";
 import { AdminToolsGrid } from "@/components/AdminToolsGrid";
@@ -19,9 +22,11 @@ import { ApiCostAlertBanner } from "@/components/ApiCostAlertBanner";
 import { SystemStatusIndicator } from "@/components/SystemStatusIndicator";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { toast } from "@/hooks/use-toast";
 
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/intake": { label: "Intake HQ", roles: null },
+  "/now": { label: "Now HQ", roles: null },
   "/dispatch": { label: "Dispatch HQ", roles: null },
   "/phone": { label: "Inbox", roles: null },
   "/sms": { label: "Messages", roles: null },
@@ -51,15 +56,71 @@ function ThemeToggleButton() {
   );
 }
 
-export function AppHeader() {
+type AppHeaderProps = {
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+};
+
+export function AppHeader({ searchValue, onSearchChange, searchPlaceholder }: AppHeaderProps = {}) {
   const location = useLocation();
-  const { role, signOut, user } = useAuth();
+  const { role, signOut, user, employeeId } = useEffectiveAuth();
+  const queryClient = useQueryClient();
   const allowedTabs = useEmployeeTabAccess();
   const { order } = useNavOrder();
   const { settings } = useCompanySettings();
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: unreadVoicemails } = useVoicemails();
+
+  const { data: desktopCallsEnabled = false } = useQuery({
+    queryKey: ["employee-desktop-calls", employeeId],
+    enabled: Boolean(user && employeeId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("desktop_calls_enabled")
+        .eq("id", employeeId!)
+        .maybeSingle();
+      if (error) throw error;
+      return Boolean(data?.desktop_calls_enabled);
+    },
+  });
+
+  const desktopCallsMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (!employeeId) throw new Error("No employee profile is linked to this login.");
+      const { error } = await supabase
+        .from("employees")
+        .update({ desktop_calls_enabled: enabled })
+        .eq("id", employeeId);
+      if (error) throw error;
+      return enabled;
+    },
+    onSuccess: (enabled) => {
+      queryClient.invalidateQueries({ queryKey: ["employee-desktop-calls", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees-for-routing"] });
+      if (enabled) {
+        openPhoneConsole();
+        toast({
+          title: "Desktop calls on",
+          description: "Keep the phone popup open so Twilio can ring this computer.",
+        });
+      } else {
+        toast({
+          title: "Desktop calls off",
+          description: "Incoming calls will follow the normal IVR and cell-forwarding path.",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Couldn't update call routing",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const unreadMap: Record<string, number> = {
     "/phone": unreadVoicemails,
@@ -100,7 +161,7 @@ export function AppHeader() {
               : item.to === "/intake"
                 ? location.pathname === "/intake" || location.pathname.startsWith("/operations-v2")
               : item.to === "/dispatch"
-                ? location.pathname === "/dispatch" || location.pathname.startsWith("/dispatch-v2") || location.pathname.startsWith("/schedule-v2")
+                ? location.pathname === "/dispatch" || location.pathname.startsWith("/dispatch/") || location.pathname.startsWith("/dispatch-v2") || location.pathname.startsWith("/schedule-v2")
               : item.to === "/phone"
                 ? location.pathname.startsWith("/phone") || location.pathname.startsWith("/calls") || location.pathname.startsWith("/inbox")
               : item.to === "/quick-quote"
@@ -132,8 +193,29 @@ export function AppHeader() {
         {/* Right cluster */}
         {user && (
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
-            <SmartSearchBar />
+            <SmartSearchBar value={searchValue} onChange={onSearchChange} placeholder={searchPlaceholder} />
             <NewItemDropdown />
+            {employeeId && (
+              <div
+                className={cn(
+                  "hidden h-9 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold xl:flex",
+                  desktopCallsEnabled
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                    : "border-border bg-muted/40 text-muted-foreground"
+                )}
+                title="When on, IVR calls assigned to you can ring this desktop softphone."
+              >
+                <MonitorSmartphone className="h-4 w-4" />
+                <span>Desk calls</span>
+                <Switch
+                  checked={desktopCallsEnabled}
+                  disabled={desktopCallsMutation.isPending}
+                  onCheckedChange={(checked) => desktopCallsMutation.mutate(checked)}
+                  aria-label="Take calls on desktop"
+                  className="scale-75"
+                />
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"

@@ -60,10 +60,6 @@ export interface CompanySettings {
   /** Post-call SMS template for unknown/new callers */
   post_call_sms_unknown: string;
   post_call_sms_unknown_template_key: string;
-  /** Call forwarding enabled flag */
-  call_forwarding_enabled: string;
-  /** Call forwarding destination number */
-  call_forwarding_number: string;
   /** Phone number for JARVIS approval alerts */
   jarvis_alert_phone: string;
   /** SMS alert forwarding enabled flag */
@@ -121,8 +117,6 @@ const DEFAULTS: CompanySettings = {
   post_call_sms_customer_template_key: "",
   post_call_sms_unknown: "",
   post_call_sms_unknown_template_key: "",
-  call_forwarding_enabled: "false",
-  call_forwarding_number: "",
   jarvis_alert_phone: "",
   sms_alert_enabled: "true",
   sms_response_delay_seconds: "8",

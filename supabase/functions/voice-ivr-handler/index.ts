@@ -525,7 +525,21 @@ Deno.serve(async (req) => {
 
     const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys);
     const inboundRouteMode = ((option as any).inbound_route_mode || "cell_forwarding").toLowerCase();
+    let preparedDesktopDialList: any = null;
     if (forwardingNumbers.length > 0 && inboundRouteMode !== "softphone") {
+      preparedDesktopDialList = await buildDepartmentDialList(supabase, deptKey, {
+        callSid,
+        traceGroup: callSid,
+        sourceName: "voice-ivr-handler",
+        fallbackDepartments: fallbackDepartmentKeys,
+      });
+    }
+    if (
+      forwardingNumbers.length > 0 &&
+      inboundRouteMode !== "softphone" &&
+      preparedDesktopDialList?.clientIdentities?.length === 0 &&
+      preparedDesktopDialList?.evaluation?.reason !== "all_busy"
+    ) {
       const numberTags = buildNumberTags(forwardingNumbers);
       const timeout = Math.max(10, Math.min(60, (option as any).ring_timeout_seconds || dialTimeout));
       console.log(`[ivr-handler] dept "${option.label}" -> cell forwarding (${forwardingNumbers.length} numbers)`);
@@ -562,96 +576,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── Check if "Away from Desk" forwarding is active + within THIS department's hours ──
-    const { data: fwdRows } = await supabase
-      .from("company_settings")
-      .select("key, value")
-      .in("key", ["call_forwarding_enabled", "call_forwarding_number"]);
-    const fwdMap: Record<string, string> = {};
-    for (const r of (fwdRows || []) as any[]) fwdMap[r.key] = r.value;
-    // Retired global "forward all calls" override. Use per-person Away from Desk
-    // and IVR overflow instead so answering-service handoff still works.
-    const callFwdEnabled = false;
-    const callFwdNumber = fwdMap["call_forwarding_number"] || "";
-
-    if (callFwdEnabled && callFwdNumber) {
-      // Department is already confirmed open (after-hours check above would have returned)
-      // So if we get here, the department is within hours → forward to cell
-      console.log(`AWAY FROM DESK active + dept "${option.label}" is open — forwarding to ${callFwdNumber}`);
-      await logSystemTrace({
-        sourceType: "voice",
-        sourceName: "voice-ivr-handler",
-        eventKind: "route_selected",
-        summary: `Away-from-desk forwarding to ${callFwdNumber}`,
-        reason: "call_forwarding_enabled",
-        severity: "warning",
-        traceGroup: callSid,
-        entityType: "call",
-        entityId: callSid,
-        callSid,
-        metadata: { digit, label: option.label, target: callFwdNumber },
-      });
-      const dialCallerId = twilioNumber;
-      return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
-    <Number>${escapeXml(callFwdNumber)}</Number>
-  </Dial>
-</Response>`,
-        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
-      );
-    }
-
     // Determine which user IDs to dial
     const assignedIds: string[] = option.assigned_user_ids || [];
 
-    // Check OOO for assigned employees
-    const { data: oooEmployees } = await supabase
-      .from("employees")
-      .select("name, ooo_enabled, ooo_forward_number")
-      .eq("is_active", true)
-      .eq("ooo_enabled", true);
-
-    const oooMatch = (oooEmployees || []).find((emp: any) => {
-      return emp.ooo_forward_number;
-    });
-
-    if (oooMatch && oooMatch.ooo_forward_number && assignedIds.length === 0) {
-      const dialCallerId = twilioNumber;
-      console.log(`Employee ${oooMatch.name} is OOO — forwarding to ${oooMatch.ooo_forward_number} (company caller ID)`);
-      await logSystemTrace({
-        sourceType: "voice",
-        sourceName: "voice-ivr-handler",
-        eventKind: "route_selected",
-        summary: `OOO forwarding to ${oooMatch.ooo_forward_number}`,
-        reason: "out_of_office",
-        severity: "warning",
-        traceGroup: callSid,
-        entityType: "call",
-        entityId: callSid,
-        callSid,
-        metadata: { employee_name: oooMatch.name, digit, label: option.label },
-      });
-      return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  ${streamTwiml}
-  <Say voice="Polly.Joanna">${escapeXml(oooMatch.name)} is currently away from their desk. Forwarding your call.</Say>
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(dialCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
-    <Number>${escapeXml(oooMatch.ooo_forward_number)}</Number>
-  </Dial>
-</Response>`,
-        { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
-      );
-    }
-
     // ── Build dial list using this app's IVR department routing ──
     // Department comes from the IVR menu's stable routing key; labels are only legacy fallbacks.
-    // We skip anyone busy or marked away-from-desk so a 2nd caller is never
+    // We skip anyone busy or whose Desk calls toggle is off so a 2nd caller is never
     // routed to the same active client that's already on a live call.
-    const { clientIdentities, chosenEmployees, evaluation } = await buildDepartmentDialList(supabase, deptKey, {
+    const { clientIdentities, chosenEmployees, evaluation } = preparedDesktopDialList || await buildDepartmentDialList(supabase, deptKey, {
       callSid,
       traceGroup: callSid,
       sourceName: "voice-ivr-handler",
@@ -667,40 +599,21 @@ Deno.serve(async (req) => {
       // Fallback only when no department-routing rules exist for this IVR option.
       const { data: assignedEmployees } = await supabase
         .from("employees")
-        .select("name, profile_id, ooo_enabled")
+        .select("name, profile_id")
         .eq("is_active", true)
         .in("profile_id", assignedIds);
 
-      const employeesByProfile = new Map<string, { name?: string | null; profile_id?: string | null; ooo_enabled?: boolean | null }>();
+      const employeesByProfile = new Map<string, { name?: string | null; profile_id?: string | null }>();
       for (const employee of assignedEmployees || []) {
         if (employee.profile_id) employeesByProfile.set(employee.profile_id, employee);
       }
 
       const availableAssignedIds: string[] = [];
       let fallbackBusyCount = 0;
-      let fallbackAwayCount = 0;
 
       for (const uid of assignedIds) {
         const employee = employeesByProfile.get(uid);
         const employeeName = employee?.name || `uo2_user_${uid}`;
-        if (employee?.ooo_enabled) {
-          fallbackAwayCount++;
-          await logSystemTrace({
-            sourceType: "voice",
-            sourceName: "voice-ivr-handler",
-            eventKind: "candidate_skipped",
-            summary: `${employeeName} skipped for ${option.label}: away from desk`,
-            reason: "out_of_office",
-            severity: "info",
-            traceGroup: callSid,
-            entityType: "call",
-            entityId: callSid,
-            callSid,
-            metadata: { digit, label: option.label, profile_id: uid },
-          });
-          continue;
-        }
-
         if (employee?.name && await isUserBusy(supabase, employee.name)) {
           fallbackBusyCount++;
           await logSystemTrace({
@@ -743,7 +656,6 @@ Deno.serve(async (req) => {
               dept_key: deptKey,
               overflow_number: overflowNumber,
               busy_count: fallbackBusyCount,
-              away_count: fallbackAwayCount,
               total_candidates: assignedIds.length,
             },
           });
@@ -773,7 +685,6 @@ Deno.serve(async (req) => {
               queue_wait_seconds: queueWaitSeconds,
               hold_music_audio_url: (config as any).hold_music_audio_url || null,
               busy_count: fallbackBusyCount,
-              away_count: fallbackAwayCount,
               total_candidates: assignedIds.length,
             },
           });
@@ -787,7 +698,7 @@ Deno.serve(async (req) => {
           );
         }
 
-        console.log(`[ivr-handler] dept "${option.label}": no assigned users available after busy/away checks`);
+        console.log(`[ivr-handler] dept "${option.label}": no assigned users available after busy checks`);
         if (overflowEnabled && overflowNumber && (config as any).overflow_on_no_answer !== false) {
           return new Response(
             overflowDialTwiml("no_available_assigned_users"),
@@ -872,7 +783,7 @@ Deno.serve(async (req) => {
       );
     } else {
       const finalReason = evaluation.reason === "all_busy" && queueRetry ? "queue_timeout" : evaluation.reason;
-      // Last resort: nobody eligible after OOO / identity checks → route to voicemail (or overflow if configured)
+      // Last resort: nobody eligible after desktop, busy, or identity checks → route to voicemail (or overflow if configured)
       console.log(`[ivr-handler] dept "${option.label}": nobody available — routing to voicemail`);
       await logSystemTrace({
         sourceType: "voice",

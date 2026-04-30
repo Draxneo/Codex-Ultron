@@ -5,6 +5,7 @@ import {
   eachDayOfInterval,
   endOfWeek,
   format,
+  formatDistanceToNow,
   isSameDay,
   isToday,
   parseISO,
@@ -13,9 +14,13 @@ import {
 } from "date-fns";
 import {
   AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Camera,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Clock,
   ExternalLink,
   Filter,
@@ -25,14 +30,14 @@ import {
   Phone,
   Plus,
   Route,
-  Search,
+  Send,
   Sparkles,
   UserRound,
   Users,
+  Zap,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
-import { NewJobDialog } from "@/components/NewJobDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,12 +48,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { JobPhotosGrid } from "@/components/job/JobPhotosGrid";
+import { useDispatchLiveCards, type DispatchLiveCardContext } from "@/hooks/useDispatchLiveCards";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
+import { useTechStatusMap, type TechStatusInfo } from "@/hooks/useTechStatusMap";
 import { toast } from "@/hooks/use-toast";
 import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
 import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
@@ -74,6 +81,7 @@ type ScheduleItem = {
   job_number?: string | null;
   hcp_job_number?: string | null;
   customer_phone?: string | null;
+  customer_email?: string | null;
 };
 
 type CommunicationItem = {
@@ -90,6 +98,24 @@ type CommunicationItem = {
   latestJobId?: string | null;
   raw: CallConversation | SmsConversation;
 };
+
+function communicationVisual(item: Pick<CommunicationItem, "kind" | "direction">) {
+  const isInbound = item.direction === "inbound";
+  if (item.kind === "call") {
+    return {
+      label: isInbound ? "Inbound phone call" : "Outbound phone call",
+      Icon: Phone,
+      DirectionIcon: isInbound ? ArrowDownLeft : ArrowUpRight,
+      className: isInbound ? "bg-sky-700 text-white" : "bg-indigo-700 text-white",
+    };
+  }
+  return {
+    label: isInbound ? "Inbound text message" : "Outbound text message",
+    Icon: isInbound ? MessageSquare : Send,
+    DirectionIcon: isInbound ? ArrowDownLeft : ArrowUpRight,
+    className: isInbound ? "bg-teal-700 text-white" : "bg-slate-700 text-white",
+  };
+}
 
 type DispatchMode = "ai" | "human";
 
@@ -133,12 +159,38 @@ function getEmployeeName(employees: any[] = [], assignedTo?: string | null) {
   return employees.find((employee) => employee.id === assignedTo)?.name || assignedTo;
 }
 
+function getEmployeeId(employees: any[] = [], assignedTo?: string | null) {
+  if (!assignedTo) return null;
+  const employee = employees.find((emp) => emp.id === assignedTo || emp.name === assignedTo);
+  return employee?.id || null;
+}
+
 function buildTimeRange(item: ScheduleItem) {
   if (!item.arrival_start && !item.arrival_end) return "Any time";
   if (item.arrival_start && item.arrival_end) {
     return `${normalizeTime(item.arrival_start)} - ${normalizeTime(item.arrival_end)}`;
   }
   return normalizeTime(item.arrival_start || item.arrival_end);
+}
+
+function relativeTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
+function techStatusLabel(status?: TechStatusInfo | null) {
+  if (!status) return null;
+  if (status.status === "on_site") return "On site";
+  if (status.status === "at_supply_house") return status.locationName ? `At ${status.locationName}` : "At supply";
+  return "En route";
+}
+
+function liveToneClass(context?: DispatchLiveCardContext) {
+  if (!context || context.liveTone === "quiet") return "border-border bg-muted/40 text-muted-foreground";
+  if (context.liveTone === "attention") return "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100";
+  return "border-sky-300 bg-sky-50 text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-100";
 }
 
 function formatCallTime(value?: string | null) {
@@ -179,6 +231,19 @@ function buildSmsUrl(phone?: string | null, draft?: string) {
   params.set("phone", toE164(phone) || phone);
   if (draft) params.set("draft", draft);
   return `/sms?${params.toString()}`;
+}
+
+function buildQuickQuoteUrl(item: ScheduleItem) {
+  const params = new URLSearchParams();
+  if (item.item_type === "estimate") {
+    params.set("estimate_id", item.id);
+  } else {
+    params.set("job_id", item.id);
+  }
+  if (item.customer_name) params.set("customer_name", item.customer_name);
+  if (item.customer_phone) params.set("customer_phone", item.customer_phone);
+  if (item.customer_email) params.set("customer_email", item.customer_email);
+  return `/quick-quote?${params.toString()}`;
 }
 
 function callConversationToItem(conversation: CallConversation): CommunicationItem {
@@ -249,14 +314,29 @@ function MetricCard({
 function JobCard({
   item,
   employees,
+  liveContext,
+  techStatus,
   compact = false,
   onClick,
+  onOpenMedia,
 }: {
   item: ScheduleItem;
   employees: any[];
+  liveContext?: DispatchLiveCardContext;
+  techStatus?: TechStatusInfo | null;
   compact?: boolean;
   onClick: () => void;
+  onOpenMedia?: () => void;
 }) {
+  const statusLabel = techStatusLabel(techStatus);
+  const hasFieldSignal = !!liveContext && (
+    liveContext.attachmentCount > 0 ||
+    liveContext.responseCount > 0 ||
+    liveContext.suggestedItemCount > 0 ||
+    !!liveContext.latestTechNote ||
+    !!liveContext.latestActivity
+  );
+
   return (
     <button
       type="button"
@@ -283,23 +363,68 @@ function JobCard({
         </div>
       </div>
       {!compact && (
+        <>
         <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <UserRound className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{getEmployeeName(employees, item.assigned_to)}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <UserRound className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{getEmployeeName(employees, item.assigned_to)}</span>
+            </span>
+            {statusLabel && (
+              <Badge variant="secondary" className="h-6 shrink-0 px-2 text-[10px]">
+                {statusLabel}
+              </Badge>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Call">
-              <Phone className="h-3.5 w-3.5" />
+            {item.item_type === "job" && (
+              <span
+                className={cn(
+                  "flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border bg-background px-1.5 text-muted-foreground",
+                  liveContext?.attachmentCount && "text-primary"
+                )}
+                role="img"
+                aria-label="Open job attachments"
+                title="Open job attachments"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenMedia?.();
+                }}
+              >
+                <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                {liveContext?.attachmentCount ? <span className="text-[10px] font-semibold">{liveContext.attachmentCount}</span> : null}
+              </span>
+            )}
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" role="img" aria-label="Call customer" title="Call customer">
+              <Phone className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Text">
-              <MessageSquare className="h-3.5 w-3.5" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" role="img" aria-label="Text customer" title="Text customer">
+              <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" title="Route">
-              <Navigation className="h-3.5 w-3.5" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground" role="img" aria-label="Route stop" title="Route stop">
+              <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
           </div>
         </div>
+        {hasFieldSignal && (
+          <div className={cn("mt-3 rounded-md border p-2 text-xs leading-5", liveToneClass(liveContext))}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{liveContext.liveSummary}</span>
+              </span>
+              {liveContext.latestTechNote?.createdAt && (
+                <span className="shrink-0 text-[10px] opacity-75">{relativeTime(liveContext.latestTechNote.createdAt)}</span>
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {liveContext.responseCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.responseCount} checklist</Badge>}
+              {liveContext.suggestedItemCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.suggestedItemCount} suggested</Badge>}
+              {liveContext.attachmentCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.attachmentCount} media</Badge>}
+            </div>
+          </div>
+        )}
+        </>
       )}
     </button>
   );
@@ -469,33 +594,40 @@ function BoardCommandRail({
           ) : communicationItems.length === 0 ? (
             <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No recent calls or texts.</p>
           ) : (
-            communicationItems.slice(0, 4).map((item) => (
+            communicationItems.slice(0, 4).map((item) => {
+              const visual = communicationVisual(item);
+              const VisualIcon = visual.Icon;
+              const DirectionIcon = visual.DirectionIcon;
+              return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => onCommunicationClick(item)}
+                  aria-label={`Open ${visual.label} from ${item.name}`}
+                  title={visual.label}
                   className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={item.kind === "call" ? "secondary" : "outline"} className="text-[10px]">
-                          {item.kind === "call" ? "Call" : "Text"}
-                        </Badge>
-                        <Badge variant={item.direction === "inbound" ? "default" : "outline"} className="text-[10px]">
-                          {item.direction === "inbound" ? "Inbound" : "Outbound"}
-                        </Badge>
-                        <p className="truncate text-sm font-semibold">{item.name}</p>
+                    <div className="flex min-w-0 gap-2">
+                      <span className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md", visual.className)} role="img" aria-label={visual.label} title={visual.label}>
+                        <VisualIcon className="h-4 w-4" aria-hidden="true" />
+                        <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold">{item.name}</p>
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-foreground">{item.summary}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">{item.time}</p>
                       </div>
-                      <p className="mt-1 text-xs font-medium text-foreground">{item.summary}</p>
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
-                      <p className="mt-1 text-[10px] text-muted-foreground">{item.time}</p>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <Button
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
+                        aria-label={`Call ${item.name}`}
                         title="Call back"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -508,6 +640,7 @@ function BoardCommandRail({
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
+                        aria-label={`Text ${item.name}`}
                         title="Text customer"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -519,7 +652,8 @@ function BoardCommandRail({
                     </div>
                   </div>
                 </button>
-            ))
+              );
+            })
           )}
         </div>
       </RailSection>
@@ -541,8 +675,10 @@ function CommunicationContextDialog({
 
   const isCall = item.kind === "call";
   const fullPage = isCall ? "/phone" : "/sms";
-  const title = isCall ? "Call Context" : "Text Context";
   const actionLabel = isCall ? "Open phone page" : "Open SMS page";
+  const visual = communicationVisual(item);
+  const VisualIcon = visual.Icon;
+  const DirectionIcon = visual.DirectionIcon;
   const call = isCall ? (item.raw as CallConversation).lastCall : null;
   const sms = !isCall ? (item.raw as SmsConversation).lastMessage : null;
   const transcript = call?.transcription || null;
@@ -562,14 +698,14 @@ function CommunicationContextDialog({
       <DialogContent className="max-w-3xl p-0">
         <DialogHeader className="border-b px-6 py-5">
           <div className="flex flex-wrap items-center gap-2">
+            <span className={cn("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md", visual.className)} role="img" aria-label={visual.label} title={visual.label}>
+              <VisualIcon className="h-4 w-4" aria-hidden="true" />
+              <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" aria-hidden="true" />
+            </span>
             <DialogTitle>{item.name}</DialogTitle>
-            <Badge variant={isCall ? "secondary" : "outline"}>{isCall ? "Call" : "Text"}</Badge>
-            <Badge variant={item.direction === "inbound" ? "default" : "outline"}>
-              {item.direction === "inbound" ? "Inbound" : "Outbound"}
-            </Badge>
           </div>
           <DialogDescription>
-            {title} &middot; {formatPhone(item.phone) || item.phone} &middot; {item.time}
+            {formatPhone(item.phone) || item.phone} &middot; {item.time}
           </DialogDescription>
         </DialogHeader>
 
@@ -656,15 +792,19 @@ function CommunicationContextDialog({
 function JobContextDialog({
   item,
   employees,
+  liveContext,
   open,
   onOpenChange,
   onOpenRecord,
+  onOpenMedia,
 }: {
   item: ScheduleItem | null;
   employees: any[];
+  liveContext?: DispatchLiveCardContext;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenRecord: (item: ScheduleItem) => void;
+  onOpenMedia?: (item: ScheduleItem) => void;
 }) {
   const navigate = useNavigate();
   if (!item) return null;
@@ -690,6 +830,9 @@ function JobContextDialog({
     }
     navigate(buildSmsUrl(item.customer_phone));
   };
+  const startQuickQuote = () => {
+    navigate(buildQuickQuoteUrl(item));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -697,7 +840,6 @@ function JobContextDialog({
         <DialogHeader className="border-b px-6 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{item.customer_name || "No customer name"}</DialogTitle>
-            <Badge variant="outline">{itemLabel(item)}</Badge>
             <Badge variant={item.assigned_to ? "secondary" : "destructive"}>
               {item.assigned_to ? "Assigned" : "Needs tech"}
             </Badge>
@@ -747,12 +889,60 @@ function JobContextDialog({
                 </p>
               </div>
             </section>
+
+            <section className={cn("rounded-lg border p-4", liveToneClass(liveContext))}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Live field context</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    {liveContext?.liveSummary || "No field updates yet."}
+                  </p>
+                </div>
+                {liveContext?.latestTechNote?.createdAt && (
+                  <Badge variant="outline" className="bg-background/70">
+                    {relativeTime(liveContext.latestTechNote.createdAt)}
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-md border bg-background/70 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Media</p>
+                  <p className="mt-1 text-lg font-semibold">{liveContext?.attachmentCount || 0}</p>
+                </div>
+                <div className="rounded-md border bg-background/70 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Checklist</p>
+                  <p className="mt-1 text-lg font-semibold">{liveContext?.responseCount || 0}</p>
+                </div>
+                <div className="rounded-md border bg-background/70 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Jarvis items</p>
+                  <p className="mt-1 text-lg font-semibold">{liveContext?.suggestedItemCount || 0}</p>
+                </div>
+              </div>
+              {liveContext?.latestTechNote?.text && (
+                <div className="mt-3 rounded-md border bg-background/70 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Latest tech voice note</p>
+                  <p className="mt-1 line-clamp-4 text-sm leading-6">{liveContext.latestTechNote.text}</p>
+                </div>
+              )}
+              {liveContext?.latestActivity?.details && (
+                <div className="mt-3 rounded-md border bg-background/70 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                    Last action{liveContext.latestActivity.performedBy ? ` by ${liveContext.latestActivity.performedBy}` : ""}
+                  </p>
+                  <p className="mt-1 line-clamp-3 text-sm leading-6">{liveContext.latestActivity.details}</p>
+                </div>
+              )}
+            </section>
           </div>
 
           <aside className="space-y-3">
             <Button className="w-full justify-start gap-2" onClick={() => onOpenRecord(item)}>
               <ExternalLink className="h-4 w-4" />
               {recordLabel}
+            </Button>
+            <Button variant="secondary" className="w-full justify-start gap-2 border border-amber-500/30 bg-amber-500/15 text-amber-900 hover:bg-amber-500/25 dark:text-amber-100" onClick={startQuickQuote}>
+              <Zap className="h-4 w-4" />
+              Quick quote
             </Button>
             <Button variant="outline" className="w-full justify-start gap-2" onClick={callFromBoard}>
               <Phone className="h-4 w-4" />
@@ -762,12 +952,18 @@ function JobContextDialog({
               <MessageSquare className="h-4 w-4" />
               Text customer
             </Button>
+            {item.item_type === "job" && (
+              <Button variant="outline" className="w-full justify-start gap-2" onClick={() => onOpenMedia?.(item)}>
+                <Camera className="h-4 w-4" />
+                Attachments / photos
+              </Button>
+            )}
             <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Route action", description: "Next pass can open map routing and fit-this-job suggestions." })}>
               <Navigation className="h-4 w-4" />
               Route / fit
             </Button>
             <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              Future dispatch pop-up data: open balance, club membership, parts readiness, recent calls/texts, warranty/callback risk, weather, and preferred tech.
+              Dispatch now watches the job record, tech voice notes, checklist responses, photos, and attachments. As techs add context, this card should update instead of becoming a separate side quest.
             </div>
           </aside>
         </div>
@@ -781,18 +977,53 @@ function JobContextDialog({
   );
 }
 
+function JobMediaDialog({
+  item,
+  open,
+  onOpenChange,
+}: {
+  item: ScheduleItem | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!item || item.item_type !== "job") return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl p-0">
+        <DialogHeader className="border-b px-6 py-5">
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="h-5 w-5 text-primary" />
+            Field media
+          </DialogTitle>
+          <DialogDescription>
+            {item.customer_name || "No customer name"} &middot; {item.job_number || item.hcp_job_number || item.id.slice(0, 8)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[70vh] overflow-auto">
+          <JobPhotosGrid jobId={item.id} />
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ScheduleV2() {
   const navigate = useNavigate();
   const { data: jobs, isLoading: jobsLoading } = useJobs();
   const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
   const { data: employees = [] } = useEmployees();
+  const techStatusMap = useTechStatusMap();
   const [currentDay, setCurrentDay] = useState(() => new Date());
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [mode, setMode] = useState<DispatchMode>("ai");
-  const [newJobOpen, setNewJobOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   const [selectedCommunication, setSelectedCommunication] = useState<CommunicationItem | null>(null);
+  const [selectedMediaItem, setSelectedMediaItem] = useState<ScheduleItem | null>(null);
 
   const scheduleItems = useMemo<ScheduleItem[]>(() => {
     const realJobHcpIds = new Set(
@@ -883,6 +1114,17 @@ export default function ScheduleV2() {
   const criticalItems = dayItems.filter((item) => !item.assigned_to || !item.arrival_start);
   const routeReadyCount = dayItems.filter((item) => item.assigned_to && item.address).length;
   const loading = jobsLoading || estimatesLoading;
+  const dispatchLiveJobIds = useMemo(
+    () => filteredItems.filter((item) => item.item_type === "job").map((item) => item.id).slice(0, 200),
+    [filteredItems]
+  );
+  const { data: dispatchLiveCards = new Map<string, DispatchLiveCardContext>() } = useDispatchLiveCards(dispatchLiveJobIds);
+
+  const getLiveContext = (item: ScheduleItem) => item.item_type === "job" ? dispatchLiveCards.get(item.id) : undefined;
+  const getTechStatus = (item: ScheduleItem) => {
+    const employeeId = getEmployeeId(employees, item.assigned_to);
+    return employeeId ? techStatusMap.get(employeeId) || null : null;
+  };
 
   const openItem = (item: ScheduleItem) => {
     setSelectedItem(item);
@@ -894,14 +1136,17 @@ export default function ScheduleV2() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <AppHeader />
+      <AppHeader
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search dispatch"
+      />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="border-b bg-card px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold tracking-tight text-foreground">Dispatch HQ</h1>
-                <Badge variant="secondary">Operations Brain</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 Run the day around when work happens, where it is, and what needs approval before trucks move.
@@ -930,35 +1175,32 @@ export default function ScheduleV2() {
                   Human
                 </Button>
               </div>
+              <Button
+                variant="default"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Open full calendar"
+                title="Open full calendar"
+                onClick={() => navigate(`/dispatch/calendar?date=${format(currentDay, "yyyy-MM-dd")}`)}
+              >
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+              </Button>
               <Button variant="outline" size="sm" onClick={() => navigate("/intake")}>
                 Intake HQ
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentDay(subDays(currentDay, 1))}>
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Previous day" title="Previous day" onClick={() => setCurrentDay(subDays(currentDay, 1))}>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button variant="outline" size="sm" onClick={() => setCurrentDay(new Date())}>
                 Today
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button size="sm" onClick={() => setNewJobOpen(true)}>
-                <Plus className="h-4 w-4" />
-                New Job
+              <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Next day" title="Next day" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search customer, address, job number, or notes"
-                className="h-10 pl-9"
-              />
-            </div>
+          <div className="mt-4 flex justify-end">
             <div className="flex items-center gap-1 overflow-x-auto rounded-md border bg-background p-1">
               <Filter className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
               {FILTERS.map((option) => (
@@ -989,6 +1231,16 @@ export default function ScheduleV2() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <TabsList className="h-10">
                 <TabsTrigger value="board" className="gap-2"><Users className="h-4 w-4" /> Board</TabsTrigger>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-2 px-3"
+                  onClick={() => navigate(`/dispatch/calendar?date=${format(currentDay, "yyyy-MM-dd")}`)}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Calendar
+                </Button>
                 <TabsTrigger value="route" className="gap-2"><Route className="h-4 w-4" /> Route</TabsTrigger>
               </TabsList>
               <div className="flex items-center gap-1 overflow-x-auto">
@@ -1046,7 +1298,15 @@ export default function ScheduleV2() {
                             </div>
                           ) : (
                             items.map((item) => (
-                              <JobCard key={item.id} item={item} employees={employees} onClick={() => openItem(item)} />
+                              <JobCard
+                                key={item.id}
+                                item={item}
+                                employees={employees}
+                                liveContext={getLiveContext(item)}
+                                techStatus={getTechStatus(item)}
+                                onClick={() => openItem(item)}
+                                onOpenMedia={() => setSelectedMediaItem(item)}
+                              />
                             ))
                           )}
                         </div>
@@ -1087,7 +1347,15 @@ export default function ScheduleV2() {
                             {index < dayItems.length - 1 && <div className="h-10 w-px bg-border" />}
                           </div>
                           <div className="min-w-0 flex-1 pb-2">
-                            <JobCard item={item} employees={employees} compact onClick={() => openItem(item)} />
+                            <JobCard
+                              item={item}
+                              employees={employees}
+                              liveContext={getLiveContext(item)}
+                              techStatus={getTechStatus(item)}
+                              compact
+                              onClick={() => openItem(item)}
+                              onOpenMedia={() => setSelectedMediaItem(item)}
+                            />
                           </div>
                         </div>
                       ))}
@@ -1159,15 +1427,23 @@ export default function ScheduleV2() {
         </Tabs>
       </main>
 
-      <NewJobDialog open={newJobOpen} onOpenChange={setNewJobOpen} defaultDate={format(currentDay, "yyyy-MM-dd")} />
       <JobContextDialog
         item={selectedItem}
         employees={employees}
+        liveContext={selectedItem ? getLiveContext(selectedItem) : undefined}
         open={!!selectedItem}
         onOpenChange={(open) => {
           if (!open) setSelectedItem(null);
         }}
         onOpenRecord={openRecord}
+        onOpenMedia={(item) => setSelectedMediaItem(item)}
+      />
+      <JobMediaDialog
+        item={selectedMediaItem}
+        open={!!selectedMediaItem}
+        onOpenChange={(open) => {
+          if (!open) setSelectedMediaItem(null);
+        }}
       />
       <CommunicationContextDialog
         item={selectedCommunication}

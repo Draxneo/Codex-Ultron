@@ -5,8 +5,6 @@
  *   • Roster       — list, add, edit, deactivate employees
  *   • Permissions  — page-access matrix (PageAccessCard) + impersonation (ViewAsCard)
  *   • Pay & Payroll — pay rates, time tracking, paysheet
- *   • Schedules    — placeholder
- *   • Activity     — placeholder
  */
 
 import { useState, useEffect } from "react";
@@ -19,10 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Users, Shield, DollarSign, Calendar, Activity,
-  Plus, Trash2, UserPlus, Mail, MessageSquare, Clock,
-} from "lucide-react";
+import { Users, Shield, DollarSign, Plus, Trash2, UserPlus, Mail, MessageSquare } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -170,7 +165,6 @@ function RosterTab() {
                           {appRolesMap[emp.id] === "supervisor" && (
                             <Badge variant="outline" className="text-[9px] border-warning text-warning">Login: Supervisor</Badge>
                           )}
-                          {emp.ooo_enabled && <Badge variant="outline" className="text-[9px] border-warning text-warning">OOO</Badge>}
                           {emp.is_active === false && <Badge variant="outline" className="text-[9px]">Inactive</Badge>}
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
@@ -333,28 +327,11 @@ function PayPayrollTab() {
   );
 }
 
-/* ──────────── Placeholder Tabs ──────────── */
-function ComingSoon({ icon: Icon, title, blurb }: { icon: any; title: string; blurb: string }) {
-  return (
-    <Card>
-      <CardContent className="py-12 flex flex-col items-center text-center gap-3">
-        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-          <Icon className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <div>
-          <p className="font-semibold">{title}</p>
-          <p className="text-xs text-muted-foreground mt-1 max-w-xs">{blurb}</p>
-        </div>
-        <Badge variant="outline" className="text-[10px]">Coming soon</Badge>
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ──────────── Hub ──────────── */
 export function EmployeeHub() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get("employeeTab") || "roster";
+  const requestedTab = searchParams.get("employeeTab") || "roster";
+  const initialTab = ["roster", "permissions", "pay"].includes(requestedTab) ? requestedTab : "roster";
   const [tab, setTab] = useState(initialTab);
 
   const handleTabChange = (nextTab: string) => {
@@ -370,12 +347,10 @@ export function EmployeeHub() {
 
   return (
     <Tabs value={tab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid w-full grid-cols-5">
+      <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="roster" className="gap-1.5"><Users className="h-3.5 w-3.5" />Roster</TabsTrigger>
         <TabsTrigger value="permissions" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Permissions</TabsTrigger>
         <TabsTrigger value="pay" className="gap-1.5"><DollarSign className="h-3.5 w-3.5" />Pay</TabsTrigger>
-        <TabsTrigger value="schedules" className="gap-1.5"><Calendar className="h-3.5 w-3.5" />Schedules</TabsTrigger>
-        <TabsTrigger value="activity" className="gap-1.5"><Activity className="h-3.5 w-3.5" />Activity</TabsTrigger>
       </TabsList>
 
       <TabsContent value="roster" className="mt-4"><RosterTab /></TabsContent>
@@ -384,12 +359,6 @@ export function EmployeeHub() {
         <ViewAsCard />
       </TabsContent>
       <TabsContent value="pay" className="mt-4"><PayPayrollTab /></TabsContent>
-      <TabsContent value="schedules" className="mt-4">
-        <ComingSoon icon={Clock} title="Working Hours & On-Call Rotation" blurb="Set weekly schedules, on-call assignments, and shift swaps. Hooks into JARVIS for after-hours routing." />
-      </TabsContent>
-      <TabsContent value="activity" className="mt-4">
-        <ComingSoon icon={Activity} title="Employee Activity Log" blurb="Per-employee timeline: logins, jobs touched, calls made, customer interactions. Useful for audits and reviews." />
-      </TabsContent>
     </Tabs>
   );
 }

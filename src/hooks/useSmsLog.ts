@@ -102,6 +102,19 @@ function mergeMessagesChrono(existing: SmsMessage[], incoming: SmsMessage[]): Sm
 
 const PAGE_SIZE = 500;
 
+function isOpenWorkStatus(status?: string | null) {
+  const text = String(status || "").toLowerCase();
+  if (!text) return false;
+  return !/\b(done|complete|completed|closed|cancel|canceled|cancelled|lost|won|paid|invoiced|archived)\b/.test(text);
+}
+
+function hasCurrentWorkDate(value?: string | null) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return timestamp >= Date.now() - 24 * 60 * 60 * 1000;
+}
+
 interface UseSmsLogOptions {
   role?: string | null;
   employeeId?: string | null;
@@ -172,6 +185,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       for (const job of jobs || []) {
         if (!job.customer_name || !job.customer_phone) continue;
         addContactLookup(map, job.customer_phone, { name: job.customer_name, type: "customer" });
+        if (!isOpenWorkStatus(job.status) || !hasCurrentWorkDate(job.scheduled_date)) continue;
         const key = normalizeLast10(job.customer_phone);
         if (!key || jobsByPhone[key]) continue;
         jobsByPhone[key] = {
@@ -188,8 +202,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       for (const est of estimates || []) {
         if (!est.customer_name || !est.customer_phone) continue;
         const estimateStatus = String(est.work_status || est.status || "").toLowerCase();
-        if (["won", "lost", "canceled", "cancelled"].includes(estimateStatus)) continue;
         addContactLookup(map, est.customer_phone, { name: est.customer_name, type: "customer" });
+        if (!isOpenWorkStatus(estimateStatus) || !hasCurrentWorkDate(est.scheduled_date)) continue;
         const key = normalizeLast10(est.customer_phone);
         if (!key || estimatesByPhone[key]) continue;
         estimatesByPhone[key] = {
@@ -235,7 +249,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
   const setThreadStatus = useCallback(async (phoneNumber: string, status: SmsConversationStatus) => {
     const phoneLast10 = normalizeLast10(phoneNumber);
-    if (!phoneLast10 || !userId) return;
+    if (!phoneLast10) throw new Error("Missing phone number for SMS thread status.");
+    if (!userId) throw new Error("Sign in before marking an SMS thread handled.");
 
     const updatedAt = new Date().toISOString();
     setThreadSettings((prev) => ({
@@ -258,6 +273,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
     if (error) {
       console.error("Failed to update SMS thread status:", error);
+      throw error;
     }
   }, [userId]);
 
@@ -452,8 +468,10 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
             });
             return mergeMessagesChrono(withoutOptimistic, [msg]);
           });
-          if (msg.direction === "inbound") {
-            void setThreadStatus(msg.phone_number, "needs_reply");
+          if (msg.direction === "inbound" && userId) {
+            void setThreadStatus(msg.phone_number, "needs_reply").catch((error) => {
+              console.error("Failed to mark inbound SMS thread as needing reply:", error);
+            });
           }
         }
       )
@@ -534,8 +552,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         setting.updated_at &&
         (!latestInbound || new Date(setting.updated_at).getTime() >= new Date(latestInbound.created_at).getTime())
       );
-      const derivedStatus: SmsConversationStatus =
-        unread > 0 || lastMsg.direction === "inbound" ? "needs_reply" : "waiting";
+      const derivedStatus: SmsConversationStatus = unread > 0 ? "needs_reply" : "waiting";
       const status = manualIsFresh ? setting!.conversation_status! : derivedStatus;
       const matchedJob = phoneLast10 ? jobContextMap[phoneLast10] || null : null;
       const matchedEstimate = phoneLast10 ? estimateContextMap[phoneLast10] || null : null;
@@ -570,8 +587,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const queryClient = useQueryClient();
 
   const markAsRead = useCallback(async (phoneNumber: string) => {
+    const normalized = normalizeLast10(phoneNumber);
     const unreadIds = messages
-      .filter((m) => m.phone_number === phoneNumber && m.direction === "inbound" && !m.is_read)
+      .filter((m) => normalizeLast10(m.phone_number) === normalized && m.direction === "inbound" && !m.is_read)
       .map((m) => m.id);
 
     if (unreadIds.length === 0) return;
@@ -644,7 +662,11 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         return false;
       }
       toast({ title: "SMS Sent", description: `Message sent to ${contactName || to}` });
-      void setThreadStatus(to, "waiting");
+      if (userId) {
+        void setThreadStatus(to, "waiting").catch((error) => {
+          console.error("Failed to mark outbound SMS thread as waiting:", error);
+        });
+      }
       return true;
     } catch (e: any) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));

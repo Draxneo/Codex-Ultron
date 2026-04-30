@@ -5,6 +5,7 @@ import { normalizeLast10 } from "@/lib/formatters";
 import {
   addContactLookup,
   buildCustomerDisplayName,
+  resolveContactFromLookup,
   type ContactLookupMap,
 } from "@/lib/communications";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
@@ -115,11 +116,13 @@ export function useCallLog() {
       .map(([key, groupCalls]) => {
         const last = groupCalls[0];
         const dbName = groupCalls.find((c) => c.contact_name)?.contact_name || null;
+        const dbType = groupCalls.find((c) => c.contact_type && c.contact_type !== "unknown")?.contact_type || last.contact_type;
         const mapMatch = contactMap[key];
+        const resolved = resolveContactFromLookup(contactMap, last.phone_number, dbName, dbType);
         return {
           phoneNumber: last.phone_number,
-          contactName: dbName || mapMatch?.name || null,
-          contactType: dbName ? last.contact_type : (mapMatch?.type || last.contact_type),
+          contactName: resolved.name || mapMatch?.name || null,
+          contactType: resolved.type || mapMatch?.type || last.contact_type,
           calls: groupCalls,
           lastCall: last,
           unreadCount: groupCalls.filter((c) => !c.is_read && c.direction === "inbound").length,

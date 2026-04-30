@@ -2,7 +2,7 @@
  * TechJarvisPushToTalk - field-first voice assistant for tech jobs.
  *
  * The tech workflow is intentionally simple:
- * take pictures, talk to JARVIS, build/send the customer cart.
+ * take pictures, talk to JARVIS, and capture clean field notes.
  */
 
 import { useState, useCallback, useRef } from "react";
@@ -26,6 +26,7 @@ interface Props {
   bare?: boolean;
   onOpenCart?: () => void;
   onOpenPhotos?: () => void;
+  enableProposalActions?: boolean;
 }
 
 type ProposedCartAction = {
@@ -131,6 +132,7 @@ export function TechJarvisPushToTalk({
   bare = false,
   onOpenCart,
   onOpenPhotos,
+  enableProposalActions = true,
 }: Props) {
   const [thinking, setThinking] = useState(false);
   const [lastReply, setLastReply] = useState<string | null>(null);
@@ -162,7 +164,7 @@ export function TechJarvisPushToTalk({
             metadata: {
               job_number: jobNumber || null,
               customer_name: customerName || null,
-              workflow: "tech_jarvis_cart",
+              workflow: enableProposalActions ? "tech_jarvis_proposal" : "tech_jarvis_field_notes",
             },
           })
           .select("id")
@@ -178,10 +180,16 @@ export function TechJarvisPushToTalk({
         const pageCtx = [
           `Active job: ${jobNumber || jobId}${customerName ? ` for ${customerName}` : ""}.`,
           `Job ID: ${jobId}.`,
-          "Tech workflow: photos plus voice notes should become repair/replacement recommendations, cart options, and a customer-ready approval/payment link.",
+          enableProposalActions
+            ? "Tech workflow: photos plus voice notes should become repair/replacement recommendations, priced proposal options, and a customer-ready approval/payment link."
+            : "Tech workflow: photos plus voice notes should become clear field notes, diagnosis summaries, repair/replacement recommendations, and next-step guidance.",
           "When discussing replacement equipment, think like the field team: brand, tonnage, system type, tier, then orientation/install location. Example: Carrier 3 ton Performance gas heat system in the attic.",
-          "If the tech describes options, respond with clear cart item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved.",
-          "When recommending cart choices, add a final section named CART OPTIONS. Put each priced option on one line like: Option A: Replace capacitor | price: $289 | description: Includes part, labor, testing.",
+          enableProposalActions
+            ? "If the tech describes options, respond with clear proposal item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved."
+            : "Do not create cart actions in this view. Focus on what the technician found, what still needs proof, and the clean next step.",
+          enableProposalActions
+            ? "When recommending proposal choices, add a final section named CART OPTIONS. Put each priced option on one line like: Option A: Replace capacitor | price: $289 | description: Includes part, labor, testing."
+            : "If pricing is mentioned, summarize it as field context only. The proposal workspace can handle cart creation later.",
         ].join(" ");
 
         const { data, error } = await supabase.functions.invoke("ai-task-agent", {
@@ -193,7 +201,7 @@ export function TechJarvisPushToTalk({
         });
         if (error) throw error;
         const reply: string = data?.reply || "No response.";
-        const suggestedItems = parseJarvisCartSuggestions(reply);
+        const suggestedItems = enableProposalActions ? parseJarvisCartSuggestions(reply) : [];
         setLastReply(reply);
         setProposedCartActions(suggestedItems);
         if (transcriptId) {
@@ -221,7 +229,7 @@ export function TechJarvisPushToTalk({
         setThinking(false);
       }
     },
-    [jobId, jobNumber, customerName, employeeId, announce],
+    [jobId, jobNumber, customerName, employeeId, announce, enableProposalActions],
   );
 
   const addProposedAction = useCallback(
@@ -259,6 +267,7 @@ export function TechJarvisPushToTalk({
   }, []);
 
   const { isRecording, loading, start, stop } = useVoiceToText({
+    context: "tech_jarvis",
     onTranscript: (t) => {
       transcriptRef.current = t;
       if (sendTranscriptWhenReadyRef.current && t.trim()) {
@@ -314,7 +323,9 @@ export function TechJarvisPushToTalk({
         <p className="text-sm font-semibold text-foreground">Tell JARVIS what you found.</p>
         <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
           Talk through the diagnosis, repair choices, equipment options, and anything the customer asked.
-          JARVIS should help turn that into cart options and a customer-ready link.
+          {enableProposalActions
+            ? " JARVIS should turn that into estimate line items the technician can review before sending for customer approval."
+            : " JARVIS should turn that into clean field notes and a practical next step."}
         </p>
       </div>
 
@@ -351,13 +362,15 @@ export function TechJarvisPushToTalk({
               : "Press and hold the mic"}
       </p>
 
-      <div className="grid grid-cols-2 gap-2 w-full">
+      <div className={cn("grid gap-2 w-full", enableProposalActions ? "grid-cols-2" : "grid-cols-1")}>
         <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenPhotos}>
           <Camera className="h-4 w-4" /> Add photos
         </Button>
-        <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenCart}>
-          <ShoppingCart className="h-4 w-4" /> Open cart
-        </Button>
+        {enableProposalActions && (
+          <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenCart}>
+            <ShoppingCart className="h-4 w-4" /> Open proposal
+          </Button>
+        )}
       </div>
 
       {lastQuestion && (
@@ -371,11 +384,11 @@ export function TechJarvisPushToTalk({
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">JARVIS</p>
               </div>
               <p className="text-xs text-foreground whitespace-pre-wrap">{lastReply}</p>
-              {proposedCartActions.length > 0 && (
+              {enableProposalActions && proposedCartActions.length > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">Proposed cart actions</p>
+                      <p className="text-sm font-semibold text-foreground">Proposed proposal actions</p>
                       <p className="text-[11px] text-muted-foreground">
                         JARVIS found priced options. Review before adding anything.
                       </p>
@@ -413,7 +426,7 @@ export function TechJarvisPushToTalk({
                             ) : (
                               <Check className="h-3.5 w-3.5" />
                             )}
-                            Add to cart
+                            Add to proposal
                           </Button>
                           <Button
                             type="button"
@@ -422,7 +435,7 @@ export function TechJarvisPushToTalk({
                             className="h-10 w-10"
                             disabled={addingSuggestionId === action.id}
                             onClick={() => dismissProposedAction(action.id)}
-                            aria-label="Dismiss suggested cart item"
+                            aria-label="Dismiss suggested proposal item"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -433,9 +446,11 @@ export function TechJarvisPushToTalk({
                 </div>
               )}
               <div className="flex gap-2 pt-1">
-                <Button type="button" size="sm" className="h-9 gap-1.5" onClick={onOpenCart}>
-                  <ShoppingCart className="h-3.5 w-3.5" /> Build cart
-                </Button>
+                {enableProposalActions && (
+                  <Button type="button" size="sm" className="h-9 gap-1.5" onClick={onOpenCart}>
+                    <ShoppingCart className="h-3.5 w-3.5" /> Build proposal
+                  </Button>
+                )}
                 <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5" onClick={onOpenPhotos}>
                   <Camera className="h-3.5 w-3.5" /> Add more photos
                 </Button>

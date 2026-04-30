@@ -1,6 +1,6 @@
 import { Loader2, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type DictationProvider, useVoiceToText } from "@/hooks/useVoiceToText";
+import { type DictationContext, type DictationProvider, useVoiceToText } from "@/hooks/useVoiceToText";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ interface DictateButtonProps {
   provider?: DictationProvider;
   prompt?: string;
   autoStopOnSilence?: boolean;
+  context?: DictationContext;
   showLabel?: boolean;
   idleLabel?: string;
   recordingLabel?: string;
@@ -27,6 +28,7 @@ export function DictateButton({
   provider,
   prompt,
   autoStopOnSilence = true,
+  context = "general",
   showLabel = false,
   idleLabel = "Talk",
   recordingLabel = "Stop",
@@ -37,6 +39,7 @@ export function DictateButton({
   const isMobile = useIsMobile();
 
   const { isRecording, loading, toggle } = useVoiceToText({
+    context,
     provider,
     prompt,
     autoStopOnSilence,

@@ -134,9 +134,11 @@ const UnscheduledJobs = () => {
           </Button>
           <h1 className="text-lg font-bold">Job Backlog</h1>
           <Badge variant="secondary" className="text-xs">{totalCount}</Badge>
-          <Button size="sm" className="ml-auto text-xs" onClick={() => setNewJobOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> New Job
-          </Button>
+          {isMobile && (
+            <Button size="sm" className="ml-auto text-xs" onClick={() => setNewJobOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> New Job
+            </Button>
+          )}
         </div>
 
         {isLoading && (

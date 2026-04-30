@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight, MessageSquare, PhoneCall } from "lucide-react";
+import { Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight, MessageSquare, PhoneCall, Briefcase, CalendarClock, MapPin } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
 import { Input } from "@/components/ui/input";
@@ -27,9 +27,15 @@ const PAGE_SIZE = 50;
 function lastContactLabel(customer: EnrichedCustomer) {
   const at = customer.enrichment.last_contact_at;
   if (!at) return "No recent contact";
-  const type = customer.enrichment.last_contact_type === "sms" ? "Text" : "Call";
   const direction = customer.enrichment.last_contact_direction;
-  return `${type}${direction ? ` ${direction}` : ""} · ${formatRelativeDate(at)}`;
+  const directionLabel = direction ? direction.charAt(0).toUpperCase() + direction.slice(1) : null;
+  return [directionLabel, formatRelativeDate(at)].filter(Boolean).join(" - ");
+}
+
+function lastContactTone(customer: EnrichedCustomer) {
+  if (customer.enrichment.last_contact_type === "sms") return "text-sky-600 bg-sky-500/10 dark:text-sky-300";
+  if (customer.enrichment.last_contact_type === "call") return "text-emerald-600 bg-emerald-500/10 dark:text-emerald-300";
+  return "text-muted-foreground bg-muted";
 }
 
 export default function Customers() {
@@ -92,19 +98,25 @@ export default function Customers() {
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      {!isMobile && <AppHeader />}
+      {!isMobile && (
+        <AppHeader
+          searchValue={search}
+          onSearchChange={handleSearch}
+          searchPlaceholder="Search customers"
+        />
+      )}
       <main className="flex-1 overflow-hidden flex">
         <ModuleWorkbench
           title="Customer HQ"
           eyebrow="Relationship memory"
           description="Find customers by recent call, recent text, recent job, name, address, email, or phone number."
           icon={<Users className="h-4.5 w-4.5" />}
-          primaryAction={
+          primaryAction={isMobile ? (
             <Button size="sm" className="text-xs bg-[hsl(var(--sky))] text-white hover:bg-[hsl(var(--sky))]/90" onClick={() => setDialogOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" /> New Customer
             </Button>
-          }
-          search={
+          ) : undefined}
+          search={isMobile ? (
             <div className="relative w-full min-w-[220px] max-w-sm sm:w-80">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -114,7 +126,7 @@ export default function Customers() {
                 className="pl-8 h-9"
               />
             </div>
-          }
+          ) : undefined}
           filters={
             <ToggleGroup type="single" value={sortMode} onValueChange={handleSortChange} className="hidden sm:flex">
               <ToggleGroupItem value="recent_contact" aria-label="Sort by recent contact" size="sm" title="Recent call or text">
@@ -141,54 +153,11 @@ export default function Customers() {
           meta={
             <span className="hidden text-xs text-muted-foreground sm:inline">
               {totalCount.toLocaleString()} customer{totalCount !== 1 ? "s" : ""}
-              {letterFilter && ` · ${letterFilter}`}
+              {letterFilter && ` - ${letterFilter}`}
             </span>
           }
           contentClassName="p-4"
         >
-          {search === "__legacy_toolbar__" && (
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
-            <div className="flex items-center gap-2">
-              <Button size="sm" className="text-xs bg-[hsl(var(--sky))] text-white hover:bg-[hsl(var(--sky))]/90" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> New Customer
-              </Button>
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search customers..."
-                  value={search}
-                  onChange={e => handleSearch(e.target.value)}
-                  className="pl-8 h-9"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ToggleGroup type="single" value={sortMode} onValueChange={handleSortChange} className="hidden sm:flex">
-                <ToggleGroupItem value="recent_contact" aria-label="Sort by recent contact" size="sm" title="Recent call or text">
-                  <PhoneCall className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="recent_job" aria-label="Sort by recent jobs" size="sm" title="Recent jobs">
-                  <Clock className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="az" aria-label="Sort A-Z" size="sm" title="A–Z">
-                  <ArrowDownAZ className="h-4 w-4" />
-                </ToggleGroupItem>
-              </ToggleGroup>
-              <ToggleGroup type="single" value={view} onValueChange={v => v && setView(v as "card" | "table")} className="hidden sm:flex">
-                <ToggleGroupItem value="table" aria-label="Table view" size="sm">
-                  <LayoutList className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="card" aria-label="Card view" size="sm">
-                  <LayoutGrid className="h-4 w-4" />
-                </ToggleGroupItem>
-              </ToggleGroup>
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                {totalCount.toLocaleString()} customer{totalCount !== 1 ? "s" : ""}
-                {letterFilter && ` · ${letterFilter}`}
-              </span>
-            </div>
-          </div>
-          )}
 
           <div ref={scrollRef}>
             {isLoading && Array.from({ length: 8 }).map((_, i) => (
@@ -200,8 +169,8 @@ export default function Customers() {
                 icon={Users}
                 title="No customers found"
                 description={search ? "Try adjusting your search terms." : "Add your first customer to get started."}
-                actionLabel={!search ? "Add Customer" : undefined}
-                onAction={!search ? () => setDialogOpen(true) : undefined}
+                actionLabel={!search && isMobile ? "Add Customer" : undefined}
+                onAction={!search && isMobile ? () => setDialogOpen(true) : undefined}
               />
             )}
 
@@ -211,17 +180,30 @@ export default function Customers() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead className="hidden sm:table-cell">Phone</TableHead>
-                      <TableHead className="hidden md:table-cell">Email</TableHead>
-                      <TableHead className="hidden lg:table-cell">City</TableHead>
-                      <TableHead className="hidden xl:table-cell">Last Contact</TableHead>
-                      <TableHead className="text-right">Jobs</TableHead>
-                      <TableHead className="text-right hidden sm:table-cell">Last Job</TableHead>
+                      <TableHead className="hidden sm:table-cell" aria-label="Phone" title="Phone">
+                        <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell" aria-label="Email" title="Email">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell" aria-label="City" title="City">
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
+                      <TableHead className="hidden xl:table-cell" aria-label="Last contact" title="Last contact">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
+                      <TableHead className="text-right" aria-label="Jobs" title="Jobs">
+                        <Briefcase className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
+                      <TableHead className="text-right hidden sm:table-cell" aria-label="Last job" title="Last job">
+                        <CalendarClock className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {customers.map(c => {
                       const e = c.enrichment;
+                      const hasActiveJob = activeJobCustomers?.has(c.id);
                       return (
                         <TableRow
                           key={c.id}
@@ -237,34 +219,44 @@ export default function Customers() {
                                 <ClickToCall phone={(c.phone || c.mobile_phone)!} contactName={[c.first_name, c.last_name].filter(Boolean).join(" ")} iconClassName="h-3 w-3" />
                                 <SmsButton phone={(c.phone || c.mobile_phone)!} iconClassName="h-3 w-3" />
                               </div>
-                            ) : "—"}
+                            ) : (
+                              <span className="text-muted-foreground/40">-</span>
+                            )}
                           </TableCell>
                           <TableCell className="hidden md:table-cell py-2 text-sm text-muted-foreground">
-                            {c.email || "—"}
+                            {c.email || <span className="text-muted-foreground/40">-</span>}
                           </TableCell>
                           <TableCell className="hidden lg:table-cell py-2 text-sm text-muted-foreground">
-                            {c.city || "—"}
+                            {c.city || <span className="text-muted-foreground/40">-</span>}
                           </TableCell>
                           <TableCell className="hidden xl:table-cell py-2 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5">
-                              {c.enrichment.last_contact_type === "sms" ? (
-                                <MessageSquare className="h-3.5 w-3.5" />
-                              ) : c.enrichment.last_contact_type === "call" ? (
-                                <PhoneCall className="h-3.5 w-3.5" />
-                              ) : null}
+                              <span className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full", lastContactTone(c))}>
+                                {c.enrichment.last_contact_type === "sms" ? (
+                                  <MessageSquare className="h-3.5 w-3.5" />
+                                ) : c.enrichment.last_contact_type === "call" ? (
+                                  <PhoneCall className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Clock className="h-3.5 w-3.5" />
+                                )}
+                              </span>
                               <span>{lastContactLabel(c)}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right py-2 text-sm">
-                            <span className="inline-flex items-center gap-1.5">
-                              {activeJobCustomers?.has(c.id) && (
-                                <span className="h-2 w-2 rounded-full bg-[hsl(var(--success))] animate-pulse" title="Active job" />
+                            <span
+                              className={cn(
+                                "inline-flex items-center justify-end gap-1.5",
+                                hasActiveJob && "font-semibold text-emerald-700 dark:text-emerald-400"
                               )}
-                              {e.job_count}
+                              title={hasActiveJob ? "Active job" : "Job history"}
+                            >
+                              <Briefcase className={cn("h-3.5 w-3.5", hasActiveJob ? "animate-pulse text-emerald-600" : "text-muted-foreground/60")} />
+                              <span>{e.job_count}</span>
                             </span>
                           </TableCell>
                           <TableCell className="text-right hidden sm:table-cell py-2 text-xs text-muted-foreground">
-                            {e.last_job_date ? format(new Date(e.last_job_date), "MMM d, yyyy") : "—"}
+                            {e.last_job_date ? format(new Date(e.last_job_date), "MMM d, yyyy") : <span className="text-muted-foreground/40">-</span>}
                           </TableCell>
                         </TableRow>
                       );
@@ -278,6 +270,7 @@ export default function Customers() {
               <div className="space-y-1">
                 {customers.map(c => {
                   const e = c.enrichment;
+                  const hasActiveJob = activeJobCustomers?.has(c.id);
                   return (
                     <Card
                       key={c.id}
@@ -285,19 +278,36 @@ export default function Customers() {
                       onClick={() => goToCustomer(c.id)}
                     >
                       <CustomerCard customer={c} enrichment={e} variant="list" showBadgeDetail>
-                        <div className="text-xs text-muted-foreground ml-auto shrink-0">
-                          {e.job_count} job{e.job_count !== 1 ? "s" : ""}
+                        <div
+                          className={cn(
+                            "ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-muted-foreground",
+                            hasActiveJob && "bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-400"
+                          )}
+                          title={hasActiveJob ? "Active job" : "Job history"}
+                        >
+                          <Briefcase className={cn("h-3.5 w-3.5", hasActiveJob ? "animate-pulse text-emerald-600" : "text-muted-foreground/60")} />
+                          {e.job_count}
                         </div>
                       </CustomerCard>
                       <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground ml-[42px]">
                         {c.enrichment.last_contact_at && (
                           <span className="flex items-center gap-1">
-                            {c.enrichment.last_contact_type === "sms" ? (
-                              <MessageSquare className="h-3 w-3" />
-                            ) : (
-                              <PhoneCall className="h-3 w-3" />
-                            )}
+                            <span className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full", lastContactTone(c))}>
+                              {c.enrichment.last_contact_type === "sms" ? (
+                                <MessageSquare className="h-3 w-3" />
+                              ) : (
+                                <PhoneCall className="h-3 w-3" />
+                              )}
+                            </span>
                             {lastContactLabel(c)}
+                          </span>
+                        )}
+                        {!c.enrichment.last_contact_at && (
+                          <span className="flex items-center gap-1 text-muted-foreground/70">
+                            <span className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full", lastContactTone(c))}>
+                              <Clock className="h-3 w-3" />
+                            </span>
+                            No recent contact
                           </span>
                         )}
                         {c.phone && (

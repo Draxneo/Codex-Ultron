@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import {
-  Package, CreditCard, Brain, ChevronRight, ChevronLeft, Phone, Mail,
-  Settings2, FileText, Webhook, MessageSquare, Users, Shield,
-  Plus, Trash2, Pencil, BarChart3, Copy, UserPlus, Building2, MapPin, RefreshCw, ScanSearch, Activity,
-  BookOpen, Database, CalendarDays, ClipboardCheck, ReceiptText, Tags,
+  CreditCard, ChevronLeft, Phone,
+  Settings2, Webhook, MessageSquare, Users,
+  Plus, Trash2, Pencil, Copy, Building2, RefreshCw, ScanSearch, Activity,
 } from "lucide-react";
 import { AdminHub } from "@/components/AdminHub";
 import { EmployeeHub } from "@/components/admin/EmployeeHub";
@@ -22,20 +20,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QuickLinksGrid } from "@/components/QuickLinksGrid";
-import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { useCapacitor } from "@/hooks/useCapacitor";
-
 // Config components (absorbed from SettingsPage)
 import { CompanySettingsCard } from "@/components/CompanySettingsCard";
 import { NavOrderEditor } from "@/components/NavOrderEditor";
@@ -43,43 +32,36 @@ import { HumanInTheLoopCard } from "@/components/HumanInTheLoopCard";
 import { IntakeSimulator } from "@/components/IntakeSimulator";
 import { CopilotPermissionsCard } from "@/components/CopilotPermissionsCard";
 
-import { PageAccessCard } from "@/components/PageAccessCard";
-import { ViewAsCard } from "@/components/ViewAsCard";
-
 import { CompanyDocumentsCard } from "@/components/CompanyDocumentsCard";
 import { RingtoneSettingsCard } from "@/components/RingtoneSettingsCard";
 import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard";
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
 
-import { PayRatesCard } from "@/components/PayRatesCard";
 import { LineItemTemplatesCard } from "@/components/LineItemTemplatesCard";
-import { TimeTrackerCard } from "@/components/TimeTrackerCard";
 import { MetaAudiencesCard } from "@/components/MetaAudiencesCard";
 import { PaymentPlanRulesCard } from "@/components/PaymentPlanRulesCard";
-import { useEmployees, useAddEmployee, useToggleEmployee, useUpdateEmployee, useInviteUser, useDeleteEmployee } from "@/hooks/useEmployees";
+import { useEmployees } from "@/hooks/useEmployees";
 import { usePermitAuthorities } from "@/hooks/usePermitAuthorities";
 import { PermitScoutPanel } from "@/components/PermitScoutPanel";
 import { DuplicateManager } from "@/components/DuplicateManager";
 import { HcpHistoryImport } from "@/components/HcpHistoryImport";
 import { HcpPhotoArchive } from "@/components/HcpPhotoArchive";
-import { Textarea } from "@/components/ui/textarea";
 import { ApiCostTrackerCard } from "@/components/ApiCostTrackerCard";
 import { ApiCostsOverviewCard } from "@/components/ApiCostsOverviewCard";
 import { ApiUsageHourlyChart } from "@/components/ApiUsageHourlyChart";
-import { ClickToCall } from "@/components/ClickToCall";
 import HcpCustomerSyncButton from "@/components/HcpCustomerSyncButton";
 import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { CustomerDataTools } from "@/components/admin/CustomerDataTools";
 import { ADMIN_SETTING_SECTIONS } from "@/config/adminNavigation";
 
-// ─── Webhook URLs ───
+// Webhook URLs
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hcp-webhook`;
 const SMS_WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/sms-webhook`;
 const STRIPE_WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/stripe-webhook`;
 const VOICE_WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/voice-webhook`;
 const FB_LEAD_WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/facebook-lead-webhook`;
 
-// ─── Dispatch Utility Buttons (moved from Jobs toolbar) ───
+// Dispatch Utility Buttons
 function DispatchRecalcButton() {
   const [loading, setLoading] = useState(false);
   const { data: employees } = useEmployees();
@@ -142,518 +124,6 @@ function ComfortClubRescanButton() {
   );
 }
 
-// ─── Tool Card Registry (only standalone-page tools) ───
-interface ToolCardDef {
-  key: string;
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  borderColor: string;
-  iconColor: string;
-  iconBg: string;
-  to: string;
-  hasCanvas?: boolean;
-}
-
-const TOOL_CARDS: ToolCardDef[] = [
-  { key: "jarvis", title: "JARVIS", description: "Proactive dashboard — what needs attention, AI activity, and quick actions.", icon: Brain, borderColor: "border-l-violet-500", iconColor: "text-violet-500", iconBg: "bg-violet-500/10", to: "/copilot" },
-  { key: "shopping-cart", title: "Catalog & Pricebook", description: "Browse and manage equipment matchups, repairs, parts, and AHRI lookups — your master pricebook.", icon: Package, borderColor: "border-l-orange-500", iconColor: "text-orange-500", iconBg: "bg-orange-500/10", to: "/catalog" },
-  { key: "phone-system", title: "IVR Builder", description: "Canonical IVR editor for greetings, departments, queues, and routing.", icon: Phone, borderColor: "border-l-cyan-500", iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", to: "/ivr-builder", hasCanvas: true },
-  { key: "payments", title: "Payments Dashboard", description: "Track invoices, payment plans, and revenue.", icon: CreditCard, borderColor: "border-l-sky-500", iconColor: "text-sky-500", iconBg: "bg-sky-500/10", to: "/payments" },
-  { key: "lsa-leads", title: "LSA Leads", description: "View and manage Google LSA leads.", icon: MapPin, borderColor: "border-l-blue-500", iconColor: "text-blue-500", iconBg: "bg-blue-500/10", to: "/leads?source=google_lsa" },
-  { key: "system-log", title: "System Log (Mission Control)", description: "Errors, cron health, retry queue, and on-call pages — full operational telemetry.", icon: Activity, borderColor: "border-l-rose-500", iconColor: "text-rose-500", iconBg: "bg-rose-500/10", to: "/system-log" },
-];
-
-// Canonical role options (must match employees_role_canonical_check constraint)
-const ROLE_OPTIONS = [
-  { value: "admin", label: "Admin" },
-  { value: "office", label: "Office" },
-  { value: "supervisor", label: "Supervisor" },
-  { value: "tech", label: "Technician" },
-  { value: "installer", label: "Installer" },
-];
-
-function ToolCard({ card }: { card: ToolCardDef }) {
-  return (
-    <Link
-      to={card.to}
-      className={`flex items-start gap-3 rounded-lg border border-l-4 ${card.borderColor} bg-card p-4 shadow-sm transition-all hover:shadow-md hover:border-l-[6px]`}
-    >
-      <div className={`shrink-0 rounded-lg p-2 ${card.iconBg}`}>
-        <card.icon className={`h-4 w-4 ${card.iconColor}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm flex items-center gap-1.5">
-            {card.title}
-            {card.hasCanvas && (
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 font-bold tracking-wider bg-primary/10 text-primary border-0">
-                CANVAS
-              </Badge>
-            )}
-          </h3>
-          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{card.description}</p>
-      </div>
-    </Link>
-  );
-}
-
-// ─── Referrals Panel ───
-function ReferralsPanel() {
-  const { toast: t } = useToast();
-  const [referrals, setReferrals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("referrals")
-        .select("*, referral_codes(code, customers(first_name, last_name))")
-        .order("created_at", { ascending: false }).limit(50);
-      setReferrals(data || []);
-      setLoading(false);
-    })();
-  }, []);
-
-  const updateStatus = async (id: string, status: string) => {
-    const updates: any = { status };
-    if (status === "paid") updates.bonus_awarded = true;
-    await supabase.from("referrals").update(updates).eq("id", id);
-    setReferrals(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-    t({ title: "Updated", description: `Referral marked as ${status}` });
-  };
-
-  if (loading) return <p className="text-sm text-muted-foreground py-4">Loading referrals...</p>;
-  if (!referrals.length) return <p className="text-sm text-muted-foreground py-4">No referrals yet</p>;
-
-  return (
-    <div className="space-y-2">
-      {referrals.map(r => {
-        const referrer = r.referral_codes?.customers;
-        const referrerName = referrer ? [referrer.first_name, referrer.last_name].filter(Boolean).join(" ") : r.referrer_code;
-        return (
-          <Card key={r.id} className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium">{r.referred_name}</span>
-                <span className="text-xs text-muted-foreground ml-2">via {referrerName}</span>
-              </div>
-              <Select defaultValue={r.status} onValueChange={(val) => updateStatus(r.id, val)}>
-                <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
-                  <SelectItem value="paid">Bonus Paid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-xs text-muted-foreground mt-1 space-x-3">
-              {r.referred_phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{r.referred_phone}</span>}
-              {r.referred_email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{r.referred_email}</span>}
-              <span>{format(new Date(r.created_at), "MMM d, yyyy")}</span>
-            </div>
-            {r.service_needed && <p className="text-xs mt-1">{r.service_needed}</p>}
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-// Small controlled input that only saves on blur — prevents mutation spam
-function OooForwardInput({ initialValue, onSave }: { initialValue: string; onSave: (v: string) => void }) {
-  const [value, setValue] = useState(initialValue);
-  return (
-    <Input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => { if (value !== initialValue) onSave(value); }}
-      className="w-40 h-7 text-xs"
-      placeholder="Cell to forward to"
-    />
-  );
-}
-
-function EditEmployeeDialog({
-  employee,
-  open,
-  onClose,
-  onSave,
-}: {
-  employee: any;
-  open: boolean;
-  onClose: () => void;
-  onSave: (payload: { name: string; role: string; phone: string; home_address: string; email: string }) => void;
-}) {
-  const [name, setName] = useState("");
-  const [roles, setRoles] = useState<string[]>(["service_tech"]);
-  const [phone, setPhone] = useState("");
-  const [homeAddress, setHomeAddress] = useState("");
-  const [email, setEmail] = useState("");
-
-  useEffect(() => {
-    if (!open || !employee) return;
-    setName(employee.name || "");
-    setRoles((employee.role || "service_tech").split(",").filter(Boolean));
-    setPhone(employee.phone || "");
-    setHomeAddress(employee.home_address || "");
-    setEmail(employee.email || "");
-  }, [open, employee]);
-
-  const toggleRole = (role: string) => {
-    setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
-  };
-
-  const handleSave = () => {
-    if (!name.trim() || roles.length === 0) return;
-    onSave({ name, role: roles.join(","), phone, home_address: homeAddress, email });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Edit Employee</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Name</Label>
-            <Input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Email</Label>
-            <Input placeholder="email@company.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Phone</Label>
-            <Input placeholder="+15551234567" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Home Address</Label>
-            <AddressAutocomplete value={homeAddress} onChange={setHomeAddress} placeholder="For travel time calculation" />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Roles</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLE_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox checked={roles.includes(opt.value)} onCheckedChange={() => toggleRole(opt.value)} />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave}>Save</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
-// ─── Team Section (absorbed from SettingsPage) ───
-function TeamSection() {
-  const { data: employees } = useEmployees();
-  const addEmployee = useAddEmployee();
-  const toggleEmployee = useToggleEmployee();
-  const updateEmployee = useUpdateEmployee();
-  const deleteEmployee = useDeleteEmployee();
-  const inviteUser = useInviteUser();
-  const navigate = useNavigate();
-  const [deletingEmployee, setDeletingEmployee] = useState<any>(null);
-
-  // Fetch app roles (user_roles) to show supervisor badges
-  const [appRolesMap, setAppRolesMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    async function fetchAppRoles() {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, employee_id");
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-      if (!profiles || !roles) return;
-      const userToRole: Record<string, string> = {};
-      for (const r of roles) userToRole[r.user_id] = r.role;
-      const empToRole: Record<string, string> = {};
-      for (const p of profiles) {
-        if (p.employee_id && userToRole[p.id]) {
-          empToRole[p.employee_id] = userToRole[p.id];
-        }
-      }
-      setAppRolesMap(empToRole);
-    }
-    fetchAppRoles();
-  }, []);
-
-  const [addingEmployee, setAddingEmployee] = useState(false);
-  const [empName, setEmpName] = useState("");
-  const [empRoles, setEmpRoles] = useState<string[]>(["service_tech"]);
-  const [empPhone, setEmpPhone] = useState("");
-  const [empHomeAddress, setEmpHomeAddress] = useState("");
-  const [empEmail, setEmpEmail] = useState("");
-  const [editingEmployee, setEditingEmployee] = useState<any>(null);
-  const [invitingEmployee, setInvitingEmployee] = useState<any>(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePassword, setInvitePassword] = useState("");
-  const [inviteRole, setInviteRole] = useState<string>("tech");
-
-  const toggleRole = (role: string) => {
-    setEmpRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
-  };
-
-  const handleAddEmployee = () => {
-    if (!empName.trim() || empRoles.length === 0) return;
-    addEmployee.mutate({ name: empName, role: empRoles.join(","), phone: empPhone || null, home_address: empHomeAddress || null, email: empEmail || null });
-    setEmpName(""); setEmpPhone(""); setEmpHomeAddress(""); setEmpEmail(""); setEmpRoles(["service_tech"]);
-    setAddingEmployee(false);
-  };
-
-  const handleInvite = () => {
-    if (!inviteEmail.trim() || !invitePassword.trim() || !invitingEmployee) return;
-    if (invitePassword.length < 6) { toast({ title: "Password too short", description: "Must be at least 6 characters", variant: "destructive" }); return; }
-    inviteUser.mutate(
-      { email: inviteEmail, password: invitePassword, employee_id: invitingEmployee.id, role: inviteRole, full_name: invitingEmployee.name },
-      {
-        onSuccess: (data) => { toast({ title: "Account created", description: `${invitingEmployee.name} can now log in with their email and password.` }); setInvitingEmployee(null); setInviteEmail(""); setInvitePassword(""); },
-        onError: (err: any) => { toast({ title: "Invite failed", description: err.message, variant: "destructive" }); },
-      }
-    );
-  };
-
-  const renderEmployeeDialog = (open: boolean, onClose: () => void, title: string, onSave: () => void, saveLabel: string) => (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Name</Label>
-            <Input placeholder="Full name" value={empName} onChange={(e) => setEmpName(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Email</Label>
-            <Input placeholder="email@company.com" type="email" value={empEmail} onChange={(e) => setEmpEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Phone</Label>
-            <Input placeholder="+15551234567" value={empPhone} onChange={(e) => setEmpPhone(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Home Address</Label>
-            <AddressAutocomplete value={empHomeAddress} onChange={setEmpHomeAddress} placeholder="For travel time calculation" />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Roles</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLE_OPTIONS.map(opt => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox checked={empRoles.includes(opt.value)} onCheckedChange={() => toggleRole(opt.value)} />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={onSave}>{saveLabel}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base">Team & User Accounts</CardTitle>
-            <CardDescription className="text-xs">Manage employees, login accounts, and roles.</CardDescription>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => setAddingEmployee(true)}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {employees?.map((emp: any) => (
-            <div key={emp.id} className="border-b last:border-0">
-              <div className="flex items-center justify-between py-3 gap-2">
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
-                  setEditingEmployee(emp);
-                }}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium">{emp.name}</span>
-                    {appRolesMap[emp.id] === "supervisor" && (
-                      <Badge className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-300 hover:bg-amber-500/20">Supervisor</Badge>
-                    )}
-                    {appRolesMap[emp.id] === "admin" && (
-                      <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30 hover:bg-primary/20">Admin</Badge>
-                    )}
-                    {(emp.role || "").split(",").map((r: string) => {
-                      const label = ROLE_OPTIONS.find(o => o.value === r)?.label || r;
-                      return <Badge key={r} variant="secondary" className="text-[10px]">{label}</Badge>;
-                    })}
-                    {emp.ooo_enabled && <Badge variant="outline" className="text-[9px] border-warning text-warning">OOO</Badge>}
-                  </div>
-                  {emp.phone && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <ClickToCall
-                        phone={emp.phone}
-                        contactName={emp.name}
-                        iconClassName="h-3 w-3"
-                        className="text-muted-foreground hover:text-primary"
-                      >
-                        {emp.phone}
-                      </ClickToCall>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/sms?phone=${encodeURIComponent(emp.phone)}`);
-                        }}
-                        className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                        title={`SMS ${emp.name}`}
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-                  {(emp as any).email && <div className="flex items-center gap-1 text-xs text-muted-foreground"><Mail className="h-3 w-3" />{(emp as any).email}</div>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => {
-                    setInvitingEmployee(emp); setInviteEmail((emp as any).email || ""); setInvitePassword("");
-                    setInviteRole(emp.role === "admin" ? "admin" : emp.role === "office" ? "office" : "tech");
-                  }}>
-                    <UserPlus className="h-3 w-3" /> {(emp as any).email ? "Reset Password" : "Invite"}
-                  </Button>
-                  <Switch checked={emp.is_active ?? true} onCheckedChange={(checked) => toggleEmployee.mutate({ id: emp.id, is_active: checked })} />
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeletingEmployee(emp)} title="Delete employee">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 pb-3 pl-2">
-                <div className="flex items-center gap-1.5">
-                  <Switch checked={emp.ooo_enabled ?? false} onCheckedChange={(checked) => updateEmployee.mutate({ id: emp.id, name: emp.name, role: emp.role, ooo_enabled: checked })} className="scale-75" />
-                  <span className="text-[11px] text-muted-foreground">Out of office</span>
-                </div>
-                {emp.ooo_enabled && (
-                  <OooForwardInput
-                    key={emp.id}
-                    initialValue={emp.ooo_forward_number || ""}
-                    onSave={(value) => updateEmployee.mutate({ id: emp.id, name: emp.name, role: emp.role, ooo_forward_number: value || null })}
-                  />
-                )}
-              </div>
-              
-            </div>
-          ))}
-          {(!employees || employees.length === 0) && <p className="text-sm text-muted-foreground text-center py-4">No employees added yet</p>}
-        </CardContent>
-      </Card>
-      <div className="pt-4">
-        <div className="flex items-center gap-2 mb-3">
-          <CreditCard className="h-4 w-4 text-muted-foreground" />
-          <h4 className="text-sm font-semibold text-muted-foreground">Payroll</h4>
-        </div>
-        <Separator className="mb-4" />
-        <div className="space-y-4">
-          <PayRatesCard />
-          <TimeTrackerCard />
-        </div>
-      </div>
-
-
-      {renderEmployeeDialog(addingEmployee, () => { setAddingEmployee(false); setEmpName(""); setEmpPhone(""); setEmpRoles(["service_tech"]); setEmpHomeAddress(""); setEmpEmail(""); }, "Add Employee", handleAddEmployee, "Add")}
-
-      <EditEmployeeDialog
-        employee={editingEmployee}
-        open={!!editingEmployee}
-        onClose={() => setEditingEmployee(null)}
-        onSave={({ name, role, phone, home_address, email }) => {
-          if (!editingEmployee) return;
-          updateEmployee.mutate({
-            id: editingEmployee.id,
-            name,
-            role,
-            phone: phone || null,
-            home_address: home_address || null,
-            email: email || null,
-          });
-          setEditingEmployee(null);
-        }}
-      />
-
-      <Dialog open={!!invitingEmployee} onOpenChange={(open) => { if (!open) setInvitingEmployee(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" /> Create Login for {invitingEmployee?.name}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">This will create a user account, link it to this employee, and assign an app role.</p>
-          <div className="space-y-1">
-            <Label className="text-xs">Email</Label>
-            <Input type="email" placeholder="email@company.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Password</Label>
-            <Input type="password" placeholder="Min 6 characters" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">App Role</Label>
-            <Select value={inviteRole} onValueChange={setInviteRole}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tech">Tech</SelectItem>
-                <SelectItem value="supervisor">Supervisor</SelectItem>
-                <SelectItem value="office">Office</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setInvitingEmployee(null)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={inviteUser.isPending}>
-              {inviteUser.isPending ? "Creating..." : "Create Account"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={!!deletingEmployee} onOpenChange={(open) => { if (!open) setDeletingEmployee(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deletingEmployee?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this team member. Any jobs or records referencing them may be affected. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deletingEmployee) {
-                  deleteEmployee.mutate(deletingEmployee.id, {
-                    onSuccess: () => { toast({ title: "Employee deleted", description: `${deletingEmployee.name} has been removed.` }); setDeletingEmployee(null); },
-                    onError: (err: any) => { toast({ title: "Delete failed", description: err.message, variant: "destructive" }); },
-                  });
-                }
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-// ─── Webhooks & Integrations Section ───
 function WebhooksIntegrationsSection() {
   const copyToClipboard = (url: string, label: string) => {
     navigator.clipboard.writeText(url);
@@ -664,7 +134,7 @@ function WebhooksIntegrationsSection() {
     { label: "Job Webhook (HCP)", url: WEBHOOK_URL, icon: Webhook, desc: "Receives new jobs and estimates automatically.", setup: (
       <div className="text-xs text-muted-foreground space-y-1.5 bg-muted/50 rounded-lg p-3">
         <p className="font-semibold">Setup:</p>
-        <p>1. Go to your scheduling platform's <strong>Settings → Webhooks</strong></p>
+        <p>1. Go to your scheduling platform's <strong>Settings - Webhooks</strong></p>
         <p>2. Paste the URL above</p>
         <p>3. Copy the signing secret and save it as <code className="bg-muted px-1 rounded">HCP_WEBHOOK_SECRET</code></p>
         <p>4. Enable events: <code className="bg-muted px-1 rounded">job.created</code>, <code className="bg-muted px-1 rounded">job.scheduled</code>, <code className="bg-muted px-1 rounded">job.completed</code>, <code className="bg-muted px-1 rounded">job.canceled</code></p>
@@ -676,7 +146,7 @@ function WebhooksIntegrationsSection() {
     { label: "Facebook Lead Ads", url: FB_LEAD_WEBHOOK_URL, icon: Users, desc: "Receives leads from Facebook forms. JARVIS auto-texts new leads.", setup: (
       <div className="text-xs text-muted-foreground space-y-1.5 bg-muted/50 rounded-lg p-3">
         <p className="font-semibold">Setup:</p>
-        <p>1. Go to <strong>Facebook Business → Integrations → Leads Access</strong></p>
+        <p>1. Go to <strong>Facebook Business - Integrations - Leads Access</strong></p>
         <p>2. Add the webhook URL above</p>
         <p>3. Verify token: <code className="bg-muted px-1 rounded">cs-ultra-leads</code></p>
         <p>4. Subscribe to <code className="bg-muted px-1 rounded">leadgen</code> events</p>
@@ -714,16 +184,16 @@ function WebhooksIntegrationsSection() {
           <div className="text-xs text-muted-foreground space-y-3 bg-muted/50 rounded-lg p-3">
             <div>
               <p className="font-semibold mb-1">Twilio</p>
-              <p>• <code className="bg-muted px-1 rounded">TWILIO_ACCOUNT_SID</code></p>
-              <p>• <code className="bg-muted px-1 rounded">TWILIO_AUTH_TOKEN</code></p>
-              <p>• <code className="bg-muted px-1 rounded">TWILIO_PHONE_NUMBER</code></p>
+              <p>- <code className="bg-muted px-1 rounded">TWILIO_ACCOUNT_SID</code></p>
+              <p>- <code className="bg-muted px-1 rounded">TWILIO_AUTH_TOKEN</code></p>
+              <p>- <code className="bg-muted px-1 rounded">TWILIO_PHONE_NUMBER</code></p>
             </div>
             <div>
               <p className="font-semibold mb-1">Stripe</p>
-              <p>• <code className="bg-muted px-1 rounded">STRIPE_SECRET_KEY</code></p>
-              <p>• <code className="bg-muted px-1 rounded">STRIPE_WEBHOOK_SECRET</code></p>
+              <p>- <code className="bg-muted px-1 rounded">STRIPE_SECRET_KEY</code></p>
+              <p>- <code className="bg-muted px-1 rounded">STRIPE_WEBHOOK_SECRET</code></p>
             </div>
-            <p className="text-green-600 font-medium mt-2">✅ All configured.</p>
+            <p className="text-green-600 font-medium mt-2">All configured.</p>
           </div>
         </CardContent>
       </Card>
@@ -820,7 +290,7 @@ function PermitAuthoritiesSection() {
 }
 
 
-// ─── Sidebar sections for admin ───
+// Sidebar sections for admin
 type DevFunction = {
   name: string;
   plainEnglish: string;
@@ -1083,17 +553,38 @@ const ADMIN_SECTIONS = ADMIN_SETTING_SECTIONS;
 const ADMIN_GROUPS = Array.from(new Set(ADMIN_SECTIONS.map((section) => section.group)));
 
 const SECTION_KEYS = new Set(ADMIN_SECTIONS.map((section) => section.key));
-const RETIRED_ADMIN_SECTIONS = new Set(["webhooks", "jarvis", "marketing", "operations", "booking", "customer-portal", "pipeline", "job-fields"]);
+const RETIRED_ADMIN_SECTION_TARGETS: Record<string, string> = {
+  billing: "payments",
+  notifications: "voice",
+  leads: "data",
+  "customer-intake": "dev",
+  estimates: "payments",
+  jobs: "dev",
+  pricebook: "payments",
+  "service-plans": "payments",
+  checklists: "data",
+  "lead-sources": "data",
+  tags: "data",
+  tools: "dev",
+  webhooks: "dev",
+  jarvis: "dev",
+  marketing: "dev",
+  operations: "dev",
+  booking: "dev",
+  "customer-portal": "dev",
+  pipeline: "dev",
+  "job-fields": "dev",
+};
 const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   config: "company",
   settings: "company",
   team: "employees",
   employees: "employees",
-  tools: "tools",
+  tools: "dev",
   reports: "reports",
   payments: "payments",
-  billing: "billing",
-  notifications: "notifications",
+  billing: "payments",
+  notifications: "voice",
   voice: "voice",
   jarvis: "dev",
   marketing: "dev",
@@ -1103,210 +594,25 @@ const LEGACY_TAB_TO_SECTION: Record<string, string> = {
 
 function resolveAdminSection(section: string | null, legacyTab: string | null) {
   if (section && SECTION_KEYS.has(section)) return section;
-  if (section && RETIRED_ADMIN_SECTIONS.has(section)) return "dev";
+  if (section && RETIRED_ADMIN_SECTION_TARGETS[section]) return RETIRED_ADMIN_SECTION_TARGETS[section];
   if (legacyTab) return LEGACY_TAB_TO_SECTION[legacyTab] ?? null;
   return null;
-}
-
-function SettingsShortcutPanel({
-  title,
-  description,
-  links,
-}: {
-  title: string;
-  description: string;
-  links: Array<{ label: string; description: string; to: string; icon: React.ElementType }>;
-}) {
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {links.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link key={link.label} to={link.to} className="rounded-md border bg-card p-3 transition-colors hover:bg-muted/40">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <Icon className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{link.label}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{link.description}</p>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </CardContent>
-      </Card>
-    </div>
-  );
 }
 
 function AdminSectionContent({ section }: { section: string }) {
   switch (section) {
     case "company":
       return <div className="space-y-4"><CompanySettingsCard /><NavOrderEditor /></div>;
-    case "billing":
-      return <SettingsShortcutPanel title="Billing" description="Billing controls belong in the same global settings rail as company and permissions." links={[
-        { label: "Payments", description: "Open payment plans, invoicing rules, and checkout configuration.", to: "/payments", icon: CreditCard },
-        { label: "Invoices", description: "Tune invoice defaults and line-item templates.", to: "/admin?section=payments", icon: ReceiptText },
-      ]} />;
-    case "notifications":
-      return <SettingsShortcutPanel title="Notifications" description="Central place for call, SMS, device, and alert preferences." links={[
-        { label: "Registered Devices", description: "Manage notification-capable devices.", to: "/admin?section=voice", icon: Phone },
-        { label: "System Status", description: "Review alerts, costs, retries, and backend health.", to: "/system-log", icon: Activity },
-      ]} />;
     case "employees":
-    case "team": // legacy alias
       return <EmployeeHub />;
-    case "webhooks":
-      return <WebhooksIntegrationsSection />;
     case "voice":
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
-    case "leads":
-      return <SettingsShortcutPanel title="Leads" description="Lead capture, source tracking, and sales handoff settings." links={[
-        { label: "Lead Inbox", description: "Open lead records and source filters.", to: "/leads", icon: MapPin },
-        { label: "Lead Sources", description: "Configure source labels and reporting categories.", to: "/admin?section=lead-sources", icon: Tags },
-      ]} />;
-    case "customer-intake":
-      return <div className="space-y-4"><IntakeSimulator /><CustomerDataTools /></div>;
-    case "estimates":
-      return <SettingsShortcutPanel title="Estimates" description="Presentation and estimate configuration for customer options." links={[
-        { label: "Quick Quote", description: "Open the estimate builder.", to: "/quick-quote", icon: FileText },
-        { label: "Price Book", description: "Manage services, systems, discounts, and templates.", to: "/catalog", icon: BookOpen },
-      ]} />;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
-    case "jobs":
-      return (
-        <div className="space-y-4">
-          <CompanyDocumentsCard />
-          <TimeTrackerCard />
-          <PayRatesCard />
-        </div>
-      );
-    case "pricebook":
-      return <SettingsShortcutPanel title="Price Book" description="Services, repairs, parts, equipment, AHRI data, discounts, and templates." links={[
-        { label: "Open Price Book", description: "Manage catalog content and customer-ready options.", to: "/catalog", icon: BookOpen },
-        { label: "Payments & Line Items", description: "Configure payment plans and line-item templates.", to: "/admin?section=payments", icon: CreditCard },
-      ]} />;
-    case "service-plans":
-      return <SettingsShortcutPanel title="Service Plans" description="Comfort Club, agreements, membership perks, and renewal controls." links={[
-        { label: "Agreements", description: "Open service agreements and customer memberships.", to: "/agreements", icon: Shield },
-        { label: "Comfort Club Scan", description: "Run operational tools for agreement backfill and verification.", to: "/admin?section=dev", icon: ScanSearch },
-      ]} />;
-    case "checklists":
-    case "lead-sources":
-    case "tags":
-      return <SettingsShortcutPanel title={ADMIN_SECTIONS.find((s) => s.key === section)?.label || "Settings"} description="Operational labels and checklists for the modules UltraOffice currently supports." links={[
-        { label: "Data Tools", description: "Clean, dedupe, and normalize customer/job data.", to: "/admin?section=data", icon: Database },
-        { label: "Reports", description: "Use reporting to validate field and tag consistency.", to: "/reports", icon: BarChart3 },
-      ]} />;
     case "data":
       return <CustomerDataTools />;
     case "dev":
       return <DevOpsCenter />;
-    case "jarvis":
-      return <div className="space-y-4"><HumanInTheLoopCard /><IntakeSimulator /><CopilotPermissionsCard /></div>;
-    case "marketing":
-      return <MetaAudiencesCard />;
-    case "operations":
-      return (
-        <div className="space-y-4">
-          <CompanyDocumentsCard />
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-semibold mb-2">Permit Authorities</h4>
-            <PermitAuthoritiesSection />
-          </div>
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-semibold mb-2">Scout & Test Automation</h4>
-            <PermitScoutPanel />
-          </div>
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-semibold mb-2">Dispatch Utilities</h4>
-            <div className="flex flex-wrap gap-2">
-              <DispatchRecalcButton />
-              <ComfortClubRescanButton />
-              <HcpCustomerSyncButton />
-            </div>
-          </div>
-          <div className="border-t pt-4">
-            <h4 className="text-xs font-semibold mb-2">HCP Migration Tools</h4>
-            <HcpHistoryImport />
-            <HcpPhotoArchive />
-          </div>
-          <DuplicateManager />
-        </div>
-      );
-    case "tools":
-      return (
-        <div className="space-y-8">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Brain className="h-4 w-4 text-violet-500" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">AI & Automation</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["jarvis"].includes(c.key)).map(card => (
-                <ToolCard key={card.key} card={card} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Sales & Pricing</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["shopping-cart"].includes(c.key)).map(card => (
-                <ToolCard key={card.key} card={card} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-cyan-500" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Operations</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["phone-system"].includes(c.key)).map(card => (
-                <ToolCard key={card.key} card={card} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-sky-500" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Financials & Reporting</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["payments", "lsa-leads"].includes(c.key)).map(card => (
-                <ToolCard key={card.key} card={card} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-emerald-600" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Dev & Testing</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TOOL_CARDS.filter(c => ["system-log"].includes(c.key)).map(card => (
-                <ToolCard key={card.key} card={card} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Quick Links</h2>
-            <QuickLinksGrid excludeCategories={["Supply Houses"]} />
-          </div>
-        </div>
-      );
     case "reports":
       return (
         <div className="space-y-6">
@@ -1330,13 +636,13 @@ function AdminSectionContent({ section }: { section: string }) {
   }
 }
 
-// ─── Main Admin Page ───
+// Main Admin Page
 export default function Admin() {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSection = resolveAdminSection(searchParams.get("section"), searchParams.get("tab"));
   const isEmployeePaySection = activeSection === "employees" && searchParams.get("employeeTab") === "pay";
-  const { role, loading } = useAuth();
+  const { loading } = useAuth();
   const allowedTabs = useEmployeeTabAccess();
 
   if (loading) return null;

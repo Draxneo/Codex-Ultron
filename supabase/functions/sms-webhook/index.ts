@@ -9,6 +9,7 @@ import {
   describeActiveWork,
   lookupActiveWorkContext,
 } from "../_shared/jarvisContactIntent.ts";
+import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 
 import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
@@ -599,7 +600,7 @@ Deno.serve(async (req) => {
 
     // ── Answering Service Relay Handler ──
     // The body is a structured form: "Caller: <name>\nPhone: <digits>\nComments: <issue>"
-    // Parse it, look up / hint at the real customer, and create a To-Do for the dispatcher to call back.
+    // Parse it, look up / hint at the real customer, and create a Now HQ action item for the dispatcher.
     // Then RETURN — never run auto-customer-creation on the 844 number itself.
     if (isAnsweringService && !testModeOn) {
       try {
@@ -1002,12 +1003,13 @@ IMPORTANT RULES:
             ? `${extracted.first_name} ${extracted.last_name || ""}`.trim()
             : (contactName || from);
 
-          // Dedup window: any pending booking card for this phone in the last 2 hours
-          // (covers extended back-and-forth SMS threads with the customer providing info piecemeal)
+          // Dedup window: any pending intake card for this phone in the last 2 hours.
+          // This lets a "follow up later" card become "customer approved, do the thing"
+          // instead of stacking a second card for the same live conversation.
           const dedupWindow = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
           const { data: existingBookings } = await supabase.from("action_items")
             .select("id, metadata, title")
-            .eq("category", "new_appointment")
+            .in("category", ["new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead"])
             .eq("customer_phone", from)
             .eq("status", "pending")
             .gte("created_at", dedupWindow)
@@ -1107,8 +1109,8 @@ IMPORTANT RULES:
               });
             }
 
-            // Create a low-key follow_up card for dispatcher visibility
-            await supabase.from("action_items").insert({
+            // Keep one live follow_up card for dispatcher visibility.
+            await upsertLiveActionItem(supabase, {
               title: `${customerName} texted about ${ref}`,
               description: extracted.summary || `Follow-up SMS on existing ${target} — note added locally`,
               category: intentDecision.actionCategory === "new_appointment" ? "follow_up" : intentDecision.actionCategory,
@@ -1218,14 +1220,36 @@ IMPORTANT RULES:
             }
 
             if (existingBooking) {
-              // Merge richer data into existing action_item
+              // Merge richer data into the existing live action card and upgrade
+              // the next step when the customer changes direction.
               const mergedMeta = { ...((existingBooking.metadata as any) || {}), ...bookingMetadata };
               await supabase.from("action_items")
-                .update({ metadata: mergedMeta, description: needsPropertySelection ? "Customer has multiple properties. Choose the service address before booking." : (extracted.suggested_action || `Updated booking info from follow-up SMS.`) })
+                .update({
+                  title: `SMS updated: ${customerName} wants to ${effectiveServiceType === "estimate" ? "book an estimate" : "book service"}`,
+                  category: "new_appointment",
+                  priority: "high",
+                  suggested_action: needsPropertySelection ? `Choose property for ${customerName}` : `Book ${effectiveServiceType} for ${customerName}`,
+                  metadata: {
+                    ...mergedMeta,
+                    living_card: true,
+                    last_context_update_at: new Date().toISOString(),
+                    context_updates: [
+                      {
+                        at: new Date().toISOString(),
+                        source: "sms",
+                        category: "new_appointment",
+                        intent: intentDecision.intent,
+                        summary: extracted.summary || body.slice(0, 200),
+                      },
+                      ...((((existingBooking.metadata as any) || {}).context_updates) || []),
+                    ].slice(0, 12),
+                  },
+                  description: needsPropertySelection ? "Customer has multiple properties. Choose the service address before booking." : (extracted.suggested_action || `Updated booking info from follow-up SMS.`),
+                })
                 .eq("id", existingBooking.id);
               console.log(`Observer: UPDATED existing booking action_item ${existingBooking.id} for ${from} (dedup)`);
             } else {
-              await supabase.from("action_items").insert({
+              await upsertLiveActionItem(supabase, {
                 title: `📱 ${customerName} — ${effectiveServiceType} booking request`,
                 description: needsPropertySelection ? "Customer has multiple properties. Choose the service address before booking." : (extracted.suggested_action || `Customer provided contact info via SMS after a phone call. Ready to book ${effectiveServiceType}.`),
                 category: "new_appointment",

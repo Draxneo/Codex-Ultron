@@ -4,7 +4,7 @@
  *
  * Backed by the `call_routing_rules` table. The server reads these rules
  * after IVR selection and before generating <Dial><Client/></Dial> TwiML,
- * skipping anyone busy or marked Away from Desk.
+ * skipping anyone busy or whose Desk calls toggle is off.
  */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -140,15 +140,15 @@ export function CallRoutingSettings() {
     },
   });
 
-  const { data: employees = [] } = useQuery<Array<{ name: string; ooo_enabled: boolean | null; profile_id: string | null }>>({
+  const { data: employees = [] } = useQuery<Array<{ name: string; profile_id: string | null }>>({
     queryKey: ["employees-for-routing"],
     queryFn: async () => {
       const { data } = await supabase
         .from("employees")
-        .select("name, ooo_enabled, profile_id")
+        .select("name, profile_id")
         .eq("is_active", true)
         .order("name", { ascending: true });
-      return (data || []) as Array<{ name: string; ooo_enabled: boolean | null; profile_id: string | null }>;
+      return (data || []) as Array<{ name: string; profile_id: string | null }>;
     },
   });
 
@@ -177,21 +177,6 @@ export function CallRoutingSettings() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["call_routing_rules"] }),
     onError: (e: any) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
-  });
-
-  const updateAwayMut = useMutation({
-    mutationFn: async (input: { employee_name: string; away: boolean }) => {
-      const { error } = await supabase
-        .from("employees")
-        .update({ ooo_enabled: input.away } as any)
-        .eq("name", input.employee_name);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employees-for-routing"] });
-      toast({ title: "Availability updated" });
-    },
-    onError: (e: any) => toast({ title: "Availability update failed", description: e.message, variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -322,7 +307,6 @@ export function CallRoutingSettings() {
                       <TableHead className="w-20">Order</TableHead>
                       <TableHead>Employee</TableHead>
                       <TableHead className="w-28">Route</TableHead>
-                      <TableHead className="w-32">Away</TableHead>
                       <TableHead className="w-24 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -365,14 +349,6 @@ export function CallRoutingSettings() {
                             }
                           />
                         </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={employeeByName.get(rule.employee_name)?.ooo_enabled === true}
-                            onCheckedChange={(checked) =>
-                              updateAwayMut.mutate({ employee_name: rule.employee_name, away: checked })
-                            }
-                          />
-                        </TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="ghost"
@@ -399,10 +375,9 @@ export function CallRoutingSettings() {
           <ul className="list-disc pl-5 space-y-1">
             <li>The IVR Builder defines the departments; this page only controls who each department routes to.</li>
             <li>When a call comes in for a department, the server tries recipients in priority order (1, 2, 3…).</li>
-            <li>Only employees with a linked app login can receive in-app webphone calls.</li>
+            <li>Only employees with a linked app login and the top-bar Desk calls toggle on can receive in-app webphone calls.</li>
             <li>Anyone currently on a live call is skipped until they become available again.</li>
-            <li>Anyone with "Away from Desk" toggled on is also skipped.</li>
-            <li>If everyone is busy, queue and overflow behavior comes from the IVR Builder settings.</li>
+            <li>If everyone is busy or has Desk calls off, queue, cell forwarding, and overflow behavior comes from the IVR Builder settings.</li>
             <li><strong>General</strong> is used when there's no IVR menu — direct dials to the main line.</li>
           </ul>
         </CardContent>

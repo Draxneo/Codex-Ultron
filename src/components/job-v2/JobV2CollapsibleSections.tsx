@@ -35,9 +35,6 @@ export function JobV2CollapsibleSections({ job }: { job: any }) {
           <div className="flex justify-between"><span>Brand</span><span className="text-foreground">{job?.brand || "—"}</span></div>
         </div>
       </Section>
-      <Section title="Job costing breakdown">
-        <p className="py-2">Cost breakdown coming soon.</p>
-      </Section>
     </div>
   );
 }

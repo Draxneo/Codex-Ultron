@@ -239,13 +239,13 @@ async function resolveClientIdentityForEmployee(
 }
 
 export type DepartmentDialEvaluation = {
-  reason: "available" | "all_busy" | "ooo_only" | "no_rules" | "missing_identity";
+  reason: "available" | "all_busy" | "desktop_disabled" | "no_rules" | "missing_identity";
   requestedDepartment: string;
   matchedDepartment: string | null;
   usedFallbackDepartment: boolean;
   totalCandidates: number;
   busyCount: number;
-  oooCount: number;
+  desktopDisabledCount: number;
   missingIdentityCount: number;
 };
 
@@ -266,7 +266,7 @@ async function fetchRoutingRules(
 /**
  * Given a department, return the ordered list of <Client> identity strings
  * that should ring from this app's IVR routing layer — skipping anyone busy
- * or marked away-from-desk.
+ * or whose Desk calls toggle is off.
  *
  * Returns empty array if no one is currently available; the caller can then
  * be queued, overflowed, or sent to voicemail by the calling handler.
@@ -315,40 +315,41 @@ export async function buildDepartmentDialList(
         usedFallbackDepartment: false,
         totalCandidates: 0,
         busyCount: 0,
-        oooCount: 0,
+        desktopDisabledCount: 0,
         missingIdentityCount: 0,
       },
     };
   }
 
-  // Pull OOO state for all candidates in one query
+  // Pull desktop availability for all candidates in one query.
+  // The desktop toggle is intentional: off means this person should stay on
+  // the normal IVR/cell-forwarding path instead of ringing their browser.
   const { data: emps } = await supabase
     .from("employees")
-    .select("name, ooo_enabled")
+    .select("name, desktop_calls_enabled")
     .in("name", candidates);
-  const oooSet = new Set(
-    ((emps || []) as Array<{ name: string; ooo_enabled: boolean }>)
-      .filter((e) => e.ooo_enabled)
+  const desktopEnabledSet = new Set(
+    ((emps || []) as Array<{ name: string; desktop_calls_enabled: boolean }>)
+      .filter((e) => e.desktop_calls_enabled === true)
       .map((e) => e.name.toLowerCase()),
   );
-
   const identities: string[] = [];
   const chosen: string[] = [];
   let busyCount = 0;
-  let oooCount = 0;
+  let desktopDisabledCount = 0;
   let missingIdentityCount = 0;
   const traceDepartment = matchedDepartment || requestedDepartment;
 
   for (const name of candidates) {
-    if (oooSet.has(name.toLowerCase())) {
-      oooCount += 1;
-      console.log(`[callRouting] ${name} is OOO — skipping`);
+    if (!desktopEnabledSet.has(name.toLowerCase())) {
+      desktopDisabledCount += 1;
+      console.log(`[callRouting] ${name} desktop calls disabled - skipping browser softphone`);
       await logSystemTrace({
         sourceType: "voice",
         sourceName: trace?.sourceName || "call-routing",
         eventKind: "candidate_skipped",
         summary: `${name} skipped during ${traceDepartment} routing`,
-        reason: "out_of_office",
+        reason: "desktop_calls_disabled",
         severity: "info",
         traceGroup: trace?.traceGroup ?? trace?.callSid ?? null,
         entityType: "department",
@@ -406,8 +407,8 @@ export async function buildDepartmentDialList(
     ? "available"
     : busyCount > 0
       ? "all_busy"
-      : oooCount === candidates.length
-        ? "ooo_only"
+      : desktopDisabledCount === candidates.length
+        ? "desktop_disabled"
         : "missing_identity";
 
   return {
@@ -420,7 +421,7 @@ export async function buildDepartmentDialList(
       usedFallbackDepartment: matchedDepartment !== null && matchedDepartment !== requestedDepartment,
       totalCandidates: candidates.length,
       busyCount,
-      oooCount,
+      desktopDisabledCount,
       missingIdentityCount,
     },
   };
