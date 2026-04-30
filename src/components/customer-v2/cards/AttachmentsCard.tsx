@@ -37,8 +37,8 @@ export function AttachmentsCard({ customerId }: Props) {
           <p className="text-xs">No attachments</p>
         </div>
       )}
-      <Button size="sm" variant="outline" className="w-full mt-3">
-        Add attachment
+      <Button size="sm" variant="outline" className="w-full mt-3" disabled title="Not wired yet">
+        Attachment upload pending
       </Button>
     </Card>
   );

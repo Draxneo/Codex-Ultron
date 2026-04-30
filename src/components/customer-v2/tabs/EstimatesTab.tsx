@@ -15,7 +15,7 @@ export function EstimatesTab({ customerId }: { customerId: string }) {
     <Card className="shadow-none border">
       <div className="flex items-center justify-between p-4 border-b">
         <h2 className="text-sm font-bold">{estimates.length} {estimates.length === 1 ? "estimate" : "estimates"}</h2>
-        <Button size="sm" className="gap-1"><Plus className="h-3.5 w-3.5" />New estimate</Button>
+        <Button size="sm" className="gap-1" disabled title="Not wired yet"><Plus className="h-3.5 w-3.5" />Estimate creation pending</Button>
       </div>
       {isLoading ? (
         <p className="p-6 text-sm text-muted-foreground">Loading…</p>

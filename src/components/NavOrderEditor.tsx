@@ -14,24 +14,26 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, DollarSign, Settings, Package, BarChart3, ListChecks } from "lucide-react";
+import { GripVertical, CalendarDays, Phone, MessageSquare, Users, Zap, Bot, CreditCard, Settings, Package, BarChart3, ListChecks, Inbox } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavOrder } from "@/hooks/useNavOrder";
 
 const NAV_META: Record<string, { icon: any; label: string }> = {
-  "/": { icon: CalendarDays, label: "Schedule" },
+  "/": { icon: CalendarDays, label: "Dispatch HQ" },
+  "/intake": { icon: Inbox, label: "Intake HQ" },
   "/now": { icon: ListChecks, label: "Now HQ" },
+  "/dispatch": { icon: CalendarDays, label: "Dispatch HQ" },
   "/phone": { icon: Phone, label: "Phone" },
-  "/sms": { icon: MessageSquare, label: "SMS" },
-  "/team": { icon: Users, label: "Team Chat" },
-  "/customers": { icon: Users, label: "Customers" },
-  "/quick-quote": { icon: Zap, label: "Estimates" },
+  "/sms": { icon: MessageSquare, label: "Messages" },
+  "/team": { icon: Users, label: "Team HQ" },
+  "/customers": { icon: Users, label: "Customer HQ" },
+  "/quick-quote": { icon: Zap, label: "Quote HQ" },
   "/catalog": { icon: Package, label: "Price Book" },
-  "/pay": { icon: DollarSign, label: "Payments" },
+  "/payments": { icon: CreditCard, label: "Payments" },
   "/reports": { icon: BarChart3, label: "Reporting" },
   "/copilot": { icon: Bot, label: "JARVIS" },
-  "/admin": { icon: Settings, label: "Admin" },
+  "/admin": { icon: Settings, label: "Settings" },
 };
 
 function SortableNavItem({ id }: { id: string }) {

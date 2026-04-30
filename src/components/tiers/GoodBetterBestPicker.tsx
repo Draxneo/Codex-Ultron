@@ -81,7 +81,7 @@ export function GoodBetterBestPicker({
         <CardContent className="py-8 text-center text-sm text-muted-foreground space-y-1">
           <Sparkles className="h-6 w-6 mx-auto text-muted-foreground/40" />
           <p className="font-medium text-foreground">No Good/Better/Best curated for this view yet.</p>
-          <p>An admin can curate tiers from the Quick Quote tools menu.</p>
+          <p>An admin can curate tiers from the Quote Builder tools menu.</p>
         </CardContent>
       </Card>
     );

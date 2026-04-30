@@ -15,7 +15,7 @@ export function JobsTab({ customerId }: { customerId: string }) {
     <Card className="shadow-none border">
       <div className="flex items-center justify-between p-4 border-b">
         <h2 className="text-sm font-bold">{jobs.length} {jobs.length === 1 ? "job" : "jobs"}</h2>
-        <Button size="sm" className="gap-1"><Plus className="h-3.5 w-3.5" />New job</Button>
+        <Button size="sm" className="gap-1" disabled title="Not wired yet"><Plus className="h-3.5 w-3.5" />Job creation pending</Button>
       </div>
       {isLoading ? (
         <p className="p-6 text-sm text-muted-foreground">Loading…</p>

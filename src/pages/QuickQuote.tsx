@@ -275,7 +275,7 @@ export default function QuickQuote() {
   // Push the rendered quote into the linked job's line items so it appears on the HCP estimate
   const pushToHcpEstimate = async (m: EquipmentMatchup) => {
     if (!estimateId) {
-      toast({ title: "No estimate linked", description: "Open this Quick Quote from an estimate to enable Push to HCP.", variant: "destructive" });
+      toast({ title: "No estimate linked", description: "Open the quote builder from an estimate to enable Push to HCP.", variant: "destructive" });
       return;
     }
     const rendered = buildRendered(m);
@@ -353,7 +353,7 @@ export default function QuickQuote() {
       return;
     }
     if (!customerPhone) {
-      toast({ title: "No customer phone on file", description: "Open this Quick Quote from a job or estimate card.", variant: "destructive" });
+      toast({ title: "No customer phone on file", description: "Open the quote builder from a job or estimate card.", variant: "destructive" });
       return;
     }
     setTextingId(m.id);
@@ -577,7 +577,7 @@ export default function QuickQuote() {
           onSave={save}
           onReset={reset}
           onCancel={cancel}
-          hint="Drag sections to permanently rearrange Quick Quote"
+          hint="Drag sections to permanently rearrange Quote Builder"
         />
       )}
       <div className="max-w-5xl mx-auto p-4 space-y-6">
@@ -587,7 +587,7 @@ export default function QuickQuote() {
           </button>
           <div className="flex items-center gap-2">
             <Zap className="h-6 w-6 text-accent" />
-            <h1 className="text-2xl font-bold text-foreground">Quick Quote</h1>
+            <h1 className="text-2xl font-bold text-foreground">Quote Builder</h1>
           </div>
           {customerName && (
             <span className="text-sm text-muted-foreground ml-auto">
@@ -616,7 +616,7 @@ export default function QuickQuote() {
 
       <TierPresetManager
         scope={TIER_SCOPE}
-        scopeLabel="Quick Quote"
+        scopeLabel="Quote Builder"
         open={tierManagerOpen}
         onOpenChange={setTierManagerOpen}
       />

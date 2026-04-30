@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Briefcase,
@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  CreditCard,
   Edit3,
   ExternalLink,
   Hash,
@@ -143,12 +144,12 @@ const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
 const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389}", "\u{1F440}", "\u{1F4A1}", "\u{1F4CC}"];
 
 const quickAccessItems = [
-  { label: "Dispatch", href: "/dispatch", icon: CalendarDays },
-  { label: "Intake", href: "/intake", icon: Inbox },
-  { label: "Customers", href: "/customers", icon: Users },
-  { label: "Quotes", href: "/quick-quote", icon: ClipboardList },
-  { label: "Catalog", href: "/catalog", icon: Briefcase },
-  { label: "Payments", href: "/payments", icon: PhoneCall },
+  { label: "Dispatch HQ", href: "/dispatch", icon: CalendarDays },
+  { label: "Intake HQ", href: "/intake", icon: Inbox },
+  { label: "Customer HQ", href: "/customers", icon: Users },
+  { label: "Quote HQ", href: "/quick-quote", icon: ClipboardList },
+  { label: "Price Book", href: "/catalog", icon: Briefcase },
+  { label: "Payments", href: "/payments", icon: CreditCard },
 ];
 
 const usefulWebLinks = [
@@ -1563,15 +1564,15 @@ export default function TeamCommunications() {
                     {quickAccessItems.map((item) => {
                       const Icon = item.icon;
                       return (
-                        <a
+                        <Link
                           key={item.href}
-                          href={item.href}
+                          to={item.href}
                           className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-2 text-xs font-medium hover:bg-muted"
                           aria-label={`Open ${item.label}`}
                         >
                           <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                           <span className="truncate">{item.label}</span>
-                        </a>
+                        </Link>
                       );
                     })}
                   </div>

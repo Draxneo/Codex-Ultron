@@ -20,6 +20,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   "/locations": "Catalog & Pricebook",
   "/copilot": "JARVIS",
   "/quick-quote": "Quote HQ",
+  "/quote-builder": "Quote Builder",
   "/catalog": "Catalog & Pricebook",
   "/shopping-cart": "Catalog & Pricebook",
 };

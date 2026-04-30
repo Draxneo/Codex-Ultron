@@ -10,11 +10,10 @@ import {
   FileText,
   MessageSquare,
   Phone,
-  Plus,
   RefreshCw,
   Search,
   Settings2,
-  UserPlus,
+  Users,
   Zap,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -34,11 +33,11 @@ import { TOOL_CARDS, SETTINGS_GROUPS } from "@/config/adminNavigation";
 import { routeToTabKey, useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
 const quickActions = [
-  { label: "New Job", icon: Plus, path: "/?newJob=1", group: "Create" },
-  { label: "New Customer", icon: UserPlus, path: "/customers?new=1", group: "Create" },
-  { label: "Estimate", icon: FileText, path: "/?type=estimate", group: "Create" },
+  { label: "Dispatch HQ", icon: Briefcase, path: "/dispatch", group: "HQ" },
+  { label: "Customer HQ", icon: Users, path: "/customers", group: "HQ" },
+  { label: "Quote HQ", icon: FileText, path: "/quick-quote", group: "HQ" },
   { label: "Phone", icon: Phone, path: "/phone", group: "Communication" },
-  { label: "SMS", icon: MessageSquare, path: "/sms", group: "Communication" },
+  { label: "Messages", icon: MessageSquare, path: "/sms", group: "Communication" },
 ];
 
 const metricCards = [
@@ -149,7 +148,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
     return [
       ...quickActions.map((action) => ({
         ...action,
-        description: "Start the common workflow from one creation menu.",
+        description: "Open this shared workspace.",
         bg: "bg-muted",
         color: "text-foreground",
       })),
@@ -158,7 +157,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
     ];
   }, []);
 
-  const categories = useMemo(() => ["All", "Create", "Tools", ...SETTINGS_GROUPS.map((group) => group.title), "Activity"], []);
+  const categories = useMemo(() => ["All", "HQ", "Communication", "Tools", ...SETTINGS_GROUPS.map((group) => group.title), "Activity"], []);
 
   const canAccessItem = useCallback((item: HubItem) => {
     if (!allowedTabs) return true;
@@ -287,7 +286,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
                   <p className="text-xs text-muted-foreground">Latest operational events and follow-up signals.</p>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="gap-1.5">
-                  <Link to="/">Open schedule <ArrowRight className="h-4 w-4" /></Link>
+                  <Link to="/dispatch">Open Dispatch HQ <ArrowRight className="h-4 w-4" /></Link>
                 </Button>
               </div>
               <Card className="rounded-md">

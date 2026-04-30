@@ -16,9 +16,9 @@ export function UpcomingAppointments({ appointments }: Props) {
     <Card className="p-4 shadow-none border">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-bold">Upcoming appointments</h3>
-        <Button size="sm" variant="outline" className="gap-1 h-7">
+        <Button size="sm" variant="outline" className="gap-1 h-7" disabled title="Not wired yet">
           <Plus className="h-3.5 w-3.5" />
-          New job
+          Job workflow pending
         </Button>
       </div>
       {appointments.length === 0 ? (

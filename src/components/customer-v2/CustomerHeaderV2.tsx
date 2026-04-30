@@ -44,8 +44,8 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
           <div className="flex items-center gap-2">
             {customer && <CustomerEditDialog customer={customer} />}
             {outstandingBalance > 0 && (
-              <Button size="sm" variant="default">
-                Take payment
+              <Button size="sm" variant="default" disabled title="Not wired yet">
+                Payment workflow pending
               </Button>
             )}
             {primaryPhone && (
@@ -91,7 +91,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-destructive">Archive customer</DropdownMenuItem>
+                <DropdownMenuItem disabled className="text-destructive">Archive workflow pending</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

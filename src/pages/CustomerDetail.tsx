@@ -160,17 +160,17 @@ function RelationshipBrief({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button className="w-full justify-start gap-2" variant="outline">
+            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
               <CalendarClock className="h-4 w-4" />
-              Queue maintenance reminder
+              Maintenance reminder pending
             </Button>
-            <Button className="w-full justify-start gap-2" variant="outline">
+            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
               <HeartHandshake className="h-4 w-4" />
-              Review Comfort Club renewal
+              Comfort Club review pending
             </Button>
-            <Button className="w-full justify-start gap-2" variant="outline">
+            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
               <BadgeDollarSign className="h-4 w-4" />
-              Mark replacement opportunity
+              Replacement marker pending
             </Button>
             <p className="pt-1 text-xs text-muted-foreground">
               These are approval buttons for the next rebuild pass. No customer-facing action is sent automatically.
@@ -346,9 +346,9 @@ function ProtectionPanel({
             </div>
           )}
 
-          <Button className="w-full justify-start gap-2" variant="outline">
+          <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
             <HeartHandshake className="h-4 w-4" />
-            Prepare renewal or membership offer
+            Renewal offer workflow pending
           </Button>
         </CardContent>
       </Card>

@@ -561,10 +561,10 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
     if (isFirstMount && sessions.length === 0) return;
 
     const SHORT_LABELS: Record<string, string> = {
-      "/": "Jobs", "/customers": "Customers", "/parts": "Parts",
+      "/": "Dispatch HQ", "/customers": "Customer HQ", "/parts": "Parts",
       "/agreements": "Agreements", "/payments": "Payments",
       "/settings": "Settings", "/admin": "Admin",
-      "/sms": "SMS", "/phone": "Phone", "/calls": "Phone", "/team": "Team Chat", "/chat": "Team Chat",
+      "/sms": "Messages", "/phone": "Phone", "/calls": "Phone", "/team": "Team HQ", "/chat": "Team HQ",
       "/agent-training": "Agent Training", "/brochure": "Brochures",
       "/locations": "Catalog", "/copilot": "JARVIS",
     };

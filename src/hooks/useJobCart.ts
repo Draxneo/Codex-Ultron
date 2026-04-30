@@ -85,7 +85,7 @@ export function useJobCart(jobId: string | undefined) {
         .from("job_carts")
         .select("*")
         .eq("job_id", jobId)
-        .not("status", "in", "(canceled,declined,paid)")
+        .not("status", "in", "(canceled,declined)")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -213,7 +213,7 @@ export function useJobCart(jobId: string | undefined) {
       if (!phone) {
         throw new Error("Customer phone number is missing. Add a phone number or copy the link instead.");
       }
-      const link = `${window.location.origin}/cart/${cartQuery.data.public_token}`;
+      const link = `${window.location.origin}/cart/${cartQuery.data.public_token}?present=1`;
 
       // Send SMS via centralized pipeline
       const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
@@ -265,6 +265,7 @@ export function useJobCart(jobId: string | undefined) {
   const cart = cartQuery.data;
   const items = itemsQuery.data || [];
   const itemCount = items.reduce((s, i) => s + Number(i.quantity), 0);
+  const publicLink = cart ? `${window.location.origin}/cart/${cart.public_token}?present=1` : null;
 
   return {
     cart,
@@ -275,8 +276,8 @@ export function useJobCart(jobId: string | undefined) {
     updateItem,
     removeItem,
     sendToCustomer,
-    publicLink: cart ? `${window.location.origin}/cart/${cart.public_token}` : null,
+    publicLink,
     /** Fullscreen "present mode" link for in-home pitch */
-    presentLink: cart ? `${window.location.origin}/cart/${cart.public_token}?present=1` : null,
+    presentLink: publicLink,
   };
 }

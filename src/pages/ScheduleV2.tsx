@@ -1015,7 +1015,7 @@ function JobContextDialog({
             </Button>
             <Button variant="secondary" className="w-full justify-start gap-2 border border-amber-500/30 bg-amber-500/15 text-amber-900 hover:bg-amber-500/25 dark:text-amber-100" onClick={startQuickQuote}>
               <Zap className="h-4 w-4" />
-              Quick quote
+              Build quote
             </Button>
             <Button variant="outline" className="w-full justify-start gap-2" onClick={callFromBoard}>
               <Phone className="h-4 w-4" />

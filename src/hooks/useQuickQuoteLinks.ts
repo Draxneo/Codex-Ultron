@@ -92,7 +92,7 @@ export function useApproveQuickQuote() {
       });
       if (autoCreateError) throw autoCreateError;
       if (autoCreate && (autoCreate as any).ok === false) {
-        throw new Error((autoCreate as any).error || "Quick quote was approved, but the office handoff needs review.");
+        throw new Error((autoCreate as any).error || "Quote was approved, but the office handoff needs review.");
       }
 
       return data as unknown as QuickQuoteLink;

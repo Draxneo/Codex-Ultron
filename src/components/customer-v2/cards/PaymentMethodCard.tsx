@@ -18,8 +18,8 @@ export function PaymentMethodCard({ defaultPaymentMethodId }: Props) {
       ) : (
         <>
           <p className="text-xs text-muted-foreground mb-3">No payment method on file.</p>
-          <Button size="sm" variant="outline" className="w-full">
-            Add payment method
+          <Button size="sm" variant="outline" className="w-full" disabled title="Not wired yet">
+            Payment setup pending
           </Button>
         </>
       )}

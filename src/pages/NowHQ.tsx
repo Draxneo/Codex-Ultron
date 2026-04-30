@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
+import { ActionItemCards } from "@/components/copilot/ActionItemCards";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +32,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
 import { supabase } from "@/integrations/supabase/client";
-import { resolveActionItem } from "@/lib/actionItemLifecycle";
 import {
   buildEstimateWorkflowCard,
   buildJobWorkflowCard,
@@ -78,7 +78,7 @@ const OWNER_LABEL: Record<WorkflowOwner, string> = {
 const HUMAN_TOOLS = [
   { title: "Intake HQ", body: "Answer calls/texts, match customers, and start the right workflow.", to: "/intake", icon: MessageSquare },
   { title: "Dispatch HQ", body: "Classic board for scheduling, routing, and running the day.", to: "/dispatch", icon: CalendarCheck },
-  { title: "Quote HQ", body: "Build and follow up on estimates and replacement opportunities.", to: "/quick-quote", icon: FileText },
+  { title: "Quote HQ", body: "Track open estimates, customer decisions, and quote follow-up.", to: "/quick-quote", icon: FileText },
   { title: "Customer HQ", body: "Look up customer history, jobs, communication, warranty, and attachments.", to: "/customers", icon: Users },
   { title: "Price Book", body: "Equipment, repair catalog, parts, pricing formulas, and AHRI matchups.", to: "/catalog", icon: Wrench },
   { title: "Settings", body: "Manual control for company, team, phone, payments, data, and system health.", to: "/admin", icon: Settings },
@@ -124,7 +124,7 @@ function isHumanNeeded(card: WorkflowNowCard) {
 
 function workflowUrl(card: WorkflowNowCard) {
   if (card.recordType === "action") {
-    return card.customerPhone ? `/intake?phone=${encodeURIComponent(card.customerPhone)}` : "/intake";
+    return card.route;
   }
   if (card.recordType === "alert") {
     return card.route;
@@ -136,6 +136,10 @@ function workflowUrl(card: WorkflowNowCard) {
     return `/quick-quote?customer_name=${encodeURIComponent(card.customerName)}${card.customerPhone ? `&customer_phone=${encodeURIComponent(card.customerPhone)}` : ""}`;
   }
   return null;
+}
+
+function actionReviewUrl(card: WorkflowNowCard) {
+  return `/now?action_items=1&action_id=${encodeURIComponent(card.recordId)}`;
 }
 
 function recordLabel(card: WorkflowNowCard) {
@@ -179,8 +183,10 @@ function WorkflowCard({
   const group = GROUP_META[card.group];
   const WorkflowIcon = workflow.icon;
   const GroupIcon = group.icon;
+  const primaryUrl = card.recordType === "action" ? actionReviewUrl(card) : card.route;
+  const primaryLabel = card.recordType === "action" ? "Review action" : "Open record";
   const secondaryUrl = workflowUrl(card);
-  const secondaryLabel = card.recordType === "action" ? "Open in Intake" : card.recordType === "alert" ? "Open record" : "Quick quote";
+  const secondaryLabel = card.recordType === "action" ? "Open source" : card.recordType === "alert" ? "Open record" : "Build quote";
   const isBusy = busyId === card.id;
   const contextItems = [
     { label: "Record", value: recordLabel(card), href: card.route },
@@ -284,11 +290,11 @@ function WorkflowCard({
               <p className="mt-1 font-medium">{dueLabel(card.dueAt)}</p>
             </div>
             <Button asChild className="justify-between">
-              <Link to={card.route}>
-                Open record <ArrowRight className="h-4 w-4" />
+              <Link to={primaryUrl}>
+                {primaryLabel} <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            {secondaryUrl && (
+            {secondaryUrl && secondaryUrl !== primaryUrl && (
               <Button asChild variant="outline" className="justify-between">
                 <Link to={secondaryUrl}>
                   {secondaryLabel} <Zap className="h-4 w-4" />
@@ -310,7 +316,7 @@ function WorkflowCard({
                 Retry workflow <Zap className="h-4 w-4" />
               </Button>
             )}
-            {(card.recordType === "action" || card.recordType === "alert") && (
+            {card.recordType === "alert" && (
               <Button variant="secondary" className="justify-between" disabled={isBusy} onClick={() => onResolve(card)}>
                 Mark handled <CheckCircle2 className="h-4 w-4" />
               </Button>
@@ -353,6 +359,7 @@ function HumanModeFallback() {
 export default function NowHQ() {
   const [mode, setMode] = useState<UIMode>("ai");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: jobs = [], isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useJobs();
@@ -539,19 +546,20 @@ export default function NowHQ() {
     queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
   };
 
+  const closeActionReview = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("action_items");
+    next.delete("action_id");
+    setSearchParams(next, { replace: true });
+    refreshNowFeeds();
+  };
+
   const resolveCard = useMutation({
     mutationFn: async (card: WorkflowNowCard) => {
       setBusyId(card.id);
 
       if (card.recordType === "action") {
-        await resolveActionItem({
-          id: card.recordId,
-          status: "accepted",
-          userId: user?.id,
-          title: card.title,
-          activityDetails: `${card.title} marked handled from Now HQ.`,
-        });
-        return;
+        throw new Error("Open the action review queue to book, approve, send, call, or dismiss this card.");
       }
 
       if (card.recordType === "alert") {
@@ -677,6 +685,7 @@ export default function NowHQ() {
     { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },
   ].filter((item) => item.active);
   const humanCards = cards.filter(isHumanNeeded);
+  const showActionReview = searchParams.get("action_items") === "1";
   const firstCard = humanCards[0] || null;
   const remainingCards = firstCard ? humanCards.filter((card) => card.id !== firstCard.id).slice(0, 12) : [];
   const jarvisWatching = Math.max(0, cards.length - humanCards.length);
@@ -690,6 +699,34 @@ export default function NowHQ() {
     leads: cards.filter((card) => card.workflowType === "lead").length,
     blocked: cards.filter((card) => card.recordType === "alert").length,
   };
+
+  if (showActionReview) {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden bg-background">
+        <AppHeader />
+        <main className="flex-1 overflow-auto">
+          <section className="border-b bg-card px-4 py-4">
+            <div className="mx-auto max-w-7xl">
+              <div className="flex items-center gap-2">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-500/10 text-orange-500">
+                  <Zap className="h-5 w-5" />
+                </span>
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">Action Review</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Use the dedicated controls for booking, approvals, replies, calls, and dismissals.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className="mx-auto max-w-7xl p-4">
+            <ActionItemCards onBack={closeActionReview} />
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">

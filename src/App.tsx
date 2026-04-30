@@ -220,8 +220,8 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Post-Call Actions window — opened by Electron IPC when a call becomes active.
- * Shows CallerInfoCenter + JARVIS ActionItemCards instead of the old CSR Intake form.
+ * CSR call window - opened by Electron IPC when a call becomes active.
+ * Keeps the popup to caller context, live transcript, and handoff links into Intake/Now.
  */
 function PostCallActionsView() {
   const [searchParams] = useSearchParams();
@@ -299,10 +299,15 @@ function PostCallActionsView() {
         </ScrollArea>
       </div>
 
-      {/* Dynamic action cards + static fallbacks */}
+      {/* Intake/Now handoff links only; booking stays in Intake/Now. */}
       <ScrollArea className="max-h-[40%] shrink-0 pb-2">
         <div className="px-4 pb-4">
-          <IntakeActionCards phoneNumber={phone} callerName={resolvedName} customerId={customer?.id} />
+          <IntakeActionCards
+            phoneNumber={phone}
+            callerName={resolvedName}
+            customerId={customer?.id}
+            callSid={callSid}
+          />
         </div>
       </ScrollArea>
     </div>

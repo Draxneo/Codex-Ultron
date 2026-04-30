@@ -95,7 +95,7 @@ export function JobV2ActionBar({ job, jobId, onInvoiceClick }: Props) {
         />
         <ActionButton
           icon={Zap}
-          label="Quick Quote"
+          label="Build Quote"
           sublabel="Send & approve"
           onClick={() => {
             const params = new URLSearchParams({

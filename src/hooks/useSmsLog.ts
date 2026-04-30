@@ -66,6 +66,13 @@ type SmsThreadSetting = {
   updated_at: string | null;
 };
 
+type IntakeThreadStatus = {
+  phone_last10: string;
+  status: "open" | "handled" | string | null;
+  handled_at: string | null;
+  updated_at: string | null;
+};
+
 export type SmsJobContext = {
   id: string;
   label: string;
@@ -133,6 +140,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const [jobContextMap, setJobContextMap] = useState<Record<string, SmsJobContext>>({});
   const [estimateContextMap, setEstimateContextMap] = useState<Record<string, SmsEstimateContext>>({});
   const [threadSettings, setThreadSettings] = useState<Record<string, SmsThreadSetting>>({});
+  const [sharedThreadStatuses, setSharedThreadStatuses] = useState<Record<string, IntakeThreadStatus>>({});
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [techPhoneFilter, setTechPhoneFilter] = useState<Set<string> | null>(null);
@@ -248,6 +256,60 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     fetchThreadSettings();
   }, [disabled, userId]);
 
+  useEffect(() => {
+    if (disabled) return;
+
+    const fetchSharedStatuses = async () => {
+      const { data, error } = await (supabase as any)
+        .from("intake_thread_status")
+        .select("phone_last10, status, handled_at, updated_at")
+        .eq("channel", "sms");
+
+      if (error) {
+        console.warn("Failed to fetch shared SMS thread statuses:", error);
+        return;
+      }
+
+      const next: Record<string, IntakeThreadStatus> = {};
+      for (const row of (data || []) as IntakeThreadStatus[]) {
+        next[row.phone_last10] = row;
+      }
+      setSharedThreadStatuses(next);
+    };
+
+    fetchSharedStatuses();
+
+    const channelName = `sms_thread_status_realtime_${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "intake_thread_status", filter: "channel=eq.sms" },
+        (payload: any) => {
+          const row = payload.new as IntakeThreadStatus | undefined;
+          const oldRow = payload.old as IntakeThreadStatus | undefined;
+          const key = row?.phone_last10 || oldRow?.phone_last10;
+          if (!key) return;
+          setSharedThreadStatuses((prev) => {
+            const next = { ...prev };
+            if (payload.eventType === "DELETE") delete next[key];
+            else if (row) next[key] = row;
+            return next;
+          });
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Shared SMS thread status realtime error:", status);
+          fetchSharedStatuses();
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [disabled]);
+
   const setThreadStatus = useCallback(async (phoneNumber: string, status: SmsConversationStatus) => {
     const phoneLast10 = normalizeLast10(phoneNumber);
     if (!phoneLast10) throw new Error("Missing phone number for SMS thread status.");
@@ -275,6 +337,30 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     if (error) {
       console.error("Failed to update SMS thread status:", error);
       throw error;
+    }
+
+    const sharedStatus: IntakeThreadStatus = {
+      phone_last10: phoneLast10,
+      status: status === "done" ? "handled" : "open",
+      handled_at: status === "done" ? updatedAt : null,
+      updated_at: updatedAt,
+    };
+    setSharedThreadStatuses((prev) => ({ ...prev, [phoneLast10]: sharedStatus }));
+
+    const { error: sharedError } = await (supabase as any)
+      .from("intake_thread_status")
+      .upsert({
+        channel: "sms",
+        phone_last10: phoneLast10,
+        status: sharedStatus.status,
+        handled_by_user_id: status === "done" ? userId : null,
+        handled_at: sharedStatus.handled_at,
+        updated_at: updatedAt,
+      }, { onConflict: "channel,phone_last10" });
+
+    if (sharedError) {
+      console.error("Failed to update shared SMS thread status:", sharedError);
+      throw sharedError;
     }
   }, [userId]);
 
@@ -549,13 +635,20 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const latestToNumber = [...convoMsgs].reverse().find((m) => m.to_number)?.to_number || null;
       const phoneLast10 = normalizeLast10(phone);
       const setting = phoneLast10 ? threadSettings[phoneLast10] : undefined;
+      const sharedStatus = phoneLast10 ? sharedThreadStatuses[phoneLast10] : undefined;
+      const sharedHandledAt = sharedStatus?.handled_at || sharedStatus?.updated_at || null;
+      const sharedDoneIsFresh = !!(
+        sharedStatus?.status === "handled" &&
+        sharedHandledAt &&
+        (!latestInbound || new Date(sharedHandledAt).getTime() >= new Date(latestInbound.created_at).getTime())
+      );
       const manualIsFresh = !!(
         setting?.conversation_status &&
         setting.updated_at &&
         (!latestInbound || new Date(setting.updated_at).getTime() >= new Date(latestInbound.created_at).getTime())
       );
       const derivedStatus: SmsConversationStatus = unread > 0 ? "needs_reply" : "waiting";
-      const status = manualIsFresh ? setting!.conversation_status! : derivedStatus;
+      const status = sharedDoneIsFresh ? "done" : manualIsFresh ? setting!.conversation_status! : derivedStatus;
       const matchedJob = phoneLast10 ? jobContextMap[phoneLast10] || null : null;
       const matchedEstimate = phoneLast10 ? estimateContextMap[phoneLast10] || null : null;
 
@@ -584,7 +677,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     });
 
     return convos;
-  }, [messages, resolveContact, threadSettings, jobContextMap, estimateContextMap]);
+  }, [messages, resolveContact, threadSettings, sharedThreadStatuses, jobContextMap, estimateContextMap]);
 
   const queryClient = useQueryClient();
 

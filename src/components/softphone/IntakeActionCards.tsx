@@ -1,387 +1,288 @@
 /**
- * IntakeActionCards — Realtime booking intent cards for the CSR intake popout.
- * Subscribes to action_items filtered by the current caller's phone.
- * Shows inline "Book It Now" cards when JARVIS detects booking intent from transcripts.
- * Falls back to static action buttons (Create Customer, New Job, Look Up) when idle.
+ * IntakeActionCards - CSR softphone handoff links.
+ *
+ * The phone popup stays communication-focused: caller context, transcript, and
+ * links into Intake/Now. Booking and customer/job creation remain in Intake/Now.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  CalendarPlus, Loader2, UserPlus, Briefcase, Search,
-  Phone, MessageSquare, Mail, Voicemail, CheckCircle2, AlertTriangle, MapPin, X,
-} from "lucide-react";
+import { ArrowRight, Loader2, ListChecks, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NewCustomerDialog } from "@/components/NewCustomerDialog";
-import { NewJobDialog } from "@/components/NewJobDialog";
-import { useBookingAction } from "@/hooks/useBookingAction";
-import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
-import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import {
-  ACTION_ITEM_STATUS,
-  invalidateActionItemQueues,
-  resolveActionItem,
-} from "@/lib/actionItemLifecycle";
-const BOOKING_CATEGORIES = ["new_appointment", "booking_confirm"];
 
-type BookingIntent = {
+type IntakeNowCard = {
   id: string;
   title: string;
   description: string | null;
   category: string;
-  source: string;
-  priority: string;
   customer_phone: string | null;
   metadata: any;
   created_at: string;
-};
-
-const SOURCE_ICON: Record<string, React.ElementType> = {
-  call: Phone,
-  phone: Phone,
-  sms: MessageSquare,
-  voicemail: Voicemail,
-  email: Mail,
 };
 
 interface IntakeActionCardsProps {
   phoneNumber?: string;
   callerName?: string;
   customerId?: string;
+  callSid?: string | null;
 }
 
-export function IntakeActionCards({ phoneNumber, callerName, customerId }: IntakeActionCardsProps) {
-  const [intents, setIntents] = useState<BookingIntent[]>([]);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [showNewJob, setShowNewJob] = useState(false);
-  const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
-  const { book, getState, reset } = useBookingAction();
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  const sharedTasks = useSharedActionItemTasks("intake-shared-action-item-tasks");
+const NOW_CARD_CATEGORIES = [
+  "new_appointment",
+  "booking_confirm",
+  "follow_up",
+  "thread_attention",
+  "new_lead",
+  "missed_call",
+  "schedule_change",
+  "eta_request",
+  "reschedule",
+  "confirmation",
+  "dispatch_callback",
+];
 
-  // Normalize phone for matching
-  const normalizedPhone = phoneNumber?.replace(/\D/g, "").slice(-10) || "";
+function last10(value?: string | null) {
+  return String(value || "").replace(/\D/g, "").slice(-10);
+}
 
-  // Load existing pending intents on mount
+function cardPhone(card: IntakeNowCard) {
+  const metadata = card.metadata || {};
+  return card.customer_phone || metadata.phone || metadata.customer_phone || metadata.callback_phone || null;
+}
+
+function buildIntakeUrl(phoneNumber?: string) {
+  return phoneNumber ? `/intake?phone=${encodeURIComponent(phoneNumber)}` : "/intake";
+}
+
+export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid }: IntakeActionCardsProps) {
+  const [cards, setCards] = useState<IntakeNowCard[]>([]);
+  const [savingNowCard, setSavingNowCard] = useState(false);
+  const queryClient = useQueryClient();
+  const normalizedPhone = useMemo(() => last10(phoneNumber), [phoneNumber]);
+  const intakeUrl = buildIntakeUrl(phoneNumber);
+  const primaryCard = cards[0];
+
+  useEffect(() => {
+    if (!normalizedPhone || normalizedPhone.length < 10) {
+      setCards([]);
+      return;
+    }
+
+    const loadCards = async () => {
+      const { data, error } = await supabase
+        .from("action_items" as any)
+        .select("*")
+        .eq("status", "pending")
+        .in("category", NOW_CARD_CATEGORIES)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error("[IntakeActionCards] Could not load Now cards", error);
+        return;
+      }
+
+      const matched = ((data || []) as any[]).filter((row) => last10(cardPhone(row)) === normalizedPhone);
+      setCards(matched.slice(0, 3).map(mapRow));
+    };
+
+    loadCards();
+  }, [normalizedPhone]);
+
   useEffect(() => {
     if (!normalizedPhone || normalizedPhone.length < 10) return;
 
-    const load = async () => {
-      const { data } = await supabase
-        .from("action_items")
-        .select("*")
-        .eq("status", ACTION_ITEM_STATUS.pending)
-        .in("category", BOOKING_CATEGORIES)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      if (data) {
-        const matched = data.filter((row: any) => {
-          const rowDigits = (row.customer_phone || "").replace(/\D/g, "").slice(-10);
-          return rowDigits === normalizedPhone;
-        });
-        setIntents(matched.map(mapRow));
-      }
-    };
-    load();
-  }, [normalizedPhone]);
-
-  // Subscribe to new booking intents in realtime
-  useEffect(() => {
     const channel = supabase
-      .channel("intake-booking-intents")
+      .channel(`csr-now-cards-${normalizedPhone}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "action_items" },
         (payload: any) => {
           if (payload.eventType === "DELETE") {
             const id = payload.old?.id;
-            if (id) setIntents((prev) => prev.filter((a) => a.id !== id));
+            if (id) setCards((prev) => prev.filter((card) => card.id !== id));
             return;
           }
 
           const row = payload.new;
-          if (row?.status !== ACTION_ITEM_STATUS.pending) {
-            setIntents((prev) => prev.filter((a) => a.id !== row?.id));
+          const matchesPhone = last10(cardPhone(row)) === normalizedPhone;
+          const isOpenNowCard = row?.status === "pending" && NOW_CARD_CATEGORIES.includes(row.category);
+          if (!matchesPhone || !isOpenNowCard) {
+            setCards((prev) => prev.filter((card) => card.id !== row?.id));
             return;
           }
-          if (row?.status !== ACTION_ITEM_STATUS.pending || !BOOKING_CATEGORIES.includes(row.category)) return;
-          const rowDigits = (row.customer_phone || "").replace(/\D/g, "").slice(-10);
-          if (normalizedPhone && rowDigits === normalizedPhone) {
-            setIntents((prev) => {
-              if (prev.some((a) => a.id === row.id)) {
-                return prev.map((a) => (a.id === row.id ? mapRow(row) : a));
-              }
-              return [mapRow(row), ...prev].slice(0, 5);
-            });
-          }
+
+          setCards((prev) => {
+            const mapped = mapRow(row);
+            const next = prev.some((card) => card.id === mapped.id)
+              ? prev.map((card) => (card.id === mapped.id ? mapped : card))
+              : [mapped, ...prev];
+            return next
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .slice(0, 3);
+          });
         }
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [normalizedPhone]);
 
-  const mapRow = (row: any): BookingIntent => ({
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    category: row.category,
-    source: row.source || "jarvis",
-    priority: row.priority || "normal",
-    customer_phone: row.customer_phone,
-    metadata: row.metadata,
-    created_at: row.created_at,
-  });
-
-  const handleBookIt = async (intent: BookingIntent) => {
-    const claimed = await sharedTasks.claimActionItem(intent);
-    if (!claimed.ok) {
-      toast.error(claimed.reason || "This card is already being handled.");
+  const createOrUpdateNowCard = async () => {
+    if (!phoneNumber) {
+      toast.error("No caller phone number yet.");
       return;
     }
 
-    const result = await book({
-      action_item_id: intent.id,
-      metadata: {
-        ...(intent.metadata || {}),
-        ...(propertySelections[intent.id] ? {
-          address: propertySelections[intent.id].address || propertySelections[intent.id].formatted,
-          address_id: propertySelections[intent.id].id || null,
-          requires_property_selection: false,
-          selected_property_label: propertySelections[intent.id].label || null,
-        } : {}),
-      },
-      description: intent.description,
-      customer_phone: intent.customer_phone,
-    });
-    if (result.ok) {
-      setTimeout(() => {
-        setIntents((prev) => prev.filter((a) => a.id !== intent.id));
-        setPropertySelections((prev) => {
-          const next = { ...prev };
-          delete next[intent.id];
-          return next;
-        });
-        reset(intent.id);
-      }, 2500);
-    }
-  };
+    setSavingNowCard(true);
+    const now = new Date().toISOString();
+    const description = callerName
+      ? `${callerName} is on the phone. Review Intake context before approving the next action.`
+      : "Caller is on the phone. Review Intake context before approving the next action.";
 
-  const handleDismiss = async (intent: BookingIntent) => {
-    const claimed = await sharedTasks.claimActionItem(intent);
-    if (!claimed.ok) {
-      toast.error(claimed.reason || "This card is already being handled.");
-      return;
-    }
+    try {
+      if (primaryCard) {
+        const previousMeta = primaryCard.metadata || {};
+        const previousUpdates = Array.isArray(previousMeta.context_updates) ? previousMeta.context_updates : [];
+        const { error } = await supabase
+          .from("action_items" as any)
+          .update({
+            description: primaryCard.description || description,
+            customer_phone: primaryCard.customer_phone || phoneNumber,
+            suggested_action: "Open Intake HQ, review the live call context, then approve or update the next action from Now HQ.",
+            metadata: {
+              ...previousMeta,
+              phone: previousMeta.phone || phoneNumber,
+              customer_phone: previousMeta.customer_phone || phoneNumber,
+              customer_name: previousMeta.customer_name || callerName || null,
+              customer_id: previousMeta.customer_id || customerId || null,
+              call_sid: previousMeta.call_sid || callSid || null,
+              source_url: previousMeta.source_url || intakeUrl,
+              living_card: true,
+              last_context_update_at: now,
+              updated_from: "csr_softphone",
+              context_updates: [
+                {
+                  at: now,
+                  source: "csr_softphone",
+                  category: primaryCard.category,
+                  summary: "CSR requested a Now card refresh from the phone popup.",
+                },
+                ...previousUpdates,
+              ].slice(0, 12),
+            },
+          })
+          .eq("id", primaryCard.id);
+        if (error) throw error;
+        toast.success("Now card updated");
+      } else {
+        const { data, error } = await supabase
+          .from("action_items" as any)
+          .insert({
+            source: "csr_softphone",
+            category: "thread_attention",
+            priority: "normal",
+            title: callerName ? `Review live call with ${callerName}` : "Review live caller",
+            description,
+            suggested_action: "Open Intake HQ, review the live call context, then approve or update the next action from Now HQ.",
+            customer_phone: phoneNumber,
+            metadata: {
+              phone: phoneNumber,
+              customer_phone: phoneNumber,
+              customer_name: callerName || null,
+              customer_id: customerId || null,
+              call_sid: callSid || null,
+              source_url: intakeUrl,
+              living_card: true,
+              context_updates: [
+                {
+                  at: now,
+                  source: "csr_softphone",
+                  category: "thread_attention",
+                  summary: "CSR created a Now card from the phone popup.",
+                },
+              ],
+            },
+          })
+          .select("*")
+          .single();
+        if (error) throw error;
+        if (data) setCards((prev) => [mapRow(data), ...prev].slice(0, 3));
+        toast.success("Now card created");
+      }
 
-    await resolveActionItem({
-      id: intent.id,
-      status: ACTION_ITEM_STATUS.dismissed,
-      userId: user?.id,
-      title: intent.title,
-    });
-    invalidateActionItemQueues(qc);
-    setIntents((prev) => prev.filter((a) => a.id !== intent.id));
-    setPropertySelections((prev) => {
-      const next = { ...prev };
-      delete next[intent.id];
-      return next;
-    });
-    reset(intent.id);
+      queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
+      queryClient.invalidateQueries({ queryKey: ["action_items_pending"] });
+      queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
+    } catch (error: any) {
+      toast.error(error?.message || "Could not create/update Now card");
+    } finally {
+      setSavingNowCard(false);
+    }
   };
 
   return (
     <div className="flex flex-col gap-2 p-3">
-      {/* Dynamic booking intent cards */}
-      {intents.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-            Booking Intents Detected
-          </p>
-          {intents.map((intent) => {
-            const SourceIcon = SOURCE_ICON[intent.source] || CalendarPlus;
-            const m = (intent.metadata || {}) as any;
-            const state = getState(intent.id);
-            const phase = state.phase;
-            const isWorking = phase === "resolving" || phase === "booking" || phase === "syncing";
-            const isDone = phase === "booked" || phase === "syncing";
-            const isFailed = phase === "failed";
-            const propertyOptions = Array.isArray(m.property_options) ? m.property_options : [];
-            const selectedProperty = propertySelections[intent.id];
-            const claimState = sharedTasks.getClaimState(intent);
-            const isClaimedByOther = claimState.isClaimedByOther;
-            const needsPropertySelection =
-              !!m.requires_property_selection && propertyOptions.length > 0 && !selectedProperty;
-
-            return (
-              <div
-                key={intent.id}
-                className="rounded-lg border bg-card p-3 space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-200"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <SourceIcon className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-foreground leading-tight">{intent.title}</p>
-                    {intent.description && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{intent.description}</p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDismiss(intent)}
-                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Dismiss"
-                    disabled={isWorking || isClaimedByOther}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {/* Context pills */}
-                <div className="flex flex-wrap gap-1">
-                  {m.customer_name && (
-                    <span className="text-[9px] font-medium bg-muted px-1.5 py-0.5 rounded-full">
-                      {m.customer_name}
-                    </span>
-                  )}
-                  {m.job_type && (
-                    <span className="text-[9px] font-medium bg-accent/50 text-accent-foreground px-1.5 py-0.5 rounded-full">
-                      {m.job_type}
-                    </span>
-                  )}
-                  {m.scheduled_date && (
-                    <span className="text-[9px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                      {m.scheduled_date} {m.scheduled_time || ""}
-                    </span>
-                  )}
-                </div>
-
-                {isFailed && state.error && (
-                  <div className="flex items-start gap-1.5 rounded border border-destructive/40 bg-destructive/10 p-1.5 text-[10px] text-destructive">
-                    <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                    <span className="break-words">{state.error}</span>
-                  </div>
-                )}
-
-                {isDone && state.result && (
-                  <div className="flex items-center gap-1.5 rounded border border-[hsl(var(--success))]/40 bg-[hsl(var(--success))]/10 p-1.5 text-[10px]">
-                    <CheckCircle2 className="h-3 w-3 shrink-0 text-[hsl(var(--success))]" />
-                    <span className="text-foreground font-medium">
-                      #{state.result.job_number || state.result.job_id}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {phase === "syncing" ? "syncing…" : "booked"}
-                    </span>
-                  </div>
-                )}
-
-                {propertyOptions.length > 0 && m.requires_property_selection && (
-                  <div className="rounded border border-orange-500/30 bg-orange-500/5 p-2 space-y-1.5">
-                    <p className="text-[10px] font-medium text-orange-700">
-                      Choose service property
-                    </p>
-                    <div className="grid gap-1.5">
-                      {propertyOptions.map((property: any, index: number) => {
-                        const address = property.address || property.formatted;
-                        const active = selectedProperty?.id
-                          ? selectedProperty.id === property.id
-                          : (selectedProperty?.address || selectedProperty?.formatted) === address;
-                        return (
-                          <Button
-                            key={`${property.id || index}-${address}`}
-                            size="sm"
-                            variant={active ? "default" : "outline"}
-                            className="h-auto justify-start gap-1.5 whitespace-normal py-1.5 text-left text-[10px]"
-                            onClick={() => setPropertySelections((prev) => ({ ...prev, [intent.id]: property }))}
-                            disabled={isWorking || isDone || isClaimedByOther}
-                          >
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            <span className="min-w-0">
-                              <span className="block font-medium">{property.label || "Property"}</span>
-                              <span className="block opacity-80">{address}</span>
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  size="sm"
-                  className="w-full gap-1.5 h-8 text-xs bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))]"
-                  onClick={() => handleBookIt(intent)}
-                  disabled={isWorking || isDone || isClaimedByOther || needsPropertySelection}
-                >
-                  {isWorking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isDone && <CheckCircle2 className="h-3.5 w-3.5" />}
-                  {(phase === "idle" || phase === "failed") && <CalendarPlus className="h-3.5 w-3.5" />}
-                  {phase === "resolving" && "Resolving…"}
-                  {phase === "booking" && "Booking..."}
-                  {phase === "syncing" && "Syncing…"}
-                  {phase === "booked" && "Booked"}
-                  {phase === "idle" && (needsPropertySelection ? "Choose Property" : "Book It Now")}
-                  {phase === "failed" && "Retry Booking"}
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Static fallback actions — always visible */}
-      <div className="space-y-1.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-          Quick Actions
+      <div className="rounded-lg border bg-card p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Intake / Now handoff
         </p>
-        <div className="grid grid-cols-3 gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-col gap-1 h-auto py-2.5 text-[10px]"
-            onClick={() => setShowNewCustomer(true)}
-          >
-            <UserPlus className="h-4 w-4 text-primary" />
-            New Customer
+        {primaryCard ? (
+          <div className="mt-2 rounded-md border bg-muted/30 p-2">
+            <p className="line-clamp-1 text-xs font-semibold">{primaryCard.title}</p>
+            {primaryCard.description && (
+              <p className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{primaryCard.description}</p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            No open Now card matched to this caller yet.
+          </p>
+        )}
+
+        <div className="mt-3 grid gap-1.5">
+          <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
+            <a href={intakeUrl} target="_blank" rel="noreferrer">
+              <MessageSquare className="h-3.5 w-3.5" />
+              Open Intake
+            </a>
           </Button>
           <Button
-            variant="outline"
             size="sm"
-            className="flex-col gap-1 h-auto py-2.5 text-[10px]"
-            onClick={() => setShowNewJob(true)}
-          >
-            <Briefcase className="h-4 w-4 text-primary" />
-            New Job
-          </Button>
-          <Button
             variant="outline"
-            size="sm"
-            className="flex-col gap-1 h-auto py-2.5 text-[10px]"
-            onClick={() => {
-              if (customerId) {
-                window.open(`/customers/${customerId}`, "_blank");
-              } else if (phoneNumber) {
-                window.open(`/customers?search=${encodeURIComponent(phoneNumber)}`, "_blank");
-              }
-            }}
+            className="h-8 gap-1.5 text-xs"
+            onClick={createOrUpdateNowCard}
+            disabled={savingNowCard || !phoneNumber}
           >
-            <Search className="h-4 w-4 text-primary" />
-            Look Up
+            {savingNowCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5" />}
+            {primaryCard ? "Update Now" : "Create Now"}
           </Button>
+          {primaryCard && (
+            <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+              <a href="/now" target="_blank" rel="noreferrer">
+                <ArrowRight className="h-3.5 w-3.5" />
+                Open Now HQ
+              </a>
+            </Button>
+          )}
         </div>
       </div>
-
-      <NewCustomerDialog
-        open={showNewCustomer}
-        onOpenChange={setShowNewCustomer}
-        onCustomerCreated={() => setShowNewCustomer(false)}
-      />
-      <NewJobDialog open={showNewJob} onOpenChange={setShowNewJob} />
     </div>
   );
+}
+
+function mapRow(row: any): IntakeNowCard {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    customer_phone: row.customer_phone,
+    metadata: row.metadata,
+    created_at: row.created_at,
+  };
 }

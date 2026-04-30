@@ -520,7 +520,7 @@ function WeekCard({
             <button
               type="button"
               onClick={handleQuickQuote}
-              title="Quick Quote"
+              title="Build Quote"
               className="shrink-0 rounded bg-white/25 hover:bg-white/40 text-white p-0.5 transition-colors"
             >
               <Zap className="h-2.5 w-2.5" />
@@ -673,10 +673,10 @@ function CardPopover({ item, techColor, routeInfo, visibleFields }: { item: Boar
           </div>
         )}
 
-        {/* Quick Quote */}
+        {/* Quote builder */}
         <Button size="sm" variant="default" className="w-full gap-1.5 h-8" onClick={openQuickQuote}>
           <Zap className="h-3.5 w-3.5" />
-          Quick Quote
+          Build Quote
         </Button>
 
         {/* Description */}
