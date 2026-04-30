@@ -55,6 +55,13 @@ function normalizeName(name: string | null | undefined) {
   return (name || "").trim().toLowerCase();
 }
 
+function isRouteActiveStatus(status?: string | null) {
+  const text = String(status || "").toLowerCase();
+  return !/\b(canceled|cancelled|lost|deleted|void|done|complete|completed|finished|closed|paid|invoiced|archived)\b/.test(text);
+}
+
+const globalAttemptedRouteKeys = new Set<string>();
+
 /**
  * Fetch cached travel times for a given employee + date.
  * Returns a Map<jobId, { order, travelMin, fromLabel }> for easy lookup.
@@ -206,7 +213,7 @@ export function useEnsureRouteTravelCacheForDate(
     for (const item of dayItems) {
       if (item.scheduled_date !== date) continue;
       if (!item.assigned_to || !item.address) continue;
-      if ((item.status || "").toLowerCase() === "canceled") continue;
+      if (!isRouteActiveStatus(item.status)) continue;
       if (routeMap.has(item.id)) continue;
 
       const employee = employeeByName.get(normalizeName(item.assigned_to));
@@ -230,7 +237,9 @@ export function useEnsureRouteTravelCacheForDate(
   useEffect(() => {
     if (!workToCache) return;
     if (attemptedKeysRef.current.has(workToCache.key)) return;
+    if (globalAttemptedRouteKeys.has(workToCache.key)) return;
     attemptedKeysRef.current.add(workToCache.key);
+    globalAttemptedRouteKeys.add(workToCache.key);
 
     void supabase.functions.invoke("calculate-route-cache", {
       body: { batch: workToCache.batch },

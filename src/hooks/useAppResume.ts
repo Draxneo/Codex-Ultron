@@ -1,42 +1,53 @@
-/**
- * useAppResume — Invalidates all React Query caches when the app resumes
- * from background (Android/iOS Capacitor or browser tab switch).
- *
- * Listens to:
- * 1. `visibilitychange` — fires on browser tab switch & some native resumes
- * 2. Capacitor `App.addListener("appStateChange")` — fires reliably on native
- *
- * On resume: invalidates all queries so visible data refreshes automatically.
- */
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+
+const RESUME_REFRESH_COOLDOWN_MS = 30_000;
 
 export function useAppResume() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Browser / WebView visibility change
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        queryClient.invalidateQueries();
+    let lastRefreshAt = 0;
+
+    const refreshLiveQueries = () => {
+      const now = Date.now();
+      if (now - lastRefreshAt < RESUME_REFRESH_COOLDOWN_MS) return;
+      lastRefreshAt = now;
+
+      const liveQueryKeys = [
+        ["sms_log"],
+        ["unread_sms_count"],
+        ["call_log"],
+        ["jobs"],
+        ["estimates"],
+        ["customers"],
+        ["action_items"],
+        ["now_cards"],
+        ["route_travel_cache_date"],
+        ["route_travel_cache_week"],
+      ];
+
+      for (const queryKey of liveQueryKeys) {
+        queryClient.invalidateQueries({ queryKey, exact: false });
       }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refreshLiveQueries();
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Capacitor native app state change (more reliable on Android)
     let removeNativeListener: (() => void) | null = null;
     import("@capacitor/app")
       .then(({ App }) => {
         App.addListener("appStateChange", ({ isActive }) => {
-          if (isActive) {
-            queryClient.invalidateQueries();
-          }
+          if (isActive) refreshLiveQueries();
         }).then((handle) => {
           removeNativeListener = () => handle.remove();
         });
       })
       .catch(() => {
-        // Not running in Capacitor — no-op
+        // Not running in Capacitor.
       });
 
     return () => {

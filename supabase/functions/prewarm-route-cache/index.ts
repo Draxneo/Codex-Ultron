@@ -28,20 +28,22 @@ function centralDateStr(offsetDays = 0): string {
 async function buildBatchForDate(sb: any, targetDate: string) {
   const [{ data: jobRows }, { data: estRows }] = await Promise.all([
     sb.from("jobs")
-      .select("assigned_to")
+      .select("assigned_to, status")
       .eq("scheduled_date", targetDate)
-      .not("status", "in", '("canceled")')
       .not("assigned_to", "is", null),
     sb.from("estimates")
-      .select("assigned_to")
+      .select("assigned_to, status, work_status")
       .eq("scheduled_date", targetDate)
-      .not("status", "in", '("canceled","lost")')
       .not("assigned_to", "is", null),
   ]);
 
   const names = new Set<string>();
-  for (const r of (jobRows || []) as any[]) if (r.assigned_to) names.add(r.assigned_to);
-  for (const r of (estRows || []) as any[]) if (r.assigned_to) names.add(r.assigned_to);
+  for (const r of (jobRows || []) as any[]) {
+    if (r.assigned_to && isRouteActiveStatus(r.status)) names.add(r.assigned_to);
+  }
+  for (const r of (estRows || []) as any[]) {
+    if (r.assigned_to && isRouteActiveStatus(r.status) && isRouteActiveStatus(r.work_status)) names.add(r.assigned_to);
+  }
   if (names.size === 0) return [];
 
   const { data: emps } = await sb
@@ -65,6 +67,25 @@ function normalizeName(value: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function isRouteActiveStatus(value: string | null | undefined): boolean {
+  const status = normalizeName(value);
+  return ![
+    "canceled",
+    "cancelled",
+    "lost",
+    "deleted",
+    "void",
+    "done",
+    "complete",
+    "completed",
+    "finished",
+    "closed",
+    "paid",
+    "invoiced",
+    "archived",
+  ].includes(status);
 }
 
 serve(async (req) => {

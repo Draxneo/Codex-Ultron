@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { ThemeProvider } from "next-themes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
@@ -30,45 +30,7 @@ import { CallerInfoCenter } from "./components/softphone/CallerInfoCenter";
 import { IntakeActionCards } from "./components/softphone/IntakeActionCards";
 import { ScrollArea } from "./components/ui/scroll-area";
 
-import TechMySchedule from "./pages/TechMySchedule";
-import TechJobDetail from "./pages/TechJobDetail";
-import TechJobCart from "./pages/TechJobCart";
-import TechCustomerDetail from "./pages/TechCustomerDetail";
-import ScheduleV2 from "./pages/ScheduleV2";
-import DispatchCalendar from "./pages/DispatchCalendar";
-import NowHQ from "./pages/NowHQ";
-import WorkflowMaps from "./pages/WorkflowMaps";
-import OperationsDeskV2 from "./pages/OperationsDeskV2";
-import JobDetail from "./pages/JobDetail";
-import RecordDocument from "./pages/RecordDocument";
-
-
-import CopilotPage from "./pages/CopilotPage";
 import { BookingIntentAlert } from "./components/BookingIntentAlert";
-import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
-import TechFormPublic from "./pages/TechFormPublic";
-
-import EstimateDetail from "./pages/EstimateDetail";
-import JobPhotos from "./pages/JobPhotos";
-
-import AgentTraining from "./pages/AgentTraining";
-import Customers from "./pages/Customers";
-import CustomerDetail from "./pages/CustomerDetail";
-import Agreements from "./pages/Agreements";
-import Payments from "./pages/Payments";
-import Reports from "./pages/Reports";
-import SmsPage from "./pages/SmsPage";
-import CallsPage from "./pages/CallsPage";
-import TeamCommunications from "./pages/TeamCommunications";
-import PhoneConsole from "./pages/PhoneConsole";
-import Admin from "./pages/Admin";
-import SystemLog from "./pages/SystemLog";
-import ReferralPublic from "./pages/ReferralPublic";
-import CertificateView from "./pages/CertificateView";
-import InvoicePublic from "./pages/InvoicePublic";
-import CustomerCart from "./pages/CustomerCart";
-import EstimatePresentationPublic from "./pages/EstimatePresentationPublic";
 
 /** Redirect legacy /inbox sections to their split communication routes. */
 function InboxRedirectComponent() {
@@ -87,23 +49,57 @@ function CallsRedirectComponent() {
   return <Navigate to={`/phone${location.search}`} replace />;
 }
 
-import UnscheduledJobs from "./pages/UnscheduledJobs";
-import CustomerIntakePublic from "./pages/CustomerIntakePublic";
-import NotFound from "./pages/NotFound";
-
-import IvrBuilder from "./pages/IvrBuilder";
-import CallRoutingSettings from "./pages/CallRoutingSettings";
-import Leads from "./pages/Leads";
-import Catalog from "./pages/Catalog";
-import QuickQuote from "./pages/QuickQuote";
-import QuoteHeadquarters from "./pages/QuoteHeadquarters";
-import QuickQuoteCustomerView from "./pages/QuickQuoteCustomerView";
 import { SoftphoneProvider } from "./components/SoftphoneProvider";
 import { ViewAsProvider } from "./contexts/ViewAsContext";
 import { AdminViewAsBar } from "./components/AdminViewAsBar";
 import { SmsPanel } from "./components/SmsPanel";
 import { useUnreadSmsCount } from "./hooks/useUnreadSmsCount";
 import { PHONE_CONSOLE_OPEN_EVENT, type PhoneConsoleOpenDetail } from "@/lib/phoneConsoleBridge";
+
+const TechMySchedule = lazy(() => import("./pages/TechMySchedule"));
+const TechJobDetail = lazy(() => import("./pages/TechJobDetail"));
+const TechJobCart = lazy(() => import("./pages/TechJobCart"));
+const TechCustomerDetail = lazy(() => import("./pages/TechCustomerDetail"));
+const ScheduleV2 = lazy(() => import("./pages/ScheduleV2"));
+const DispatchCalendar = lazy(() => import("./pages/DispatchCalendar"));
+const NowHQ = lazy(() => import("./pages/NowHQ"));
+const WorkflowMaps = lazy(() => import("./pages/WorkflowMaps"));
+const OperationsDeskV2 = lazy(() => import("./pages/OperationsDeskV2"));
+const JobDetail = lazy(() => import("./pages/JobDetail"));
+const RecordDocument = lazy(() => import("./pages/RecordDocument"));
+const CopilotPage = lazy(() => import("./pages/CopilotPage"));
+const Login = lazy(() => import("./pages/Login"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const TechFormPublic = lazy(() => import("./pages/TechFormPublic"));
+const EstimateDetail = lazy(() => import("./pages/EstimateDetail"));
+const JobPhotos = lazy(() => import("./pages/JobPhotos"));
+const AgentTraining = lazy(() => import("./pages/AgentTraining"));
+const Customers = lazy(() => import("./pages/Customers"));
+const CustomerDetail = lazy(() => import("./pages/CustomerDetail"));
+const Agreements = lazy(() => import("./pages/Agreements"));
+const Payments = lazy(() => import("./pages/Payments"));
+const Reports = lazy(() => import("./pages/Reports"));
+const SmsPage = lazy(() => import("./pages/SmsPage"));
+const CallsPage = lazy(() => import("./pages/CallsPage"));
+const TeamCommunications = lazy(() => import("./pages/TeamCommunications"));
+const PhoneConsole = lazy(() => import("./pages/PhoneConsole"));
+const Admin = lazy(() => import("./pages/Admin"));
+const SystemLog = lazy(() => import("./pages/SystemLog"));
+const ReferralPublic = lazy(() => import("./pages/ReferralPublic"));
+const CertificateView = lazy(() => import("./pages/CertificateView"));
+const InvoicePublic = lazy(() => import("./pages/InvoicePublic"));
+const CustomerCart = lazy(() => import("./pages/CustomerCart"));
+const EstimatePresentationPublic = lazy(() => import("./pages/EstimatePresentationPublic"));
+const UnscheduledJobs = lazy(() => import("./pages/UnscheduledJobs"));
+const CustomerIntakePublic = lazy(() => import("./pages/CustomerIntakePublic"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const IvrBuilder = lazy(() => import("./pages/IvrBuilder"));
+const CallRoutingSettings = lazy(() => import("./pages/CallRoutingSettings"));
+const Leads = lazy(() => import("./pages/Leads"));
+const Catalog = lazy(() => import("./pages/Catalog"));
+const QuickQuote = lazy(() => import("./pages/QuickQuote"));
+const QuoteHeadquarters = lazy(() => import("./pages/QuoteHeadquarters"));
+const QuickQuoteCustomerView = lazy(() => import("./pages/QuickQuoteCustomerView"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -123,6 +119,14 @@ function PrivateAppListeners() {
   usePreWarmCache();
   useAppResume();
   return null;
+}
+
+function RouteLoading() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+      Loading...
+    </div>
+  );
 }
 
 /**
@@ -366,6 +370,7 @@ function AppRouter() {
       <PhoneConsolePopup />
       <SmsComposerPopup />
       <PageTransition>
+      <Suspense fallback={<RouteLoading />}>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
@@ -456,6 +461,7 @@ function AppRouter() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
       </PageTransition>
     </>
   );

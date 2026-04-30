@@ -100,7 +100,7 @@ function mergeMessagesChrono(existing: SmsMessage[], incoming: SmsMessage[]): Sm
   return sortMessagesChrono(Array.from(byId.values()));
 }
 
-const PAGE_SIZE = 500;
+const PAGE_SIZE = 150;
 
 function isOpenWorkStatus(status?: string | null) {
   const text = String(status || "").toLowerCase();
@@ -407,7 +407,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
           .select("*")
           .in("phone_number", phoneVariants)
           .order("created_at", { ascending: false })
-          .limit(500); // plenty of headroom for full team history within initial view
+          .limit(120); // enough to keep team threads pinned without slowing every inbox open
         pinnedTeam = (teamMsgs as unknown as SmsMessage[]) || [];
       }
     }
@@ -657,12 +657,28 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         silent: true,
       });
       if (!result.success) {
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === optimisticId ? { ...m, delivery_status: "failed" } : m
+          )
+        );
         const msg = result.error || "Send failed";
         const isBlocked = msg.includes("testing mode") || msg.includes("Safety Lock") || msg.includes("test mode");
         toast({ title: isBlocked ? "SMS Blocked" : "SMS Failed", description: msg, variant: "destructive" });
         return false;
       }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId
+            ? {
+                ...m,
+                id: result.sms_log_id || m.id,
+                twilio_sid: result.twilio_sid || m.twilio_sid,
+                delivery_status: result.queued ? "queued_retry" : "sent",
+              }
+            : m
+        )
+      );
       toast({ title: "SMS Sent", description: `Message sent to ${contactName || to}` });
       if (userId) {
         void setThreadStatus(to, "waiting").catch((error) => {

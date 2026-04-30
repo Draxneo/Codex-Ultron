@@ -61,7 +61,21 @@ function assignedToEmployee(assignedTo: string | null | undefined, employeeName:
 
 function isActiveScheduleStatus(value: string | null | undefined) {
   const status = normalizeName(value);
-  return !["canceled", "cancelled", "lost", "deleted", "void"].includes(status);
+  return ![
+    "canceled",
+    "cancelled",
+    "lost",
+    "deleted",
+    "void",
+    "done",
+    "complete",
+    "completed",
+    "finished",
+    "closed",
+    "paid",
+    "invoiced",
+    "archived",
+  ].includes(status);
 }
 
 function buildExpectedLegs({
