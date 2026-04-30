@@ -58,6 +58,8 @@ import { useCustomerOverview } from "@/hooks/useCustomerOverview";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useJobs } from "@/hooks/useJobs";
 import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
+import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +86,16 @@ type DeskConversation = {
   unread: boolean;
   latestJobId?: string | null;
   raw: CallConversation | SmsConversation;
+};
+
+type IntakeThreadStatusRow = {
+  channel: "sms" | "call";
+  phone_last10: string;
+  status: "open" | "handled";
+  handled_by_user_id: string | null;
+  handled_by_name: string | null;
+  handled_at: string | null;
+  updated_at: string | null;
 };
 
 type UIMode = "ai" | "human";
@@ -865,6 +877,7 @@ function TeamInboxSignal() {
       const { data, error } = await (supabase as any)
         .from("team_notifications")
         .select("id, title, body, related_entity_id, created_at")
+        .eq("user_id", user.id)
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -931,12 +944,16 @@ function TeamInboxSignal() {
     const { error } = await (supabase as any)
       .from("team_notifications")
       .update({ read_at: new Date().toISOString() })
+      .eq("user_id", user.id)
       .is("read_at", null);
     if (error) {
       toast({ title: "Team alerts stayed unread", description: error.message, variant: "destructive" });
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["intake-team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["side-rail-team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["now-team-notifications", user.id] });
     toast({ title: "Team alerts cleared" });
   };
 
@@ -1858,6 +1875,21 @@ function CustomerWorkspace({
       } else {
         await onMarkCallRead(selected.phone);
       }
+      if (phoneLast10) {
+        const { error: sharedStatusError } = await (supabase as any)
+          .from("intake_thread_status")
+          .upsert({
+            channel: selected.kind,
+            phone_last10: phoneLast10,
+            status: "handled",
+            handled_by_user_id: user.id,
+            handled_by_name: employeeName,
+            handled_at: handledAt,
+            last_signal_at: selected.createdAt,
+            updated_at: handledAt,
+          }, { onConflict: "channel,phone_last10" });
+        if (sharedStatusError) throw sharedStatusError;
+      }
 
       const auditResults = await Promise.all([
         supabase.from("copilot_button_clicks" as any).insert({
@@ -1896,6 +1928,7 @@ function CustomerWorkspace({
       onHandled(selected.id);
       queryClient.invalidateQueries({ queryKey: ["call_log"] });
       queryClient.invalidateQueries({ queryKey: ["sms_log"] });
+      queryClient.invalidateQueries({ queryKey: ["intake-thread-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["activity_log"] });
       if (customer?.id) queryClient.invalidateQueries({ queryKey: ["customer-activity-feed", customer.id] });
       toast({ title: "Marked handled", description: `Stamped as handled by ${employeeName}.` });
@@ -3211,7 +3244,7 @@ function HumanModeDesk({
 export default function OperationsDeskV2() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, role, employeeId } = useAuth();
+  const { user } = useAuth();
   const { conversations: callConversations, loading: callsLoading, markAsRead: markCallsAsRead } = useCallLog();
   const {
     conversations: smsConversations,
@@ -3220,7 +3253,29 @@ export default function OperationsDeskV2() {
     sendSms,
     markAsRead: markSmsAsRead,
     setThreadStatus: setSmsThreadStatus,
-  } = useSmsLog({ role, employeeId, userId: user?.id ?? null });
+  } = useSmsLogScoped();
+  const { data: intakeThreadStatuses = [] } = useQuery({
+    queryKey: ["intake-thread-statuses"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("intake_thread_status")
+        .select("channel, phone_last10, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
+      if (error) throw error;
+      return (data || []) as IntakeThreadStatusRow[];
+    },
+    staleTime: 15_000,
+  });
+  useRealtimeInvalidation(
+    [{ table: "intake_thread_status", queryKeys: [["intake-thread-statuses"]] }],
+    "intake-thread-status-sync"
+  );
+  const sharedStatusByThread = useMemo(() => {
+    const map = new Map<string, IntakeThreadStatusRow>();
+    for (const row of intakeThreadStatuses) {
+      map.set(`${row.channel}:${row.phone_last10}`, row);
+    }
+    return map;
+  }, [intakeThreadStatuses]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DeskConversation | null>(null);
   const [newJobOpen, setNewJobOpen] = useState(false);
@@ -3231,6 +3286,15 @@ export default function OperationsDeskV2() {
       ...callConversations.map(callToDeskItem),
       ...smsConversations.map(smsToDeskItem),
     ]
+      .map((item) => {
+        const phoneLast10 = normalizeLast10(item.phone);
+        const sharedStatus = sharedStatusByThread.get(`${item.kind}:${phoneLast10}`);
+        if (!sharedStatus || sharedStatus.status !== "handled") return item;
+        const handledAt = sharedStatus.handled_at || sharedStatus.updated_at;
+        const handledAfterSignal = handledAt && new Date(handledAt).getTime() >= new Date(item.createdAt).getTime();
+        if (!handledAfterSignal) return item;
+        return { ...item, status: "done", unread: false };
+      })
       .filter((item) => !isEmployeeConversation(item))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -3248,7 +3312,7 @@ export default function OperationsDeskV2() {
       ].join(" ").toLowerCase();
       return haystack.includes(q);
     });
-  }, [callConversations, smsConversations, search]);
+  }, [callConversations, smsConversations, search, sharedStatusByThread]);
 
   const selectConversation = (item: DeskConversation) => {
     setSelected(item);

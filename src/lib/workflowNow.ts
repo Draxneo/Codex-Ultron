@@ -29,7 +29,7 @@ export type WorkflowActionLink = {
 export type WorkflowNowCard = {
   id: string;
   workflowType: WorkflowType;
-  recordType: "action" | "job" | "estimate" | "lead";
+  recordType: "action" | "job" | "estimate" | "lead" | "alert";
   recordId: string;
   recordNumber?: string | null;
   customerName: string;
@@ -574,5 +574,75 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
       "Review the latest call/text context. If the customer changed direction, this same card should be updated instead of creating a duplicate.",
     tags: ["intake", item.category, item.priority, lastEvidence].filter(Boolean),
     actionLinks: resolveActionLinks(step, item),
+  };
+}
+
+function workflowTypeFromAlert(alert: any): WorkflowType {
+  const job = alert?.jobs || alert?.job || {};
+  const jobType = normalized(job?.job_type || alert?.workflow_type || alert?.job_type);
+  if (jobType === "install") return "install";
+  if (jobType === "estimate") return "estimate";
+  if (jobType === "lead") return "lead";
+  if (jobType === "intake") return "intake";
+  return "service";
+}
+
+function alertStep(alert: any, template: WorkflowStepDefinition[]) {
+  const stepId = normalized(alert?.step_id);
+  const index = Math.max(0, template.findIndex((step) =>
+    normalized(step.key) === stepId ||
+    normalized((step as any).id) === stepId ||
+    normalized(step.title) === stepId
+  ));
+  return {
+    index,
+    step: template[index] || template[0],
+  };
+}
+
+export function buildWorkflowAlertCard(alert: any, templateOverrides?: WorkflowTemplateMap): WorkflowNowCard | null {
+  if (!alert || alert.resolved_at || alert.is_active === false) return null;
+
+  const workflowType = workflowTypeFromAlert(alert);
+  const template = templatesWithOverrides(templateOverrides)[workflowType] || templatesWithOverrides(templateOverrides).service;
+  const { index, step } = alertStep(alert, template);
+  const job = alert.jobs || alert.job || {};
+  const details = alert.details && typeof alert.details === "object" ? alert.details : {};
+  const missingFields = Array.isArray(alert.missing_fields) ? alert.missing_fields.filter(Boolean) : [];
+  const customerName = job.customer_name || details.customer_name || "Workflow blocked";
+  const message = alert.message || details.message || "";
+  const stepLabel = step?.title || alert.step_id || "Workflow step";
+  const description = [
+    message,
+    missingFields.length ? `Missing: ${missingFields.join(", ")}` : "",
+    details.reason || details.description || "",
+  ].filter(Boolean).join(" ");
+
+  return {
+    id: `alert-${alert.id}`,
+    workflowType,
+    recordType: "alert",
+    recordId: alert.id,
+    recordNumber: job.job_number || String(alert.id).slice(0, 8),
+    customerName,
+    customerPhone: job.customer_phone || details.customer_phone || null,
+    customerEmail: job.customer_email || null,
+    address: job.address || details.address || null,
+    status: alert.alert_type || "blocked",
+    source: "workflow alert",
+    description,
+    title: `Blocked: ${stepLabel}`,
+    subtitle: job.job_number ? `Job #${job.job_number} needs attention before this workflow can move forward.` : "Jarvis found a blocked workflow step.",
+    owner: step?.owner || "office",
+    group: "past_due",
+    route: job.id ? `/jobs/${job.id}` : "/now",
+    stepNumber: index + 1,
+    totalSteps: template.length,
+    dueAt: alert.created_at,
+    progress: progressFromStep(index + 1, template.length),
+    stuckReason: description || "This workflow alert is active and unresolved.",
+    jarvisRecommendation: "Open the related record, fix the blocker, then resolve the workflow alert so the card leaves Now HQ.",
+    tags: ["blocked", workflowType, alert.step_id, alert.alert_type, ...missingFields].filter(Boolean),
+    actionLinks: resolveActionLinks(step, { ...job, ...details }),
   };
 }

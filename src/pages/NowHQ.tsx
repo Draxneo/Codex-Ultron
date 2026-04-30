@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import {
@@ -34,6 +34,7 @@ import {
   buildJobWorkflowCard,
   buildLeadWorkflowCard,
   buildActionItemWorkflowCard,
+  buildWorkflowAlertCard,
   NOW_HQ_LAUNCH_CUTOFF,
   type WorkflowGroup,
   type WorkflowNowCard,
@@ -42,6 +43,7 @@ import {
   type WorkflowTemplateMap,
   type WorkflowType,
 } from "@/lib/workflowNow";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { cn } from "@/lib/utils";
 
 type UIMode = "ai" | "human";
@@ -120,6 +122,9 @@ function workflowUrl(card: WorkflowNowCard) {
   if (card.recordType === "action") {
     return card.customerPhone ? `/intake?phone=${encodeURIComponent(card.customerPhone)}` : "/intake";
   }
+  if (card.recordType === "alert") {
+    return card.route;
+  }
   if (card.recordType === "estimate") {
     return `/quick-quote?estimate_id=${card.recordId}&customer_name=${encodeURIComponent(card.customerName)}${card.customerPhone ? `&customer_phone=${encodeURIComponent(card.customerPhone)}` : ""}`;
   }
@@ -131,6 +136,7 @@ function workflowUrl(card: WorkflowNowCard) {
 
 function recordLabel(card: WorkflowNowCard) {
   if (card.recordType === "action") return card.recordNumber ? `Action #${card.recordNumber}` : "Action card";
+  if (card.recordType === "alert") return card.recordNumber ? `Blocked #${card.recordNumber}` : "Blocked workflow";
   if (card.recordType === "job") return card.recordNumber ? `Job #${card.recordNumber}` : "Job";
   if (card.recordType === "estimate") return card.recordNumber ? `Estimate #${card.recordNumber}` : "Estimate";
   return card.recordNumber ? `Lead #${card.recordNumber}` : "Lead";
@@ -155,7 +161,7 @@ function WorkflowCard({ card, featured = false }: { card: WorkflowNowCard; featu
   const WorkflowIcon = workflow.icon;
   const GroupIcon = group.icon;
   const secondaryUrl = workflowUrl(card);
-  const secondaryLabel = card.recordType === "action" ? "Open in Intake" : "Quick quote";
+  const secondaryLabel = card.recordType === "action" ? "Open in Intake" : card.recordType === "alert" ? "Open record" : "Quick quote";
   const contextItems = [
     { label: "Record", value: recordLabel(card), href: card.route },
     { label: "Customer", value: card.customerName },
@@ -308,7 +314,6 @@ function HumanModeFallback() {
 
 export default function NowHQ() {
   const [mode, setMode] = useState<UIMode>("ai");
-  const qc = useQueryClient();
   const { data: jobs = [], isLoading: jobsLoading } = useJobs();
   const { data: estimates = [], isLoading: estimatesLoading } = useEstimates(false);
   const { data: actionItems = [], isLoading: actionItemsLoading } = useQuery({
@@ -318,6 +323,23 @@ export default function NowHQ() {
         .from("action_items" as any)
         .select("*")
         .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(80);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const { data: workflowAlerts = [], isLoading: workflowAlertsLoading } = useQuery({
+    queryKey: ["now-hq-workflow-alerts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workflow_alerts" as any)
+        .select(`
+          *,
+          jobs:job_id (*)
+        `)
+        .in("alert_type", ["blocked", "escalated"])
+        .is("resolved_at", null)
         .order("created_at", { ascending: false })
         .limit(80);
       if (error) throw error;
@@ -355,32 +377,32 @@ export default function NowHQ() {
     },
   });
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("now-hq-live-action-items")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "action_items" },
-        () => {
-          void qc.invalidateQueries({ queryKey: ["now-hq-action-items"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [qc]);
+  useRealtimeInvalidation(
+    [
+      { table: "action_items", queryKeys: [["now-hq-action-items"], ["hud_attention_counts"]] },
+      { table: "workflow_alerts", queryKeys: [["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
+      { table: "jobs", queryKeys: [["jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
+      { table: "estimates", queryKeys: [["estimates"], ["hud_attention_counts"]] },
+      { table: "leads", queryKeys: [["now-hq-leads"], ["hud_attention_counts"]] },
+      { table: "workflow_definitions", queryKeys: [["workflow-definitions-active"]] },
+    ],
+    "now-hq-workflow-sync"
+  );
 
   const cards = useMemo(() => {
     const actionCards = (actionItems as any[]).map((item) => buildActionItemWorkflowCard(item, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
-    const jobCards = (jobs as any[]).map((job) => buildJobWorkflowCard(job, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
+    const alertCards = (workflowAlerts as any[]).map((alert) => buildWorkflowAlertCard(alert, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
+    const alertedJobIds = new Set((workflowAlerts as any[]).map((alert) => alert.job_id).filter(Boolean));
+    const jobCards = (jobs as any[])
+      .filter((job) => !alertedJobIds.has(job.id))
+      .map((job) => buildJobWorkflowCard(job, workflowTemplates))
+      .filter(Boolean) as WorkflowNowCard[];
     const estimateCards = (estimates as any[]).map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const leadCards = (leads as any[]).map((lead) => buildLeadWorkflowCard(lead, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
-    return [...actionCards, ...jobCards, ...estimateCards, ...leadCards].sort(workflowSort);
-  }, [actionItems, jobs, estimates, leads, workflowTemplates]);
+    return [...alertCards, ...actionCards, ...jobCards, ...estimateCards, ...leadCards].sort(workflowSort);
+  }, [actionItems, workflowAlerts, jobs, estimates, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || jobsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
   const humanCards = cards.filter(isHumanNeeded);
   const firstCard = humanCards[0] || cards[0] || null;
   const remainingCards = firstCard ? humanCards.filter((card) => card.id !== firstCard.id).slice(0, 12) : [];
@@ -393,6 +415,7 @@ export default function NowHQ() {
     pastDue: cards.filter((card) => card.group === "past_due").length,
     closeout: cards.filter((card) => card.group === "closeout").length,
     leads: cards.filter((card) => card.workflowType === "lead").length,
+    blocked: cards.filter((card) => card.recordType === "alert").length,
   };
 
   return (

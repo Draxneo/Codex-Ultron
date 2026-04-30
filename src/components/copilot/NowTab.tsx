@@ -43,6 +43,7 @@ function TeamMessagesNowCard() {
       const { data, error } = await supabase
         .from("team_notifications" as any)
         .select("id, title, body, related_entity_id, created_at")
+        .eq("user_id", user.id)
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(5);
@@ -57,6 +58,7 @@ function TeamMessagesNowCard() {
     const { error } = await supabase
       .from("team_notifications" as any)
       .update({ read_at: new Date().toISOString() })
+      .eq("user_id", user.id)
       .is("read_at", null);
     if (error) {
       toast({ title: "Could not clear team alerts", description: error.message, variant: "destructive" });
@@ -65,6 +67,8 @@ function TeamMessagesNowCard() {
     toast({ title: "Team alerts cleared" });
     qc.invalidateQueries({ queryKey: ["now-team-notifications", user.id] });
     qc.invalidateQueries({ queryKey: ["side-rail-team-notifications", user.id] });
+    qc.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+    qc.invalidateQueries({ queryKey: ["intake-team-notifications", user.id] });
   };
 
   if (notifications.length === 0) return null;

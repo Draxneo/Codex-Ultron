@@ -136,6 +136,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [techPhoneFilter, setTechPhoneFilter] = useState<Set<string> | null>(null);
+  const [reconnectSeq, setReconnectSeq] = useState(0);
 
   // Fetch employees + customers to build a phone→contact lookup
   useEffect(() => {
@@ -489,8 +490,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           console.warn("SMS realtime channel error, reconnecting...", status);
           supabase.removeChannel(channel);
-          // Will re-subscribe on next effect cycle
           fetchMessages();
+          setReconnectSeq((value) => value + 1);
         }
       });
 
@@ -500,6 +501,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         console.warn("SMS realtime channel not joined, triggering reconnect");
         supabase.removeChannel(channel);
         fetchMessages();
+        setReconnectSeq((value) => value + 1);
       }
     }, 30_000);
 
@@ -507,7 +509,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       clearInterval(heartbeat);
       supabase.removeChannel(channel);
     };
-  }, [fetchMessages, role, setThreadStatus, techPhoneFilter, disabled]);
+  }, [fetchMessages, role, setThreadStatus, techPhoneFilter, disabled, userId, reconnectSeq]);
 
   // Resolve a phone number to a contact via DB fields first, then client-side lookup
   const resolveContact = useCallback(

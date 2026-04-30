@@ -14,7 +14,7 @@ import { useSoftphoneContext } from "./SoftphoneProvider";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { playDtmfTone } from "@/lib/softphoneAudio";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanySetting } from "@/lib/companySettings";
 import { useTelephonyMode } from "@/hooks/useTelephonyMode";
@@ -76,6 +76,7 @@ function timeAgo(value: string) {
 
 function TeamDispatchTextPanel() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: notifications = [] } = useQuery({
     queryKey: ["side-rail-team-notifications", user?.id],
@@ -84,6 +85,7 @@ function TeamDispatchTextPanel() {
       const { data, error } = await supabase
         .from("team_notifications" as any)
         .select("id, type, title, body, related_entity_id, created_at")
+        .eq("user_id", user.id)
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(8);
@@ -149,11 +151,16 @@ function TeamDispatchTextPanel() {
     const { error } = await supabase
       .from("team_notifications" as any)
       .update({ read_at: new Date().toISOString() })
+      .eq("user_id", user.id)
       .is("read_at", null);
     if (error) {
       toast({ title: "Team alerts stayed unread", description: error.message, variant: "destructive" });
       return;
     }
+    queryClient.invalidateQueries({ queryKey: ["side-rail-team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["now-team-notifications", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["intake-team-notifications", user.id] });
     toast({ title: "Team alerts cleared" });
   };
 
