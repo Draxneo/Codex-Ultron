@@ -95,7 +95,9 @@ export function DatabaseHygienePanel() {
   });
 
   const cleanupCandidates = data?.cleanup_candidates ?? [];
-  const cleanupCount = cleanupCandidates.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const cleanupCount = cleanupCandidates
+    .filter((item) => !item.action.toLowerCase().includes("review"))
+    .reduce((sum, item) => sum + Number(item.count || 0), 0);
   const topTables = data?.top_tables ?? [];
   const policies = data?.policies ?? [];
   const lastRun = data?.last_runs?.[0];
@@ -131,7 +133,7 @@ export function DatabaseHygienePanel() {
               <Trash2 className="h-4 w-4" /> Ready for cleanup
             </div>
             <p className="mt-2 text-2xl font-bold">{cleanupCount.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">rows in approved cleanup buckets</p>
+            <p className="text-sm text-muted-foreground">rows in approved cleanup buckets, not review-only import data</p>
           </div>
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">

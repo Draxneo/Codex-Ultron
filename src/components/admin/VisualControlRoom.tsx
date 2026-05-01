@@ -34,8 +34,11 @@ type CountResult = {
 };
 
 const CURRENT_LOOKBACK_DAYS = 7;
+const DISPATCH_LOOKBACK_DAYS = 14;
 
 const recentCutoff = () => new Date(Date.now() - CURRENT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+const dispatchCutoff = () => new Date(Date.now() - DISPATCH_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+const todayDate = () => new Date().toISOString().slice(0, 10);
 
 async function countRows(
   key: string,
@@ -200,7 +203,7 @@ export function VisualControlRoom() {
         countRows(
           "outbound-drafts",
           "Draft texts not sent",
-          `Current draft texts from the last ${CURRENT_LOOKBACK_DAYS} days that still need approval or cleanup.`,
+          `Real draft texts from the last ${CURRENT_LOOKBACK_DAYS} days that still need approval or cleanup.`,
           "outbound_drafts",
           MessageSquareWarning,
           "watch",
@@ -208,11 +211,12 @@ export function VisualControlRoom() {
             q
               .in("status", ["pending", "auto_pending", "queued_retry", "failed"])
               .gte("created_at", recentCutoff())
+              .not("body", "eq", "")
         ),
         countRows(
           "dispatch-gaps",
-          "Jobs missing dispatch basics",
-          "Jobs that appear active but are missing schedule, assignment, or address details.",
+          "Current jobs missing basics",
+          "Recent or upcoming jobs missing a date, assigned tech, or usable address.",
           "jobs",
           Truck,
           "watch",
@@ -220,14 +224,15 @@ export function VisualControlRoom() {
             q
               .not("status", "in", '("completed","complete","canceled","cancelled","archived","invoiced","done","paid","closed")')
               .or("scheduled_date.is.null,assigned_to.is.null,address.is.null")
+              .or(`created_at.gte.${dispatchCutoff()},scheduled_date.gte.${todayDate()}`)
         ),
         countRows(
           "hcp-residue",
-          "Old import residue",
-          "Housecall Pro attachment records that still need archive cleanup.",
+          "Import attachment review",
+          "Housecall Pro attachment records that need review before we call the import finished.",
           "hcp_attachments",
           Database,
-          "watch",
+          "quiet",
           (q) => q.in("archive_status", ["failed", "metadata", "missing"])
         ),
         countRows(
@@ -336,9 +341,9 @@ export function VisualControlRoom() {
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <JourneyStep title="Talk to customer" helper="Calls, texts, intake" icon={PhoneCall} count={checks.find((c) => c.key === "failed-sms")?.count ?? 0} />
           <JourneyStep title="Create the work" helper="NOW cards and approvals" icon={ShieldAlert} count={checks.find((c) => c.key === "workflow-alerts")?.count ?? 0} />
-          <JourneyStep title="Run the day" helper="Schedule and dispatch gaps" icon={Truck} count={checks.find((c) => c.key === "dispatch-gaps")?.count ?? 0} />
+          <JourneyStep title="Run the day" helper="Current dispatch gaps" icon={Truck} count={checks.find((c) => c.key === "dispatch-gaps")?.count ?? 0} />
           <JourneyStep title="Route and ETA" helper="Route messages waiting" icon={Route} count={checks.find((c) => c.key === "route-queue")?.count ?? 0} />
-          <JourneyStep title="Imported history" helper="Old data cleanup" icon={Database} count={checks.find((c) => c.key === "hcp-residue")?.count ?? 0} />
+          <JourneyStep title="Imported history" helper="HCP records to review" icon={Database} count={checks.find((c) => c.key === "hcp-residue")?.count ?? 0} />
           <JourneyStep title="Hidden follow-up" helper="Snoozed or acknowledged" icon={Clock3} count={checks.find((c) => c.key === "hidden-cards")?.count ?? 0} />
         </CardContent>
       </Card>
