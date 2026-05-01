@@ -124,6 +124,8 @@ export function usePricingFormulas() {
   return {
     formulas: query.data || [],
     isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
     upsertFormula,
     getFormula,
     calculatePrices,

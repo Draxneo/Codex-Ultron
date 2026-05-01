@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Zap, ArrowLeft, Send, Link2, Loader2, ExternalLink, FileText, Upload, Eye, Sparkles, MessageSquare } from "lucide-react";
+import { AlertTriangle, Copy, Zap, ArrowLeft, Send, Link2, Loader2, ExternalLink, FileText, Upload, Eye, Sparkles, MessageSquare } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -53,6 +53,12 @@ const LOCATION_ORIENTATIONS: Record<string, string[]> = {
   Closet: ["Multiposition", "Vertical"],
 };
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function QuickQuote() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,7 +79,7 @@ export default function QuickQuote() {
   // Presentation state
   const [presentationToken, setPresentationToken] = useState<string | null>(null);
   const createPresentation = useCreatePresentation();
-  const { formulas } = usePricingFormulas();
+  const { formulas, isError: pricingError, error: pricingQueryError } = usePricingFormulas();
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
   const [pushingId, setPushingId] = useState<string | null>(null);
   const createQuickQuoteLink = useCreateQuickQuoteLink();
@@ -108,13 +114,14 @@ export default function QuickQuote() {
   };
 
   // Load company contact info for the rendered quote
-  const { data: company } = useQuery<CompanyContact>({
+  const { data: company, isError: companyError, error: companyQueryError } = useQuery<CompanyContact>({
     queryKey: ["company_contact_for_quote"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("company_settings")
         .select("key, value")
         .in("key", ["company_name", "company_phone", "company_address", "company_city", "company_state", "company_zip", "tacla_number"]);
+      if (error) throw error;
       const map: Record<string, string> = {};
       for (const row of data || []) map[(row as any).key] = (row as any).value;
       return {
@@ -130,7 +137,7 @@ export default function QuickQuote() {
   });
 
   // Fetch all matchups once
-  const { data: allMatchups = [], isLoading } = useQuery({
+  const { data: allMatchups = [], isLoading, isError: matchupsError, error: matchupsQueryError } = useQuery({
     queryKey: ["equipment_matchups_all"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -253,6 +260,12 @@ export default function QuickQuote() {
   const handleSystemTypeChange = (v: string) => { setSystemType(v); setTier(""); setLocation(""); setPresentationToken(null); };
   const handleTierChange = (v: string) => { setTier(v === "__any__" ? "" : v); setLocation(""); setPresentationToken(null); };
   const handleLocationChange = (v: string) => { setLocation(v); setPresentationToken(null); };
+
+  const quoteDataIssues = [
+    matchupsError ? `equipment database (${errorMessage(matchupsQueryError)})` : null,
+    pricingError ? `pricing formulas (${errorMessage(pricingQueryError)})` : null,
+    companyError ? `company contact settings (${errorMessage(companyQueryError)})` : null,
+  ].filter(Boolean);
 
   const formatQuoteText = (m: EquipmentMatchup) => {
     const rendered = buildRendered(m);
@@ -599,6 +612,20 @@ export default function QuickQuote() {
             </span>
           )}
         </div>
+
+        {quoteDataIssues.length > 0 ? (
+          <Card className="border-amber-300 bg-amber-50 text-amber-950">
+            <CardContent className="flex gap-3 py-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Quote Builder is open, but part of the quote data did not load.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Missing {quoteDataIssues.join(", ")}. Refresh before texting a customer or copying a final quote.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={draftOrder} strategy={verticalListSortingStrategy}>
