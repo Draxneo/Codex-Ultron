@@ -48,7 +48,7 @@ import {
   type WorkflowType,
 } from "@/lib/workflowNow";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
-import { APP_ACTION_GO_LIVE_ISO, CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
+import { APP_ACTION_GO_LIVE_ISO, CLOSED_CART_STATUS_FILTER, CLOSED_LEAD_STATUS_FILTER } from "@/lib/appLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
@@ -444,7 +444,7 @@ export default function NowHQ() {
       const { data, error } = await supabase
         .from("leads" as any)
         .select("*")
-        .not("status", "in", '("converted","lost","closed")')
+        .not("status", "in", CLOSED_LEAD_STATUS_FILTER)
         .gte("created_at", NOW_HQ_LAUNCH_CUTOFF)
         .order("created_at", { ascending: false })
         .limit(200);

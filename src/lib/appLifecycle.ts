@@ -48,3 +48,16 @@ export const CLOSED_CART_STATUSES = [
 ] as const;
 
 export const CLOSED_CART_STATUS_FILTER = '("canceled","cancelled","declined","paid")';
+
+export const CLOSED_LEAD_STATUSES = [
+  "archived",
+  "canceled",
+  "cancelled",
+  "closed",
+  "converted",
+  "done",
+  "lost",
+  "nurture",
+] as const;
+
+export const CLOSED_LEAD_STATUS_FILTER = '("archived","canceled","cancelled","closed","converted","done","lost","nurture")';

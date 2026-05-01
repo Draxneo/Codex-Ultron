@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, isBefore, parseISO } from "date-fns";
 import { getExpectedJobItems, type ExpectedJobItem } from "@/lib/expectedJobItems";
-import { NOW_HQ_LAUNCH_CUTOFF } from "@/lib/appLifecycle";
+import { CLOSED_LEAD_STATUSES, NOW_HQ_LAUNCH_CUTOFF } from "@/lib/appLifecycle";
 
 export type WorkflowType = "intake" | "estimate" | "install" | "service" | "lead";
 export type WorkflowOwner = "office" | "tech" | "customer" | "system";
@@ -493,7 +493,7 @@ export function buildEstimateWorkflowCard(estimate: any, templateOverrides?: Wor
 
 export function buildLeadWorkflowCard(lead: any, templateOverrides?: WorkflowTemplateMap): WorkflowNowCard | null {
   const status = normalized(lead.status || "new");
-  if (["converted", "lost", "closed"].includes(status)) return null;
+  if ((CLOSED_LEAD_STATUSES as readonly string[]).includes(status)) return null;
   if (isLegacyLeadImport(lead)) return null;
 
   const stepIndex = status === "new"
