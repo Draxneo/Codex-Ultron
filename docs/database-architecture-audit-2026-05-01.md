@@ -79,6 +79,19 @@ These are read windows, not new places to store facts. Calls still live in `call
 
 Do not use these views for blind whole-database totals. Use recent/filtered reads or the communication RPC. Big dashboard counts should use small purpose-built count queries so the owner dashboard stays fast.
 
+## Intake Wiring Pass
+
+Commit `f462e12` starts moving Intake and Jarvis onto the communication read model:
+
+- Intake now loads `get_unified_communications(...)` through `useUnifiedCommunications`.
+- Existing call and SMS controls remain in place so sending, reading, and replying do not change behavior.
+- Intake cards are enriched with the canonical source row when one exists.
+- Marking a card handled now uses `mark_intake_communication_handled(...)` instead of hand-writing a status row from the screen.
+- Jarvis context receives the canonical communication id/source/job/customer context when the operator asks Jarvis about a selected call or text.
+- `jarvis-context-builder` now prefers `get_unified_communications(...)` for recent call/text history, with a fallback to the older raw reads if the read model fails.
+
+This is the correct transition pattern: the UI can keep working while the source-of-truth read path is centralized underneath it.
+
 ## Merge Candidates
 
 The main real duplication is team communications:
