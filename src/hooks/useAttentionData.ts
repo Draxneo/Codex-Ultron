@@ -117,7 +117,8 @@ function useAttentionCounts() {
         supabase.from("customer_invoices").select("id", { count: "exact", head: true })
           .eq("status", "sent")
           .lt("sent_at", sevenDaysAgo.toISOString())
-          .is("paid_at", null),
+          .is("paid_at", null)
+          .gte("created_at", GO_LIVE),
 
         // 8: Missing site visit photos
         supabase.from("jobs").select("id", { count: "exact", head: true })
