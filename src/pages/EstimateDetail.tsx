@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   BookOpen,
@@ -98,6 +99,12 @@ function money(value: number | null | undefined) {
   return `$${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 function EstimateOptionsWorkbench({
   estimateId,
   linkedJobId,
@@ -110,7 +117,7 @@ function EstimateOptionsWorkbench({
   onBuildQuote: () => void;
 }) {
   const [activeOptionKey, setActiveOptionKey] = useState<string | null>(null);
-  const { data: lineItems, isLoading } = useQuery({
+  const { data: lineItems, isLoading, isError: lineItemsError, error: lineItemsQueryError } = useQuery({
     queryKey: ["estimate_line_items", estimateId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -199,7 +206,19 @@ function EstimateOptionsWorkbench({
         </div>
       </div>
 
-      {isLoading ? (
+      {lineItemsError ? (
+        <div className="m-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <div className="flex gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Estimate options did not load.</p>
+              <p className="mt-1 text-xs leading-relaxed">
+                {errorMessage(lineItemsQueryError)}. Refresh before presenting or converting this estimate.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-2 p-4">
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
@@ -421,20 +440,37 @@ function MobileActionPill({
   );
 }
 
+function EstimateDataWarning({ issues }: { issues: string[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+      <div className="flex gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p className="font-semibold">Estimate opened, but part of the customer picture did not load.</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            Missing {issues.join(", ")}. Refresh before texting, presenting, approving, or converting this estimate.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EstimateDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { data: estimate, isLoading } = useEstimate(id);
-  const { data: linkedCustomer } = useCustomer(estimate?.customer_id || undefined);
+  const { data: estimate, isLoading, isError: estimateError, error: estimateQueryError } = useEstimate(id);
+  const { data: linkedCustomer, isError: customerError, error: customerQueryError } = useCustomer(estimate?.customer_id || undefined);
   const updateStatus = useUpdateEstimateStatus();
   const [review, setReview] = useState<EstimateReview | null>(null);
   const [reviewLoading, setReviewLoading] = useState(true);
   const [linkedJobId, setLinkedJobId] = useState<string | null>(null);
   const [convertingToJob, setConvertingToJob] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { data: presentations } = usePresentationsForEstimate(id);
-  const { data: customerResponses } = useResponsesForEstimate(id);
+  const { data: presentations, isError: presentationsError, error: presentationsQueryError } = usePresentationsForEstimate(id);
+  const { data: customerResponses, isError: responsesError, error: responsesQueryError } = useResponsesForEstimate(id);
   const estimateStatus = estimate?.work_status || estimate?.status || "new";
   const expectedItems = useMemo(
     () => estimate ? getExpectedJobItems({ ...estimate, job_type: "estimate", status: estimateStatus }) : [],
@@ -477,11 +513,13 @@ export default function EstimateDetail() {
     );
   }
 
-  if (!estimate || !id) {
+  if (estimateError || !estimate || !id) {
     return (
       <div className="min-h-screen bg-background">
         {!isMobile && <AppHeader />}
-        <main className="p-4 text-center text-muted-foreground">Estimate not found</main>
+        <main className="p-4 text-center text-muted-foreground">
+          {estimateQueryError ? errorMessage(estimateQueryError) : "Estimate not found"}
+        </main>
       </div>
     );
   }
@@ -530,6 +568,11 @@ export default function EstimateDetail() {
   if (customerEmail) estimateQuoteParams.set("customer_email", customerEmail);
   const buildEstimateOption = () => navigate(`/quick-quote?${estimateQuoteParams.toString()}`);
   const desktopPresentationUrl = latestPresentationToken ? `${window.location.origin}/presentation/${latestPresentationToken}` : null;
+  const estimateDataIssues = [
+    customerError ? `customer details (${errorMessage(customerQueryError)})` : null,
+    presentationsError ? `presentation links (${errorMessage(presentationsQueryError)})` : null,
+    responsesError ? `customer approval responses (${errorMessage(responsesQueryError)})` : null,
+  ].filter(Boolean);
 
   const handleConvert = async () => {
     setConvertingToJob(true);
@@ -639,6 +682,8 @@ export default function EstimateDetail() {
         </div>
 
         <main className="mx-auto w-full max-w-2xl space-y-3 px-3 pt-3">
+          <EstimateDataWarning issues={estimateDataIssues} />
+
           <TechCollapsibleCard icon={User2} title="Customer" iconBg="bg-blue-500/10" iconColor="text-blue-500" collapsible={false}>
             <TechCustomerCard
               customerId={estimate.customer_id || null}
@@ -811,6 +856,8 @@ export default function EstimateDetail() {
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-4">
+        <EstimateDataWarning issues={estimateDataIssues} />
+
         <div className="grid grid-cols-12 gap-4">
           <aside className="col-span-12 space-y-3 lg:col-span-3">
             <JobV2CustomerCard

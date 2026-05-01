@@ -23,13 +23,19 @@ import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TechJobDetail from "@/pages/TechJobDetail";
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  const { data: job, isLoading, isError } = useJob(id!);
-  const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
+  const { data: job, isLoading, isError, error: jobQueryError } = useJob(id!);
+  const { data: linkedCustomer, isError: customerError, error: customerQueryError } = useCustomer(job?.customer_id || undefined);
   const invoiceRef = useRef<HTMLDivElement>(null);
   const lineItemsRef = useRef<HTMLDivElement>(null);
 
@@ -74,7 +80,9 @@ export default function JobDetail() {
         <main className="max-w-xl mx-auto px-6 py-16 text-center">
           <AlertTriangle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
           <h1 className="text-xl font-semibold">Job not found</h1>
-          <p className="text-sm text-muted-foreground mt-2">This job may have been deleted, moved, or the link is invalid.</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {jobQueryError ? errorMessage(jobQueryError) : "This job may have been deleted, moved, or the link is invalid."}
+          </p>
         </main>
       </div>
     );
@@ -119,6 +127,20 @@ export default function JobDetail() {
       <JobV2Header job={job} customerName={customerName} customerId={job.customer_id} />
 
       <main className="px-6 py-4 max-w-[1600px] mx-auto">
+        {customerError ? (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            <div className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Job opened, but linked customer details did not load.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  {errorMessage(customerQueryError)}. Refresh before dispatching, texting, invoicing, or collecting payment.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-12 gap-4">
           {/* LEFT COLUMN — Customer + Sidebar */}
           <aside className="col-span-12 lg:col-span-3 space-y-3">
