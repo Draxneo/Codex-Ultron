@@ -43,6 +43,9 @@ type RetentionPolicy = {
   retention_days: number | null;
   enabled: boolean;
   notes?: string | null;
+  app_status?: string | null;
+  consolidation_group?: string | null;
+  architecture_note?: string | null;
 };
 
 type CleanupRun = {
@@ -81,6 +84,24 @@ function toneForAction(action?: string | null) {
   if (action === "keep") return "outline" as const;
   if (action === "review") return "secondary" as const;
   return "default" as const;
+}
+
+function statusLabel(status?: string | null) {
+  if (status === "current") return "current app";
+  if (status === "protected_import") return "protected import";
+  if (status === "runtime_cache") return "runtime/cache";
+  if (status === "future_placeholder") return "future/empty";
+  if (status === "merge_candidate") return "merge candidate";
+  if (status === "archive") return "archive";
+  return "review";
+}
+
+function toneForStatus(status?: string | null) {
+  if (status === "current") return "outline" as const;
+  if (status === "protected_import") return "secondary" as const;
+  if (status === "runtime_cache") return "default" as const;
+  if (status === "future_placeholder" || status === "merge_candidate") return "secondary" as const;
+  return "secondary" as const;
 }
 
 export function DatabaseHygienePanel() {
@@ -208,17 +229,26 @@ export function DatabaseHygienePanel() {
                     <p className="font-medium">{policy.table_name}</p>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">{policy.category}</p>
                   </div>
-                  {policy.enabled ? (
-                    <Badge variant="outline" className="gap-1 text-emerald-700 dark:text-emerald-300">
-                      <CheckCircle2 className="h-3 w-3" /> on
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="gap-1">
-                      <Archive className="h-3 w-3" /> review
-                    </Badge>
-                  )}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge variant={toneForStatus(policy.app_status)}>{statusLabel(policy.app_status)}</Badge>
+                    {policy.enabled ? (
+                      <Badge variant="outline" className="gap-1 text-emerald-700 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3 w-3" /> on
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="gap-1">
+                        <Archive className="h-3 w-3" /> review
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{policy.business_use}</p>
+                {policy.architecture_note ? (
+                  <p className="mt-2 rounded-md border bg-background/60 p-2 text-xs text-muted-foreground">{policy.architecture_note}</p>
+                ) : null}
+                {policy.consolidation_group ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Review group: {policy.consolidation_group}</p>
+                ) : null}
                 <p className="mt-2 text-sm font-medium">
                   {actionLabel(policy.retention_action)}
                   {policy.retention_days ? ` after ${policy.retention_days} days` : ""}
