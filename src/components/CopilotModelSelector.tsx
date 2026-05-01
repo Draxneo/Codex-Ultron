@@ -52,7 +52,7 @@ export function CopilotModelSelector() {
     const opt = MODEL_OPTIONS.find((m) => m.id === value);
     toast({
       title: "Model updated",
-      description: `Copilot will now use ${opt?.label || value}`,
+      description: `Jarvis will now use ${opt?.label || value}`,
     });
   };
 
@@ -61,10 +61,10 @@ export function CopilotModelSelector() {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Brain className="h-4 w-4 text-primary" />
-          Copilot AI Model
+          Jarvis AI Model
         </CardTitle>
         <CardDescription className="text-xs">
-          Choose which AI model powers the copilot.
+          Choose which AI model powers Jarvis.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

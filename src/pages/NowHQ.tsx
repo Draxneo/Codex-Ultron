@@ -861,7 +861,7 @@ export default function NowHQ() {
                 <div className="space-y-4">
                   <div>
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Do this now</h2>
-                    <p className="text-sm text-muted-foreground">This is the top card Jarvis thinks needs human attention.</p>
+                    <p className="text-sm text-muted-foreground">This is the first card Jarvis wants someone to check.</p>
                   </div>
                   {isLoading ? (
                     <Skeleton className="h-64 w-full rounded-lg" />

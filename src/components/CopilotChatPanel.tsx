@@ -1239,7 +1239,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
               onBlur={handleInputBlur}
               onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === "Enter" && !e.shiftKey) smartCopilotSend(); }}
               onPaste={handlePaste}
-              placeholder={compact ? "Ask Copilot..." : "Ask about jobs, tasks, or operations..."}
+              placeholder={compact ? "Ask Jarvis..." : "Ask Jarvis about jobs, tasks, or operations..."}
               className="flex-1"
               disabled={chatLoading || copilotPolishing}
             />
