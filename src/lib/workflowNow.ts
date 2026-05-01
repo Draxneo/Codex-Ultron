@@ -640,7 +640,7 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
     totalSteps: template.length,
     dueAt: item.created_at,
     progress: progressFromStep(stepIndex + 1, template.length),
-    stuckReason: item.suggested_action || item.description || "Jarvis needs a human to approve the next move.",
+    stuckReason: item.suggested_action || item.description || "Jarvis needs someone to approve the next move.",
     jarvisRecommendation:
       "Review the latest call/text context. If the customer changed direction, this same card should be updated instead of creating a duplicate.",
     tags: [workflowType, item.category, item.priority, lastEvidence].filter(Boolean),

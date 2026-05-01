@@ -200,7 +200,7 @@ export function VisualOperationsSettingsCard() {
             <div>
               <p className="text-sm font-semibold">When should JARVIS call something stuck?</p>
               <p className="text-xs text-muted-foreground">
-                These dials control when workflow cards need a human instead of silently sitting.
+                These dials control when Jarvis should raise his hand instead of letting work sit.
               </p>
             </div>
           </div>

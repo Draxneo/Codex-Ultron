@@ -155,7 +155,7 @@ export function VisualControlRoom() {
       ] = await Promise.all([
         countRows(
           "workflow-alerts",
-          "Workflow cards needing eyes",
+          "Cards waiting on a person",
           `Cards from the last ${CURRENT_LOOKBACK_DAYS} days that Jarvis could not safely move forward by itself.`,
           "workflow_alerts",
           ShieldAlert,
@@ -285,7 +285,7 @@ export function VisualControlRoom() {
     refetchInterval: 60_000,
   });
 
-  const checks = data?.checks ?? [];
+  const checks = useMemo(() => data?.checks ?? [], [data?.checks]);
   const troubleCount = useMemo(
     () =>
       checks.filter((item) => !item.error && item.tone !== "quiet" && item.count > 0).reduce((sum, item) => sum + item.count, 0),
@@ -315,7 +315,7 @@ export function VisualControlRoom() {
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="rounded-lg border bg-card p-4">
             <p className="text-3xl font-bold">{troubleCount.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">current items worth checking</p>
+            <p className="text-sm text-muted-foreground">items that need a quick look</p>
           </div>
           <div className="rounded-lg border bg-card p-4">
             <p className="text-3xl font-bold">{wiringCount}</p>

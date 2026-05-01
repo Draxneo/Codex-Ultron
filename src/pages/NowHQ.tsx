@@ -878,7 +878,7 @@ export default function NowHQ() {
                       <CardContent className="flex flex-col items-center justify-center gap-3 p-12 text-center">
                         <CheckCircle2 className="h-9 w-9 text-emerald-500" />
                         <div>
-                          <p className="font-semibold">Nothing needs a human right now</p>
+                          <p className="font-semibold">Nothing needs review right now</p>
                           <p className="text-sm text-muted-foreground">We will show the next thing when it needs attention.</p>
                         </div>
                       </CardContent>

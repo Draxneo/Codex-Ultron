@@ -6,6 +6,8 @@
  */
 import { useCallback, useMemo } from "react";
 import { toE164 } from "@/lib/formatters";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const TELEPHONY_ROUTES = {
   calls: "/phone",
@@ -59,32 +61,29 @@ export function useTelephonyMode() {
   const openCall = useCallback(
     async (phone: string, opts: OpenCallOptions = {}) => {
       const e164 = toE164(phone) || phone;
-      const params = new URLSearchParams({ to: e164, autodial: "1" });
-      if (opts.jobId) params.set("job", opts.jobId);
-      if (opts.customerId) params.set("customer", opts.customerId);
-      await launchTarget(`/phone?${params.toString()}`);
+      openPhoneConsole(e164, {
+        contactName: opts.contactName,
+        jobId: opts.jobId,
+        customerId: opts.customerId,
+        autoDial: false,
+      });
     },
-    [launchTarget],
+    [],
   );
 
   const openSms = useCallback(
     async (phone: string, opts: OpenSmsOptions = {}) => {
       const e164 = toE164(phone) || phone;
-      const params = new URLSearchParams({ phone: e164 });
-      if (opts.draft) params.set("draft", opts.draft);
-      await launchTarget(`/sms?${params.toString()}`);
+      openSmsComposer(e164, { draft: opts.draft });
     },
-    [launchTarget],
+    [],
   );
 
   const openNewSms = useCallback(
     async (phone?: string) => {
-      const params = new URLSearchParams();
-      if (phone) params.set("phone", toE164(phone) || phone);
-      const qs = params.toString();
-      await launchTarget(`/sms${qs ? `?${qs}` : ""}`);
+      openSmsComposer(phone ? toE164(phone) || phone : undefined);
     },
-    [launchTarget],
+    [],
   );
 
   const openMessages = useCallback(() => {

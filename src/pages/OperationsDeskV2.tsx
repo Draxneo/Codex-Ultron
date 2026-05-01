@@ -1437,7 +1437,7 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
           )}
           <Button variant="outline" className="w-full gap-2" onClick={() => navigate("/phone")}>
             <ExternalLink className="h-4 w-4" />
-            Open phone history
+            Open call inbox
           </Button>
         </div>
       </Section>
