@@ -556,10 +556,10 @@ function BoardCommandRail({
         )}
       </RailSection>
 
-      <RailSection title="Today At Risk" detail="When or where is not clean yet.">
+      <RailSection title="Day Snapshot" detail="Capacity, cleanup, and backlog for the selected day.">
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md border bg-background p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open slots</p>
             <p className="mt-1 text-xl font-semibold">{openSlots}</p>
           </div>
           <div className="rounded-md border bg-background p-3">
