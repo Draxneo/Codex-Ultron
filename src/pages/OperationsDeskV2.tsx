@@ -1059,6 +1059,7 @@ function ConversationList({
   items,
   selectedId,
   loading,
+  readModelError,
   search,
   tutorialMode,
   onSearch,
@@ -1067,6 +1068,7 @@ function ConversationList({
   items: DeskConversation[];
   selectedId?: string;
   loading: boolean;
+  readModelError?: unknown;
   search: string;
   tutorialMode: boolean;
   onSearch: (value: string) => void;
@@ -1191,6 +1193,11 @@ function ConversationList({
           />
         </div>
         <TeamInboxSignal />
+        {readModelError ? (
+          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
+            Calls and texts are showing, but customer/job matching is behind. Refresh or check Control Room if this stays on.
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-6" onScroll={handleQueueScroll}>
@@ -3343,7 +3350,7 @@ export default function OperationsDeskV2() {
     markAsRead: markSmsAsRead,
     setThreadStatus: setSmsThreadStatus,
   } = useSmsLogScoped();
-  const { communications: unifiedCommunications, loading: unifiedLoading } = useUnifiedCommunications({
+  const { communications: unifiedCommunications, loading: unifiedLoading, error: unifiedError } = useUnifiedCommunications({
     limit: 250,
     view: "all",
   });
@@ -3486,6 +3493,7 @@ export default function OperationsDeskV2() {
           items={conversations}
           selectedId={selected?.id}
           loading={loading}
+          readModelError={unifiedError}
           search={search}
           tutorialMode={tutorialMode}
           onSearch={setSearch}
