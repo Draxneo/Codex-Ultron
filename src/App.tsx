@@ -26,8 +26,6 @@ import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { onMainMessage } from "@/lib/electron";
 import { SmsComposerPopup } from "./components/SmsComposerPopup";
 
-import { BookingIntentAlert } from "./components/BookingIntentAlert";
-
 /** Redirect legacy /inbox sections to their split communication routes. */
 function InboxRedirectComponent() {
   const [sp] = useSearchParams();
@@ -85,6 +83,9 @@ const CallerInfoCenter = lazy(() =>
 );
 const IntakeActionCards = lazy(() =>
   import("./components/softphone/IntakeActionCards").then((module) => ({ default: module.IntakeActionCards }))
+);
+const BookingIntentAlert = lazy(() =>
+  import("./components/BookingIntentAlert").then((module) => ({ default: module.BookingIntentAlert }))
 );
 const Admin = lazy(() => import("./pages/Admin"));
 const SystemLog = lazy(() => import("./pages/SystemLog"));
@@ -518,7 +519,9 @@ const App = () => (
                       <SmsLogGate>
                         <AppRouter />
                         <AdminViewAsBar />
-                        <BookingIntentAlert />
+                        <Suspense fallback={null}>
+                          <BookingIntentAlert />
+                        </Suspense>
                       </SmsLogGate>
                     </AnnouncerProvider>
                   </SoftphoneProvider>
