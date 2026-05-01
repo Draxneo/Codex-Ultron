@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, isBefore, parseISO } from "date-fns";
 import { getExpectedJobItems, type ExpectedJobItem } from "@/lib/expectedJobItems";
+import { NOW_HQ_LAUNCH_CUTOFF } from "@/lib/appLifecycle";
 
 export type WorkflowType = "intake" | "estimate" | "install" | "service" | "lead";
 export type WorkflowOwner = "office" | "tech" | "customer" | "system";
@@ -54,7 +55,7 @@ export type WorkflowNowCard = {
   actionLinks?: WorkflowActionLink[];
 };
 
-export const NOW_HQ_LAUNCH_CUTOFF = "2026-04-30T00:00:00.000Z";
+export { NOW_HQ_LAUNCH_CUTOFF };
 
 export const ESTIMATE_WORKFLOW: WorkflowStepDefinition[] = [
   { key: "schedule_estimate", title: "Schedule Estimate Visit", owner: "office", mode: "auto" },

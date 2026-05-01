@@ -17,13 +17,13 @@ import { useAgreementVisitsDue, useExpiringAgreements, useServiceAgreements } fr
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { safeCount } from "@/lib/querySafety";
 import { ACTION_ITEM_STATUS } from "@/lib/actionItemLifecycle";
+import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
 import {
   AlertTriangle, CalendarX, MessageSquare, CreditCard, FileText, Shield,
   Receipt, FileCheck, Camera, ThumbsUp, CalendarCheck, ClipboardCheck, FileQuestion,
   MessageCircle, Bot, Inbox, MapPin, Eye, User, Crown,
 } from "lucide-react";
 
-const GO_LIVE = '2026-03-24';
 export const GLOBAL_ACTION_NEEDED_ROUTE = "/now";
 
 function useAttentionCounts() {
@@ -78,7 +78,7 @@ function useAttentionCounts() {
           .not("scheduled_date", "is", null)
           .neq("payment_method", "financed")
           .not("status", "in", '("done","invoiced","canceled")')
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 3: Finance paperwork
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -87,7 +87,7 @@ function useAttentionCounts() {
           .is("finance_paperwork_at", null)
           .not("assigned_to", "is", null)
           .not("status", "in", '("done","invoiced","canceled")')
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 4: Invoices not sent — fetch candidates, then exclude paid jobs locally.
         // This avoids generating a huge `not in (...)` URL when many paid invoices exist.
@@ -95,7 +95,7 @@ function useAttentionCounts() {
           .in("status", ["done", "in_progress"])
           .is("invoice_sent_at", null)
           .not("completion_form_sent_at", "is", null)
-          .gte("created_at", GO_LIVE)
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE)
           .limit(5000),
 
         // 5: Warranty not registered
@@ -103,7 +103,7 @@ function useAttentionCounts() {
           .eq("job_type", "install")
           .in("status", ["done", "invoiced"])
           .is("warranty_registered_at", null)
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 6: Inspection pending
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -111,14 +111,14 @@ function useAttentionCounts() {
           .eq("permit_required", true)
           .in("status", ["done", "invoiced"])
           .is("inspection_passed_at", null)
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 7: Unpaid invoices 7d+
         supabase.from("customer_invoices").select("id", { count: "exact", head: true })
           .eq("status", "sent")
           .lt("sent_at", sevenDaysAgo.toISOString())
           .is("paid_at", null)
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 8: Missing site visit photos
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -175,7 +175,7 @@ function useAttentionCounts() {
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .not("last_payment_error", "is", null)
           .not("status", "in", '("done","canceled")')
-          .gte("created_at", GO_LIVE),
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 22: Action items pending (JARVIS decision queue — replaces address_verify + jarvis_observer)
         supabase.from("action_items" as any).select("id", { count: "exact", head: true })

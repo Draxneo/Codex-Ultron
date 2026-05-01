@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 import { PAYMENT_STATUS_COLORS as STATUS_COLORS } from "@/lib/statusColors";
 
@@ -42,6 +43,7 @@ export default function Payments() {
         .eq("status", "sent")
         .lt("sent_at", sevenDaysAgo.toISOString())
         .is("paid_at", null)
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("sent_at", { ascending: true });
       if (error) throw error;
       return data || [];
