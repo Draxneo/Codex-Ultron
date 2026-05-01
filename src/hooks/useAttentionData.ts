@@ -17,7 +17,7 @@ import { useAgreementVisitsDue, useExpiringAgreements, useServiceAgreements } fr
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { safeCount } from "@/lib/querySafety";
 import { ACTION_ITEM_STATUS } from "@/lib/actionItemLifecycle";
-import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
+import { APP_ACTION_GO_LIVE_DATE, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 import {
   AlertTriangle, CalendarX, MessageSquare, CreditCard, FileText, Shield,
   Receipt, FileCheck, Camera, ThumbsUp, CalendarCheck, ClipboardCheck, FileQuestion,
@@ -54,7 +54,7 @@ function useAttentionCounts() {
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .lt("scheduled_date", today)
           .not("scheduled_date", "is", null)
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .is("completed_at", null)
           .not("hcp_status", "ilike", "%complete%")
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
@@ -64,13 +64,13 @@ function useAttentionCounts() {
           .is("scheduled_date", null)
           .neq("status", "on_hold")
           .or("needs_follow_up.is.null,needs_follow_up.eq.false")
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 1b: Waiting on Parts (on_hold status)
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .eq("status", "on_hold")
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 2: Deposits needed
@@ -80,7 +80,7 @@ function useAttentionCounts() {
           .not("assigned_to", "is", null)
           .not("scheduled_date", "is", null)
           .neq("payment_method", "financed")
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 3: Finance paperwork
@@ -89,7 +89,7 @@ function useAttentionCounts() {
           .eq("payment_method", "financed")
           .is("finance_paperwork_at", null)
           .not("assigned_to", "is", null)
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 4: Invoices not sent — fetch candidates, then exclude paid jobs locally.
@@ -127,7 +127,7 @@ function useAttentionCounts() {
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .eq("site_visit_missing", true)
           .is("photos_uploaded_at", null)
-          .not("status", "in", '("done","invoiced","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 9: Parts ready for pickup
@@ -178,7 +178,7 @@ function useAttentionCounts() {
         // 20: Payment failures (Stripe declines on active jobs)
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .not("last_payment_error", "is", null)
-          .not("status", "in", '("done","canceled")')
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 22: Action items pending (JARVIS decision queue — replaces address_verify + jarvis_observer)

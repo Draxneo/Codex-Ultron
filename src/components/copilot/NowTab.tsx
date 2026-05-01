@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { ActionItemCards } from "./ActionItemCards";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 import { ReminderBatchCard } from "./ReminderBatchCard";
 import { PendingSmsCard } from "./PendingSmsCard";
@@ -334,7 +335,7 @@ function UnmatchedInvoiceReviewPanel({ onBack }: { onBack: () => void }) {
         .from("jobs")
         .select("id, job_number, customer_name")
         .eq("scheduled_date", today)
-        .not("status", "in", '("completed","cancelled","invoiced","done")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .order("customer_name");
       if (error) throw error;
       return data || [];

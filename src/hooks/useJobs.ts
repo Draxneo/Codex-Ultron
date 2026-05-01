@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
+import { APP_ACTION_GO_LIVE_DATE, CLOSED_WORK_STATUSES, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 type CustomerFallback = {
   id: string;
@@ -95,7 +95,7 @@ export function useJobs() {
       const { data, error } = await supabase
         .from("jobs")
         .select("*")
-        .not("status", "in", '("canceled","cancelled","done","invoiced","completed","complete","closed")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .or(
           `scheduled_date.gte.${cutoff},and(scheduled_date.is.null,created_at.gte.${APP_ACTION_GO_LIVE_DATE}),and(status.in.("new","scheduled","in_progress","on_hold"),created_at.gte.${APP_ACTION_GO_LIVE_DATE})`
         )
@@ -231,7 +231,7 @@ export function useFollowUpJobs() {
         .from("jobs")
         .select("*")
         .eq("needs_follow_up", true)
-        .not("status", "in", '("done","invoiced","canceled")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .gte("created_at", APP_ACTION_GO_LIVE_DATE)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -253,13 +253,13 @@ export function useBacklogJobs() {
     queryKey: ["backlog_jobs"],
     staleTime: 30000,
     queryFn: async () => {
-      const doneStatuses = ["done", "invoiced", "canceled", "completed"];
+      const doneStatuses = new Set<string>(CLOSED_WORK_STATUSES);
 
       // Fetch jobs that belong in any of the 3 buckets
       const { data: jobs, error } = await supabase
         .from("jobs")
         .select("*")
-        .not("status", "in", '("done","invoiced","canceled","completed")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .or("scheduled_date.is.null,status.eq.on_hold,needs_follow_up.eq.true")
         .gte("created_at", APP_ACTION_GO_LIVE_DATE)
         .order("created_at", { ascending: false });
@@ -294,7 +294,7 @@ export function useBacklogJobs() {
 
       for (const job of finalJobs) {
         const status = job.status?.toLowerCase?.() ?? "";
-        if (doneStatuses.includes(status)) continue;
+        if (doneStatuses.has(status)) continue;
 
         // Bucket 1: Follow-Up (explicitly flagged)
         if (job.needs_follow_up) {

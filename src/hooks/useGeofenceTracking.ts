@@ -18,6 +18,7 @@ import { useCapacitor } from "./useCapacitor";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { geocodeAddress } from "@/lib/google-maps";
+import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 const GEOFENCE_RADIUS_M = 91; // ~100 yards
 const DISTANCE_FILTER_M = 50; // only process position if moved 50m+
@@ -78,7 +79,7 @@ export function useGeofenceTracking() {
         .select("id, address, customer_name, status")
         .eq("assigned_to", emp.name)
         .eq("scheduled_date", today)
-        .not("status", "in", '("done","invoiced","canceled")'),
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER),
       supabase
         .from("estimates")
         .select("id, address, customer_name, status")

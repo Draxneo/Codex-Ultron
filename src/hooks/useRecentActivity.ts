@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 export interface RecentActivityItem {
   id: string;
@@ -46,7 +47,7 @@ export function useRecentActivity(limit = 8) {
         supabase
           .from("jobs")
           .select("id, customer_name, customer_phone, customer_id, address, hcp_job_number, job_type, status, description, created_at, scheduled_date")
-          .not("status", "in", "(done,invoiced,canceled)")
+          .not("status", "in", CLOSED_WORK_STATUS_FILTER)
           .order("created_at", { ascending: false })
           .limit(limit),
       ]);

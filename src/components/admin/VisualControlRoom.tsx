@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatabaseHygienePanel } from "@/components/admin/DatabaseHygienePanel";
 import { SystemDriftPanel } from "@/components/admin/SystemDriftPanel";
+import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 type CountResult = {
   key: string;
@@ -224,7 +225,7 @@ export function VisualControlRoom() {
           "watch",
           (q) =>
             q
-              .not("status", "in", '("completed","complete","canceled","cancelled","archived","invoiced","done","paid","closed")')
+              .not("status", "in", CLOSED_WORK_STATUS_FILTER)
               .or("scheduled_date.is.null,assigned_to.is.null,address.is.null")
               .or(`created_at.gte.${dispatchCutoff()},scheduled_date.gte.${todayDate()}`)
         ),

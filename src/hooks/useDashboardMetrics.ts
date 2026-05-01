@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
+import { APP_ACTION_GO_LIVE_DATE, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 export function useDashboardMetrics() {
   return useQuery({
@@ -22,7 +22,7 @@ export function useDashboardMetrics() {
         .select("id", { count: "exact", head: true })
         .not("invoice_sent_at", "is", null)
         .is("payment_collected_at", null)
-        .not("status", "in", '("canceled","cancelled","done","invoiced","completed","complete","closed","paid")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .gte("created_at", APP_ACTION_GO_LIVE_DATE);
       if (awaitingPaymentError) throw awaitingPaymentError;
 
@@ -40,7 +40,7 @@ export function useDashboardMetrics() {
       const { count: totalActive, error: activeError } = await supabase
         .from("jobs")
         .select("id", { count: "exact", head: true })
-        .not("status", "in", '("done","invoiced","canceled","cancelled","completed","complete","closed","paid")')
+        .not("status", "in", CLOSED_WORK_STATUS_FILTER)
         .gte("created_at", APP_ACTION_GO_LIVE_DATE);
       if (activeError) throw activeError;
 
