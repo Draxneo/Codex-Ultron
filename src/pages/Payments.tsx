@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
+import { errorMessage } from "@/lib/errorMessage";
 
 import { PAYMENT_STATUS_COLORS as STATUS_COLORS } from "@/lib/statusColors";
 
@@ -128,6 +129,18 @@ export default function Payments() {
             </CardContent>
           </Card>
         </div>
+
+        {summary.isError && (
+          <Card className="border-destructive/40 bg-destructive/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Payment summary needs a quick check.</p>
+                <p className="text-xs opacity-90">{errorMessage(summary.error)}. Refresh before trusting the payment totals.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
