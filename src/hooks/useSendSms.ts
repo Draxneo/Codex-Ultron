@@ -19,6 +19,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { appendSmsSignature } from "@/lib/smsSignature";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export interface SendSmsArgs {
   to: string;
@@ -58,6 +59,25 @@ export interface SendSmsResult {
 function genClientId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `c-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function logSmsSendFailure(args: SendSmsArgs, message: string, blocked = false) {
+  if (blocked) return;
+  const digits = String(args.to || "").replace(/\D/g, "");
+  void logClientSystemError({
+    sourceName: args.source || "client-sms",
+    message,
+    severity: "error",
+    context: {
+      channel: "sms",
+      to_last4: digits.slice(-4) || null,
+      job_id: args.jobId ?? null,
+      related_customer_id: args.relatedCustomerId ?? null,
+      related_vendor_id: args.relatedVendorId ?? null,
+      media_count: args.mediaUrls?.length || 0,
+      hitl_approved: !!args.hitlApproved,
+    },
+  });
 }
 
 /**
@@ -103,10 +123,17 @@ export async function sendSmsImpl(args: SendSmsArgs): Promise<SendSmsResult> {
     } catch {
       if ((data as any)?.error) msg = (data as any).error;
     }
+    logSmsSendFailure(args, msg);
     return { success: false, error: msg };
   }
-  if (data?.error) return { success: false, error: data.error };
-  if (data?.blocked) return { success: false, blocked: true, error: "Blocked by test mode" };
+  if (data?.error) {
+    logSmsSendFailure(args, data.error);
+    return { success: false, error: data.error };
+  }
+  if (data?.blocked) {
+    logSmsSendFailure(args, "Blocked by test mode", true);
+    return { success: false, blocked: true, error: "Blocked by test mode" };
+  }
   if (data?.queued) return { success: true, queued: true, sms_log_id: data.sms_log_id };
   return { success: true, sms_log_id: data?.sms_log_id, twilio_sid: data?.sid };
 }
