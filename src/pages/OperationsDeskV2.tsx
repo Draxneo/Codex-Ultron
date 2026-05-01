@@ -532,7 +532,7 @@ function callToDeskItem(conversation: CallConversation): DeskConversation {
     customerType: conversation.contactType,
     status: call.status || "logged",
     summary: callSummary(conversation),
-    detail: call.ai_summary || call.transcription || "Open this call to review context and decide the next dispatch action.",
+    detail: call.ai_summary || call.transcription || "Open this call to review what happened and decide the next step.",
     createdAt: call.created_at,
     timeLabel: call.time_ct || formatDateTime(call.created_at),
     unread: call.direction === "inbound" && !call.is_read,
@@ -552,7 +552,7 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
     customerType: conversation.contactType,
     status: conversation.status,
     summary: smsSummary(conversation),
-    detail: message.body || "Open this text to review context and reply.",
+    detail: message.body || "Open this text to read it and reply.",
     createdAt: message.created_at,
     timeLabel: message.time_ct || formatDateTime(message.created_at),
     unread: conversation.unreadCount > 0,
@@ -626,7 +626,7 @@ function isChannelOnlyText(value?: string | null) {
 
 function cleanConversationDetail(value?: string | null) {
   const text = String(value || "").trim();
-  if (/^open this (call|text)/i.test(text)) return "Review context and decide the next dispatch action.";
+  if (/^open this (call|text)/i.test(text)) return "Review what happened and decide the next step.";
   return text;
 }
 
@@ -1081,7 +1081,7 @@ function ConversationList({
         {tutorialMode ? (
           <StepHeader
             step="Step 1"
-            title="Start Here: Live Signals"
+            title="Start Here: New Calls & Texts"
             detail={hasSearch ? "Search the wider communication history." : "Pick the newest call or text, then move right."}
             icon={BellRing}
             tone="signal"
@@ -1096,7 +1096,7 @@ function ConversationList({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <BellRing className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold">Live Signals</h2>
+                <h2 className="text-sm font-semibold">Calls & Texts Coming In</h2>
                 <Badge variant="secondary">{currentViewLabel}</Badge>
               </div>
             </div>
@@ -1180,7 +1180,7 @@ function ConversationList({
                 const badges = getAttentionBadges(item);
                 const primaryBadge = badges[0] || null;
                 const name = item.name || formatPhone(item.phone) || item.phone;
-                const summaryText = isChannelOnlyText(item.summary) ? "Review context" : item.summary;
+                const summaryText = isChannelOnlyText(item.summary) ? "Review what happened" : item.summary;
                 const detailText = cleanConversationDetail(item.detail);
                 const isSelected = selectedId === item.id;
                 return (
@@ -1320,7 +1320,7 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
     const previousCalls = conversation.calls.filter((call) => call.id !== latestCall.id).slice(0, 2);
 
     return (
-      <Section title="Conversation Evidence" detail="Deepgram transcript and call context from the selected call.">
+      <Section title="Call Notes" detail="Recording notes and summary from this call.">
         <div className="space-y-3">
           {summary && (
             <div className="rounded-md border bg-primary/5 p-3">
@@ -1396,7 +1396,7 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
   const messages = conversation.messages.slice(-8);
 
   return (
-    <Section title="Conversation Evidence" detail="Recent SMS thread from the selected phone number.">
+    <Section title="Text Thread" detail="Recent texts from this phone number.">
       <div className="space-y-3">
         <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border bg-background p-3">
           {messages.length === 0 ? (
@@ -1605,7 +1605,7 @@ function InlineSmsReplyComposer({
 
   return (
     <section id="intake-inline-sms-reply">
-      <Section title="Reply to Latest Message" detail="Answer from Intake HQ without losing the customer context.">
+      <Section title="Reply to Latest Message" detail="Answer here while the customer details stay handy.">
       <div className="space-y-3">
         {latestInbound && (
           <div className="rounded-md border bg-muted/30 p-3">
@@ -1795,8 +1795,8 @@ function CustomerWorkspace({
         {tutorialMode ? (
           <StepHeader
             step="Step 2"
-            title="Understand the Customer"
-            detail="After you choose a signal, this area shows who they are, what happened, and why it matters."
+            title="See Who's Calling"
+            detail="Pick a call or text and we'll show who it is, what they need, and what to do next."
             icon={UserRound}
             tone="context"
           />
@@ -1804,7 +1804,7 @@ function CustomerWorkspace({
           <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2">
               <UserRound className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Customer Context</h2>
+              <h2 className="text-sm font-semibold">Customer Lookup</h2>
             </div>
           </div>
         )}
@@ -2042,7 +2042,7 @@ function CustomerWorkspace({
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={() => setJarvisDialogOpen(true)}>
               <Sparkles className="h-4 w-4" />
-              Jarvis context
+              Jarvis notes
             </Button>
             <Button size="sm" className="gap-2" onClick={markHandled} disabled={handling}>
               {handling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -2059,7 +2059,7 @@ function CustomerWorkspace({
               </Button>
             ) : (
               <div className="rounded-md border bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                Jarvis will prepare customer match or lead creation.
+                Jarvis will help match this person or start a new lead.
               </div>
             )}
           </div>
@@ -2097,11 +2097,11 @@ function CustomerWorkspace({
       )}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
-        <Section title="What happened" detail="The latest customer signal and the reason this is on the desk.">
+        <Section title="What happened" detail="The latest call or text and why it needs attention.">
           <div className="rounded-md border bg-card p-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-primary" />
-              Latest signal
+              Latest call or text
             </div>
             <p className="mt-2 line-clamp-5 text-sm leading-6 text-muted-foreground">
               {contactReason}
@@ -2114,7 +2114,7 @@ function CustomerWorkspace({
           </div>
         </Section>
 
-        <Section title="Active work and memory" detail="Enough context to decide without opening the full record.">
+        <Section title="Customer work history" detail="Recent jobs and estimates so you do not have to open the full record.">
           {overviewLoading ? (
             <Skeleton className="h-24 rounded-lg" />
           ) : !customer ? (
@@ -2149,7 +2149,7 @@ function CustomerWorkspace({
               )}
               {recentRecords.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent memory</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent jobs and quotes</p>
                   {recentRecords.map((row: any) => (
                     <div key={row.id} className="rounded-md border bg-muted/30 p-3">
                       <div className="flex items-center justify-between gap-2">
@@ -2196,7 +2196,7 @@ function CustomerWorkspace({
       <Dialog open={jarvisDialogOpen} onOpenChange={setJarvisDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Jarvis context</DialogTitle>
+            <DialogTitle>Jarvis notes</DialogTitle>
             <DialogDescription>
               Quick read on this conversation. Action cards live in Now HQ.
             </DialogDescription>
@@ -2210,7 +2210,7 @@ function CustomerWorkspace({
                 <p className="mt-1 text-xs text-muted-foreground">{formatPhone(selected.phone) || selected.phone}</p>
               </div>
               <div className="rounded-lg border bg-card p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What Jarvis thinks</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What this may need</p>
                 <p className="mt-1 text-sm font-semibold">{bookingSuggestion?.label || primaryAttention?.prefix || "Review conversation"}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{bookingSuggestion?.preferredTiming || "No timing preference captured yet"}</p>
               </div>
@@ -2317,8 +2317,8 @@ function ActionPanel({
     && !addressNeedsReview;
   const approvalState = !bookingSuggestion
     ? {
-        label: "Waiting for intent",
-        detail: "Jarvis is still listening for booking, update, or follow-up context.",
+        label: "Waiting to hear what they need",
+        detail: "Jarvis is still checking whether this is a booking, change, or follow-up.",
         className: "border-border bg-card text-foreground",
         icon: Sparkles,
       }
@@ -2521,8 +2521,8 @@ function ActionPanel({
         {tutorialMode ? (
           <StepHeader
             step="Step 3"
-            title="Jarvis + Now Card"
-            detail="Intake listens and talks. Now HQ owns the action card that gets approved, updated, or converted."
+            title="Next Step"
+            detail="Handle the call here. Approve the follow-up in Now HQ when it is ready."
             icon={Bot}
             tone="action"
             action={
@@ -2536,7 +2536,7 @@ function ActionPanel({
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Jarvis Context</h2>
+              <h2 className="text-sm font-semibold">Jarvis Notes</h2>
             </div>
             <Button type="button" variant="outline" size="sm" className="shrink-0 gap-2" onClick={askJarvisAboutSelection}>
               <Sparkles className="h-4 w-4" />
@@ -2547,7 +2547,7 @@ function ActionPanel({
       </div>
 
       <div className="space-y-3 p-3">
-        <Section title="Live Intake Context" detail="Talk here. The durable action belongs in Now HQ.">
+        <Section title="Live Call Details" detail="Use this while you talk. Put the follow-up in Now HQ.">
           {bookingSuggestion ? (
             <div className="space-y-3">
               <div className="rounded-md border bg-background p-3">
@@ -2572,7 +2572,7 @@ function ActionPanel({
                         {minimumReady ? "Ready for Now HQ review" : approvalState.label}
                       </p>
                       <p className="mt-1 text-xs leading-5 opacity-80">
-                        Jarvis should create or update one open Now card for this customer. If they call back and change direction, the same card should change with them.
+                        Jarvis should keep one follow-up card for this customer. If they call back and change direction, that same card should change with them.
                       </p>
                       <Button
                         className="mt-3 w-full gap-2"
@@ -2691,8 +2691,8 @@ function ActionPanel({
                 <div className="mt-3 flex items-start gap-2 rounded-md border bg-primary/5 p-3 text-xs text-muted-foreground">
                   <Briefcase className="mt-0.5 h-3.5 w-3.5 text-primary" />
                   <span>
-                    This is intake context only. The Now card is where we approve{" "}
-                    {bookingSuggestion.type === "book_estimate" ? "the estimate booking" : "the service workflow"} and hand it to{" "}
+                    This screen is for the call or text. Now HQ is where we approve{" "}
+                    {bookingSuggestion.type === "book_estimate" ? "the estimate booking" : "the service job"} and hand it to{" "}
                     <strong className="text-foreground">{bookingSuggestion.defaultOwner}</strong> when it is ready.
                   </span>
                 </div>
@@ -2706,8 +2706,8 @@ function ActionPanel({
                   {isSms && selected.direction === "inbound"
                     ? "Reply and decide whether this belongs on the board"
                     : isCall
-                      ? "Review call context and decide whether to book/update"
-                      : "Check customer context"}
+                      ? "Review the call and decide whether to book or update"
+                      : "Check this customer"}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{selected.summary}</p>
               </div>
@@ -2717,8 +2717,8 @@ function ActionPanel({
                 </div>
               )}
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Listening for booking, estimate, update, access note, pet warning, quote follow-up, warranty, or billing intent.
-                Once Jarvis has enough context, the open Now card should update instead of creating duplicate work.
+                Jarvis is checking for booking requests, estimate requests, reschedules, gate codes, pet notes, quote follow-ups, warranty questions, or billing questions.
+                If there is already a Now card open, Jarvis should update that card instead of making another one.
               </div>
               <Button variant="outline" className="w-full gap-2" onClick={() => navigate("/now")}>
                 <Zap className="h-4 w-4" />
@@ -2869,7 +2869,7 @@ function ManualActionPanel({
           <StepHeader
             step="Step 3"
             title="Manual Actions"
-            detail="Same customer context as AI Mode, but every action is operator-driven."
+            detail="Same customer information as AI Mode, but you press every button yourself."
             icon={UserRound}
             tone="action"
           />
@@ -2884,7 +2884,7 @@ function ManualActionPanel({
       </div>
 
       <div className="space-y-3 p-3">
-        <Section title="Selected Conversation" detail="Human Mode keeps context visible and makes you press the buttons.">
+        <Section title="Selected Conversation" detail="Human Mode keeps the call or text visible and lets you choose each action.">
           {!selected ? (
             <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               Select a call or text from the live inbox to use manual controls.
@@ -2952,7 +2952,7 @@ function ManualActionPanel({
           )}
         </Section>
 
-        <Section title="Manual Rule" detail="AI Mode prepares the answer. Human Mode exposes the macro buttons.">
+        <Section title="Manual Rule" detail="AI Mode prepares suggestions. Human Mode gives you the buttons directly.">
           <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
             Use this side when Jarvis is uncertain, offline, or you want to take over the intake by hand.
           </div>
@@ -3389,7 +3389,7 @@ export default function OperationsDeskV2() {
               <Badge variant="secondary">Communication Desk</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Talk, text, listen, and understand the customer. Now HQ owns the action cards.
+              Handle calls and texts here. Now HQ keeps track of what needs doing next.
             </p>
           </div>
           <div className="flex items-center gap-2">

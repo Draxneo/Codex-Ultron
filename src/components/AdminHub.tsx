@@ -124,7 +124,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
       description: tool.label === "Catalog & Pricebook"
         ? "Manage services, repairs, materials, equipment systems, AHRI details, and sales pricing."
         : tool.label === "JARVIS"
-          ? "Open the assistant workspace for context, permissions, and operational follow-up."
+          ? "Open the assistant workspace for notes, permissions, and office follow-up."
           : "Open this operational tool.",
       group: "Tools",
       icon: tool.icon,
@@ -283,7 +283,7 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">Recent Activity</h2>
-                  <p className="text-xs text-muted-foreground">Latest operational events and follow-up signals.</p>
+                  <p className="text-xs text-muted-foreground">Latest system activity and follow-ups.</p>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="gap-1.5">
                   <Link to="/dispatch">Open Dispatch HQ <ArrowRight className="h-4 w-4" /></Link>

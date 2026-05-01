@@ -31,7 +31,7 @@ const sections = [
 type Section = typeof sections[number]["id"];
 
 const sectionDescriptions: Record<Section, string> = {
-  core: "The live JARVIS control center: source of truth, company brains, tool drift, knowledge layers, and approval queues in one place.",
+  core: "The live JARVIS control center: company instructions, tools, knowledge, and approval queues in one place.",
   prompt: "The full system prompt defining JARVIS's internal assistant identity, rules, and context injections. Loaded from the database on every request.",
   knowledge: "Classification rules, routing logic, and reference data JARVIS uses to understand inbound emails and calls.",
   instructions: "Behavioral rules for how JARVIS briefs the team, formats action items, summarizes jobs, and handles internal requests. These override default behavior.",

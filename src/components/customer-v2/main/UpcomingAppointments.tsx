@@ -18,7 +18,7 @@ export function UpcomingAppointments({ appointments }: Props) {
         <h3 className="text-sm font-bold">Upcoming appointments</h3>
         <Button size="sm" variant="outline" className="gap-1 h-7" disabled title="Not wired yet">
           <Plus className="h-3.5 w-3.5" />
-          Job workflow pending
+          New job button not ready yet
         </Button>
       </div>
       {appointments.length === 0 ? (

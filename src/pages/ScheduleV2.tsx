@@ -250,7 +250,7 @@ function callConversationToItem(conversation: CallConversation): CommunicationIt
     name,
     phone: conversation.phoneNumber,
     summary: summarizeCallIntent(conversation),
-    detail: call.ai_summary || call.transcription || "Open the call context to review what happened and what dispatch should do next.",
+    detail: call.ai_summary || call.transcription || "Open the call to review what happened and what dispatch should do next.",
     time: call.time_ct || formatCallTime(call.created_at),
     createdAt: call.created_at,
     status: call.status || "logged",
@@ -269,7 +269,7 @@ function smsConversationToItem(conversation: SmsConversation): CommunicationItem
     name,
     phone: conversation.phoneNumber,
     summary: summarizeSmsIntent(conversation),
-    detail: latest.body || "Open the text context to review the latest message.",
+    detail: latest.body || "Open the text to review the latest message.",
     time: latest.time_ct || formatCallTime(latest.created_at),
     createdAt: latest.created_at,
     status: conversation.status,
@@ -481,20 +481,20 @@ function BoardCommandRail({
   return (
     <aside className="space-y-3">
       <RailSection
-        title={mode === "ai" ? "JARVIS Day Prep" : "Human Dispatch Controls"}
-        detail={mode === "ai" ? "Prepared moves wait for approval." : "Macro buttons for manual recovery."}
+        title={mode === "ai" ? "Today's Helper" : "Manual Dispatch Tools"}
+        detail={mode === "ai" ? "Jarvis points out what needs a quick yes or no." : "Use these buttons when you want to handle the board yourself."}
       >
         {mode === "ai" ? (
           <div className="space-y-3">
             <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <Sparkles className="h-4 w-4 text-primary" />
-                Prepared brief
+                Today's quick look
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {criticalItems.length === 0
-                  ? `${routeReadyCount} stops are route-ready. ${openSlots} likely openings remain.`
-                  : `${criticalItems.length} scheduled jobs need a tech or arrival window before routes are clean.`}
+                  ? `${routeReadyCount} stops have a tech and address. About ${openSlots} openings may still be available.`
+                  : `${criticalItems.length} scheduled job${criticalItems.length === 1 ? "" : "s"} still need a tech or arrival time.`}
               </p>
             </div>
 
@@ -506,7 +506,7 @@ function BoardCommandRail({
               >
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
-                  Approve dispatch cleanup
+                  Fix this job
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {firstCritical.customer_name || "Unnamed job"} needs {!firstCritical.assigned_to ? "a technician" : "an arrival window"}.
@@ -526,25 +526,25 @@ function BoardCommandRail({
               >
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Clock className="h-4 w-4 text-primary" />
-                  Place next backlog item
+                  Schedule next backlog job
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {firstBacklog.customer_name || "Unscheduled work"} is ready to fit into an open window.
+                  {firstBacklog.customer_name || "Unscheduled work"} is ready to put on the board.
                 </p>
               </button>
             )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toast({ title: "Gap finder", description: `${openSlots} likely openings based on active tech capacity.` })}>
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toast({ title: "Openings", description: `${openSlots} possible openings based on the active tech list.` })}>
               <Clock className="h-4 w-4" />
-              Find gap
+              Find opening
             </Button>
             <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toast({ title: "Route check", description: `${routeReadyCount} stops have technician and address data.` })}>
               <Route className="h-4 w-4" />
               Check route
             </Button>
-            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => firstCritical ? onItemClick(firstCritical) : toast({ title: "No cleanup needed", description: "Every scheduled job has the minimum dispatch data." })}>
+            <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => firstCritical ? onItemClick(firstCritical) : toast({ title: "Board looks good", description: "Every scheduled job has a tech and a time window." })}>
               <UserRound className="h-4 w-4" />
               Assign tech
             </Button>
@@ -556,7 +556,7 @@ function BoardCommandRail({
         )}
       </RailSection>
 
-      <RailSection title="Day Snapshot" detail="Capacity, cleanup, and backlog for the selected day.">
+      <RailSection title="Day Snapshot" detail="What today's board looks like at a glance.">
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md border bg-background p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open slots</p>
@@ -576,12 +576,12 @@ function BoardCommandRail({
             <JobCard key={item.id} item={item} employees={employees} compact onClick={() => onItemClick(item)} />
           ))}
           {criticalItems.length === 0 && (
-            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No schedule cleanup waiting.</p>
+            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No jobs need fixing right now.</p>
           )}
         </div>
       </RailSection>
 
-      <RailSection title="Calls And Texts" detail="People who may change today's when/where.">
+      <RailSection title="Calls And Texts" detail="Recent customers who may affect today's schedule.">
         <div className="space-y-2">
           {callsLoading || smsLoading ? (
             <Skeleton className="h-20 rounded-md" />
@@ -872,7 +872,7 @@ function JobContextDialog({
           .update({
             title: `Review field update: ${item.customer_name || "Job"}`,
             description: summary,
-            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job workflow moving.",
+            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job moving.",
             customer_phone: item.customer_phone || null,
             metadata,
           })
@@ -887,7 +887,7 @@ function JobContextDialog({
             priority: liveContext?.liveTone === "attention" ? "high" : "normal",
             title: `Review field update: ${item.customer_name || "Job"}`,
             description: summary,
-            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job workflow moving.",
+            suggested_action: "Review the latest tech note/photos, update the estimate or invoice, and keep the job moving.",
             job_id: item.id,
             customer_phone: item.customer_phone || null,
             metadata,
@@ -925,7 +925,7 @@ function JobContextDialog({
         <div className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_240px]">
           <div className="space-y-4">
             <section className="rounded-lg border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Dispatch context</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Schedule details</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Technician</p>
@@ -966,7 +966,7 @@ function JobContextDialog({
             <section className={cn("rounded-lg border p-4", liveToneClass(liveContext))}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Live field context</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Latest field update</p>
                   <p className="mt-2 text-sm font-semibold">
                     {liveContext?.liveSummary || "No field updates yet."}
                   </p>
@@ -1042,7 +1042,7 @@ function JobContextDialog({
               Route / fit
             </Button>
             <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              Dispatch now watches the job record, tech voice notes, checklist responses, photos, and attachments. As techs add context, this card should update instead of becoming a separate side quest.
+              This pulls in the job record, tech notes, checklist answers, photos, and attachments so the office can see the latest without hunting around.
             </div>
           </aside>
         </div>
@@ -1228,7 +1228,7 @@ export default function ScheduleV2() {
                 <h1 className="text-xl font-semibold tracking-tight text-foreground">Dispatch HQ</h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Run the day around when work happens, where it is, and what needs approval before trucks move.
+                Keep today's jobs, techs, addresses, and approvals in one place before trucks roll.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1299,10 +1299,10 @@ export default function ScheduleV2() {
         </div>
 
         <div className="grid shrink-0 grid-cols-2 gap-3 border-b bg-muted/30 p-4 lg:grid-cols-4">
-          <MetricCard label="When" value={format(currentDay, "MMM d")} detail={isToday(currentDay) ? "Today" : format(currentDay, "EEEE")} icon={CalendarDays} />
-          <MetricCard label="Where" value={dayItems.length} detail={`${routeReadyCount} stops have tech and address`} icon={Route} />
-          <MetricCard label="Approve" value={criticalItems.length} detail="Missing tech or arrival window" icon={AlertTriangle} />
-          <MetricCard label="Place" value={unscheduledItems.length} detail="Backlog ready for the board" icon={Sparkles} />
+          <MetricCard label="Date" value={format(currentDay, "MMM d")} detail={isToday(currentDay) ? "Today" : format(currentDay, "EEEE")} icon={CalendarDays} />
+          <MetricCard label="Stops" value={dayItems.length} detail={`${routeReadyCount} have a tech and address`} icon={Route} />
+          <MetricCard label="Needs Fix" value={criticalItems.length} detail="Missing a tech or arrival time" icon={AlertTriangle} />
+          <MetricCard label="Backlog" value={unscheduledItems.length} detail="Waiting to be scheduled" icon={Sparkles} />
         </div>
 
         <Tabs defaultValue="board" className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1356,8 +1356,8 @@ export default function ScheduleV2() {
                   <h2 className="text-sm font-semibold text-foreground">Day Board</h2>
                   <p className="text-xs text-muted-foreground">
                     {mode === "ai"
-                      ? "JARVIS prepares cleanup and customer moves; dispatch approves from the rail."
-                      : "Manual lane control for assigning techs, placing backlog, and contacting customers."}
+                      ? "Jarvis points out schedule problems; dispatch approves the fix."
+                      : "Assign techs, schedule backlog, and contact customers by hand."}
                   </p>
                 </div>
                 <div className="grid min-w-[1320px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -1408,7 +1408,7 @@ export default function ScheduleV2() {
               <TabsContent value="route" className="m-0 min-h-0 flex-1 overflow-auto p-4">
                 <div className="mb-3">
                   <h2 className="text-sm font-semibold text-foreground">Route View</h2>
-                  <p className="text-xs text-muted-foreground">Stops, map position, and route health for the selected day.</p>
+                  <p className="text-xs text-muted-foreground">See the day's stops, travel order, and anything that may slow the route down.</p>
                 </div>
                 <div className="grid min-h-[620px] gap-4 lg:grid-cols-[360px_1fr_340px]">
                   <section className="rounded-lg border bg-card shadow-sm">
@@ -1446,8 +1446,8 @@ export default function ScheduleV2() {
                     <div className="absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--border))_1px,transparent_1px),linear-gradient(hsl(var(--border))_1px,transparent_1px)] bg-[size:36px_36px] opacity-35" />
                     <div className="relative flex h-full min-h-[620px] flex-col">
                       <div className="border-b bg-card/90 px-4 py-3 backdrop-blur">
-                        <h3 className="text-sm font-semibold">Where The Day Is</h3>
-                        <p className="text-xs text-muted-foreground">Stop clustering and travel warnings belong here.</p>
+                        <h3 className="text-sm font-semibold">Map Overview</h3>
+                        <p className="text-xs text-muted-foreground">A quick look at where the day is spread out.</p>
                       </div>
                       <div className="relative flex-1">
                         {dayItems.slice(0, 8).map((item, index) => (
@@ -1471,13 +1471,13 @@ export default function ScheduleV2() {
 
                   <section className="rounded-lg border bg-card shadow-sm">
                     <div className="border-b px-4 py-3">
-                      <h3 className="text-sm font-semibold">Route Health</h3>
-                      <p className="text-xs text-muted-foreground">What dispatch should fix before sending the day.</p>
+                      <h3 className="text-sm font-semibold">Route Check</h3>
+                      <p className="text-xs text-muted-foreground">Anything to fix before techs head out.</p>
                     </div>
                     <div className="space-y-3 p-3">
                       {criticalItems.length === 0 ? (
                         <div className="rounded-lg border border-[hsl(var(--success))]/30 bg-[hsl(var(--complete-bg))] p-3 text-sm">
-                          The selected day looks route-ready.
+                          The selected day looks ready to run.
                         </div>
                       ) : (
                         criticalItems.map((item) => (

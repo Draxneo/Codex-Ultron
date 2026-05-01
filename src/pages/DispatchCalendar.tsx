@@ -173,11 +173,11 @@ export default function DispatchCalendar() {
               </Button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold tracking-tight text-foreground">Dispatch Calendar</h1>
+                  <h1 className="text-lg font-semibold tracking-tight text-foreground">Weekly Calendar</h1>
                   <Badge variant="secondary">Full Screen</Badge>
                 </div>
                 <p className="hidden text-xs text-muted-foreground md:block">
-                  Housecall-style weekly schedule for openings, overlaps, and arrival windows.
+                  Weekly schedule showing open spots, overlaps, and arrival windows.
                 </p>
               </div>
             </div>
@@ -230,7 +230,7 @@ export default function DispatchCalendar() {
             <>
               <div className="flex shrink-0 items-center gap-2 border-b bg-muted/30 px-3 py-1">
                 <CalendarDays className="h-4 w-4 text-primary" />
-                <span className="text-xs font-semibold text-foreground">Calendar workspace</span>
+                <span className="text-xs font-semibold text-foreground">Weekly calendar</span>
                 <span className="text-[11px] text-muted-foreground">
                   Scroll vertically for the day, horizontally for surrounding days.
                 </span>

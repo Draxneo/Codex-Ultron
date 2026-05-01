@@ -689,9 +689,9 @@ export default function TeamCommunications() {
           source: "team_communications",
           category: "team_blocker",
           priority: "normal",
-          title: "Review team message",
+          title: "Team message needs attention",
           description: body || `${message.attachments?.length ?? 0} team attachment needs review.`,
-          suggested_action: "Open Team HQ, review the message, and decide the next operational step.",
+          suggested_action: "Open Team HQ, read the message, and decide what needs to happen next.",
           metadata: {
             team_message_id: message.id,
             conversation_id: message.conversation_id,
@@ -1422,7 +1422,7 @@ export default function TeamCommunications() {
                 <section>
                   <div className="mb-2 flex items-center gap-1.5">
                     <Briefcase className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operations Signals</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team Items to Handle</p>
                   </div>
                   <div className="space-y-2">
                     <div className="rounded-md border bg-background p-3 text-xs">
@@ -1431,7 +1431,7 @@ export default function TeamCommunications() {
                         <Badge variant={activeCall ? "default" : "secondary"}>{activeCall ? "call live" : "quiet"}</Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-muted-foreground">
-                        {operationCandidates[0]?.body || (operationCandidates[0]?.attachments?.length ? "Latest update has attachments." : "Pick a room or direct message to see team context.")}
+                        {operationCandidates[0]?.body || (operationCandidates[0]?.attachments?.length ? "Latest update has attachments." : "Pick a chat to see what is going on.")}
                       </p>
                       <div className="mt-2 flex items-center justify-between text-muted-foreground">
                         <span>{unreadNotifications.length} unread team alert{unreadNotifications.length === 1 ? "" : "s"}</span>
@@ -1500,15 +1500,15 @@ export default function TeamCommunications() {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resources</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team Links</p>
                     </div>
                     <Button
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7"
                       onClick={() => setResourceDialogOpen(true)}
-                      title="Add resource"
-                      aria-label="Add resource"
+                      title="Add team link"
+                      aria-label="Add team link"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
@@ -1652,7 +1652,7 @@ export default function TeamCommunications() {
       <Dialog open={resourceDialogOpen} onOpenChange={setResourceDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add team resource</DialogTitle>
+            <DialogTitle>Add team link</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>

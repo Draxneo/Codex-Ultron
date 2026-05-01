@@ -310,7 +310,7 @@ export function detectRouteStopFlexibility(stop: RouteStopInput): RouteFlexibili
     return { flexibility: "preferred", fixed: false, source: "time-window", reasons, warnings };
   }
 
-  reasons.push("No fixed or flexible signal found.");
+  reasons.push("No timing notes found.");
   return { flexibility: "unknown", fixed: false, source: "default", reasons, warnings };
 }
 
@@ -402,7 +402,7 @@ function compareSuggestionStops(a: NormalizedRouteStop, b: NormalizedRouteStop):
 
 function warningsForStop(stop: NormalizedRouteStop): string[] {
   const warnings = [...stop.detection.warnings];
-  if (!stop.address) warnings.push("Missing address; map-based routing will need office review.");
+  if (!stop.address) warnings.push("Missing address; office needs to check before routing.");
   if (!stop.zip) warnings.push("Missing ZIP; grouped under unknown ZIP.");
   if (!stop.customerPhone) warnings.push("Missing customer phone; SMS draft cannot be addressed.");
   if (stop.technicianKey === DEFAULT_TECHNICIAN_KEY) warnings.push("Missing technician assignment.");

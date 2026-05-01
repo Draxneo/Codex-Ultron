@@ -108,7 +108,7 @@ export default function Customers() {
       <main className="flex-1 overflow-hidden flex">
         <ModuleWorkbench
           title="Customer HQ"
-          eyebrow="Relationship memory"
+          eyebrow="Customer history"
           description="Find customers by recent call, recent text, recent job, name, address, email, or phone number."
           icon={<Users className="h-4.5 w-4.5" />}
           primaryAction={isMobile ? (

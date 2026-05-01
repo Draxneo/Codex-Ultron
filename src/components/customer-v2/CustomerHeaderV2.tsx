@@ -45,7 +45,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
             {customer && <CustomerEditDialog customer={customer} />}
             {outstandingBalance > 0 && (
               <Button size="sm" variant="default" disabled title="Not wired yet">
-                Payment workflow pending
+                Payment button not ready yet
               </Button>
             )}
             {primaryPhone && (
@@ -91,7 +91,7 @@ export function CustomerHeaderV2({ customerId, fullName, outstandingBalance, pri
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled className="text-destructive">Archive workflow pending</DropdownMenuItem>
+                <DropdownMenuItem disabled className="text-destructive">Archive option not ready yet</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

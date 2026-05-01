@@ -76,7 +76,7 @@ const OWNER_LABEL: Record<WorkflowOwner, string> = {
 };
 
 const HUMAN_TOOLS = [
-  { title: "Intake HQ", body: "Answer calls/texts, match customers, and start the right workflow.", to: "/intake", icon: MessageSquare },
+  { title: "Intake HQ", body: "Answer calls and texts, find the customer, and get the right next step started.", to: "/intake", icon: MessageSquare },
   { title: "Dispatch HQ", body: "Classic board for scheduling, routing, and running the day.", to: "/dispatch", icon: CalendarCheck },
   { title: "Quote HQ", body: "Track open estimates, customer decisions, and quote follow-up.", to: "/quick-quote", icon: FileText },
   { title: "Customer HQ", body: "Look up customer history, jobs, communication, warranty, and attachments.", to: "/customers", icon: Users },
@@ -194,7 +194,7 @@ function WorkflowCard({
     { label: "Phone", value: card.customerPhone },
     { label: "Address", value: card.address },
     { label: "Status", value: card.status },
-    { label: "Type/source", value: card.source },
+    { label: "From", value: card.source },
   ].filter((item) => item.value);
 
   return (
@@ -242,14 +242,14 @@ function WorkflowCard({
 
             {card.description && (
               <div className="rounded-md border bg-card/70 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer / job context</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer/job notes</p>
                 <p className="mt-1 line-clamp-3 text-sm text-muted-foreground">{card.description}</p>
               </div>
             )}
 
             {card.actionLinks?.length ? (
               <div className="rounded-md border bg-card/70 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Context links</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Related links</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {card.actionLinks.map((link) => (
                     <a
@@ -313,7 +313,7 @@ function WorkflowCard({
             )}
             {card.recordType === "alert" && (
               <Button variant="outline" className="justify-between" disabled={isBusy} onClick={() => onRetry(card)}>
-                Retry workflow <Zap className="h-4 w-4" />
+                Try this step again <Zap className="h-4 w-4" />
               </Button>
             )}
             {card.recordType === "alert" && (
@@ -587,7 +587,7 @@ export default function NowHQ() {
     },
     onSuccess: () => {
       refreshNowFeeds();
-      toast({ title: "Acknowledged", description: "That card is hidden for 24 hours unless the real workflow state changes." });
+      toast({ title: "Acknowledged", description: "We will tuck this away for 24 hours unless the job changes." });
     },
     onError: (error) => {
       toast({
@@ -754,14 +754,14 @@ export default function NowHQ() {
                 onClick={() => setMode("ai")}
                 className={cn("flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold", mode === "ai" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
               >
-                <Bot className="h-4 w-4" /> AI Mode
+                <Bot className="h-4 w-4" /> Guided List
               </button>
               <button
                 type="button"
                 onClick={() => setMode("human")}
                 className={cn("flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold", mode === "human" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
               >
-                <LayoutDashboard className="h-4 w-4" /> Human Mode
+                <LayoutDashboard className="h-4 w-4" /> Manual Boards
               </button>
             </div>
           </div>
@@ -794,7 +794,7 @@ export default function NowHQ() {
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-2xl font-bold">{jarvisWatching}</p>
-                    <p className="text-xs text-muted-foreground">Jarvis is watching</p>
+                    <p className="text-xs text-muted-foreground">Handled for now</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -833,7 +833,7 @@ export default function NowHQ() {
                         <CheckCircle2 className="h-9 w-9 text-emerald-500" />
                         <div>
                           <p className="font-semibold">Nothing needs a human right now</p>
-                          <p className="text-sm text-muted-foreground">Jarvis will keep watching workflows and surface the next thing when it matters.</p>
+                          <p className="text-sm text-muted-foreground">We will show the next thing when it needs attention.</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -860,10 +860,10 @@ export default function NowHQ() {
                     <CardContent className="space-y-3 p-4 text-sm">
                       <div className="flex items-center gap-2 font-semibold">
                         <Sparkles className="h-4 w-4 text-primary" />
-                        Jarvis operating rule
+                        How this board works
                       </div>
                       <p className="text-muted-foreground">
-                        Intake listens and talks. Now owns the living action cards. When a customer calls or texts again, Jarvis should update the open card before creating another one.
+                        Intake handles the call or text. Now HQ keeps one follow-up card updated when the customer reaches out again.
                       </p>
                     </CardContent>
                   </Card>
@@ -873,13 +873,13 @@ export default function NowHQ() {
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm">
                       <div className="flex justify-between"><span>Live intake actions</span><strong>{counts.intake}</strong></div>
-                      <div className="flex justify-between"><span>Estimate workflows</span><strong>{counts.estimates}</strong></div>
-                      <div className="flex justify-between"><span>Service workflows</span><strong>{counts.service}</strong></div>
-                      <div className="flex justify-between"><span>Installer workflows</span><strong>{counts.installs}</strong></div>
+                      <div className="flex justify-between"><span>Estimate follow-ups</span><strong>{counts.estimates}</strong></div>
+                      <div className="flex justify-between"><span>Service follow-ups</span><strong>{counts.service}</strong></div>
+                      <div className="flex justify-between"><span>Install follow-ups</span><strong>{counts.installs}</strong></div>
                       <div className="flex justify-between"><span>Lead drip</span><strong>{counts.leads}</strong></div>
                       <div className="flex justify-between"><span>Warranty / rebate / inspection</span><strong>{counts.closeout}</strong></div>
                       <div className="flex justify-between"><span>Past due exceptions</span><strong>{counts.pastDue}</strong></div>
-                      <div className="flex justify-between"><span>Silent workflow cards</span><strong>{jarvisWatching}</strong></div>
+                      <div className="flex justify-between"><span>Quiet items</span><strong>{jarvisWatching}</strong></div>
                     </CardContent>
                   </Card>
                 </aside>
@@ -888,8 +888,8 @@ export default function NowHQ() {
           ) : (
             <div className="space-y-4">
               <div>
-                <h2 className="text-xl font-bold">Human Mode</h2>
-                <p className="text-sm text-muted-foreground">Manual dashboards are here when you need to verify, override, or work without AI help.</p>
+                <h2 className="text-xl font-bold">Manual Boards</h2>
+                <p className="text-sm text-muted-foreground">Use these boards when you want to check the work yourself or handle it by hand.</p>
               </div>
               <HumanModeFallback />
             </div>

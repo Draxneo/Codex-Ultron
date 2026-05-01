@@ -445,25 +445,25 @@ export default function QuoteHeadquarters() {
       <AppHeader
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search quote pipeline"
+        searchPlaceholder="Search open quotes"
       />
       <main className="mx-auto max-w-[1600px] space-y-5 p-5">
         <section className="rounded-lg border bg-background p-4 shadow-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Sales follow-up pipeline</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Quote follow-up</p>
               <div className="mt-1 flex items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight">Quote HQ</h1>
-                <Badge variant="secondary">Human-approved drip</Badge>
+                <Badge variant="secondary">Office-approved follow-ups</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Open estimates, prepared follow-ups, customer response state, and quote-closing actions.
+                Open quotes, ready-to-send follow-ups, what the customer has done, and the next closing step.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="gap-2" onClick={() => navigate("/reports")}>
                 <TrendingUp className="h-4 w-4" />
-                Pipeline report
+                Quote report
               </Button>
               <Button className="gap-2" onClick={() => navigate("/quote-builder")}>
                 <Plus className="h-4 w-4" />
@@ -474,7 +474,7 @@ export default function QuoteHeadquarters() {
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard icon={FileText} label="Open quotes" value={`${pipeline.length}`} detail="Not won, lost, or canceled" />
-            <MetricCard icon={Eye} label="Viewed" value={`${counts.viewed}`} detail="Warm follow-up candidates" />
+            <MetricCard icon={Eye} label="Viewed" value={`${counts.viewed}`} detail="Customers who opened the quote" />
             <MetricCard icon={Clock} label="Aging" value={`${counts.aging}`} detail="Seven or more days open" />
             <MetricCard icon={CheckCircle2} label="Approved" value={`${counts.approved}`} detail="Needs install handoff" />
             <MetricCard
@@ -666,7 +666,7 @@ function QuotePipelineCard({
               <p className="mt-2 text-xs text-muted-foreground/90">
                 {lastTouchedDate
                   ? formatDistanceToNow(lastTouchedDate, { addSuffix: true })
-                  : "No activity timestamp"}
+                  : "No recent activity"}
               </p>
             </div>
           </div>
@@ -683,7 +683,7 @@ function QuotePipelineCard({
           </Button>
           <Button className="gap-2" onClick={onSms} disabled={!canText}>
             {item.stage === "viewed" ? <Phone className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
-            Draft touch
+            Draft text
           </Button>
         </div>
       </CardContent>

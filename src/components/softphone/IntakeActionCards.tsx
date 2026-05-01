@@ -229,7 +229,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid
     <div className="flex flex-col gap-2 p-3">
       <div className="rounded-lg border bg-card p-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Intake / Now handoff
+          Send to Intake or Now
         </p>
         {primaryCard ? (
           <div className="mt-2 rounded-md border bg-muted/30 p-2">
@@ -240,7 +240,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid
           </div>
         ) : (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            No open Now card matched to this caller yet.
+            No follow-up card is open for this caller yet.
           </p>
         )}
 
@@ -259,7 +259,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid
             disabled={savingNowCard || !phoneNumber}
           >
             {savingNowCard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5" />}
-            {primaryCard ? "Update Now" : "Create Now"}
+            {primaryCard ? "Update Follow-Up" : "Create Follow-Up"}
           </Button>
           {primaryCard && (
             <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 text-xs">

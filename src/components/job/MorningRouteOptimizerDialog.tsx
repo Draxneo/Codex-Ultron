@@ -331,7 +331,7 @@ export function MorningRouteOptimizerDialog({ open, onOpenChange, date, items, e
             <DialogTitle>Morning Route Optimizer</DialogTitle>
           </div>
           <DialogDescription>
-            Suggestion-only review for {format(new Date(`${date}T00:00:00`), "EEEE, MMM d")}. Nothing moves and nothing texts until approved.
+            Review suggested route changes for {format(new Date(`${date}T00:00:00`), "EEEE, MMM d")}. Nothing changes and no texts go out until you approve.
           </DialogDescription>
         </DialogHeader>
 

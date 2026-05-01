@@ -1053,7 +1053,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                     <div className={`transition-opacity ${!noVmEnabled ? "opacity-50 pointer-events-none" : ""}`}>
                       <TemplateBindingCard
                         title="No-VM Missed Call Body"
-                        description="Single source of truth — replaces the legacy global missed-call SMS settings."
+                        description="Main setting for missed-call texts. This replaces the old global setting."
                         value={menuOption.dept_no_vm_missed_call_sms || ""}
                         templateKey={null}
                         placeholder="Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here."
@@ -1078,7 +1078,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                     <div className={`transition-opacity ${!postCallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
                       <TemplateBindingCard
                         title="Post-Call Body"
-                        description="Single source of truth — replaces the legacy global post-call SMS settings."
+                        description="Main setting for after-call texts. This replaces the old global setting."
                         value={menuOption.dept_post_call_sms || ""}
                         templateKey={null}
                         placeholder="Hey! Thanks so much for calling — we really appreciate you! Text us back here anytime. 😊"

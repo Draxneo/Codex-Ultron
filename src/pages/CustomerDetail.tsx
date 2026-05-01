@@ -182,7 +182,7 @@ function RelationshipBrief({
       <div className="space-y-4">
         <Card className="shadow-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Current Context</CardTitle>
+            <CardTitle className="text-base">Current Customer Details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
             <MiniContext
@@ -197,7 +197,7 @@ function RelationshipBrief({
             <MiniContext
               label="Address"
               value={customerAddress(c, overview)}
-              detail="Primary service location for dispatch, service history, and warranty context"
+              detail="Main service address for scheduling, service history, and warranty notes"
             />
             <MiniContext
               label="Latest note"
@@ -348,7 +348,7 @@ function ProtectionPanel({
 
           <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
             <HeartHandshake className="h-4 w-4" />
-            Renewal offer workflow pending
+            Renewal offer not ready yet
           </Button>
         </CardContent>
       </Card>
@@ -526,12 +526,12 @@ export default function CustomerDetail() {
               value={formatShortDate(overview.last_job_date, "No completed visit")}
               detail={overview.upcoming_appointments?.length ? "Has upcoming work" : "No upcoming appointment"}
             />
-            <SignalCard icon={MapPin} label="Where" value={serviceAddress} detail="Primary dispatch context" />
+            <SignalCard icon={MapPin} label="Where" value={serviceAddress} detail="Main service address" />
             <SignalCard
               icon={HeartHandshake}
               label="Why"
               value={agreementStatus}
-              detail="Retention, warranty, remarketing, and renewal context"
+              detail="Plan, warranty, and renewal notes"
             />
           </div>
         </section>
@@ -563,7 +563,7 @@ export default function CustomerDetail() {
                 <CardContent className="grid gap-3 md:grid-cols-3">
                   <MiniContext label="Estimates" value="Customer proposals" detail="Quotes and options we have presented" />
                   <MiniContext label="Jobs" value="Completed and active work" detail="Service, maintenance, install, and repair history" />
-                  <MiniContext label="Invoices" value="Payment memory" detail="Paid, open, and overdue customer billing" />
+                  <MiniContext label="Invoices" value="Payment history" detail="Paid, open, and overdue customer billing" />
                 </CardContent>
               </Card>
               <EstimatesTab customerId={id} />
