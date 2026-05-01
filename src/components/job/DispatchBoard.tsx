@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { Clock, Phone, Car, MapPin } from "lucide-react";
+import { AlertTriangle, Clock, Phone, Car, MapPin } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { AddressLink } from "@/components/AddressLink";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { getLifecycleInfo } from "@/lib/jobLifecycle";
 import { Badge } from "@/components/ui/badge";
 import { useCustomerEnrichment } from "@/hooks/useCustomerEnrichment";
 import { CustomerStatusBadges, getAvatarColor } from "@/components/CustomerStatusBadges";
-import { useTechStatusMap } from "@/hooks/useTechStatusMap";
+import { useTechStatusMapState } from "@/hooks/useTechStatusMap";
 import { TechStatusBadge } from "@/components/TechStatusBadge";
 import type { CalendarVisibleFields, CardDensity } from "@/components/job/CalendarSettings";
 import { getUsHolidayName } from "@/lib/usHolidays";
@@ -268,7 +268,8 @@ function DispatchCustomerBlock({
 export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, visibleFields, cardDensity = "comfortable", businessHoursOnly = false, showHolidays = false }: DispatchBoardProps) {
   const queryClient = useQueryClient();
   const { data: enrichmentMap } = useCustomerEnrichment();
-  const techStatusMap = useTechStatusMap();
+  const techStatusState = useTechStatusMapState();
+  const techStatusMap = techStatusState.statusMap;
   const startHour = businessHoursOnly ? BUSINESS_START_HOUR : DEFAULT_START_HOUR;
   const endHour = businessHoursOnly ? BUSINESS_END_HOUR : DEFAULT_END_HOUR;
   const totalHours = endHour - startHour;
@@ -387,9 +388,16 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
 
 
   return (
-    <div className="flex-1 min-h-0 flex overflow-hidden">
-      {/* Main dispatch grid */}
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {techStatusState.isError && (
+          <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4" />
+            Live technician status is not updating right now. The schedule still works, but location badges may be stale.
+          </div>
+        )}
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* Main dispatch grid */}
+        <div className="flex-1 min-h-0 overflow-auto">
       {/* Header row with hours */}
       <div className="sticky top-0 z-20 flex bg-gradient-to-r from-[hsl(var(--navy-dark))] via-[hsl(var(--navy))] to-[hsl(var(--navy-light))] border-b">
         <div className="w-[140px] shrink-0 border-r border-white/10 px-3 py-2">
@@ -718,7 +726,8 @@ export function DispatchBoard({ dayItems, employees, onItemClick, routeOrders, v
           </div>
         );
       })}
+        </div>
       </div>
-    </div>
+      </div>
   );
 }

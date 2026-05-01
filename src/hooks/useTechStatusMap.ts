@@ -10,16 +10,20 @@ export interface TechStatusInfo {
   locationName: string | null;
 }
 
+function emptyStatusMap() {
+  return new Map<string, TechStatusInfo>();
+}
+
 /**
  * Fetches today's latest tech_location_events per employee,
  * derives current status, and subscribes to realtime updates.
  * Returns Map<employeeId, TechStatusInfo>
  */
-export function useTechStatusMap() {
+export function useTechStatusMapState() {
   const queryClient = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const { data: statusMap } = useQuery({
+  const query = useQuery({
     queryKey: ["tech-status-map", today],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -28,7 +32,8 @@ export function useTechStatusMap() {
         .gte("created_at", `${today}T00:00:00`)
         .order("created_at", { ascending: false });
 
-      if (error || !data) return new Map<string, TechStatusInfo>();
+      if (error) throw error;
+      if (!data) return emptyStatusMap();
 
       const map = new Map<string, TechStatusInfo>();
       const seen = new Set<string>();
@@ -66,7 +71,14 @@ export function useTechStatusMap() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient, today]);
 
-  return statusMap ?? new Map<string, TechStatusInfo>();
+  return {
+    ...query,
+    statusMap: query.data ?? emptyStatusMap(),
+  };
+}
+
+export function useTechStatusMap() {
+  return useTechStatusMapState().statusMap;
 }
 
 function deriveStatus(eventType: string): TechStatus | null {
