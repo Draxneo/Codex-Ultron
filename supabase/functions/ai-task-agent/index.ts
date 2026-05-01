@@ -476,7 +476,56 @@ async function getCustomerInvoicesContext(sb: any) {
   return `\n\nCUSTOMER INVOICES (last ${lines.length}):\n${lines.join("\n")}`;
 }
 
-// ==================== Chat Context ====================
+// ==================== Team Communications Context ====================
+
+async function getTeamContext(sb: any) {
+  const { data: conversations } = await sb.from("team_conversations")
+    .select("id, name, type, created_at")
+    .order("created_at", { ascending: true });
+  if (!conversations || conversations.length === 0) return "";
+
+  const { data: messages } = await sb.from("team_messages")
+    .select("conversation_id, sender_id, body, created_at, deleted_at")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  const senderIds = Array.from(new Set((messages || []).map((m: any) => m.sender_id).filter(Boolean)));
+  const senderMap: Record<string, string> = {};
+  if (senderIds.length > 0) {
+    const { data: employees } = await sb.from("employees")
+      .select("name, profile_id")
+      .in("profile_id", senderIds);
+    for (const employee of (employees || [])) {
+      if (employee.profile_id) senderMap[employee.profile_id] = employee.name;
+    }
+  }
+
+  const conversationMap: Record<string, { name: string; type: string; msgs: string[] }> = {};
+  for (const conversation of conversations) {
+    conversationMap[conversation.id] = {
+      name: conversation.name || (conversation.type === "direct" ? "Direct conversation" : "Team Room"),
+      type: conversation.type,
+      msgs: [],
+    };
+  }
+
+  for (const message of (messages || [])) {
+    const conversation = conversationMap[message.conversation_id];
+    if (!conversation || conversation.msgs.length >= 5) continue;
+    const sender = senderMap[message.sender_id] || "Team member";
+    conversation.msgs.push(`  ${sender}: "${String(message.body || "").slice(0, 140)}" (${formatDateUS(message.created_at)})`);
+  }
+
+  const lines = Object.values(conversationMap)
+    .filter((conversation) => conversation.msgs.length > 0)
+    .map((conversation) => `- ${conversation.name} (${conversation.type})\n${conversation.msgs.join("\n")}`);
+
+  if (lines.length === 0) return "";
+  return `\n\nTEAM HEADQUARTERS MESSAGES:\n${lines.join("\n")}`;
+}
+
+// ==================== Legacy Chat Context ====================
 
 async function getChatContext(sb: any) {
   const { data: channels } = await sb.from("chat_channels")
@@ -986,8 +1035,8 @@ const sendSmsToEmployeeTool = { type: "function", function: { name: "send_sms_to
 const sendTechFormLinkTool = { type: "function", function: { name: "send_tech_form_link", description: "Send a tech form link to the assigned tech for a job.", parameters: { type: "object", properties: { job_identifier: { type: "string" }, custom_message: { type: "string" } }, required: ["job_identifier"], additionalProperties: false } } };
 const searchSmsHistoryTool = { type: "function", function: { name: "search_sms_history", description: "Search SMS history by phone, name, or message text.", parameters: { type: "object", properties: { query: { type: "string" }, direction: { type: "string", enum: ["inbound", "outbound"] }, limit: { type: "number" } }, required: ["query"], additionalProperties: false } } };
 const searchCallHistoryTool = { type: "function", function: { name: "search_call_history", description: "Search call log by phone or contact name.", parameters: { type: "object", properties: { query: { type: "string" }, direction: { type: "string", enum: ["inbound", "outbound"] }, status: { type: "string" }, limit: { type: "number" } }, required: ["query"], additionalProperties: false } } };
-const readChatMessagesTool = { type: "function", function: { name: "read_chat_messages", description: "Read recent team chat messages, optionally by channel.", parameters: { type: "object", properties: { channel_name: { type: "string" }, limit: { type: "number" } }, additionalProperties: false } } };
-const sendChatMessageTool = { type: "function", function: { name: "send_chat_message", description: "Send a message to a team chat channel as Copilot.", parameters: { type: "object", properties: { channel_name: { type: "string" }, message: { type: "string" } }, required: ["channel_name", "message"], additionalProperties: false } } };
+const readTeamMessagesTool = { type: "function", function: { name: "read_team_messages", description: "Read recent Team Headquarters messages, optionally by room or direct conversation name.", parameters: { type: "object", properties: { conversation_name: { type: "string" }, limit: { type: "number" } }, additionalProperties: false } } };
+const sendTeamMessageTool = { type: "function", function: { name: "send_team_message", description: "Send a message to a Team Headquarters room after dispatcher approval.", parameters: { type: "object", properties: { conversation_name: { type: "string", description: "Team room or direct conversation name. Defaults to Team Room." }, message: { type: "string" } }, required: ["message"], additionalProperties: false } } };
 
 // Sales docs (formerly sales-docs-agent)
 const createQuoteTool = { type: "function", function: { name: "create_quote", description: "Create a database-backed equipment quote and return render-ready :::equipment-card blocks using exact matchup values only. Think in technician order: brand, tonnage, system type, tier, orientation/application.", parameters: { type: "object", properties: { customer_name: { type: "string" }, tonnage: { type: "number" }, system_type: { type: "string" }, brand: { type: "string" }, tier: { type: "string" }, address: { type: "string" }, application: { type: "string" }, job_id: { type: "string" }, estimate_id: { type: "string" }, notes: { type: "string" } }, required: ["customer_name", "tonnage", "system_type"], additionalProperties: false } } };
@@ -1182,7 +1231,7 @@ const JARVIS_HITL_MUTATING_TOOLS = new Set([
   "log_learning",
   "send_sms_to_employee",
   "send_tech_form_link",
-  "send_chat_message",
+  "send_team_message",
   "create_customer",
   "update_customer",
   "update_job_field",
@@ -1204,7 +1253,7 @@ const JARVIS_HITL_TOOL_LABELS: Record<string, string> = {
   log_learning: "Save JARVIS learning",
   send_sms_to_employee: "Send SMS to employee",
   send_tech_form_link: "Send tech form link",
-  send_chat_message: "Send team chat message",
+  send_team_message: "Send team message",
   create_customer: "Create customer",
   update_customer: "Update customer",
   create_job: "Create job",
@@ -1472,29 +1521,58 @@ async function executeToolCall(
         extracted_data: c.call_extraction || null,
       })) };
 
-    } else if (toolName === "read_chat_messages") {
-      let query = sb.from("chat_messages")
-        .select("sender_name, content, created_at, chat_channels(name)")
-        .order("created_at", { ascending: false }).limit(args.limit || 20);
-      if (args.channel_name) {
-        const { data: ch } = await sb.from("chat_channels").select("id").ilike("name", `%${args.channel_name}%`).limit(1);
-        if (ch && ch.length > 0) query = query.eq("channel_id", ch[0].id);
+    } else if (toolName === "read_team_messages") {
+      const conversationName = args.conversation_name || args.channel_name;
+      let query = sb.from("team_messages")
+        .select("conversation_id, sender_id, body, created_at, team_conversations(name, type)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(args.limit || 20);
+      if (conversationName) {
+        const { data: conversations } = await sb.from("team_conversations")
+          .select("id")
+          .ilike("name", `%${conversationName}%`)
+          .limit(1);
+        if (conversations && conversations.length > 0) query = query.eq("conversation_id", conversations[0].id);
       }
       const { data: msgs, error } = await query;
       if (error) throw error;
+
+      const senderIds = Array.from(new Set((msgs || []).map((m: any) => m.sender_id).filter(Boolean)));
+      const senderMap: Record<string, string> = {};
+      if (senderIds.length > 0) {
+        const { data: employees } = await sb.from("employees").select("name, profile_id").in("profile_id", senderIds);
+        for (const employee of (employees || [])) {
+          if (employee.profile_id) senderMap[employee.profile_id] = employee.name;
+        }
+      }
+
       result = { status: "success", count: (msgs || []).length, messages: (msgs || []).map((m: any) => ({
-        sender: m.sender_name, content: m.content, channel: m.chat_channels?.name || "unknown", time: m.created_at,
+        sender: senderMap[m.sender_id] || "Team member",
+        content: m.body,
+        conversation: m.team_conversations?.name || "Team Room",
+        conversation_type: m.team_conversations?.type || "room",
+        time: m.created_at,
       })) };
 
-    } else if (toolName === "send_chat_message") {
-      const { data: channels } = await sb.from("chat_channels").select("id").ilike("name", `%${args.channel_name}%`).limit(1);
-      if (!channels || channels.length === 0) throw new Error(`Channel "${args.channel_name}" not found`);
-      const { error } = await sb.from("chat_messages").insert({
-        channel_id: channels[0].id, user_id: "00000000-0000-0000-0000-000000000000",
-        sender_name: "Copilot", content: args.message,
+    } else if (toolName === "send_team_message") {
+      const senderId = approvedAction?.userId || args.sender_id;
+      if (!senderId) throw new Error("A signed-in dispatcher must approve team messages before they can be posted.");
+
+      const conversationName = args.conversation_name || args.channel_name || "Team Room";
+      const { data: conversations } = await sb.from("team_conversations")
+        .select("id, name")
+        .ilike("name", `%${conversationName}%`)
+        .limit(1);
+      if (!conversations || conversations.length === 0) throw new Error(`Team conversation "${conversationName}" not found`);
+
+      const { error } = await sb.from("team_messages").insert({
+        conversation_id: conversations[0].id,
+        sender_id: senderId,
+        body: args.message,
       });
       if (error) throw error;
-      result = { status: "success", channel: args.channel_name, message: args.message };
+      result = { status: "success", conversation: conversations[0].name || conversationName, message: args.message };
 
     } else if (toolName === "create_quote") {
       const { data: quote, error: quoteErr } = await sb.from("quotes").insert({
@@ -2767,7 +2845,7 @@ serve(async (req) => {
       addLoader("voicemails", getVoicemailsContext(sb));
     }
     if (needed.has("chat")) {
-      addLoader("chat", getChatContext(sb));
+      addLoader("team", getTeamContext(sb));
     }
     if (needed.has("parts")) {
       addLoader("parts", getPartsCatalogContext(sb));
@@ -3020,7 +3098,7 @@ serve(async (req) => {
       "web_search", "scrape_url", "update_instruction", "log_learning",
       "lookup_equipment", "verify_address",
       "send_sms_to_employee", "send_tech_form_link", "search_sms_history",
-      "search_call_history", "read_chat_messages", "send_chat_message",
+      "search_call_history", "read_team_messages", "send_team_message",
       "create_quote", "generate_install_quote", "convert_estimate_to_job",
       "generate_letterhead_document",
       "get_travel_times", "check_scheduling_fit", "suggest_schedule_optimization",
@@ -3129,8 +3207,8 @@ TOOL ROUTING RULES (follow strictly)
       send_tech_form_link: sendTechFormLinkTool,
       search_sms_history: searchSmsHistoryTool,
       search_call_history: searchCallHistoryTool,
-      read_chat_messages: readChatMessagesTool,
-      send_chat_message: sendChatMessageTool,
+      read_team_messages: readTeamMessagesTool,
+      send_team_message: sendTeamMessageTool,
       // Sales docs
       create_quote: createQuoteTool,
       generate_install_quote: generateInstallQuoteTool,
@@ -3195,7 +3273,7 @@ TOOL ROUTING RULES (follow strictly)
          "get_live_transcript", "create_job", "create_customer"].forEach(x => t.add(x));
       }
       if (ctx.includes("chat") || ctx.includes("team")) {
-        ["read_chat_messages", "send_chat_message"].forEach(x => t.add(x));
+        ["read_team_messages", "send_team_message"].forEach(x => t.add(x));
       }
       if (ctx.includes("part") || ctx.includes("catalog") || ctx.includes("supply")) {
         ["invoke_supplyhouse", "invoke_carrier_enterprise", "scrape_url"].forEach(x => t.add(x));

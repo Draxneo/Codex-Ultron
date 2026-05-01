@@ -54,8 +54,8 @@ export const CANONICAL_JARVIS_TOOLS = [
   "send_tech_form_link",
   "search_sms_history",
   "search_call_history",
-  "read_chat_messages",
-  "send_chat_message",
+  "read_team_messages",
+  "send_team_message",
   "create_quote",
   "generate_install_quote",
   "convert_estimate_to_job",
@@ -94,6 +94,8 @@ export const RETIRED_JARVIS_TOOLS = [
   "search_supplyhouse",
   "search_carrier_enterprise",
   "ahri_lookup_carrier_enterprise",
+  "read_chat_messages",
+  "send_chat_message",
 ] as const;
 
 const canonicalToolSet = new Set<string>(CANONICAL_JARVIS_TOOLS);

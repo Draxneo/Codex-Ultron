@@ -846,8 +846,9 @@ export default function TechFormPublic() {
     setSubmitted(true);
     toast({ title: "Form submitted!", description: "Your job completion has been recorded." });
 
-    if (!isDemo && job.id) {
-      // Chat notification
+    if (false && !isDemo && job.id) {
+      // Retired legacy chat notification. The office-facing signal is now
+      // activity_log plus the shared job read models used by Team HQ and Now.
       const { data: channel } = await supabase
         .from("chat_channels")
         .select("id")

@@ -141,14 +141,15 @@ Remaining direct reads are not all bad. Some are mutation screens or admin tools
 - Move dashboard/read-only context behind canonical hooks/views.
 - Avoid giving Jarvis old raw-table paths when a canonical read model exists.
 
-The biggest old parallel communication path is still `chat_*`. It appears mostly unused by the current Team HQ, but some legacy helpers still reference it:
+The biggest old parallel communication path is still `chat_*`. It appears mostly unused by the current Team HQ. The active app path has now been moved toward `team_*`:
 
 - `src/hooks/useChat.ts`
 - `src/hooks/useChatNotifications.ts`
-- `src/pages/TechFormPublic.tsx` completion notification block
-- Jarvis tool labels for `read_chat_messages` / `send_chat_message`
+- `src/pages/TechFormPublic.tsx` no longer writes new tech completion notices into `chat_messages`; the office-facing signal is `activity_log` plus shared job read models.
+- Jarvis canonical tools now use `read_team_messages` / `send_team_message`.
+- `read_chat_messages` / `send_chat_message` are marked retired and disabled by migration `20260501224500_retire_legacy_chat_tools.sql`.
 
-Recommended next step: either migrate useful `chat_*` history into `team_*`, or explicitly retire `chat_*` from the app and make any remaining tech-form/system notifications write to `team_*`, `activity_log`, or `action_items` depending on whether they are a chat message, a job event, or a true Now action.
+Recommended next step: migrate useful `chat_*` history into `team_*`, or leave it archived as read-only history. New app features should write to `team_*`, `activity_log`, or `action_items` depending on whether they are a chat message, a job event, or a true Now action.
 
 ## Merge Candidates
 

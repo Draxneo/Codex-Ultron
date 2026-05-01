@@ -26,7 +26,7 @@ const CATEGORY_MAP: Record<string, { label: string; emoji: string; order: number
 
 /** Map function_name → category */
 function getCategoryKey(fn: string): string {
-  if (["send_sms_to_customer", "send_sms_to_employee", "send_tech_form_link", "search_sms_history", "search_call_history", "read_chat_messages", "send_chat_message"].includes(fn)) return "communications";
+  if (["send_sms_to_customer", "send_sms_to_employee", "send_tech_form_link", "search_sms_history", "search_call_history", "read_team_messages", "send_team_message", "read_chat_messages", "send_chat_message"].includes(fn)) return "communications";
   if (["create_quote", "convert_estimate_to_job", "generate_letterhead_document"].includes(fn)) return "sales";
   if (["get_travel_times", "check_scheduling_fit", "suggest_schedule_optimization"].includes(fn)) return "scheduling";
   if (["create_customer", "create_job", "update_job_field", "verify_address", "suggest_actions"].includes(fn)) return "customer";
@@ -50,8 +50,10 @@ const FRIENDLY_DESCRIPTIONS: Record<string, string> = {
   suggest_schedule_optimization: "Suggests a better job order to reduce total driving time.",
   send_sms_to_customer: "Sends a text message to a customer. Currently disabled — all customer SMS goes through the dispatcher.",
   send_sms_to_employee: "Sends a text message to an employee through Twilio.",
-  send_chat_message: "Posts a message into a team chat channel on behalf of JARVIS.",
-  read_chat_messages: "Reads recent messages from a team chat channel.",
+  send_team_message: "Prepares a Team Headquarters message for dispatcher approval, then posts it to the selected room.",
+  read_team_messages: "Reads recent messages from Team Headquarters rooms and direct conversations.",
+  send_chat_message: "Retired legacy chat tool. Use send_team_message instead.",
+  read_chat_messages: "Retired legacy chat tool. Use read_team_messages instead.",
   search_call_history: "Searches past phone calls by number, name, or status.",
   search_sms_history: "Searches past text messages by number, name, or keywords.",
   send_tech_form_link: "Texts the tech a link to their pre-install checklist or completion form.",
