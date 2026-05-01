@@ -3425,15 +3425,9 @@ export default function OperationsDeskV2() {
   };
 
   useEffect(() => {
-    if (selected) return;
-    const nextActionable = conversations.find((item) => getConversationGroup(item) === "needs_action");
-    if (nextActionable) setSelected(nextActionable);
-  }, [conversations, selected]);
-
-  useEffect(() => {
     if (!selected) return;
     if (conversations.some((item) => item.id === selected.id)) return;
-    setSelected(conversations[0] || null);
+    setSelected(null);
   }, [conversations, selected]);
 
   useEffect(() => {
