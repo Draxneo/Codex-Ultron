@@ -235,6 +235,35 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
     animated: false, style: { stroke: "hsl(var(--destructive))", strokeDasharray: "5 5" }, label: "Timeout",
   });
 
+  // ── Hold Queue ──
+  const queueWaitSeconds = Math.max(5, (config as any).overflow_ring_seconds_before_handoff || 5);
+  const queueY = Y_START + (menuOptions.length * Y_GAP) + 200;
+  nodes.push({
+    id: "hold-queue", type: "ivrNode",
+    position: { x: X_GAP * 5, y: queueY },
+    data: {
+      nodeType: "hold_music",
+      label: "Hold Queue",
+      subtitle: config.hold_music_audio_url
+        ? `Custom queue audio - ${queueWaitSeconds}s`
+        : `Fallback voice - ${queueWaitSeconds}s`,
+      onSelect,
+    } satisfies IvrNodeData,
+  });
+  if (menuOptions.length > 0) {
+    menuOptions.forEach((opt) => {
+      edges.push({
+        id: `e-na-${opt.digit}-hold`, source: `na-${opt.digit}`, target: "hold-queue",
+        animated: true, style: { stroke: "hsl(262 83% 58%)" }, label: "Busy / retry wait",
+      });
+    });
+  } else {
+    edges.push({
+      id: "e-direct-na-hold", source: "direct-na", target: "hold-queue",
+      animated: true, style: { stroke: "hsl(262 83% 58%)" }, label: "Busy / retry wait",
+    });
+  }
+
   // ── 24/7 Answering Service Overflow ──
   const overflowEnabled = (config as any).answering_service_enabled === true;
   const overflowNumber = (config as any).answering_service_number || "";
@@ -243,7 +272,7 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
     ? (overflowNumber ? `→ ${overflowNumber}` : "No number set")
     : "Disabled — click to enable";
 
-  const overflowY = Y_START + (menuOptions.length * Y_GAP) + 200;
+  const overflowY = queueY + 110;
   nodes.push({
     id: "overflow", type: "ivrNode",
     position: { x: X_GAP * 6, y: overflowY },
@@ -258,19 +287,10 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
   if (overflowEnabled && overflowNumber) {
 
     if ((config as any).overflow_on_busy || (config as any).overflow_on_no_answer) {
-      // Connect every "no answer" node to overflow
-      menuOptions.forEach((opt) => {
-        edges.push({
-          id: `e-na-${opt.digit}-overflow`, source: `na-${opt.digit}`, target: "overflow",
-          animated: true, style: { stroke: "hsl(189 94% 43%)" }, label: "No answer overflow",
-        });
+      edges.push({
+        id: "e-hold-overflow", source: "hold-queue", target: "overflow",
+        animated: true, style: { stroke: "hsl(189 94% 43%)" }, label: "Still busy",
       });
-      if (menuOptions.length === 0) {
-        edges.push({
-          id: "e-direct-na-overflow", source: "direct-na", target: "overflow",
-          animated: true, style: { stroke: "hsl(189 94% 43%)" }, label: "No answer overflow",
-        });
-      }
     }
     if ((config as any).overflow_after_hours) {
       menuOptions.forEach((opt) => {

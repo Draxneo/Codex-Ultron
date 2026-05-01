@@ -202,7 +202,7 @@ function GreetingEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
   return (
     <div className="space-y-4">
       <AudioUploadField
-        label="Main Greeting"
+        label="Main IVR Menu Recording"
         audioUrl={config.greeting_audio_url}
         textValue={config.greeting_text}
         onTextChange={(v) => onUpdateConfig({ greeting_text: v })}
@@ -210,6 +210,9 @@ function GreetingEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpdat
         placeholder="Thank you for calling…"
         bucketPath="main"
       />
+      <p className="rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/20 dark:text-amber-200">
+        If you upload audio here, callers hear that recording as the menu prompt. The typed text is only used as a fallback when no recording is uploaded.
+      </p>
 
       <Separator />
 
@@ -863,7 +866,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
 
   const isAfterHoursSms = nodeId.startsWith("sms-ah-");
 
-  const nodeTitle = nodeType === "greeting" ? "Greeting & Settings"
+  const nodeTitle = nodeType === "greeting" ? "Greeting & Menu"
     : nodeType === "department" ? (menuOption?.label || "Department")
     : nodeType === "holiday" ? "Holiday Check"
     : nodeType === "no_answer" ? "No Answer"
@@ -948,10 +951,38 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
           </div>
         )}
 
-        {(nodeType === "voicemail" && nodeId !== "holiday-vm") && (
-          <p className="text-sm text-muted-foreground">
-            Callers can optionally leave a voicemail. The missed call SMS fires regardless — voicemail is not required for the SMS to send.
-          </p>
+        {(nodeType === "voicemail" && nodeId !== "holiday-vm") && !menuOption && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This is the general voicemail prompt when the call flow sends a caller to voicemail. The missed call SMS still fires even if they hang up.
+            </p>
+            <AudioUploadField
+              label="General Voicemail Recording"
+              audioUrl={config.voicemail_audio_url}
+              textValue={config.voicemail_greeting}
+              onTextChange={(v) => onUpdateConfig({ voicemail_greeting: v })}
+              onAudioChange={(url) => onUpdateConfig({ voicemail_audio_url: url })}
+              placeholder="Sorry we missed you. Leave a message and we will call you right back."
+              bucketPath="general-vm"
+            />
+          </div>
+        )}
+
+        {(nodeType === "voicemail" && nodeId !== "holiday-vm") && menuOption && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This is the voicemail prompt for callers who picked {menuOption.label} and nobody answered. The missed call SMS still fires even if they hang up.
+            </p>
+            <AudioUploadField
+              label={`${menuOption.label} Voicemail Recording`}
+              audioUrl={menuOption.dept_vm_audio_url || null}
+              textValue={menuOption.dept_vm_greeting || ""}
+              onTextChange={(v) => onUpdateDept({ digit: menuOption.digit, dept_vm_greeting: v }, true)}
+              onAudioChange={(url) => onUpdateDept({ digit: menuOption.digit, dept_vm_audio_url: url })}
+              placeholder={`e.g. You reached our ${menuOption.label} team. Leave a message and we will call you right back.`}
+              bucketPath={`dept-${menuOption.digit}-vm`}
+            />
+          </div>
         )}
 
         {nodeType === "no_answer" && (
@@ -978,11 +1009,28 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
           </div>
         )}
 
-        {(nodeType === "hangup" || nodeType === "after_hours") && (
+        {(nodeType === "hangup" || (nodeType === "after_hours" && !menuOption)) && (
           <p className="text-sm text-muted-foreground">
             {nodeType === "hangup" && "Call disconnects after two failed menu input attempts."}
             {nodeType === "after_hours" && "Plays the department's after-hours greeting when calling outside business hours."}
           </p>
+        )}
+
+        {nodeType === "after_hours" && menuOption && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This is what callers hear when they choose {menuOption.label} outside that department's open hours.
+            </p>
+            <AudioUploadField
+              label={`${menuOption.label} After-Hours Recording`}
+              audioUrl={menuOption.dept_after_hours_audio_url || null}
+              textValue={menuOption.dept_after_hours_greeting || ""}
+              onTextChange={(v) => onUpdateDept({ digit: menuOption.digit, dept_after_hours_greeting: v }, true)}
+              onAudioChange={(url) => onUpdateDept({ digit: menuOption.digit, dept_after_hours_audio_url: url })}
+              placeholder={`e.g. You've reached our ${menuOption.label} department after hours. Please leave a message after the tone.`}
+              bucketPath={`dept-${menuOption.digit}`}
+            />
+          </div>
         )}
 
         {nodeType === "sms" && menuOption && (() => {
