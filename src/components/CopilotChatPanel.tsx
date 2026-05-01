@@ -388,6 +388,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
   const pendingAutoSend = useRef(false);
   const autoSendText = useRef("");
   const lastAutoSentForSession = useRef<string | null>(null);
+  const sendMessageRef = useRef<(overrideText?: string) => Promise<void>>(async () => {});
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const isReadOnly = activeSession?.ended_at != null;
@@ -413,9 +414,9 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       autoSendText.current = "";
       if (lastAutoSentForSession.current === key) return;
       lastAutoSentForSession.current = key;
-      sendMessage();
+      sendMessageRef.current();
     }
-  }, [input]);
+  }, [input, activeSessionId, chatLoading]);
 
   const handleWake = useCallback(() => {
     pendingAutoSend.current = true;
@@ -723,6 +724,7 @@ export default function CopilotChatPanel({ pageContext, compact = false, employe
       setChatLoading(false);
     }
   };
+  sendMessageRef.current = sendMessage;
 
   const quickQuestions = (() => {
     if (!routeKey) return ["What should I focus on first today?", "Which jobs are at risk?", "How's the team doing this week?"];
