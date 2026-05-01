@@ -56,19 +56,22 @@ function useAttentionCounts() {
           .not("scheduled_date", "is", null)
           .not("status", "in", '("done","invoiced","canceled")')
           .is("completed_at", null)
-          .not("hcp_status", "ilike", "%complete%"),
+          .not("hcp_status", "ilike", "%complete%")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 1: Ready to Schedule (unscheduled, not on_hold, not follow-up)
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .is("scheduled_date", null)
           .neq("status", "on_hold")
           .or("needs_follow_up.is.null,needs_follow_up.eq.false")
-          .not("status", "in", '("done","invoiced","canceled")'),
+          .not("status", "in", '("done","invoiced","canceled")')
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 1b: Waiting on Parts (on_hold status)
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .eq("status", "on_hold")
-          .not("status", "in", '("done","invoiced","canceled")'),
+          .not("status", "in", '("done","invoiced","canceled")')
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 2: Deposits needed
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -124,7 +127,8 @@ function useAttentionCounts() {
         supabase.from("jobs").select("id", { count: "exact", head: true })
           .eq("site_visit_missing", true)
           .is("photos_uploaded_at", null)
-          .not("status", "in", '("done","invoiced","canceled")'),
+          .not("status", "in", '("done","invoiced","canceled")')
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 9: Parts ready for pickup
         supabase.from("parts_orders" as any).select("id", { count: "exact", head: true })

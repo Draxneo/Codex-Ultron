@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
 
 type CustomerFallback = {
   id: string;
@@ -95,7 +96,9 @@ export function useJobs() {
         .from("jobs")
         .select("*")
         .not("status", "in", '("canceled","cancelled","done","invoiced","completed","complete","closed")')
-        .or(`scheduled_date.gte.${cutoff},scheduled_date.is.null,status.in.("new","scheduled","in_progress","on_hold")`)
+        .or(
+          `scheduled_date.gte.${cutoff},and(scheduled_date.is.null,created_at.gte.${APP_ACTION_GO_LIVE_DATE}),and(status.in.("new","scheduled","in_progress","on_hold"),created_at.gte.${APP_ACTION_GO_LIVE_DATE})`
+        )
         .order("scheduled_date", { ascending: false });
       if (error) throw error;
 
@@ -229,6 +232,7 @@ export function useFollowUpJobs() {
         .select("*")
         .eq("needs_follow_up", true)
         .not("status", "in", '("done","invoiced","canceled")')
+        .gte("created_at", APP_ACTION_GO_LIVE_DATE)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -257,6 +261,7 @@ export function useBacklogJobs() {
         .select("*")
         .not("status", "in", '("done","invoiced","canceled","completed")')
         .or("scheduled_date.is.null,status.eq.on_hold,needs_follow_up.eq.true")
+        .gte("created_at", APP_ACTION_GO_LIVE_DATE)
         .order("created_at", { ascending: false });
       if (error) throw error;
 
