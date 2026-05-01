@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useState } from "react";
+import { useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeLast10 } from "@/lib/formatters";
@@ -63,19 +63,18 @@ export type CallConversation = {
 
 export function useCallLog() {
   const queryClient = useQueryClient();
-  const [contactMap, setContactMap] = useState<ContactLookupMap>({});
-
-  // Build phone→name lookup from employees + customers
-  useEffect(() => {
-    const load = async () => {
+  const { data: contactMap = {} } = useQuery({
+    queryKey: ["communication_contact_lookup", "calls"],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    queryFn: async () => {
       const [{ data: employees }, { data: customers }] = await Promise.all([
         supabase.from("employees").select("name, phone, is_active"),
         supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
       ]);
-      setContactMap(buildContactMap(employees, customers));
-    };
-    load();
-  }, []);
+      return buildContactMap(employees, customers);
+    },
+  });
 
   // Stale-call cleanup is now handled entirely server-side by the
   // `reconcile-stuck-calls` cron and the `enforce_terminal_call_status` DB
