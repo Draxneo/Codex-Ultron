@@ -21,6 +21,11 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function debugBooking(message: string, detail?: Record<string, unknown>) {
+  if (!import.meta.env.DEV) return;
+  console.debug(`[useBookingAction] ${message}`, detail);
+}
+
 export type BookingPhase = "idle" | "resolving" | "booking" | "syncing" | "booked" | "failed";
 
 export type BookingResult = {
@@ -110,7 +115,15 @@ export function useBookingAction() {
           is_estimate: m.job_type === "estimate",
         };
 
-        console.log("[useBookingAction] customer-actions create_job payload:", body);
+        debugBooking("creating job from action item", {
+          action_item_id,
+          customer_id: body.customer_id || null,
+          job_type: body.job_type,
+          has_phone: Boolean(body.customer_phone),
+          has_email: Boolean(body.customer_email),
+          has_address: Boolean(body.address),
+          scheduled: Boolean(body.scheduled_date),
+        });
         setState(action_item_id, { phase: "booking" });
 
         const { data: jobResult, error: jobError } = await supabase.functions.invoke("customer-actions", {
@@ -133,7 +146,12 @@ export function useBookingAction() {
           },
         });
 
-        console.log("[useBookingAction] customer-actions create_job response:", { jobResult, jobError });
+        debugBooking("booking function returned", {
+          action_item_id,
+          ok: !jobError && !jobResult?.error,
+          job_id: jobResult?.job?.id || null,
+          error: jobError?.message || jobResult?.error || null,
+        });
 
         if (jobError) throw new Error(jobError.message || "Edge function call failed");
         if (!jobResult) throw new Error("No response from booking function");
