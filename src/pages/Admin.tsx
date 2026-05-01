@@ -55,6 +55,7 @@ import HcpCustomerSyncButton from "@/components/HcpCustomerSyncButton";
 import { PaysheetPanel } from "@/components/PaysheetPanel";
 import { CustomerDataTools } from "@/components/admin/CustomerDataTools";
 import { ADMIN_SETTING_SECTIONS } from "@/config/adminNavigation";
+import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 // Webhook URLs
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hcp-webhook`;
@@ -74,7 +75,7 @@ function DispatchRecalcButton() {
     try {
       const today = format(new Date(), "yyyy-MM-dd");
       const tomorrow = format(new Date(Date.now() + 86400000), "yyyy-MM-dd");
-      const { data: jobRows } = await supabase.from("jobs").select("assigned_to, scheduled_date").gte("scheduled_date", today).lte("scheduled_date", tomorrow).not("status", "in", '("canceled")');
+      const { data: jobRows } = await supabase.from("jobs").select("assigned_to, scheduled_date").gte("scheduled_date", today).lte("scheduled_date", tomorrow).not("status", "in", CLOSED_WORK_STATUS_FILTER);
       const empMap = new Map(employees.map((e: any) => [e.name, e.id]));
       const seen = new Set<string>();
       const batch: { employee_id: string; date: string }[] = [];

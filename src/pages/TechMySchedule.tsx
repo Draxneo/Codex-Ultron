@@ -23,7 +23,7 @@ import { JobScheduleCard } from "@/components/job/JobScheduleCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
+import { CLOSED_ESTIMATE_STATUS_FILTER, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 // Tech lane colors mirror DayCalendarBoard
 const TECH_HEX_PALETTE = [
@@ -138,7 +138,7 @@ export default function TechMySchedule() {
           .gte("scheduled_date", weekStartStr)
           .lte("scheduled_date", weekEndStr)
           .eq("assigned_to", employeeName!)
-          .not("status", "in", "(canceled,lost)"),
+          .not("status", "in", CLOSED_ESTIMATE_STATUS_FILTER),
       ]);
       for (const r of jobsRes.data || []) {
         if (r.scheduled_date) counts.set(r.scheduled_date, (counts.get(r.scheduled_date) || 0) + 1);
