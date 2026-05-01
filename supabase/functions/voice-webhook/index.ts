@@ -44,11 +44,17 @@ function menuGreetingTwiml(
   menuText: string,
 ): string {
   if (audioUrl) {
-    return `<Play>${escapeXml(audioUrl)}</Play>
-    <Say voice="Polly.Joanna">${escapeXml(menuText)}</Say>`;
+    return `<Play>${escapeXml(audioUrl)}</Play>`;
   }
   return `<Say voice="Polly.Joanna">${
     escapeXml(`${greetingText} ${menuText}`.trim())
+  }</Say>`;
+}
+
+function menuRetryTwiml(audioUrl: string | null, menuText: string): string {
+  if (audioUrl) return `<Play>${escapeXml(audioUrl)}</Play>`;
+  return `<Say voice="Polly.Joanna">We didn't receive a response. ${
+    escapeXml(menuText)
   }</Say>`;
 }
 
@@ -932,9 +938,7 @@ Deno.serve(async (req) => {
       }&amp;ContactType=${
         encodeURIComponent(contactType)
       }&amp;Attempt=2" timeout="8" input="dtmf">
-    <Say voice="Polly.Joanna">We didn't receive a response. ${
-        escapeXml(menuText)
-      }</Say>
+    ${menuRetryTwiml(config.greeting_audio_url, menuText)}
   </Gather>
   <Redirect>${escapeXml(ivrHandlerUrl)}?CallSid=${
         encodeURIComponent(callSid)

@@ -961,6 +961,14 @@ export function useSoftphone(enabled: boolean = true) {
     const unsubscribe = onPowerResume(() => {
       console.log("[Softphone] Power resume — re-warming audio + re-registering Twilio Device");
       try { warmAudioContext(); } catch { /* noop */ }
+      const callInFlight = state.status === "ringing" ||
+                           state.status === "connecting" ||
+                           state.status === "on-call" ||
+                           _callStartedAt !== null;
+      if (callInFlight) {
+        callDebug("power-resume.skip-registration-during-call", { status: state.status });
+        return;
+      }
       const device = deviceRef.current;
       if (!device) {
         if (!initializingRef.current) initialize();
@@ -979,7 +987,7 @@ export function useSoftphone(enabled: boolean = true) {
     });
 
     return unsubscribe;
-  }, [enabled, initialize, isElectronMainWindow, refreshDeviceToken, safeRegisterDevice]);
+  }, [enabled, initialize, isElectronMainWindow, refreshDeviceToken, safeRegisterDevice, state.status, _callStartedAt]);
 
   // ── Registration heartbeat ──
   // The Twilio Device WebSocket can silently drop (network blip, idle disconnect,
@@ -993,10 +1001,14 @@ export function useSoftphone(enabled: boolean = true) {
       const device = deviceRef.current;
       if (!device) return;
       const devState = (device as any).state || (device as any).status?.();
-      const inCall = _callStartedAt !== null;
+      const inCall = state.status === "ringing" ||
+                     state.status === "connecting" ||
+                     state.status === "on-call" ||
+                     _callStartedAt !== null;
 
       if (devState === "destroyed") {
         callDebug("heartbeat.device-destroyed", { inCall });
+        if (inCall) return;
         console.warn("[Softphone heartbeat] Device destroyed — full re-init");
         deviceRef.current = null;
         if (!initializingRef.current) initialize();
@@ -1005,6 +1017,7 @@ export function useSoftphone(enabled: boolean = true) {
 
       if (devState !== "registered") {
         callDebug("heartbeat.re-register", { devState, inCall });
+        if (inCall) return;
         console.warn(`[Softphone heartbeat] Device state="${devState}" inCall=${inCall} — forcing re-register`);
         void refreshDeviceToken("heartbeat", device).finally(() => {
           void safeRegisterDevice(device, "heartbeat").then((ok) => {
@@ -1020,7 +1033,7 @@ export function useSoftphone(enabled: boolean = true) {
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [initialize, isElectronMainWindow, enabled, refreshDeviceToken, safeRegisterDevice]);
+  }, [initialize, isElectronMainWindow, enabled, refreshDeviceToken, safeRegisterDevice, state.status, _callStartedAt]);
 
   /**
    * Non-destructive health check / recovery.
