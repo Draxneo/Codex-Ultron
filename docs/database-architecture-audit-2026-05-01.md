@@ -143,8 +143,7 @@ Remaining direct reads are not all bad. Some are mutation screens or admin tools
 
 The biggest old parallel communication path is still `chat_*`. It appears mostly unused by the current Team HQ. The active app path has now been moved toward `team_*`:
 
-- `src/hooks/useChat.ts`
-- `src/hooks/useChatNotifications.ts`
+- `src/hooks/useChat.ts` and `src/hooks/useChatNotifications.ts` were removed because nothing imported them.
 - `src/pages/TechFormPublic.tsx` no longer writes new tech completion notices into `chat_messages`; the office-facing signal is `activity_log` plus shared job read models.
 - Jarvis canonical tools now use `read_team_messages` / `send_team_message`.
 - `read_chat_messages` / `send_chat_message` are marked retired and disabled by migration `20260501224500_retire_legacy_chat_tools.sql`.

@@ -510,20 +510,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ─── 2. CREATE CHAT CHANNEL (idempotent) ───
-    const chatFilter = isEstimateTable
-      ? { column: "estimate_id", value: recordId }
-      : { column: "job_id", value: recordId };
-    const { data: existingChat } = await sb.from("chat_channels").select("id").eq(chatFilter.column, chatFilter.value).maybeSingle();
-    if (!existingChat) {
-      const chatInsert: any = { name: `${custName} — ${isEstimateType ? "estimate" : jobType}` };
-      chatInsert[chatFilter.column] = chatFilter.value;
-      const { error: chatErr } = await sb.from("chat_channels").insert(chatInsert);
-      if (chatErr) console.error("Chat channel create error:", chatErr);
-      else results.chat_created = true;
-    }
+    // Team/customer context now comes from Team HQ, activity_log, action_items,
+    // and the shared read models. Do not create new legacy chat_channels here.
 
-    // ─── 3. AUTO-STAMP LINE ITEMS (jobs table only, non-estimate types) ───
+    // 3. AUTO-STAMP LINE ITEMS (jobs table only, non-estimate types) ───
     if (!isEstimateTable && !isEstimateType) {
       try {
         const { data: existingItems } = await sb.from("job_line_items").select("id").eq("job_id", recordId).limit(1);

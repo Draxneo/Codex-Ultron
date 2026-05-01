@@ -71,7 +71,7 @@ const FRIENDLY_DESCRIPTIONS: Record<string, string> = {
   invoke_repair_quote: "Delegates to repair quote edge function (pricing engine).",
   invoke_carrier_enterprise: "Delegates to CE portal edge function (procurement).",
   create_customer: "Creates a new customer record in the CRM.",
-  create_job: "Books a new job on the dispatch board.",
+  create_job: "Prepares a new job card for human approval before anything lands on the dispatch board.",
   update_job_field: "Stamps a timestamp or status field on a job record.",
   create_parts_order: "Creates a parts/equipment order for a job.",
   update_warranty_status: "Updates warranty registration status for a job.",
