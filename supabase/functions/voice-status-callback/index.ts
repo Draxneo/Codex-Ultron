@@ -7,6 +7,7 @@ import { buildKeytermParams } from "../_shared/deepgramKeyterms.ts";
 import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
+import { resolveContact } from "../_shared/resolveContact.ts";
 
 const NEGATIVE_TERMINAL_STATUSES = new Set([
   "no-answer",
@@ -616,9 +617,29 @@ Deno.serve(async (req) => {
 
       // ── Inject missed call action card into Copilot ──
       try {
-        const callerDisplay = existingRow.contact_name ||
-          existingRow.phone_number || "Unknown";
         const phone = existingRow.phone_number || "";
+        const resolvedCaller = phone ? await resolveContact(supabase, phone) : null;
+        const callerDisplay = existingRow.contact_name ||
+          resolvedCaller?.contactName ||
+          existingRow.phone_number || "Unknown";
+        const callerType = existingRow.contact_type || resolvedCaller?.contactType || "unknown";
+
+        if (callerType === "employee") {
+          console.log(`Missed call was from employee ${callerDisplay}; skipping customer action card`);
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-status-callback",
+            eventKind: "action_card_skipped",
+            summary: "Missed-call action card skipped for employee",
+            reason: "employee_phone_number",
+            severity: "info",
+            traceGroup: existingRow.twilio_sid,
+            entityType: "call",
+            entityId: existingRow.id,
+            callSid: existingRow.twilio_sid,
+            metadata: { phone_number: phone, caller_display: callerDisplay },
+          });
+        } else {
 
         const { data: existingAction } = await supabase
           .from("action_items")
@@ -672,6 +693,7 @@ Deno.serve(async (req) => {
           },
         });
         console.log(`Missed call action_item created for ${callerDisplay}`);
+        }
         }
       } catch (mcErr) {
         console.error("Missed call action card error:", mcErr);
