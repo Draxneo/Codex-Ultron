@@ -87,6 +87,12 @@ function customerAddress(customer: any, overview: CustomerOverview) {
   return fromOverview || fromCustomer || "No service address saved";
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 function SignalCard({
   icon: Icon,
   label,
@@ -360,8 +366,8 @@ function ProtectionPanel({
   customerId: string;
   overview: CustomerOverview;
 }) {
-  const { data: agreements = [], isLoading: agreementsLoading } = useCustomerAgreements(customerId);
-  const { data: certificates = [], isLoading: certificatesLoading } = useCertificatesForCustomer(customerId);
+  const { data: agreements = [], isLoading: agreementsLoading, isError: agreementsError, error: agreementsQueryError } = useCustomerAgreements(customerId);
+  const { data: certificates = [], isLoading: certificatesLoading, isError: certificatesError, error: certificatesQueryError } = useCertificatesForCustomer(customerId);
   const activeAgreement = agreements.find((a) => a.status === "active") || agreements[0];
 
   return (
@@ -374,7 +380,12 @@ function ProtectionPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {agreementsLoading ? (
+          {agreementsError ? (
+            <InlineDataWarning
+              title="Comfort Club details did not load"
+              detail={`${errorMessage(agreementsQueryError)}. Refresh before answering membership questions.`}
+            />
+          ) : agreementsLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : activeAgreement ? (
             <div className="rounded-md border bg-muted/20 p-4">
@@ -416,7 +427,12 @@ function ProtectionPanel({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {certificatesLoading ? (
+          {certificatesError ? (
+            <InlineDataWarning
+              title="Warranty certificates did not load"
+              detail={`${errorMessage(certificatesQueryError)}. Refresh before answering warranty or registration questions.`}
+            />
+          ) : certificatesLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : certificates.length ? (
             <div className="grid gap-3 md:grid-cols-2">
@@ -461,12 +477,26 @@ function ProtectionPanel({
   );
 }
 
+function InlineDataWarning({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+      <div className="flex gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p className="font-semibold">{title}</p>
+          <p className="mt-1 text-xs leading-relaxed">{detail}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [tab, setTab] = useState("snapshot");
-  const { data: overview, isLoading, isError } = useCustomerOverview(id);
-  const { data: customerTimeline = [] } = useCustomerTimeline(id, 60);
+  const { data: overview, isLoading, isError, error: overviewQueryError } = useCustomerOverview(id);
+  const { data: customerTimeline = [], isError: timelineError, error: timelineQueryError } = useCustomerTimeline(id, 60);
 
   if (isLoading) {
     return (
@@ -497,7 +527,7 @@ export default function CustomerDetail() {
           <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
           <h1 className="text-xl font-semibold">Customer not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            This customer may have been deleted, moved, or the link is invalid.
+            {overviewQueryError ? errorMessage(overviewQueryError) : "This customer may have been deleted, moved, or the link is invalid."}
           </p>
         </main>
       </div>
@@ -526,6 +556,13 @@ export default function CustomerDetail() {
       />
 
       <main className="mx-auto max-w-[1600px] space-y-5 px-6 py-5">
+        {timelineError ? (
+          <InlineDataWarning
+            title="Customer timeline did not load"
+            detail={`${errorMessage(timelineQueryError)}. Refresh before relying on recent calls, texts, quotes, or work history.`}
+          />
+        ) : null}
+
         <section className="rounded-lg border bg-background p-4 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
