@@ -52,6 +52,10 @@ export function useRecentActivity(limit = 8) {
           .limit(limit),
       ]);
 
+      if (calls.error) throw calls.error;
+      if (sms.error) throw sms.error;
+      if (jobs.error) throw jobs.error;
+
       // Lookup addresses for unique customer_ids that came from calls/sms
       const phoneSet = new Set<string>();
       for (const c of calls.data ?? []) if (c.phone_number) phoneSet.add(c.phone_number);
