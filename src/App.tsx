@@ -24,7 +24,6 @@ import { useAppResume } from "@/hooks/useAppResume";
 import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { onMainMessage } from "@/lib/electron";
-import { PhoneOnlySoftphone } from "./components/PhoneOnlySoftphone";
 import { SmsComposerPopup } from "./components/SmsComposerPopup";
 import { CallerInfoCenter } from "./components/softphone/CallerInfoCenter";
 import { IntakeActionCards } from "./components/softphone/IntakeActionCards";
@@ -83,6 +82,9 @@ const SmsPage = lazy(() => import("./pages/SmsPage"));
 const CallsPage = lazy(() => import("./pages/CallsPage"));
 const TeamCommunications = lazy(() => import("./pages/TeamCommunications"));
 const PhoneConsole = lazy(() => import("./pages/PhoneConsole"));
+const PhoneOnlySoftphone = lazy(() =>
+  import("./components/PhoneOnlySoftphone").then((module) => ({ default: module.PhoneOnlySoftphone }))
+);
 const Admin = lazy(() => import("./pages/Admin"));
 const SystemLog = lazy(() => import("./pages/SystemLog"));
 const ReferralPublic = lazy(() => import("./pages/ReferralPublic"));
@@ -171,12 +173,14 @@ function SoftphoneOnlyView() {
   const bootCustomerId = searchParams.get("customerId") || undefined;
 
   return (
-    <PhoneOnlySoftphone
-      initialNumber={bootDialNumber}
-      contactName={searchParams.get("name") || undefined}
-      jobId={bootJobId}
-      customerId={bootCustomerId}
-    />
+    <Suspense fallback={<RouteLoading />}>
+      <PhoneOnlySoftphone
+        initialNumber={bootDialNumber}
+        contactName={searchParams.get("name") || undefined}
+        jobId={bootJobId}
+        customerId={bootCustomerId}
+      />
+    </Suspense>
   );
 }
 
