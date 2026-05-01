@@ -63,6 +63,22 @@ For speed and simplicity, the app should use dashboard-specific views/RPCs:
 
 This keeps the database organized while making screens fast.
 
+## Canonical Read Model Pass
+
+Migration `20260501213000_canonical_operations_read_models.sql` adds the first source-of-truth read windows:
+
+- `v_unified_communications`
+- `get_unified_communications(limit, offset, view, search)`
+- `v_customer_timeline`
+- `v_dispatch_live_cards`
+- `v_quote_pipeline`
+- `v_tech_work_summary`
+- `mark_intake_communication_handled(...)`
+
+These are read windows, not new places to store facts. Calls still live in `call_log`, texts still live in `sms_log`, jobs still live in `jobs`, quotes still live in `estimates`, and technician files still live in the attachment/form tables. The point is that Intake, NOW, Dispatch, Customer HQ, Quote HQ, Tech, and Jarvis can all read the same clean story instead of rebuilding it differently on every screen.
+
+Do not use these views for blind whole-database totals. Use recent/filtered reads or the communication RPC. Big dashboard counts should use small purpose-built count queries so the owner dashboard stays fast.
+
 ## Merge Candidates
 
 The main real duplication is team communications:
