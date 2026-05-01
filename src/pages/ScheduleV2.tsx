@@ -579,16 +579,24 @@ function BoardCommandRail({
             <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No jobs need fixing right now.</p>
           )}
         </div>
-      </RailSection>
 
-      <RailSection title="Calls And Texts" detail="Recent customers who may affect today's schedule.">
-        <div className="space-y-2">
+        <div className="mt-3 border-t pt-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold text-foreground">Schedule messages</p>
+              <p className="text-[11px] text-muted-foreground">Only recent calls or texts that may affect today.</p>
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={() => navigate("/intake")}>
+              Intake HQ
+            </Button>
+          </div>
           {callsLoading || smsLoading ? (
-            <Skeleton className="h-20 rounded-md" />
+            <Skeleton className="h-10 rounded-md" />
           ) : communicationItems.length === 0 ? (
-            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No recent calls or texts.</p>
+            <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">No recent calls or texts.</p>
           ) : (
-            communicationItems.slice(0, 4).map((item) => {
+            <div className="space-y-1.5">
+            {communicationItems.slice(0, 2).map((item) => {
               const visual = communicationVisual(item);
               const VisualIcon = visual.Icon;
               const DirectionIcon = visual.DirectionIcon;
@@ -599,28 +607,25 @@ function BoardCommandRail({
                   onClick={() => onCommunicationClick(item)}
                   aria-label={`Open ${visual.label} from ${item.name}`}
                   title={visual.label}
-                  className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-muted/30"
+                  className="w-full rounded-md border bg-background px-2.5 py-2 text-left transition hover:border-primary/40 hover:bg-muted/30"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 gap-2">
-                      <span className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md", visual.className)} role="img" aria-label={visual.label} title={visual.label}>
-                        <VisualIcon className="h-4 w-4" aria-hidden="true" />
-                        <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" aria-hidden="true" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={cn("relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md", visual.className)} role="img" aria-label={visual.label} title={visual.label}>
+                        <VisualIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        <DirectionIcon className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border border-background bg-background p-0.5 text-foreground" aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold">{item.name}</p>
-                        </div>
-                        <p className="mt-1 text-xs font-medium text-foreground">{item.summary}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
-                        <p className="mt-1 text-[10px] text-muted-foreground">{item.time}</p>
+                        <p className="truncate text-xs font-semibold">{item.name}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">{item.summary}</p>
                       </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="mr-1 text-[10px] text-muted-foreground">{item.time}</span>
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-7 w-7"
                         aria-label={`Call ${item.name}`}
                         title="Call back"
                         onClick={(event) => {
@@ -628,12 +633,12 @@ function BoardCommandRail({
                           openPhoneConsole(toE164(item.phone) || item.phone, { contactName: item.name });
                         }}
                       >
-                        <Phone className="h-3.5 w-3.5" />
+                        <Phone className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-7 w-7"
                         aria-label={`Text ${item.name}`}
                         title="Text customer"
                         onClick={(event) => {
@@ -641,13 +646,14 @@ function BoardCommandRail({
                           openSmsComposer(toE164(item.phone) || item.phone, { contactName: item.name });
                         }}
                       >
-                        <MessageSquare className="h-3.5 w-3.5" />
+                        <MessageSquare className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
                 </button>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       </RailSection>
