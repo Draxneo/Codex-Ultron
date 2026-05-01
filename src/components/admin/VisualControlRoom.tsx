@@ -32,7 +32,9 @@ type CountResult = {
   icon: React.ElementType;
 };
 
-const staleCutoff = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+const CURRENT_LOOKBACK_DAYS = 7;
+
+const recentCutoff = () => new Date(Date.now() - CURRENT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
 async function countRows(
   key: string,
@@ -149,11 +151,14 @@ export function VisualControlRoom() {
         countRows(
           "workflow-alerts",
           "Workflow cards needing eyes",
-          "Cards Jarvis could not safely move forward by itself.",
+          `Cards from the last ${CURRENT_LOOKBACK_DAYS} days that Jarvis could not safely move forward by itself.`,
           "workflow_alerts",
           ShieldAlert,
           "danger",
-          (q) => q.not("status", "in", '("resolved","closed","complete","completed","dismissed")')
+          (q) =>
+            q
+              .not("status", "in", '("resolved","closed","complete","completed","dismissed")')
+              .gte("created_at", recentCutoff())
         ),
         countRows(
           "hidden-cards",
@@ -185,20 +190,23 @@ export function VisualControlRoom() {
         countRows(
           "failed-sms",
           "Text messages in trouble",
-          "Messages that failed or came back undelivered.",
+          `Failed or undelivered texts from the last ${CURRENT_LOOKBACK_DAYS} days.`,
           "sms_log",
           MessageSquareWarning,
           "danger",
-          (q) => q.in("delivery_status", ["failed", "undelivered"])
+          (q) => q.in("delivery_status", ["failed", "undelivered"]).gte("created_at", recentCutoff())
         ),
         countRows(
           "outbound-drafts",
           "Draft texts not sent",
-          "Messages prepared by the system that still need approval or cleanup.",
+          `Current draft texts from the last ${CURRENT_LOOKBACK_DAYS} days that still need approval or cleanup.`,
           "outbound_drafts",
           MessageSquareWarning,
           "watch",
-          (q) => q.not("status", "in", '("sent","closed","dismissed")')
+          (q) =>
+            q
+              .in("status", ["pending", "auto_pending", "queued_retry", "failed"])
+              .gte("created_at", recentCutoff())
         ),
         countRows(
           "dispatch-gaps",
@@ -209,7 +217,7 @@ export function VisualControlRoom() {
           "watch",
           (q) =>
             q
-              .not("status", "in", '("completed","complete","canceled","cancelled","archived")')
+              .not("status", "in", '("completed","complete","canceled","cancelled","archived","invoiced","done","paid","closed")')
               .or("scheduled_date.is.null,assigned_to.is.null,address.is.null")
         ),
         countRows(
@@ -300,7 +308,7 @@ export function VisualControlRoom() {
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="rounded-lg border bg-card p-4">
             <p className="text-3xl font-bold">{troubleCount.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">items worth checking</p>
+            <p className="text-sm text-muted-foreground">current items worth checking</p>
           </div>
           <div className="rounded-lg border bg-card p-4">
             <p className="text-3xl font-bold">{wiringCount}</p>
@@ -336,7 +344,9 @@ export function VisualControlRoom() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">What Needs Eyes</CardTitle>
-            <CardDescription>These are not daily dashboard tiles. They are admin checks for silent failures.</CardDescription>
+            <CardDescription>
+              These focus on current silent failures. Old Housecall Pro history stays out of the headline count.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {checks.filter((item) => item.tone !== "quiet").map((item) => (
