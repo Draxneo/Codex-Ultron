@@ -3,7 +3,7 @@ import { usePublicInvoice } from "@/hooks/usePublicInvoice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Download, Phone, Mail, MapPin, Shield, CheckCircle2, ExternalLink } from "lucide-react";
+import { CreditCard, Download, Phone, Mail, MapPin, Shield, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react";
 import EquipmentDocBlocks from "@/components/invoice/EquipmentDocBlocks";
 import CpsRebateBlock from "@/components/invoice/CpsRebateBlock";
 import { format } from "date-fns";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
+import { errorMessage } from "@/lib/errorMessage";
 
 const fmt = (n: number) => `$${n.toFixed(2)}`;
 
@@ -25,6 +26,7 @@ export default function InvoicePublic() {
   const { token } = useParams<{ token: string }>();
   const { data, isLoading, error } = usePublicInvoice(token);
   const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -49,6 +51,7 @@ export default function InvoicePublic() {
 
   const handlePay = async () => {
     setPaying(true);
+    setPayError(null);
     try {
       const { data: checkout, error: err } = await supabase.functions.invoke("stripe-checkout", {
         body: {
@@ -63,9 +66,10 @@ export default function InvoicePublic() {
         },
       });
       if (err) throw err;
-      if (checkout?.url) window.location.href = checkout.url;
-    } catch {
-      // silently fail for now
+      if (!checkout?.url) throw new Error("The payment link was not returned.");
+      window.location.href = checkout.url;
+    } catch (err) {
+      setPayError(errorMessage(err));
     }
     setPaying(false);
   };
@@ -117,7 +121,7 @@ export default function InvoicePublic() {
           <div>
             <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Invoice</p>
             <p className="text-2xl font-bold text-foreground mt-1">
-              {invoice.invoice_number || "—"}
+              {invoice.invoice_number || "-"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {format(new Date(invoice.created_at), "MMMM d, yyyy")}
@@ -259,24 +263,38 @@ export default function InvoicePublic() {
           </div>
         )}
 
-        {/* Pay Button — or complimentary banner for $0 */}
+        {/* Pay button, or complimentary banner for $0 */}
         {invoice.status !== "paid" && invoice.status !== "void" && invoice.total > 0 && (
-          <div className="flex justify-center print:hidden">
-            <Button
-              size="lg"
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-base px-10 py-6 shadow-lg"
-              onClick={handlePay}
-              disabled={paying}
-            >
-              <CreditCard className="h-5 w-5 mr-2" />
-              {paying ? "Processing..." : `Pay ${fmt(invoice.total)} Now`}
-            </Button>
+          <div className="print:hidden">
+            {payError && (
+              <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Payment link did not open.</p>
+                    <p>Please call Carnes and Sons Air Conditioning so we can help finish this invoice.</p>
+                    <p className="mt-1 text-xs opacity-80">{payError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-center">
+              <Button
+                size="lg"
+                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-base px-10 py-6 shadow-lg"
+                onClick={handlePay}
+                disabled={paying}
+              >
+                <CreditCard className="h-5 w-5 mr-2" />
+                {paying ? "Processing..." : `Pay ${fmt(invoice.total)} Now`}
+              </Button>
+            </div>
           </div>
         )}
         {invoice.total === 0 && invoice.status !== "paid" && (
           <div className="flex justify-center print:hidden">
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-6 py-4 text-center">
-              <p className="text-sm font-semibold text-emerald-700">✓ Complimentary Service — No Payment Due</p>
+              <p className="text-sm font-semibold text-emerald-700">Complimentary Service - No Payment Due</p>
               <p className="text-xs text-emerald-600 mt-0.5">Thank you for choosing us!</p>
             </div>
           </div>
