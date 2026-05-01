@@ -97,6 +97,7 @@ export default function TechFormPublic() {
   const [manualOverrides, setManualOverrides] = useState<Record<string, boolean>>({});
   const [geoStatus, setGeoStatus] = useState<"pending" | "acquired" | "denied" | "error">("pending");
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const saveFieldRef = useRef<(fieldId: string, val: string) => Promise<void>>(async () => {});
 
   // Offline resilience
   const { isOnline, pendingCount, saveDraft, loadDraft, clearDraft, queueSave, queuePhoto, flushQueue } = useOfflineFormSync(techFormId);
@@ -143,7 +144,7 @@ export default function TechFormPublic() {
         delete debounceTimers.current[fieldId];
         const val = values[fieldId];
         if (val?.trim() && techFormId) {
-          saveField(fieldId, val);
+          saveFieldRef.current(fieldId, val);
         }
       });
       saveDraft(values);
@@ -462,6 +463,10 @@ export default function TechFormPublic() {
       queueSave(fieldId, val);
     }
   }, [techFormId, queueSave, fields, job]);
+
+  useEffect(() => {
+    saveFieldRef.current = saveField;
+  }, [saveField]);
 
   const handleTextChange = (fieldId: string, val: string) => {
     const newValues = { ...values, [fieldId]: val };
