@@ -1168,10 +1168,13 @@ export default function ScheduleV2() {
     [filteredItems]
   );
 
+  const activeTechNames = useMemo(
+    () => (employees || []).filter((employee: any) => employee.is_active !== false).map((employee: any) => employee.name).filter(Boolean),
+    [employees]
+  );
+
   const groupedByTech = useMemo(() => {
-    const activeNames = (employees || []).filter((employee: any) => employee.is_active !== false).map((employee: any) => employee.name);
     const groups = new Map<string, ScheduleItem[]>();
-    for (const name of activeNames) groups.set(name, []);
     groups.set("Unassigned", []);
 
     for (const item of dayItems) {
@@ -1188,8 +1191,13 @@ export default function ScheduleV2() {
         if (nameB === "Unassigned") return 1;
         return nameA.localeCompare(nameB);
       })
-      .filter(([, items], index) => items.length > 0 || index < 6);
+      .filter(([, items]) => items.length > 0);
   }, [dayItems, employees]);
+
+  const availableTechNames = useMemo(() => {
+    const scheduledTechs = new Set(groupedByTech.filter(([name]) => name !== "Unassigned").map(([name]) => name));
+    return activeTechNames.filter((name) => !scheduledTechs.has(name));
+  }, [activeTechNames, groupedByTech]);
 
   const weekDays = eachDayOfInterval({
     start: startOfWeek(currentDay, { weekStartsOn: 0 }),
@@ -1367,22 +1375,23 @@ export default function ScheduleV2() {
                   </p>
                 </div>
                 <div className="grid min-w-[1320px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-                  <div className="grid gap-3 lg:grid-cols-3 2xl:grid-cols-4">
-                    {groupedByTech.map(([techName, items]) => (
-                      <section key={techName} className="flex min-h-[520px] flex-col rounded-lg border bg-card shadow-sm">
+                  <div className="space-y-3">
+                    <div className="grid gap-3 lg:grid-cols-3 2xl:grid-cols-4">
+                    {groupedByTech.length === 0 ? (
+                      <section className="rounded-lg border border-dashed bg-card p-6 text-center shadow-sm">
+                        <p className="text-sm font-semibold text-foreground">No scheduled jobs on this day</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Use Intake HQ or backlog to put work on the board.</p>
+                      </section>
+                    ) : groupedByTech.map(([techName, items]) => (
+                      <section key={techName} className="flex min-h-0 flex-col rounded-lg border bg-card shadow-sm">
                         <div className="border-b px-3 py-3">
                           <div className="flex items-center justify-between gap-2">
                             <h3 className="truncate text-sm font-semibold">{techName}</h3>
                             <Badge variant={techName === "Unassigned" ? "destructive" : "secondary"}>{items.length}</Badge>
                           </div>
                         </div>
-                        <div className="flex-1 space-y-2 overflow-y-auto p-2">
-                          {items.length === 0 ? (
-                            <div className="flex h-28 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
-                              No jobs assigned
-                            </div>
-                          ) : (
-                            items.map((item) => (
+                        <div className="max-h-[560px] space-y-2 overflow-y-auto p-2">
+                          {items.map((item) => (
                               <JobCard
                                 key={item.id}
                                 item={item}
@@ -1392,11 +1401,24 @@ export default function ScheduleV2() {
                                 onClick={() => openItem(item)}
                                 onOpenMedia={() => setSelectedMediaItem(item)}
                               />
-                            ))
-                          )}
+                          ))}
                         </div>
                       </section>
                     ))}
+                    </div>
+
+                    {availableTechNames.length > 0 && (
+                      <section className="rounded-lg border bg-card px-3 py-2 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold text-muted-foreground">Available techs</span>
+                          {availableTechNames.map((name) => (
+                            <Badge key={name} variant="outline" className="rounded-md">
+                              {name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                   </div>
                   <BoardCommandRail
                     mode={mode}
