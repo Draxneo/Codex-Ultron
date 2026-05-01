@@ -107,6 +107,12 @@ function shortDate(value: string | null | undefined) {
   return format(date, "MMM d, yyyy");
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 function firstName(estimate: Estimate) {
   return (estimate.customer_name || "there").split(" ")[0] || "there";
 }
@@ -356,14 +362,23 @@ function StageBadge({ stage }: { stage: QuoteStage }) {
 
 export default function QuoteHeadquarters() {
   const navigate = useNavigate();
-  const { data: estimates = [], isLoading } = useEstimates(false);
-  const { byEstimateId: quotePipelineById, isLoading: quotePipelineLoading } = useQuotePipelineMap(300);
+  const { data: estimates = [], isLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(false);
+  const {
+    byEstimateId: quotePipelineById,
+    isLoading: quotePipelineLoading,
+    isError: quotePipelineError,
+    error: quotePipelineQueryError,
+  } = useQuotePipelineMap(300);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<QuoteStage | "all">("all");
 
   const estimateIds = useMemo(() => estimates.map((e) => e.id), [estimates]);
 
-  const { data: presentations = [] } = useQuery({
+  const {
+    data: presentations = [],
+    isError: presentationsError,
+    error: presentationsQueryError,
+  } = useQuery({
     queryKey: ["quote-hq-presentations", estimateIds],
     enabled: estimateIds.length > 0,
     queryFn: async () => {
@@ -377,7 +392,11 @@ export default function QuoteHeadquarters() {
     },
   });
 
-  const { data: responses = [] } = useQuery({
+  const {
+    data: responses = [],
+    isError: responsesError,
+    error: responsesQueryError,
+  } = useQuery({
     queryKey: ["quote-hq-responses", estimateIds],
     enabled: estimateIds.length > 0,
     queryFn: async () => {
@@ -451,6 +470,12 @@ export default function QuoteHeadquarters() {
   }, [pipeline]);
 
   const totalValue = pipeline.reduce((sum, item) => sum + moneyFromEstimate(item.estimate), 0);
+  const quoteDataIssues = [
+    estimatesError ? `estimates (${errorMessage(estimatesQueryError)})` : null,
+    quotePipelineError ? `quote tracking (${errorMessage(quotePipelineQueryError)})` : null,
+    presentationsError ? `presentation views (${errorMessage(presentationsQueryError)})` : null,
+    responsesError ? `customer responses (${errorMessage(responsesQueryError)})` : null,
+  ].filter(Boolean);
 
   const openSmsDraft = (item: QuotePipelineItem) => {
     const phone = item.estimate.customer_phone;
@@ -506,6 +531,17 @@ export default function QuoteHeadquarters() {
             />
           </div>
         </section>
+
+        {quoteDataIssues.length > 0 && (
+          <Card className="border-amber-300 bg-amber-50 shadow-none dark:border-amber-800 dark:bg-amber-950/40">
+            <CardContent className="flex items-start gap-2 p-4 text-sm text-amber-950 dark:text-amber-100">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                Quote HQ is open, but part of the follow-up picture did not load: {quoteDataIssues.join(", ")}. Refresh before approving follow-ups.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <section className="rounded-lg border bg-background p-3 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
