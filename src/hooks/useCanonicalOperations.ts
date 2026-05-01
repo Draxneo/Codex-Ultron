@@ -149,12 +149,12 @@ export function useTechWorkSummary(jobIds: string[] = []) {
   useRealtimeInvalidation(
     stableJobIds.length
       ? [
-          { table: "jobs", queryKeys: [["tech-work-summary-read-model"]] },
-          { table: "job_attachments", queryKeys: [["tech-work-summary-read-model"]] },
-          { table: "estimates", queryKeys: [["tech-work-summary-read-model"]] },
+          { table: "jobs", queryKeys: [["tech-work-summary-read-model"], ["tech-work-summary-read-model", jobKey]] },
+          { table: "job_attachments", queryKeys: [["tech-work-summary-read-model"], ["tech-work-summary-read-model", jobKey]] },
+          { table: "estimates", queryKeys: [["tech-work-summary-read-model"], ["tech-work-summary-read-model", jobKey]] },
         ]
       : [],
-    "tech-work-summary-read-model"
+    `tech-work-summary-read-model-${jobKey || "none"}`
   );
 
   return useQuery({

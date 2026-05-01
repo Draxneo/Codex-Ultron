@@ -32,6 +32,7 @@ import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechScheduleCard } from "@/components/tech/TechScheduleCard";
 import { TechStatusCard } from "@/components/tech/TechStatusCard";
 import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
+import { useTechWorkSummary, type TechWorkSummaryRow } from "@/hooks/useCanonicalOperations";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useJob } from "@/hooks/useJobs";
@@ -86,6 +87,8 @@ export default function TechJobDetail() {
   const { employeeId } = useEffectiveAuth();
   const { data: job, isLoading, isError } = useJob(id!);
   const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
+  const { data: techWorkRows = [] } = useTechWorkSummary(id ? [id] : []);
+  const techWork = techWorkRows[0] || null;
 
   const scrollToSection = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -180,11 +183,14 @@ export default function TechJobDetail() {
           onMyWaySentAt={(job as any).on_my_way_sent_at || null}
           startedAt={(job as any).started_at || null}
           completedAt={(job as any).completed_at || null}
+          techWork={techWork}
           onOpenStatus={() => scrollToSection("tech-status")}
           onOpenPhotos={() => scrollToSection("tech-findings")}
           onOpenJarvis={() => scrollToSection("tech-jarvis")}
           onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
         />
+
+        <TechWorkBrief techWork={techWork} onOpenPhotos={() => scrollToSection("tech-findings")} onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)} />
 
         <div id="tech-status" className="scroll-mt-16">
           <TechStatusCard
@@ -377,6 +383,7 @@ function UniversalTechFlow({
   onMyWaySentAt,
   startedAt,
   completedAt,
+  techWork,
   onOpenStatus,
   onOpenPhotos,
   onOpenJarvis,
@@ -385,11 +392,15 @@ function UniversalTechFlow({
   onMyWaySentAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  techWork: TechWorkSummaryRow | null;
   onOpenStatus: () => void;
   onOpenPhotos: () => void;
   onOpenJarvis: () => void;
   onOpenCart: () => void;
 }) {
+  const hasPhotos = Number(techWork?.attachment_count || 0) > 0 || Boolean(techWork?.photos_uploaded_at);
+  const hasEstimate = Number(techWork?.estimate_count || 0) > 0 || Boolean(techWork?.latest_estimate_at);
+  const nextStep = techWork?.tech_next_step || null;
   const actions = [
     {
       title: "On My Way",
@@ -407,9 +418,9 @@ function UniversalTechFlow({
     },
     {
       title: "Snap Photos",
-      detail: "Unit, plate, readings",
+      detail: hasPhotos ? `${techWork?.attachment_count || 1} file${Number(techWork?.attachment_count || 1) === 1 ? "" : "s"} saved` : "Unit, plate, readings",
       icon: ImagePlus,
-      done: false,
+      done: hasPhotos,
       onClick: onOpenPhotos,
     },
     {
@@ -421,16 +432,16 @@ function UniversalTechFlow({
     },
     {
       title: "AI Review",
-      detail: "Jarvis drafts diagnosis",
+      detail: nextStep || "Jarvis drafts diagnosis",
       icon: Sparkles,
-      done: false,
+      done: Boolean(nextStep && nextStep !== "Send ETA and start travel."),
       onClick: onOpenJarvis,
     },
     {
       title: "Add Parts",
-      detail: "Build estimate items",
+      detail: hasEstimate ? `${techWork?.estimate_count || 1} estimate${Number(techWork?.estimate_count || 1) === 1 ? "" : "s"} started` : "Build estimate items",
       icon: Wrench,
-      done: false,
+      done: hasEstimate,
       onClick: onOpenCart,
     },
     {
@@ -464,6 +475,57 @@ function UniversalTechFlow({
         {actions.map((action) => (
           <FlowActionCard key={action.title} {...action} />
         ))}
+      </div>
+    </section>
+  );
+}
+
+function TechWorkBrief({
+  techWork,
+  onOpenPhotos,
+  onOpenCart,
+}: {
+  techWork: TechWorkSummaryRow | null;
+  onOpenPhotos: () => void;
+  onOpenCart: () => void;
+}) {
+  const nextStep = techWork?.tech_next_step || "Follow the tech flow from left to right.";
+  const attachmentCount = Number(techWork?.attachment_count || 0);
+  const estimateCount = Number(techWork?.estimate_count || 0);
+
+  return (
+    <section className="rounded-lg border bg-background p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">Shared job signal</h2>
+            <Badge variant="outline" className="rounded-sm text-[10px]">
+              Office sees this too
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{nextStep}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onOpenPhotos}
+              className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+            >
+              <p className="text-lg font-bold text-foreground">{attachmentCount}</p>
+              <p className="text-xs text-muted-foreground">photos and files</p>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCart}
+              className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+            >
+              <p className="text-lg font-bold text-foreground">{estimateCount}</p>
+              <p className="text-xs text-muted-foreground">quotes started</p>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );
