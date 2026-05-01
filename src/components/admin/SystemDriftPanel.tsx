@@ -152,7 +152,7 @@ export function SystemDriftPanel() {
           <StatCard icon={Table2} label="Tables" value={summary.public_tables ?? 0} helper={`${labelProgress}% have an owner/use label`} tone={labelProgress >= 80 ? "good" : "warning"} />
           <StatCard icon={AlertTriangle} label="Unlabeled tables" value={summary.unlabeled_tables ?? 0} helper="Need owner, purpose, and retention rule" tone={(summary.unlabeled_tables ?? 0) > 0 ? "warning" : "good"} />
           <StatCard icon={Wrench} label="Database helpers" value={summary.public_functions ?? 0} helper="RPCs, triggers helpers, and internal utilities" />
-          <StatCard icon={Bot} label="Jarvis-named pieces" value={(summary.jarvis_named_functions ?? 0) + (summary.jarvis_named_tables ?? 0)} helper="AI/Jarvis/Copilot/knowledge database surface" />
+          <StatCard icon={Bot} label="Jarvis-named pieces" value={(summary.jarvis_named_functions ?? 0) + (summary.jarvis_named_tables ?? 0)} helper="Jarvis tools, knowledge, and AI database surface" />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">

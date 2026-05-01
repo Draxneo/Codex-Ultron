@@ -54,10 +54,25 @@ function DeliveryIcon({ status }: { status?: string | null }) {
       return <CheckCheck className="h-3 w-3 text-green-500" />;
     case "sent":
     case "queued":
+    case "queued_retry":
       return <Clock className="h-3 w-3 text-muted-foreground" />;
     case "failed":
     case "undelivered":
       return <AlertCircle className="h-3 w-3 text-destructive" />;
+    default:
+      return null;
+  }
+}
+
+function deliveryStatusText(status?: string | null) {
+  switch (String(status || "").toLowerCase()) {
+    case "failed":
+    case "undelivered":
+      return "Failed to send";
+    case "queued_retry":
+      return "Queued to retry";
+    case "sending":
+      return "Sending";
     default:
       return null;
   }
@@ -141,7 +156,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
     if (newMessageMode && to) {
       const e164 = toE164(to);
       if (!e164) {
-        toast.error("Invalid phone number — enter a 10-digit US number (e.g. (210) 555-1234)");
+        toast.error("Invalid phone number - enter a 10-digit US number (e.g. (210) 555-1234)");
         return false;
       }
       to = e164;
@@ -296,7 +311,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                 ) : conversation.contactType === "vendor" ? (
                   <><Building2 className="h-3 w-3 mr-1" /> Vendor</>
                 ) : conversation.contactType === "marketing" ? (
-                  <>📣 Marketing</>
+                  <>Marketing</>
                 ) : "Unknown"}
               </Badge>
               <Select
@@ -531,6 +546,15 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                       </p>
                       {msg.direction === "outbound" && (
                         <DeliveryIcon status={(msg as any).delivery_status} />
+                      )}
+                      {msg.direction === "outbound" && deliveryStatusText((msg as any).delivery_status) && (
+                        <span className={`text-[10px] font-medium ${
+                          ["failed", "undelivered"].includes(String((msg as any).delivery_status || "").toLowerCase())
+                            ? "text-destructive"
+                            : "opacity-60"
+                        }`}>
+                          {deliveryStatusText((msg as any).delivery_status)}
+                        </span>
                       )}
                       {msg.direction === "outbound" && (msg as any).twilio_sid &&
                         ["failed", "undelivered", "sending"].includes(String((msg as any).delivery_status || "").toLowerCase()) && (
