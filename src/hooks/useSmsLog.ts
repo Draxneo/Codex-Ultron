@@ -108,6 +108,11 @@ function mergeMessagesChrono(existing: SmsMessage[], incoming: SmsMessage[]): Sm
 }
 
 const PAGE_SIZE = 150;
+const CURRENT_WORK_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+function currentWorkCutoffDate() {
+  return new Date(Date.now() - CURRENT_WORK_LOOKBACK_MS).toISOString().split("T")[0];
+}
 
 function isOpenWorkStatus(status?: string | null) {
   const text = String(status || "").toLowerCase();
@@ -119,7 +124,7 @@ function hasCurrentWorkDate(value?: string | null) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
-  return timestamp >= Date.now() - 24 * 60 * 60 * 1000;
+  return timestamp >= Date.now() - CURRENT_WORK_LOOKBACK_MS;
 }
 
 interface UseSmsLogOptions {
@@ -151,12 +156,23 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     if (disabled) return;
     const buildContactMap = async () => {
       const map: ContactLookupMap = {};
+      const currentCutoff = currentWorkCutoffDate();
 
       const [{ data: employees }, { data: customers }, { data: estimates }, { data: jobs }, { data: supplyHouses }, { data: vendorContacts }] = await Promise.all([
         supabase.from("employees").select("name, phone, is_active"),
         supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
-        supabase.from("estimates").select("id, estimate_number, customer_name, customer_phone, scheduled_date, status, work_status").not("customer_phone", "is", null).not("customer_name", "is", null),
-        supabase.from("jobs").select("id, customer_name, customer_phone, hcp_job_number, job_type, scheduled_date, status").not("customer_phone", "is", null).not("customer_name", "is", null),
+        supabase
+          .from("estimates")
+          .select("id, estimate_number, customer_name, customer_phone, scheduled_date, status, work_status")
+          .not("customer_phone", "is", null)
+          .not("customer_name", "is", null)
+          .gte("scheduled_date", currentCutoff),
+        supabase
+          .from("jobs")
+          .select("id, customer_name, customer_phone, hcp_job_number, job_type, scheduled_date, status")
+          .not("customer_phone", "is", null)
+          .not("customer_name", "is", null)
+          .gte("scheduled_date", currentCutoff),
         supabase.from("supply_houses").select("name, contact_phone, text_support_phone").not("contact_phone", "is", null),
         supabase.from("vendor_contacts").select("name, phone, supply_house_id, supply_houses(name)").not("phone", "is", null),
       ]);

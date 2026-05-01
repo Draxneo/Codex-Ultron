@@ -61,7 +61,8 @@ import { useTechStatusMap, type TechStatusInfo } from "@/hooks/useTechStatusMap"
 import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { toast } from "@/hooks/use-toast";
 import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
-import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
+import type { SmsConversation } from "@/hooks/useSmsLog";
+import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhone, toE164 } from "@/lib/formatters";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
@@ -477,7 +478,7 @@ function BoardCommandRail({
 }) {
   const navigate = useNavigate();
   const { conversations, loading: callsLoading } = useCallLog();
-  const { conversations: smsConversations, loading: smsLoading } = useSmsLog();
+  const { conversations: smsConversations, loading: smsLoading } = useSmsLogScoped();
   const openSlots = Math.max(0, (employees || []).filter((employee: any) => employee.is_active !== false).length * 3 - dayItems.length);
   const unassigned = dayItems.filter((item) => !item.assigned_to);
   const firstCritical = criticalItems[0] || null;
