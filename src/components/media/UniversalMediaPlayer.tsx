@@ -81,6 +81,7 @@ export function UniversalMediaPlayer({
       await media.play();
       onPlayed?.();
     } catch (err: any) {
+      console.warn("Universal media playback failed", { src, kind, error: err });
       setError(err?.message || "Could not play this media");
       setPlaying(false);
     }
@@ -114,6 +115,7 @@ export function UniversalMediaPlayer({
       setCurrentTime(event.currentTarget.currentTime || 0);
     },
     onError: () => {
+      console.warn("Universal media failed to load", { src, kind });
       setError("Media file could not be loaded");
       setPlaying(false);
     },
