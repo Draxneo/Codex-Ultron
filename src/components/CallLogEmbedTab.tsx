@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { PhoneIncoming, PhoneOutgoing, PhoneOff, Phone, ExternalLink, Brain, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, PhoneIncoming, PhoneOutgoing, PhoneOff, Phone, ExternalLink, Brain, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { groupByDay, ctTimeLabel } from "@/lib/dateGrouping";
 import { DayDivider } from "@/components/shared/DayDivider";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
 import { UniversalMediaPlayer } from "@/components/media";
+import { errorMessage } from "@/lib/errorMessage";
 
 type CallRow = {
   id: string;
@@ -57,6 +58,7 @@ function toE164(phone: string): string {
 export function CustomerCallsTab({ phones, customerId }: { phones: string[]; customerId?: string }) {
   const [calls, setCalls] = useState<CallRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const normalizedPhones = useMemo(() => phones.map(normalizeLast10).filter(Boolean), [phones]);
 
   useEffect(() => {
@@ -70,9 +72,13 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
           .order("created_at", { ascending: false });
 
         if (!error && data && data.length > 0) {
+          setLoadError(null);
           setCalls(data as CallRow[]);
           setLoading(false);
           return;
+        }
+        if (error) {
+          setLoadError(errorMessage(error));
         }
       }
 
@@ -85,9 +91,10 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Failed to fetch calls for customer:", error);
+        setLoadError(errorMessage(error));
         setCalls([]);
       } else {
+        setLoadError(null);
         const filtered = (data || []).filter((row: any) =>
           normalizedPhones.includes(normalizeLast10(row.phone_number))
         );
@@ -100,6 +107,7 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
   }, [normalizedPhones, customerId]);
 
   if (loading) return <div className="space-y-2 p-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>;
+  if (loadError) return <EmbedLoadError title="Call history did not load" detail={`${loadError} Refresh before relying on this customer's call history.`} />;
   if (!calls.length) return <p className="text-center text-muted-foreground py-8">No call records on file</p>;
 
   return <CallList calls={calls} />;
@@ -109,6 +117,7 @@ export function CustomerCallsTab({ phones, customerId }: { phones: string[]; cus
 export function JobCallsTab({ jobId }: { jobId: string }) {
   const [calls, setCalls] = useState<CallRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCalls = async () => {
@@ -119,9 +128,10 @@ export function JobCallsTab({ jobId }: { jobId: string }) {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Failed to fetch calls for job:", error);
+        setLoadError(errorMessage(error));
         setCalls([]);
       } else {
+        setLoadError(null);
         setCalls((data || []) as CallRow[]);
       }
       setLoading(false);
@@ -131,6 +141,7 @@ export function JobCallsTab({ jobId }: { jobId: string }) {
   }, [jobId]);
 
   if (loading) return <div className="space-y-2 p-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>;
+  if (loadError) return <EmbedLoadError title="Job calls did not load" detail={`${loadError} Refresh before relying on this job's call history.`} />;
   if (!calls.length) return <p className="text-center text-muted-foreground py-8">No calls linked to this job</p>;
 
   return <CallList calls={calls} />;
@@ -179,7 +190,7 @@ function CallList({ calls }: { calls: CallRow[] }) {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {ctTimeLabel(call.created_at)}
-                        {call.duration_seconds ? ` · ${formatDuration(call.duration_seconds)}` : ""}
+                        {call.duration_seconds ? ` - ${formatDuration(call.duration_seconds)}` : ""}
                       </p>
                     </div>
                     <ClickToCall
@@ -232,7 +243,7 @@ function CallList({ calls }: { calls: CallRow[] }) {
                       {call.transcription && (
                         <div>
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                            📝 Transcription
+                            Transcript
                           </p>
                           <p className="text-xs text-muted-foreground whitespace-pre-wrap">{call.transcription}</p>
                         </div>
@@ -244,6 +255,18 @@ function CallList({ calls }: { calls: CallRow[] }) {
             })}
           </div>
         ))}
+    </div>
+  );
+}
+
+function EmbedLoadError({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="m-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="text-xs leading-relaxed">{detail}</p>
+      </div>
     </div>
   );
 }

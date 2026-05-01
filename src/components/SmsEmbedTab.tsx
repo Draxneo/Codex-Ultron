@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { ArrowDownLeft, ArrowUpRight, Phone, ExternalLink } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Phone, ExternalLink } from "lucide-react";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "react-router-dom";
 import { formatDateTimeUS, normalizeLast10 } from "@/lib/formatters";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { errorMessage } from "@/lib/errorMessage";
 
 type SmsMediaItem = { url: string; content_type: string };
 
@@ -26,21 +27,23 @@ type SmsRow = {
 export function CustomerSmsTab({ phones }: { phones: string[] }) {
   const [messages, setMessages] = useState<SmsRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const normalized = useMemo(() => phones.map(normalizeLast10).filter(Boolean), [phones]);
   const normalizedKey = normalized.join("_");
 
   const fetchSms = useCallback(async () => {
-    if (normalized.length === 0) { setLoading(false); return; }
+    if (normalized.length === 0) { setLoadError(null); setLoading(false); return; }
     const { data, error } = await supabase
       .from("sms_log")
       .select("id, direction, phone_number, body, contact_name, created_at, media_urls")
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("Failed to fetch SMS for customer:", error);
+      setLoadError(errorMessage(error));
       setMessages([]);
     } else {
+      setLoadError(null);
       const filtered = (data || []).filter((row: any) =>
         normalized.includes(normalizeLast10(row.phone_number))
       );
@@ -77,6 +80,7 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
   }, [fetchSms]);
 
   if (loading) return <div className="space-y-2 p-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>;
+  if (loadError) return <EmbedLoadError title="SMS did not load" detail={`${loadError} Refresh before relying on this customer's text history.`} />;
   if (!messages.length) return (
     <p className="text-center text-muted-foreground py-8">No SMS messages on record</p>
   );
@@ -88,6 +92,7 @@ export function CustomerSmsTab({ phones }: { phones: string[] }) {
 export function JobSmsTab({ jobId }: { jobId: string }) {
   const [messages, setMessages] = useState<SmsRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchSms = useCallback(async () => {
     const { data, error } = await supabase
@@ -97,9 +102,10 @@ export function JobSmsTab({ jobId }: { jobId: string }) {
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("Failed to fetch SMS for job:", error);
+      setLoadError(errorMessage(error));
       setMessages([]);
     } else {
+      setLoadError(null);
       setMessages((data || []) as SmsRow[]);
     }
     setLoading(false);
@@ -132,11 +138,24 @@ export function JobSmsTab({ jobId }: { jobId: string }) {
   }, [fetchSms]);
 
   if (loading) return <div className="space-y-2 p-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>;
+  if (loadError) return <EmbedLoadError title="Job texts did not load" detail={`${loadError} Refresh before relying on this job's text history.`} />;
   if (!messages.length) return (
     <p className="text-center text-muted-foreground py-8">No SMS messages linked to this job</p>
   );
 
   return <SmsMessageList messages={messages} />;
+}
+
+function EmbedLoadError({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="m-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="text-xs leading-relaxed">{detail}</p>
+      </div>
+    </div>
+  );
 }
 
 function SmsMessageList({ messages }: { messages: SmsRow[] }) {
