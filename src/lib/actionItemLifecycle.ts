@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export const ACTION_ITEM_STATUS = {
   pending: "pending",
@@ -51,6 +52,17 @@ export async function resolveActionItem({
     });
     if (activityError) {
       console.warn("[actionItemLifecycle] Action item was resolved, but activity logging failed.", activityError);
+      void logClientSystemError({
+        sourceName: "action-item-lifecycle",
+        message: activityError.message || "Action item was resolved, but activity logging failed.",
+        severity: "warning",
+        context: {
+          action_item_id: id,
+          status,
+          job_id: jobId || null,
+          performed_by: userId || null,
+        },
+      });
     }
   }
 }
