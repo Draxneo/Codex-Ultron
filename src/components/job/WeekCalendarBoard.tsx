@@ -431,18 +431,6 @@ function WeekCard({
     onToggleSelect?.(item.id);
   };
 
-  const navigate = useNavigate();
-  const handleQuickQuote = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const params = new URLSearchParams();
-    if (item.item_type === "estimate") params.set("estimate_id", item.id);
-    else params.set("job_id", item.id);
-    if (item.customer_name) params.set("customer_name", item.customer_name);
-    if (item.customer_phone) params.set("customer_phone", item.customer_phone);
-    navigate(`/quick-quote?${params.toString()}`);
-  };
-
   const cardContent = (
     <div
       onClick={() => bulkMode ? onToggleSelect?.(item.id) : onClick(item)}
@@ -483,16 +471,6 @@ function WeekCard({
             <span className="text-[8px] font-bold bg-white/25 text-white rounded-full w-4 h-4 flex items-center justify-center shrink-0">
               {initials}
             </span>
-          )}
-          {!isTiny && !bulkMode && (
-            <button
-              type="button"
-              onClick={handleQuickQuote}
-              title="Build Quote"
-              className="shrink-0 rounded bg-white/25 hover:bg-white/40 text-white p-0.5 transition-colors"
-            >
-              <Zap className="h-2.5 w-2.5" />
-            </button>
           )}
         </div>
 
