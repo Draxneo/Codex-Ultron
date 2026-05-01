@@ -14,17 +14,17 @@ import {
 import { useState, useEffect } from "react";
 
 const TASK_META: Record<string, { icon: typeof MessageSquare; group: "conversational" | "processing"; description: string }> = {
-  copilot_chat: { icon: MessageSquare, group: "conversational", description: "Main office copilot chat — handles scheduling, lookups, drafts, and reasoning." },
+  copilot_chat: { icon: MessageSquare, group: "conversational", description: "Main office Jarvis chat - handles scheduling, lookups, drafts, and reasoning." },
   daily_briefing: { icon: Sun, group: "conversational", description: "Morning briefing summary and attention cards." },
-  portal_chat: { icon: Globe, group: "conversational", description: "Customer portal chatbot — answers customer questions about their jobs and agreements." },
-  tech_form: { icon: Wrench, group: "conversational", description: "Field assistant chat embedded in tech forms — helps techs with diagnostics and notes." },
+  portal_chat: { icon: Globe, group: "conversational", description: "Customer portal Jarvis chat - answers customer questions about their jobs and agreements." },
+  tech_form: { icon: Wrench, group: "conversational", description: "Field Jarvis chat embedded in tech forms - helps techs with diagnostics and notes." },
   communications: { icon: Send, group: "processing", description: "Drafts and sends outbound SMS sequences and notifications." },
   vision_extraction: { icon: Eye, group: "processing", description: "Reads data plates, supply tickets, invoices, and documents from photos using vision/OCR." },
   sms_auto_reply: { icon: MessageCircle, group: "processing", description: "Generates auto-reply SMS to customer texts using job context." },
   customer_parsing: { icon: Users, group: "processing", description: "Parses raw SMS text into structured customer data (name, address, phone)." },
   follow_up: { icon: Clock, group: "processing", description: "Generates follow-up check-in texts and calculates next check-in dates." },
   invoicing: { icon: DollarSign, group: "processing", description: "Generates invoice line items and calculates totals from job data." },
-  scheduling: { icon: CalendarClock, group: "processing", description: "Smart scheduling — slot finding, conflict detection, and route optimization." },
+  scheduling: { icon: CalendarClock, group: "processing", description: "Smart scheduling - slot finding, conflict detection, and route optimization." },
   sales_docs: { icon: FileText, group: "conversational", description: "Sales presentations, quotes, and document generation." },
   repair_quote: { icon: PenTool, group: "processing", description: "Generates repair quotes with parts lookup and pricing." },
 };
@@ -47,7 +47,7 @@ export function ModelConfigPanel() {
     }
   }, [settings]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground text-center py-8">Loading model config…</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground text-center py-8">Loading model config...</p>;
   if (!configs?.length) return <p className="text-sm text-muted-foreground text-center py-8">No task configs found.</p>;
 
   const conversational = configs.filter(c => TASK_META[c.task_key]?.group === "conversational");
@@ -56,7 +56,7 @@ export function ModelConfigPanel() {
   const handleChange = (id: string, taskKey: string, model: string) => {
     updateModel.mutate({ id, model });
     const opt = MODEL_OPTIONS.find(m => m.id === model);
-    toast({ title: "Model updated", description: `${TASK_META[taskKey]?.description?.split("—")[0] || taskKey} → ${opt?.label || model}` });
+    toast({ title: "Model updated", description: `${TASK_META[taskKey]?.description?.split(" - ")[0] || taskKey} -> ${opt?.label || model}` });
 
     if (taskKey === "copilot_chat") {
       try { localStorage.setItem("copilot_model_cache", model); } catch {}
@@ -103,7 +103,7 @@ export function ModelConfigPanel() {
                   {MODEL_OPTIONS.map(m => (
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       <span>{m.label}</span>
-                      <span className="text-muted-foreground ml-1.5">— {m.description}</span>
+                      <span className="text-muted-foreground ml-1.5">- {m.description}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
