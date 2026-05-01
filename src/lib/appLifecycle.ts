@@ -23,3 +23,28 @@ export const CLOSED_WORK_STATUSES = [
 ] as const;
 
 export const CLOSED_WORK_STATUS_FILTER = '("archived","canceled","cancelled","closed","complete","completed","done","invoiced","paid")';
+
+export const CLOSED_ESTIMATE_STATUSES = [
+  "canceled",
+  "cancelled",
+  "closed",
+  "complete",
+  "completed",
+  "converted",
+  "done",
+  "legacy_complete",
+  "lost",
+  "rejected",
+  "won",
+] as const;
+
+export const CLOSED_ESTIMATE_STATUS_FILTER = '("canceled","cancelled","closed","complete","completed","converted","done","legacy_complete","lost","rejected","won")';
+
+export const CLOSED_CART_STATUSES = [
+  "canceled",
+  "cancelled",
+  "declined",
+  "paid",
+] as const;
+
+export const CLOSED_CART_STATUS_FILTER = '("canceled","cancelled","declined","paid")';

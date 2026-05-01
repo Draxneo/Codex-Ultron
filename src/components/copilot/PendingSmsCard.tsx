@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MessageCircle, Loader2, Send, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 interface PendingDraft {
   id: string;
@@ -33,6 +34,7 @@ export function PendingSmsCard() {
         .select("id, recipient, body, source, job_id, created_at")
         .eq("channel", "sms")
         .eq("status", "pending")
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as PendingDraft[];

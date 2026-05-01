@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JARVIS_BRAINS, isCanonicalJarvisTool, isRetiredJarvisTool } from "@/lib/jarvisCore";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 type PromptSectionRow = {
   slug: string;
@@ -55,9 +56,9 @@ export function JarvisCorePanel() {
         getCount("copilot_training", (q) => q.eq("is_active", true)),
         getCount("agent_instructions", (q) => q.eq("is_active", true)),
         getCount("agent_learnings"),
-        getCount("action_items", (q) => q.eq("category", "jarvis_action_approval").eq("status", "pending")),
-        getCount("action_items", (q) => q.eq("category", "new_appointment").eq("status", "pending")),
-        getCount("outbound_drafts", (q) => q.eq("status", "pending")),
+        getCount("action_items", (q) => q.eq("category", "jarvis_action_approval").eq("status", "pending").gte("created_at", APP_ACTION_GO_LIVE_ISO)),
+        getCount("action_items", (q) => q.eq("category", "new_appointment").eq("status", "pending").gte("created_at", APP_ACTION_GO_LIVE_ISO)),
+        getCount("outbound_drafts", (q) => q.eq("status", "pending").gte("created_at", APP_ACTION_GO_LIVE_ISO)),
       ]);
 
       if (promptSections.error) throw promptSections.error;

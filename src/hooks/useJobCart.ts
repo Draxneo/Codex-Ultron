@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getJobCartPermissions } from "@/lib/jobCartStatus";
+import { CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
 
 export interface JobCart {
   id: string;
@@ -85,7 +86,7 @@ export function useJobCart(jobId: string | undefined) {
         .from("job_carts")
         .select("*")
         .eq("job_id", jobId)
-        .not("status", "in", "(canceled,declined)")
+        .not("status", "in", CLOSED_CART_STATUS_FILTER)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

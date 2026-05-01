@@ -48,6 +48,7 @@ import {
   type WorkflowType,
 } from "@/lib/workflowNow";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { APP_ACTION_GO_LIVE_ISO, CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
@@ -413,6 +414,7 @@ export default function NowHQ() {
         .from("action_items" as any)
         .select("*")
         .eq("status", "pending")
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -477,7 +479,7 @@ export default function NowHQ() {
         .from("job_carts" as any)
         .select("*")
         .in("job_id", nowJobIds)
-        .not("status", "in", '("canceled","declined","paid")')
+        .not("status", "in", CLOSED_CART_STATUS_FILTER)
         .order("created_at", { ascending: false });
       if (error) throw error;
 

@@ -31,6 +31,7 @@ import {
   type ActionItemResolutionStatus,
 } from "@/lib/actionItemLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   new_appointment:  { label: "New Job",  icon: CalendarPlus,  color: "text-green-500" },
@@ -131,6 +132,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
         .from("action_items" as any)
         .select("*")
         .eq("status", ACTION_ITEM_STATUS.pending)
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as any[];

@@ -150,17 +150,20 @@ function useAttentionCounts() {
         // 13: Outbox: pending emails
         supabase.from("outbound_drafts").select("id", { count: "exact", head: true })
           .eq("status", "pending")
-          .eq("channel", "email"),
+          .eq("channel", "email")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 14: Outbox: pending SMS
         supabase.from("outbound_drafts").select("id", { count: "exact", head: true })
           .eq("status", "pending")
-          .eq("channel", "sms"),
+          .eq("channel", "sms")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 15: Unread inbound SMS (consolidated from HUD)
         supabase.from("sms_log").select("id", { count: "exact", head: true })
           .eq("direction", "inbound")
-          .eq("is_read", false),
+          .eq("is_read", false)
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 16: AI handoff queue (email_actions table removed — always 0)
         Promise.resolve({ count: 0, error: null }),
@@ -173,7 +176,8 @@ function useAttentionCounts() {
 
         // 19: Outbox total pending (consolidated from HUD)
         supabase.from("outbound_drafts").select("id", { count: "exact", head: true })
-          .eq("status", "pending"),
+          .eq("status", "pending")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 20: Payment failures (Stripe declines on active jobs)
         supabase.from("jobs").select("id", { count: "exact", head: true })
@@ -183,17 +187,20 @@ function useAttentionCounts() {
 
         // 22: Action items pending (JARVIS decision queue — replaces address_verify + jarvis_observer)
         supabase.from("action_items" as any).select("id", { count: "exact", head: true })
-          .eq("status", ACTION_ITEM_STATUS.pending),
+          .eq("status", ACTION_ITEM_STATUS.pending)
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 23: New leads (uncontacted, excluding LSA — LSA has its own card)
         supabase.from("action_items" as any).select("id", { count: "exact", head: true })
           .eq("status", ACTION_ITEM_STATUS.pending)
-          .eq("category", "new_lead"),
+          .eq("category", "new_lead")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
         // 24: Follow-up cards now live in action_items.
         supabase.from("action_items" as any).select("id", { count: "exact", head: true })
           .eq("status", ACTION_ITEM_STATUS.pending)
-          .eq("category", "follow_up"),
+          .eq("category", "follow_up")
+          .gte("created_at", APP_ACTION_GO_LIVE_DATE),
 
       ]);
 

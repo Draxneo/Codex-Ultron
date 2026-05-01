@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
+import { CLOSED_ESTIMATE_STATUS_FILTER, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
 
 /**
  * Counts today's scheduled work on the board, used as a denominator
@@ -19,7 +19,7 @@ async function fetchActiveJobCount(): Promise<number> {
     .from("estimates")
     .select("id", { count: "exact", head: true })
     .eq("scheduled_date", todayStr)
-    .not("status", "in", "(canceled,done,converted,rejected)");
+    .not("status", "in", CLOSED_ESTIMATE_STATUS_FILTER);
   if (estimatesError) throw estimatesError;
 
   return (jobCount || 0) + (estimateCount || 0);

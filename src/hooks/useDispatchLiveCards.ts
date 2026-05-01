@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
+import { CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
 
 export type DispatchLiveAttachment = {
   id: string;
@@ -155,7 +156,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
           .from("job_carts")
           .select("id, job_id, status, total, sent_at, approved_at, paid_at, created_at")
           .in("job_id", stableJobIds)
-          .not("status", "in", "(canceled,declined)")
+          .not("status", "in", CLOSED_CART_STATUS_FILTER)
           .order("created_at", { ascending: false })
           .limit(250),
         (supabase as any)

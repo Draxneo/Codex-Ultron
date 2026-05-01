@@ -11,6 +11,7 @@ import { ArrowRight, Loader2, ListChecks, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 type IntakeNowCard = {
   id: string;
@@ -76,6 +77,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid
         .select("*")
         .eq("status", "pending")
         .in("category", NOW_CARD_CATEGORIES)
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("created_at", { ascending: false })
         .limit(20);
 
