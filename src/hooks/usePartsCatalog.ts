@@ -139,6 +139,8 @@ export function usePartsCatalog() {
     parts,
     supplyHouses: supplyHousesQuery.data || [],
     isLoading: partsQuery.isLoading || supplyHouseNumbersQuery.isLoading,
+    isError: partsQuery.isError || supplyHouseNumbersQuery.isError,
+    error: partsQuery.error || supplyHouseNumbersQuery.error,
     addPart,
     updatePart,
     deletePart,

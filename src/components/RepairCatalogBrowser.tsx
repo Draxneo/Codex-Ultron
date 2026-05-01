@@ -2,11 +2,12 @@ import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Search, LayoutGrid, List, Loader2 } from "lucide-react";
+import { AlertTriangle, Search, LayoutGrid, List, Loader2 } from "lucide-react";
 import { RepairProductCard, type RepairCatalogItem } from "@/components/RepairProductCard";
 import { RepairPricingMatrix } from "@/components/catalog/RepairPricingMatrix";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { errorMessage } from "@/lib/errorMessage";
 
 const DEFAULT_CATEGORIES = ["Electrical", "Refrigerant", "Airflow", "Motors", "Controls", "Safety", "Drainage", "Upgrades", "General"];
 
@@ -34,7 +35,7 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
   const [sortBy, setSortBy] = useState("category");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: items = [], isLoading, isError, error } = useQuery({
     queryKey: ["repair-catalog"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -153,6 +154,15 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
       </div>
 
       {/* Results */}
+      {isError ? (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Services did not load.</p>
+            <p className="text-xs leading-relaxed">{errorMessage(error)} Refresh before adding repair items.</p>
+          </div>
+        </div>
+      ) : null}
       <div className={`overflow-y-auto ${maxHeight || "max-h-[70vh]"}`}>
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">

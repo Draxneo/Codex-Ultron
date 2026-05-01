@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Pencil, Trash2, Package, Loader2 } from "lucide-react";
+import { AlertTriangle, Search, Plus, Pencil, Trash2, Package, Loader2 } from "lucide-react";
 import { usePartsCatalog, type Part } from "@/hooks/usePartsCatalog";
+import { errorMessage } from "@/lib/errorMessage";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Capacitor: "bg-yellow-600 text-white",
@@ -25,7 +26,7 @@ interface Props {
 }
 
 export function PartsCatalogBrowser({ onAddToCart }: Props) {
-  const { parts, isLoading, addPart, updatePart, deletePart } = usePartsCatalog();
+  const { parts, isLoading, isError, error, addPart, updatePart, deletePart } = usePartsCatalog();
   const { confirmDelete } = useConfirm();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -111,6 +112,15 @@ export function PartsCatalogBrowser({ onAddToCart }: Props) {
       </div>
 
       {/* Grid */}
+      {isError ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Materials did not load.</p>
+            <p className="text-xs leading-relaxed">{errorMessage(error)} Refresh before adding parts or checking vendor numbers.</p>
+          </div>
+        </div>
+      ) : null}
       {isLoading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading parts…

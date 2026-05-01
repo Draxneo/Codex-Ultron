@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Search, LayoutGrid, List, Loader2, Table as TableIcon, X } from "lucide-react";
+import { AlertTriangle, Search, LayoutGrid, List, Loader2, Table as TableIcon, X } from "lucide-react";
 import { EquipmentProductCard } from "@/components/EquipmentProductCard";
 import { EquipmentMatchupsTable } from "@/components/EquipmentMatchupsTable";
 import { PricingFormulaMatrix } from "@/components/catalog/PricingFormulaMatrix";
@@ -11,6 +11,7 @@ import { useEquipmentSearch } from "@/hooks/useEquipmentSearch";
 import { EquipmentImageExtractor } from "@/components/catalog/EquipmentImageExtractor";
 import { BRANDS, SYSTEM_TYPES, TIERS, APPLICATIONS } from "@/hooks/useEquipmentMatchups";
 import type { EquipmentMatchup } from "@/hooks/useEquipmentMatchups";
+import { errorMessage } from "@/lib/errorMessage";
 
 const SYSTEM_TYPE_LABELS: Record<string, string> = {
   gas_heat: "Gas Heat",
@@ -177,8 +178,12 @@ export function EquipmentCatalogBrowser({ onAddToCart, compact, initialBrand, ma
 
       {/* Results */}
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {error}
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Equipment did not load.</p>
+            <p className="text-xs leading-relaxed">{errorMessage(error)} Refresh before building an equipment quote.</p>
+          </div>
         </div>
       )}
 
