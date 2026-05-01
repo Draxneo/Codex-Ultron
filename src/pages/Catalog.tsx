@@ -1,11 +1,12 @@
 import { AppHeader } from "@/components/AppHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Package, Zap, Search, ArrowLeft, Wrench, Info, Briefcase, Sparkles, Settings2 } from "lucide-react";
+import { AlertTriangle, Package, Zap, Search, ArrowLeft, Wrench, Info, Briefcase, Sparkles, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { errorMessage } from "@/lib/errorMessage";
 
 import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
 import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
@@ -17,7 +18,7 @@ import { SeedRepairCatalogButton } from "@/components/admin/SeedRepairCatalogBut
 export default function Catalog() {
   const isMobile = useIsMobile();
 
-  const { data: counts } = useQuery({
+  const { data: counts, isError: countsError, error: countsQueryError } = useQuery({
     queryKey: ["catalog_counts"],
     queryFn: async () => {
       const [eq, rp, pt, ah] = await Promise.all([
@@ -26,6 +27,15 @@ export default function Catalog() {
         supabase.from("parts_catalog").select("id", { count: "exact", head: true }),
         supabase.from("ahri_lookups" as any).select("id", { count: "exact", head: true }),
       ]);
+      const issues = [
+        eq.error ? `equipment (${eq.error.message})` : null,
+        rp.error ? `services (${rp.error.message})` : null,
+        pt.error ? `materials (${pt.error.message})` : null,
+        ah.error ? `AHRI (${ah.error.message})` : null,
+      ].filter(Boolean);
+      if (issues.length > 0) {
+        throw new Error(`Catalog counts did not load: ${issues.join(", ")}`);
+      }
       return {
         equipment: eq.count ?? 0,
         repairs: rp.count ?? 0,
@@ -85,6 +95,18 @@ export default function Catalog() {
             </Button>
           </Link>
         </div>
+
+        {countsError ? (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Price Book opened, but the catalog summary did not load.</p>
+              <p className="mt-1 text-xs leading-relaxed">
+                {errorMessage(countsQueryError)}. The tabs may still work, but refresh before trusting totals.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {/* Stats strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
