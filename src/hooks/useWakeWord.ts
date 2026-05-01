@@ -12,6 +12,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
   const recognitionRef = useRef<any>(null);
   const enabledRef = useRef(enabled);
   const cooldownRef = useRef(false);
+  const restartRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -62,7 +63,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
           setTimeout(() => {
             cooldownRef.current = false;
             if (enabledRef.current) {
-              restart();
+              restartRef.current();
             }
           }, 8000); // 8s cooldown for recording + transcription
 
@@ -76,7 +77,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
       if (!cooldownRef.current && enabledRef.current) {
         setTimeout(() => {
           if (enabledRef.current && !cooldownRef.current) {
-            restart();
+            restartRef.current();
           }
         }, 500);
       } else if (!enabledRef.current) {
@@ -96,7 +97,7 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
       if (enabledRef.current && !cooldownRef.current) {
         setTimeout(() => {
           if (enabledRef.current && !cooldownRef.current) {
-            restart();
+            restartRef.current();
           }
         }, 2000);
       }
@@ -121,6 +122,10 @@ export function useWakeWord({ wakeWord = "jarvis", onWake, enabled = false }: Us
       console.log("Failed to start wake word recognition:", e);
     }
   }, [createRecognition]);
+
+  useEffect(() => {
+    restartRef.current = restart;
+  }, [restart]);
 
   const stopListening = useCallback(() => {
     cooldownRef.current = false;
