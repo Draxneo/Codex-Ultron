@@ -81,13 +81,19 @@ function jobProblem(job: any) {
   );
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function TechJobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { employeeId } = useEffectiveAuth();
-  const { data: job, isLoading, isError } = useJob(id!);
-  const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
-  const { data: techWorkRows = [] } = useTechWorkSummary(id ? [id] : []);
+  const { data: job, isLoading, isError, error: jobQueryError } = useJob(id!);
+  const { data: linkedCustomer, isError: customerError, error: customerQueryError } = useCustomer(job?.customer_id || undefined);
+  const { data: techWorkRows = [], isError: techWorkError, error: techWorkQueryError } = useTechWorkSummary(id ? [id] : []);
   const techWork = techWorkRows[0] || null;
 
   const scrollToSection = (sectionId: string) => {
@@ -112,7 +118,9 @@ export default function TechJobDetail() {
         <main className="px-6 py-16 text-center">
           <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
           <h1 className="text-lg font-semibold">Job not found</h1>
-          <p className="mt-2 text-sm text-muted-foreground">This job may have been deleted, moved, or the link is invalid.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {jobQueryError ? errorMessage(jobQueryError) : "This job may have been deleted, moved, or the link is invalid."}
+          </p>
         </main>
       </div>
     );
@@ -135,6 +143,10 @@ export default function TechJobDetail() {
   const arrivalEnd = (job as any).arrival_end || null;
   const schedule = formatSchedule(job.scheduled_date || null, arrivalStart, arrivalEnd);
   const problemSummary = jobProblem(job);
+  const contextIssues = [
+    customerError ? `customer details (${errorMessage(customerQueryError)})` : null,
+    techWorkError ? `field-work summary (${errorMessage(techWorkQueryError)})` : null,
+  ].filter(Boolean);
 
   const openSms = () => {
     if (!customerPhone) return;
@@ -164,6 +176,20 @@ export default function TechJobDetail() {
       />
 
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-3 pt-3">
+        {contextIssues.length > 0 ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Some job context did not load.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  Missing {contextIssues.join(", ")}. Refresh before writing up the final diagnosis or proposal.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <section className="overflow-hidden rounded-lg border bg-background shadow-sm">
           <DestinationCard
             customerName={customerName}

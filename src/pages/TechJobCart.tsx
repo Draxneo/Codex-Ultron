@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, CreditCard, Presentation, Send } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, CreditCard, Presentation, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,11 +7,17 @@ import { TechCartCard } from "@/components/tech/TechCartCard";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useJob } from "@/hooks/useJobs";
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function TechJobCart() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: job, isLoading, isError } = useJob(id!);
-  const { data: linkedCustomer } = useCustomer(job?.customer_id || undefined);
+  const { data: job, isLoading, isError, error: jobQueryError } = useJob(id!);
+  const { data: linkedCustomer, isError: customerError, error: customerQueryError } = useCustomer(job?.customer_id || undefined);
 
   if (isLoading) {
     return (
@@ -38,7 +44,9 @@ export default function TechJobCart() {
         <main className="px-6 py-16 text-center">
           <Presentation className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
           <h1 className="text-lg font-semibold">Presentation not found</h1>
-          <p className="mt-2 text-sm text-muted-foreground">This job may have moved or the link is invalid.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {jobQueryError ? errorMessage(jobQueryError) : "This job may have moved or the link is invalid."}
+          </p>
         </main>
       </div>
     );
@@ -72,6 +80,20 @@ export default function TechJobCart() {
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-3 pt-3">
+        {customerError ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Customer details did not load.</p>
+                <p className="mt-1 text-xs leading-relaxed">
+                  {errorMessage(customerQueryError)}. Refresh before sending this approval link.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <section className="rounded-lg border bg-background p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
