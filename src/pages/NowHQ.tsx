@@ -29,6 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuotePipelineMap } from "@/hooks/useCanonicalOperations";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
 import { supabase } from "@/integrations/supabase/client";
@@ -148,6 +149,41 @@ function recordLabel(card: WorkflowNowCard) {
   if (card.recordType === "job") return card.recordNumber ? `Job #${card.recordNumber}` : "Job";
   if (card.recordType === "estimate") return card.recordNumber ? `Estimate #${card.recordNumber}` : "Estimate";
   return card.recordNumber ? `Lead #${card.recordNumber}` : "Lead";
+}
+
+function mergeEstimateWithPipeline(estimate: any, canonical: any) {
+  if (!canonical) return estimate;
+  const latestCommunication = canonical.latest_communication_summary
+    ? `Latest ${canonical.latest_communication_type || "contact"}: ${canonical.latest_communication_summary}`
+    : "";
+  return {
+    ...estimate,
+    customer_id: canonical.customer_id || estimate.customer_id,
+    source_job_id: canonical.source_job_id || estimate.source_job_id,
+    converted_job_id: canonical.converted_job_id || estimate.converted_job_id,
+    estimate_number: canonical.estimate_number || estimate.estimate_number,
+    customer_name: canonical.customer_name || estimate.customer_name,
+    customer_phone: canonical.customer_phone || estimate.customer_phone,
+    customer_email: canonical.customer_email || estimate.customer_email,
+    address: canonical.address || estimate.address,
+    estimate_type: canonical.estimate_type || estimate.estimate_type,
+    status: canonical.status || estimate.status,
+    total_amount: canonical.total_amount ?? estimate.total_amount,
+    scheduled_date: canonical.scheduled_date || estimate.scheduled_date,
+    arrival_start: canonical.arrival_start || estimate.arrival_start,
+    arrival_end: canonical.arrival_end || estimate.arrival_end,
+    assigned_to: canonical.assigned_to || estimate.assigned_to,
+    presentation_sent_at: canonical.presentation_sent_at || estimate.presentation_sent_at,
+    customer_approved_at: canonical.customer_approved_at || estimate.customer_approved_at,
+    brochure_sent: canonical.brochure_sent ?? estimate.brochure_sent,
+    latest_communication_at: canonical.latest_communication_at || estimate.latest_communication_at,
+    latest_communication_type: canonical.latest_communication_type || estimate.latest_communication_type,
+    latest_communication_summary: canonical.latest_communication_summary || estimate.latest_communication_summary,
+    pipeline_stage: canonical.pipeline_stage || estimate.pipeline_stage,
+    description: latestCommunication
+      ? [estimate.description, latestCommunication].filter(Boolean).join("\n\n")
+      : estimate.description,
+  };
 }
 
 function parseWorkflowSteps(value: any): WorkflowStepDefinition[] {
@@ -364,6 +400,12 @@ export default function NowHQ() {
   const { user } = useAuth();
   const { data: jobs = [], isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useJobs();
   const { data: estimates = [], isLoading: estimatesLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(false);
+  const {
+    byEstimateId: quotePipelineById,
+    isLoading: quotePipelineLoading,
+    isError: quotePipelineError,
+    error: quotePipelineQueryError,
+  } = useQuotePipelineMap(300);
   const { data: actionItems = [], isLoading: actionItemsLoading, isError: actionItemsError, error: actionItemsQueryError } = useQuery({
     queryKey: ["now-hq-action-items"],
     queryFn: async () => {
@@ -663,14 +705,17 @@ export default function NowHQ() {
         partsOrders: partsOrdersByJobId.get(job.id) || [],
       }))
       .filter(Boolean) as WorkflowNowCard[];
-    const estimateCards = (estimates as any[]).map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
+    const estimateCards = (estimates as any[])
+      .map((estimate) => mergeEstimateWithPipeline(estimate, quotePipelineById.get(estimate.id)))
+      .map((estimate) => buildEstimateWorkflowCard(estimate, workflowTemplates))
+      .filter(Boolean) as WorkflowNowCard[];
     const leadCards = (leads as any[]).map((lead) => buildLeadWorkflowCard(lead, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards]
       .filter((card) => card.recordType === "action" || card.recordType === "alert" || !acknowledgedCardIds.has(card.id))
       .sort(workflowSort);
-  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, jobInvoices, partsOrders, workflowCardAcks, estimates, leads, workflowTemplates]);
+  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, jobInvoices, partsOrders, workflowCardAcks, estimates, quotePipelineById, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || jobInvoicesLoading || partsOrdersLoading || workflowCardAcksLoading || estimatesLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || jobInvoicesLoading || partsOrdersLoading || workflowCardAcksLoading || estimatesLoading || quotePipelineLoading || leadsLoading || workflowTemplatesLoading;
   const dataErrors = [
     { label: "workflow cards", active: actionItemsError, error: actionItemsQueryError },
     { label: "workflow alerts", active: workflowAlertsError, error: workflowAlertsQueryError },
@@ -681,6 +726,7 @@ export default function NowHQ() {
     { label: "parts orders", active: partsOrdersError, error: partsOrdersQueryError },
     { label: "workflow acknowledgements", active: workflowCardAcksError, error: workflowCardAcksQueryError },
     { label: "estimates", active: estimatesError, error: estimatesQueryError },
+    { label: "quote pipeline", active: quotePipelineError, error: quotePipelineQueryError },
     { label: "leads", active: leadsError, error: leadsQueryError },
     { label: "workflow maps", active: workflowTemplatesError, error: workflowTemplatesQueryError },
   ].filter((item) => item.active);
