@@ -339,8 +339,12 @@ export default function QuickQuote() {
       // Use current origin so preview links work in preview, prod in prod.
       const url = `${window.location.origin}/q/${link.token}`;
       window.open(url, "_blank", "noopener,noreferrer");
-      navigator.clipboard.writeText(url).catch(() => {});
-      toast({ title: "Customer view opened", description: "Link copied to clipboard." });
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Customer view opened", description: "Link copied to clipboard." });
+      } catch {
+        toast({ title: "Customer view opened", description: "Clipboard was blocked, so copy the link from the new tab." });
+      }
     } finally {
       setCreatingViewId(null);
     }
