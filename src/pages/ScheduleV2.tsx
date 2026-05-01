@@ -687,7 +687,7 @@ function CommunicationContextDialog({
   if (!item) return null;
 
   const isCall = item.kind === "call";
-  const actionLabel = isCall ? "Open phone history" : "Text customer";
+  const actionLabel = isCall ? "Call customer" : "Text customer";
   const visual = communicationVisual(item);
   const VisualIcon = visual.Icon;
   const DirectionIcon = visual.DirectionIcon;
@@ -772,10 +772,6 @@ function CommunicationContextDialog({
               <MessageSquare className="h-4 w-4" />
               Text customer
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={isCall ? () => navigate("/phone") : textCustomer}>
-              <ExternalLink className="h-4 w-4" />
-              {actionLabel}
-            </Button>
             {item.latestJobId && (
               <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/jobs/${item.latestJobId}`)}>
                 <CalendarDays className="h-4 w-4" />
@@ -815,7 +811,7 @@ function CommunicationContextDialog({
 
         <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={isCall ? () => navigate("/phone") : textCustomer}>{actionLabel}</Button>
+          <Button onClick={isCall ? callBack : textCustomer}>{actionLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
