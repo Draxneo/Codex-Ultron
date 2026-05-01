@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export interface RouteLeg {
   id: string;
@@ -246,6 +247,16 @@ export function useEnsureRouteTravelCacheForDate(
     }).then(({ error }) => {
       if (error) {
         console.warn("[travel-cache] route calculation failed", error);
+        void logClientSystemError({
+          sourceName: "route-travel-cache",
+          message: error.message || "Route cache calculation failed",
+          severity: "warning",
+          context: {
+            date,
+            batch: workToCache.batch,
+            work_key: workToCache.key,
+          },
+        });
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["route_travel_cache_date", date] });
