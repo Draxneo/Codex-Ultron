@@ -987,7 +987,7 @@ export function useSoftphone(enabled: boolean = true) {
     });
 
     return unsubscribe;
-  }, [enabled, initialize, isElectronMainWindow, refreshDeviceToken, safeRegisterDevice, state.status, _callStartedAt]);
+  }, [enabled, initialize, isElectronMainWindow, refreshDeviceToken, safeRegisterDevice, state.status]);
 
   // ── Registration heartbeat ──
   // The Twilio Device WebSocket can silently drop (network blip, idle disconnect,
@@ -1033,7 +1033,7 @@ export function useSoftphone(enabled: boolean = true) {
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [initialize, isElectronMainWindow, enabled, refreshDeviceToken, safeRegisterDevice, state.status, _callStartedAt]);
+  }, [initialize, isElectronMainWindow, enabled, refreshDeviceToken, safeRegisterDevice, state.status]);
 
   /**
    * Non-destructive health check / recovery.

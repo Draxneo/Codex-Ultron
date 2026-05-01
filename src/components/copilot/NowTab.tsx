@@ -145,7 +145,7 @@ function TechProposalReviewPanel({ onBack }: { onBack: () => void }) {
       }));
       setProposals(enriched);
       setLoading(false);
-  }, [loadProposals]);
+  }, []);
 
   useEffect(() => {
     loadProposals();
@@ -163,7 +163,7 @@ function TechProposalReviewPanel({ onBack }: { onBack: () => void }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadProposals]);
 
   const handleAction = async (proposal: TechProposal, status: "approved" | "revision_requested") => {
     setActionId(proposal.id);

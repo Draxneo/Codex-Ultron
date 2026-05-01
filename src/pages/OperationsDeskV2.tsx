@@ -2409,6 +2409,13 @@ function ActionPanel({
     .filter((field, index, all) => all.findIndex((candidate) => candidate.label === field.label) === index)
     .slice(0, 5);
   const hiddenIntakeFieldCount = Math.max(0, liveIntakeFields.length - visibleIntakeFields.length);
+  const addressCheck = useMemo(() => {
+    const extracted = getConversationExtraction(selected);
+    return {
+      candidate: extractionAddress(extracted) || extractAddressFromText(`${selected?.summary || ""} ${selected?.detail || ""}`),
+      hasStoredResult: extracted.address_verified === true || extracted.address_verified === false,
+    };
+  }, [selected]);
 
   useEffect(() => {
     setLiveAddressVerification(null);
@@ -2423,16 +2430,13 @@ function ActionPanel({
   useEffect(() => {
     let cancelled = false;
     const verify = async () => {
-      const extracted = getConversationExtraction(selected);
-      const candidate = extractionAddress(extracted) || extractAddressFromText(`${selected?.summary || ""} ${selected?.detail || ""}`);
-      const hasStoredResult = extracted.address_verified === true || extracted.address_verified === false;
-      if (!candidate || hasStoredResult) {
+      if (!addressCheck.candidate || addressCheck.hasStoredResult) {
         setAddressVerifying(false);
         return;
       }
 
       setAddressVerifying(true);
-      const result = await verifyAddressWithGoogle(candidate);
+      const result = await verifyAddressWithGoogle(addressCheck.candidate);
       if (!cancelled) {
         setLiveAddressVerification(result);
         setAddressVerifying(false);
@@ -2443,7 +2447,7 @@ function ActionPanel({
     return () => {
       cancelled = true;
     };
-  }, [selected?.id]);
+  }, [addressCheck]);
 
   if (!selected) {
     return (
