@@ -36,6 +36,7 @@ import { CompanyDocumentsCard } from "@/components/CompanyDocumentsCard";
 import { RingtoneSettingsCard } from "@/components/RingtoneSettingsCard";
 import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard";
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
+import { VisualOperationsSettingsCard } from "@/components/admin/VisualOperationsSettingsCard";
 
 import { LineItemTemplatesCard } from "@/components/LineItemTemplatesCard";
 import { MetaAudiencesCard } from "@/components/MetaAudiencesCard";
@@ -602,7 +603,7 @@ function resolveAdminSection(section: string | null, legacyTab: string | null) {
 function AdminSectionContent({ section }: { section: string }) {
   switch (section) {
     case "company":
-      return <div className="space-y-4"><CompanySettingsCard /><NavOrderEditor /></div>;
+      return <div className="space-y-4"><VisualOperationsSettingsCard /><CompanySettingsCard /><NavOrderEditor /></div>;
     case "employees":
       return <EmployeeHub />;
     case "voice":

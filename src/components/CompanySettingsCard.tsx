@@ -4,9 +4,9 @@ import { Input } from "@/components/ui/input";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Building2, Mic, ShieldAlert, ShieldCheck } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Building2, Gauge, Percent, Users } from "lucide-react";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export function CompanySettingsCard() {
@@ -22,6 +22,11 @@ export function CompanySettingsCard() {
   };
 
   const set = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  const numberValue = (key: string, fallback: number) => {
+    const parsed = Number((form as any)[key]);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const setNumber = (key: string, value: number) => set(key, String(value));
 
   if (isLoading) return null;
 
@@ -88,20 +93,44 @@ export function CompanySettingsCard() {
 
         {/* Operational Settings */}
         <div className="pt-3 border-t space-y-3">
-          <p className="text-xs font-medium text-muted-foreground">Operational Defaults</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Tax Rate (%)</Label>
-              <Input value={form.tax_rate} onChange={(e) => set("tax_rate", e.target.value)} placeholder="8.25" type="number" step="0.01" className="font-mono" />
+          <div className="flex items-start gap-2">
+            <Gauge className="mt-0.5 h-4 w-4 text-primary" />
+            <div>
+              <p className="text-sm font-semibold">Operational Defaults</p>
+              <p className="text-xs text-muted-foreground">Visual dials for the values dispatch and quoting use every day.</p>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Max Jobs / Tech / Day</Label>
-              <Input value={form.max_jobs_tech} onChange={(e) => set("max_jobs_tech", e.target.value)} placeholder="4" type="number" className="font-mono" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Max Jobs / Sales / Day</Label>
-              <Input value={form.max_jobs_sales} onChange={(e) => set("max_jobs_sales", e.target.value)} placeholder="8" type="number" className="font-mono" />
-            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <VisualNumberDial
+              icon={<Percent className="h-4 w-4" />}
+              label="Tax Rate"
+              value={numberValue("tax_rate", 8.25)}
+              min={0}
+              max={12}
+              step={0.01}
+              suffix="%"
+              onChange={(value) => setNumber("tax_rate", value)}
+            />
+            <VisualNumberDial
+              icon={<Users className="h-4 w-4" />}
+              label="Service jobs per tech"
+              value={numberValue("max_jobs_tech", 4)}
+              min={1}
+              max={10}
+              step={1}
+              suffix="/day"
+              onChange={(value) => setNumber("max_jobs_tech", value)}
+            />
+            <VisualNumberDial
+              icon={<Users className="h-4 w-4" />}
+              label="Sales visits per day"
+              value={numberValue("max_jobs_sales", 8)}
+              min={1}
+              max={14}
+              step={1}
+              suffix="/day"
+              onChange={(value) => setNumber("max_jobs_sales", value)}
+            />
           </div>
         </div>
 
@@ -111,5 +140,57 @@ export function CompanySettingsCard() {
 
       </CardContent>
     </Card>
+  );
+}
+
+function VisualNumberDial({
+  icon,
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="text-muted-foreground">{icon}</div>
+          <Label className="truncate text-xs font-semibold">{label}</Label>
+        </div>
+        <Badge variant="outline" className="shrink-0 font-mono">
+          {value}
+          {suffix}
+        </Badge>
+      </div>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={([next]) => onChange(next)}
+      />
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>
+          {min}
+          {suffix}
+        </span>
+        <span>
+          {max}
+          {suffix}
+        </span>
+      </div>
+    </div>
   );
 }
