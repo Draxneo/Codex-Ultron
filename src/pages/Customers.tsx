@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight, MessageSquare, PhoneCall, Briefcase, CalendarClock, MapPin } from "lucide-react";
+import { AlertTriangle, Search, Plus, Mail, LayoutList, LayoutGrid, ArrowDownAZ, Clock, Users, ChevronLeft, ChevronRight, MessageSquare, PhoneCall, Briefcase, CalendarClock, MapPin } from "lucide-react";
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,12 @@ function lastContactTone(customer: EnrichedCustomer) {
   return "text-muted-foreground bg-muted";
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function Customers() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -50,9 +56,9 @@ export default function Customers() {
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: activeJobCustomers } = useActiveJobCustomerIds();
+  const { data: activeJobCustomers, isError: activeJobsError, error: activeJobsQueryError } = useActiveJobCustomerIds();
 
-  const { data: result, isLoading } = useCustomersPaginated({
+  const { data: result, isLoading, isError: customersError, error: customersQueryError } = useCustomersPaginated({
     search: debouncedSearch,
     sortBy: sortMode,
     page,
@@ -63,6 +69,10 @@ export default function Customers() {
   const customers = result?.customers || [];
   const totalCount = result?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const customerDataIssues = [
+    customersError ? `customer list (${errorMessage(customersQueryError)})` : null,
+    activeJobsError ? `active job markers (${errorMessage(activeJobsQueryError)})` : null,
+  ].filter(Boolean);
 
   const handleSearch = (val: string) => {
     setSearch(val);
@@ -160,6 +170,16 @@ export default function Customers() {
         >
 
           <div ref={scrollRef}>
+            {customerDataIssues.length > 0 && (
+              <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    Customer HQ is open, but part of the customer picture did not load: {customerDataIssues.join(", ")}. Refresh before relying on this list.
+                  </p>
+                </div>
+              </div>
+            )}
             {isLoading && Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full rounded mb-1" />
             ))}
