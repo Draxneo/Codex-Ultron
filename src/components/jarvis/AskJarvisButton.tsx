@@ -14,6 +14,7 @@ type AskJarvisButtonProps = {
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
   iconOnly?: boolean;
+  hideIcon?: boolean;
   stopPropagation?: boolean;
 };
 
@@ -27,6 +28,7 @@ export function AskJarvisButton({
   size = "sm",
   className,
   iconOnly = false,
+  hideIcon = false,
   stopPropagation = true,
 }: AskJarvisButtonProps) {
   const { launchJarvis } = useJarvisLauncher();
@@ -54,7 +56,7 @@ export function AskJarvisButton({
         });
       }}
     >
-      <Sparkles className={cn(iconOnly ? "h-3.5 w-3.5" : "h-4 w-4")} />
+      {!hideIcon && <Sparkles className={cn(iconOnly ? "h-3.5 w-3.5" : "h-4 w-4")} />}
       {!iconOnly && label}
     </Button>
   );

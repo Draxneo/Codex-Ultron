@@ -1378,6 +1378,7 @@ export default function ScheduleV2() {
                 variant="ghost"
                 size="sm"
                 className="h-7 shrink-0 px-2 text-[11px]"
+                hideIcon
                 stopPropagation={false}
                 prompt={`Look at the dispatch backlog for ${format(currentDay, "EEEE, MMMM d")}. Tell me which unscheduled job should be placed next, what info is missing, and the safest next step for dispatch.`}
                 context={{
