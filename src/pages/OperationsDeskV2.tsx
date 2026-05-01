@@ -1182,31 +1182,45 @@ function ConversationList({
                 const name = item.name || formatPhone(item.phone) || item.phone;
                 const summaryText = isChannelOnlyText(item.summary) ? "Review context" : item.summary;
                 const detailText = cleanConversationDetail(item.detail);
+                const isSelected = selectedId === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => onSelect(item)}
                     title={visual.label}
+                    aria-pressed={isSelected}
                     className={cn(
-                      "w-full rounded-lg border border-l-4 px-3 py-2 text-left shadow-sm transition hover:border-primary/40",
-                      selectedId === item.id ? visual.selectedClass : visual.cardClass,
-                      primaryBadge?.label === "Urgent" && selectedId !== item.id && "border-red-300 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20",
-                      primaryBadge?.label === "Needs reply" && selectedId !== item.id && "border-amber-300 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20",
-                      item.unread && "ring-1 ring-primary/15"
+                      "group w-full rounded-lg border border-l-4 px-3 py-2 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
+                      isSelected ? cn(visual.selectedClass, "intake-selected-card animate-selected-card") : visual.cardClass,
+                      primaryBadge?.label === "Urgent" && !isSelected && "border-red-300 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20",
+                      primaryBadge?.label === "Needs reply" && !isSelected && "border-amber-300 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20",
+                      item.unread && !isSelected && "ring-1 ring-primary/15"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <div
-                          className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md", visual.ringClass)}
+                          className={cn(
+                            "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-transform duration-200 group-hover:scale-105",
+                            visual.ringClass,
+                            item.unread && !isSelected && "animate-attention-pulse",
+                            isSelected && "ring-2 ring-background/80"
+                          )}
                           aria-label={visual.label}
                         >
                           <Icon className="h-4 w-4" />
                           <DirectionIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-background bg-background p-0.5 text-foreground" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{name}</p>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <p className="truncate text-sm font-semibold">{name}</p>
+                            {isSelected && (
+                              <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary-foreground">
+                                Active
+                              </span>
+                            )}
+                          </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             {badges.slice(0, 2).map((badge) => {
                               const BadgeIcon = badge.icon;
@@ -1225,7 +1239,7 @@ function ConversationList({
                         <span className="block">{feedTime.time || item.timeLabel}</span>
                       </span>
                     </div>
-                    <p className="mt-2 truncate text-xs font-medium text-foreground">{summaryText}</p>
+                    <p className={cn("mt-2 truncate text-xs font-medium", isSelected ? "text-foreground" : "text-foreground/90")}>{summaryText}</p>
                     <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{detailText}</p>
                   </button>
                 );
@@ -1979,7 +1993,7 @@ function CustomerWorkspace({
   };
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
+    <main className="min-h-0 flex-1 overflow-y-auto bg-background p-4 animate-context-panel">
       {tutorialMode && (
       <div className="mb-4">
         <StepHeader
@@ -1991,7 +2005,7 @@ function CustomerWorkspace({
         />
       </div>
       )}
-      <div className="mb-4 rounded-lg border bg-card p-4 shadow-sm">
+      <div className="mb-4 rounded-lg border bg-card p-4 shadow-sm transition-colors duration-200">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -2007,6 +2021,9 @@ function CustomerWorkspace({
                 <Badge variant="destructive">Unknown / new lead</Badge>
               )}
               {activeJobs.length > 0 && <Badge variant="secondary">{activeJobs.length} active job{activeJobs.length === 1 ? "" : "s"}</Badge>}
+              <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">
+                Selected {selected.kind === "call" ? "call" : "text"}
+              </Badge>
             </div>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span>{formatPhone(selected.phone) || selected.phone}</span>
@@ -3407,6 +3424,7 @@ export default function OperationsDeskV2() {
           onSelect={selectConversation}
         />
         <CustomerWorkspace
+          key={selected?.id || "empty"}
           selected={selected}
           tutorialMode={tutorialMode}
           smsSending={smsSending}

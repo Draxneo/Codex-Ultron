@@ -208,6 +208,54 @@
 }
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
 
+/* Quiet operator-focus motion. Used to show the active customer/thread without making the app feel flashy. */
+@keyframes context-panel-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes selected-card-in {
+  0% { transform: translateY(2px) scale(0.992); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes attention-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--ring) / 0.22); }
+  50% { box-shadow: 0 0 0 5px hsl(var(--ring) / 0); }
+}
+
+.animate-context-panel { animation: context-panel-in 0.22s ease-out; }
+.animate-selected-card { animation: selected-card-in 0.18s ease-out; }
+.animate-attention-pulse { animation: attention-pulse 2.2s ease-out infinite; }
+
+.intake-selected-card {
+  position: relative;
+  border-color: hsl(var(--ring) / 0.85);
+  background:
+    linear-gradient(90deg, hsl(var(--ring) / 0.11), transparent 42%),
+    hsl(var(--card));
+  box-shadow: 0 12px 28px -24px hsl(var(--ring) / 0.65), 0 0 0 1px hsl(var(--ring) / 0.2);
+}
+
+.intake-selected-card::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: hsl(var(--ring));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-context-panel,
+  .animate-selected-card,
+  .animate-attention-pulse {
+    animation: none;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;
