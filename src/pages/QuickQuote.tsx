@@ -269,15 +269,31 @@ export default function QuickQuote() {
     return `${m.brand} ${m.tonnage}T ${SYSTEM_TYPE_LABELS[m.system_type || ""] || m.system_type}`;
   };
 
-  const copyToClipboard = (m: EquipmentMatchup) => {
-    navigator.clipboard.writeText(formatQuoteText(m));
-    toast({ title: "Full quote copied to clipboard" });
+  const copyToClipboard = async (m: EquipmentMatchup) => {
+    try {
+      await navigator.clipboard.writeText(formatQuoteText(m));
+      toast({ title: "Full quote copied to clipboard" });
+    } catch (err) {
+      toast({
+        title: "Clipboard was blocked",
+        description: errorMessage(err),
+        variant: "destructive",
+      });
+    }
   };
 
-  const copyAllToClipboard = () => {
-    const text = results.map(formatQuoteText).join("\n\n─────────────────\n\n");
-    navigator.clipboard.writeText(text);
-    toast({ title: `${results.length} quotes copied` });
+  const copyAllToClipboard = async () => {
+    const text = results.map(formatQuoteText).join("\n\n-----------------\n\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: `${results.length} quotes copied` });
+    } catch (err) {
+      toast({
+        title: "Clipboard was blocked",
+        description: errorMessage(err),
+        variant: "destructive",
+      });
+    }
   };
 
   // Push the rendered quote into the linked job's line items so it appears on the HCP estimate
@@ -420,7 +436,14 @@ export default function QuickQuote() {
   const presentationUrl = presentationToken ? `${window.location.origin}/presentation/${presentationToken}` : null;
 
   const handleTextToCustomer = () => {
-    if (!presentationUrl || !customerPhone) return;
+    if (!presentationUrl) {
+      toast({ title: "Create the presentation first", variant: "destructive" });
+      return;
+    }
+    if (!customerPhone) {
+      toast({ title: "No customer phone on file", variant: "destructive" });
+      return;
+    }
     const firstName = customerName.split(" ")[0] || "there";
     const body = `Hi ${firstName}, the Carnes family has your system replacement quote ready when you have a minute. You can review it here and text us back with any questions: ${presentationUrl}`;
     openSmsComposer(customerPhone, {
@@ -432,8 +455,13 @@ export default function QuickQuote() {
 
   const handleCopyLink = () => {
     if (!presentationUrl) return;
-    navigator.clipboard.writeText(presentationUrl);
-    toast({ title: "Link copied to clipboard" });
+    navigator.clipboard.writeText(presentationUrl)
+      .then(() => toast({ title: "Link copied to clipboard" }))
+      .catch((err) => toast({
+        title: "Clipboard was blocked",
+        description: errorMessage(err),
+        variant: "destructive",
+      }));
   };
 
   const sectionMap: Record<QuickQuoteSectionId, React.ReactNode> = {
