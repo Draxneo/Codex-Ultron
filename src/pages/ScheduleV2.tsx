@@ -495,8 +495,8 @@ function BoardCommandRail({
   return (
     <aside className="space-y-3">
       <RailSection
-        title={mode === "ai" ? "Today's Helper" : "Manual Dispatch Tools"}
-        detail={mode === "ai" ? "Jarvis points out what needs a quick yes or no." : "Use these buttons when you want to handle the board yourself."}
+        title={mode === "ai" ? "What Needs Attention" : "Manual Dispatch Tools"}
+        detail={mode === "ai" ? "The next schedule issues that need a quick decision." : "Use these buttons when you want to handle the board yourself."}
       >
         {mode === "ai" ? (
           <div className="space-y-3">
@@ -570,7 +570,7 @@ function BoardCommandRail({
         )}
       </RailSection>
 
-      <RailSection title="Day Snapshot" detail="What today's board looks like at a glance.">
+      <RailSection title="Today's Schedule" detail="A quick count of openings, missing assignments, and backlog.">
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md border bg-background p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Open slots</p>
@@ -597,8 +597,8 @@ function BoardCommandRail({
         <div className="mt-3 border-t pt-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold text-foreground">Schedule messages</p>
-              <p className="text-[11px] text-muted-foreground">Only recent calls or texts that may affect today.</p>
+              <p className="text-xs font-semibold text-foreground">Calls and texts for today</p>
+              <p className="text-[11px] text-muted-foreground">Recent messages that may change the schedule.</p>
             </div>
             <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={() => navigate("/intake")}>
               Intake HQ
@@ -1016,7 +1016,7 @@ function JobContextDialog({
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <div className="rounded-md border bg-background/70 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Media</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Photos/files</p>
                   <p className="mt-1 text-lg font-semibold">{liveContext?.attachmentCount || 0}</p>
                 </div>
                 <div className="rounded-md border bg-background/70 p-3">
@@ -1024,7 +1024,7 @@ function JobContextDialog({
                   <p className="mt-1 text-lg font-semibold">{liveContext?.responseCount || 0}</p>
                 </div>
                 <div className="rounded-md border bg-background/70 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Jarvis items</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Suggested items</p>
                   <p className="mt-1 text-lg font-semibold">{liveContext?.suggestedItemCount || 0}</p>
                 </div>
               </div>
@@ -1386,7 +1386,7 @@ export default function ScheduleV2() {
             icon={CalendarDays}
           />
           <MetricCard label="Stops" value={dayItems.length} detail={`${routeReadyCount} have a tech and address`} icon={Route} />
-          <MetricCard label="Needs Fix" value={criticalItems.length} detail="Missing a tech or arrival time" icon={AlertTriangle} />
+          <MetricCard label="Needs Info" value={criticalItems.length} detail="Missing a tech or arrival time" icon={AlertTriangle} />
           <MetricCard
             label="Backlog"
             value={unscheduledItems.length}
@@ -1471,7 +1471,7 @@ export default function ScheduleV2() {
             <>
               <TabsContent value="board" className="m-0 min-h-0 flex-1 overflow-auto p-4">
                 <div className="mb-3">
-                  <h2 className="text-sm font-semibold text-foreground">Day Board</h2>
+                    <h2 className="text-sm font-semibold text-foreground">Today's Board</h2>
                   <p className="text-xs text-muted-foreground">
                     {mode === "ai"
                       ? "Jarvis points out schedule problems; dispatch approves the fix."
