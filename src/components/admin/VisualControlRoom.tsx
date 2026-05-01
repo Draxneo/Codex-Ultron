@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatabaseHygienePanel } from "@/components/admin/DatabaseHygienePanel";
+import { SystemDriftPanel } from "@/components/admin/SystemDriftPanel";
 
 type CountResult = {
   key: string;
@@ -328,6 +329,8 @@ export function VisualControlRoom() {
       </Card>
 
       <DatabaseHygienePanel />
+
+      <SystemDriftPanel />
 
       <Card>
         <CardHeader>
