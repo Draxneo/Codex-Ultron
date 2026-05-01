@@ -25,9 +25,6 @@ import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
 import { onMainMessage } from "@/lib/electron";
 import { SmsComposerPopup } from "./components/SmsComposerPopup";
-import { CallerInfoCenter } from "./components/softphone/CallerInfoCenter";
-import { IntakeActionCards } from "./components/softphone/IntakeActionCards";
-import { ScrollArea } from "./components/ui/scroll-area";
 
 import { BookingIntentAlert } from "./components/BookingIntentAlert";
 
@@ -82,6 +79,12 @@ const TeamCommunications = lazy(() => import("./pages/TeamCommunications"));
 const PhoneConsole = lazy(() => import("./pages/PhoneConsole"));
 const PhoneOnlySoftphone = lazy(() =>
   import("./components/PhoneOnlySoftphone").then((module) => ({ default: module.PhoneOnlySoftphone }))
+);
+const CallerInfoCenter = lazy(() =>
+  import("./components/softphone/CallerInfoCenter").then((module) => ({ default: module.CallerInfoCenter }))
+);
+const IntakeActionCards = lazy(() =>
+  import("./components/softphone/IntakeActionCards").then((module) => ({ default: module.IntakeActionCards }))
 );
 const Admin = lazy(() => import("./pages/Admin"));
 const SystemLog = lazy(() => import("./pages/SystemLog"));
@@ -270,14 +273,16 @@ function PostCallActionsView() {
   return (
     <div className="h-screen w-screen bg-background flex flex-col overflow-hidden">
       {/* Caller identity — compact header */}
-      <CallerInfoCenter phoneNumber={phone || null} callerName={resolvedName} />
+      <Suspense fallback={<div className="h-24 shrink-0 border-b bg-card" />}>
+        <CallerInfoCenter phoneNumber={phone || null} callerName={resolvedName} />
+      </Suspense>
 
       {/* Live transcript — primary section, ~60% height */}
       <div className="flex-1 min-h-0 flex flex-col border-b">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-4 pt-2 pb-1 shrink-0">
           {isLive ? "Live Transcript" : "Last Call Transcript"}
         </p>
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="px-4 pb-3 space-y-0.5 text-xs text-foreground">
             {liveTranscript.length > 0 ? (
               <>
@@ -298,20 +303,22 @@ function PostCallActionsView() {
               </p>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Intake/Now handoff links only; booking stays in Intake/Now. */}
-      <ScrollArea className="max-h-[40%] shrink-0 pb-2">
+      <div className="max-h-[40%] shrink-0 overflow-y-auto pb-2">
         <div className="px-4 pb-4">
-          <IntakeActionCards
-            phoneNumber={phone}
-            callerName={resolvedName}
-            customerId={customer?.id}
-            callSid={callSid}
-          />
+          <Suspense fallback={<div className="rounded-lg border p-3 text-xs text-muted-foreground">Loading call actions...</div>}>
+            <IntakeActionCards
+              phoneNumber={phone}
+              callerName={resolvedName}
+              customerId={customer?.id}
+              callSid={callSid}
+            />
+          </Suspense>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
