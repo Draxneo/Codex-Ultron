@@ -189,11 +189,8 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
   };
 
   const handleLiveViewClose = async () => {
-    // Close the Firecrawl session when user closes the dialog
     if (activeSessionId) {
-      try {
-        const firecrawlKey = ""; // session cleanup handled server-side on TTL
-      } catch {}
+      // Session cleanup is handled server-side on TTL.
       setActiveSessionId(null);
     }
   };

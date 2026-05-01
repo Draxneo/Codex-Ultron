@@ -59,13 +59,18 @@ export function ReminderBatchCard() {
       if (!data || data.length === 0) return null;
       const item = data[0];
       let previews: ReminderPreview[] = [];
-      try { previews = JSON.parse(item.description || "[]"); } catch {}
-      return { id: item.id, previews };
+      let parseError: string | null = null;
+      try {
+        previews = JSON.parse(item.description || "[]");
+      } catch (error: any) {
+        parseError = error?.message || "Reminder preview data could not be read.";
+      }
+      return { id: item.id, previews, parseError };
     },
     refetchInterval: 60_000,
   });
 
-  if (!actionItem || actionItem.previews.length === 0) return null;
+  if (!actionItem) return null;
 
   const { previews } = actionItem;
 
@@ -111,6 +116,30 @@ export function ReminderBatchCard() {
     }
     setDismissing(false);
   };
+
+  if (actionItem.parseError) {
+    return (
+      <div className="rounded-lg border-2 border-destructive/30 bg-destructive/5 p-3 space-y-3">
+        <div className="flex items-start gap-2">
+          <div className="rounded-full bg-destructive/10 p-1.5">
+            <Bell className="h-4 w-4 text-destructive" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Appointment reminder batch needs cleanup</p>
+            <p className="text-xs text-muted-foreground">
+              Jarvis found a reminder batch, but its preview details could not be read.
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={handleDismiss} disabled={dismissing} className="w-full">
+          {dismissing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <X className="h-3.5 w-3.5 mr-1.5" />}
+          Dismiss cleanup card
+        </Button>
+      </div>
+    );
+  }
+
+  if (previews.length === 0) return null;
 
   return (
     <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3 space-y-2">
