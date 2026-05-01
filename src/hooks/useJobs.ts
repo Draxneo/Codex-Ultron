@@ -113,6 +113,39 @@ export function useJobs() {
   });
 }
 
+export function useCalendarJobs() {
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: ["calendar_jobs"],
+    staleTime: 30000,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const cutoff = ninetyDaysAgo.toISOString().split("T")[0];
+
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .gte("scheduled_date", cutoff)
+        .order("scheduled_date", { ascending: false });
+      if (error) throw error;
+
+      const { enriched, needsFetch } = mergeJobsWithCachedCustomers(data || [], queryClient);
+      if (needsFetch.length > 0) {
+        const customerMap = await fetchCustomersByIds(needsFetch);
+        return enriched.map((job) =>
+          job.customer_id && customerMap.has(job.customer_id)
+            ? mergeLinkedCustomer(job, customerMap.get(job.customer_id))
+            : job
+        );
+      }
+      return enriched;
+    },
+  });
+}
+
 export function useJob(id: string) {
   return useQuery({
     queryKey: ["jobs", id],

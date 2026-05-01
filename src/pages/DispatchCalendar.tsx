@@ -26,7 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
-import { useJobs } from "@/hooks/useJobs";
+import { useCalendarJobs } from "@/hooks/useJobs";
 
 type CalendarItem = {
   id: string;
@@ -58,7 +58,7 @@ const FILTERS = [
   { value: "maintenance", label: "Maint." },
 ];
 
-const STATUS_DONE = new Set(["done", "invoiced", "canceled", "cancelled", "completed"]);
+const STATUS_HIDDEN_FROM_CALENDAR = new Set(["canceled", "cancelled"]);
 
 function parseDateParam(value: string | null) {
   if (!value) return new Date();
@@ -77,7 +77,7 @@ function formatWeekRange(day: Date) {
 export default function DispatchCalendar() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: jobs, isLoading: jobsLoading } = useJobs();
+  const { data: jobs, isLoading: jobsLoading } = useCalendarJobs();
   const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
   const { data: employees = [] } = useEmployees();
   const { settings: calendarSettings, update: setCalendarSettings } = useCalendarSettings();
@@ -129,7 +129,7 @@ export default function DispatchCalendar() {
     const search = query.trim().toLowerCase();
     return scheduleItems.filter((item) => {
       const status = (item.status || item.work_status || "").toLowerCase();
-      if (STATUS_DONE.has(status)) return false;
+      if (STATUS_HIDDEN_FROM_CALENDAR.has(status)) return false;
       if (filter === "estimate" && item.item_type !== "estimate") return false;
       if (filter !== "all" && filter !== "estimate" && (item.item_type === "estimate" || item.job_type !== filter)) return false;
       if (!search) return true;
