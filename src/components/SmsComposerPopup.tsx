@@ -8,7 +8,6 @@ import { SMS_COMPOSER_OPEN_EVENT, type SmsComposerOpenDetail } from "@/lib/smsCo
 
 export function SmsComposerPopup() {
   const [detail, setDetail] = useState<SmsComposerOpenDetail | null>(null);
-  const { conversations, sending, sendSms, markAsRead, setThreadStatus, hasMore, loadMore, loadingMore } = useSmsLogScoped();
 
   useEffect(() => {
     const handleOpen = (event: Event) => {
@@ -25,19 +24,7 @@ export function SmsComposerPopup() {
   }, []);
 
   const phone = detail?.phone || "";
-  const phoneLast10 = normalizeLast10(phone);
-  const conversation = useMemo(() => {
-    if (!phoneLast10) return null;
-    return conversations.find((item) => normalizeLast10(item.phoneNumber) === phoneLast10) || null;
-  }, [conversations, phoneLast10]);
-
-  const displayName = detail?.contactName || conversation?.contactName || formatPhone(phone) || phone || "customer";
-
-  const handleSend = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
-    const success = await sendSms(to, body, jobId || detail?.jobId, contactName || detail?.contactName, mediaUrls);
-    if (success) setDetail(null);
-    return success;
-  };
+  const displayName = detail?.contactName || formatPhone(phone) || phone || "customer";
 
   return (
     <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
@@ -52,25 +39,43 @@ export function SmsComposerPopup() {
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1">
-          {detail && (
-            <SmsThreadView
-              key={`${phone}-${detail.draft || ""}`}
-              conversation={conversation}
-              sending={sending}
-              onSend={handleSend}
-              onMarkRead={markAsRead}
-              onStatusChange={setThreadStatus}
-              onBack={() => setDetail(null)}
-              newMessageMode={!conversation}
-              prefillPhone={!conversation ? phone : undefined}
-              prefillBody={detail.draft}
-              hasMore={hasMore}
-              loadingMore={loadingMore}
-              onLoadMore={loadMore}
-            />
-          )}
+          {detail && <SmsComposerDialogBody detail={detail} onClose={() => setDetail(null)} />}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SmsComposerDialogBody({ detail, onClose }: { detail: SmsComposerOpenDetail; onClose: () => void }) {
+  const { conversations, sending, sendSms, markAsRead, setThreadStatus, hasMore, loadMore, loadingMore } = useSmsLogScoped();
+  const phone = detail.phone || "";
+  const phoneLast10 = normalizeLast10(phone);
+  const conversation = useMemo(() => {
+    if (!phoneLast10) return null;
+    return conversations.find((item) => normalizeLast10(item.phoneNumber) === phoneLast10) || null;
+  }, [conversations, phoneLast10]);
+
+  const handleSend = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
+    const success = await sendSms(to, body, jobId || detail?.jobId, contactName || detail?.contactName, mediaUrls);
+    if (success) onClose();
+    return success;
+  };
+
+  return (
+    <SmsThreadView
+      key={`${phone}-${detail.draft || ""}`}
+      conversation={conversation}
+      sending={sending}
+      onSend={handleSend}
+      onMarkRead={markAsRead}
+      onStatusChange={setThreadStatus}
+      onBack={onClose}
+      newMessageMode={!conversation}
+      prefillPhone={!conversation ? phone : undefined}
+      prefillBody={detail.draft}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={loadMore}
+    />
   );
 }
