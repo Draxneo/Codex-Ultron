@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ElementType } from "react";
 import {
   ArrowRight,
+  AlertTriangle,
   BarChart3,
   Briefcase,
   CheckCircle2,
@@ -31,6 +32,7 @@ import { useRecentActivity } from "@/hooks/useActivityLog";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { TOOL_CARDS, SETTINGS_GROUPS } from "@/config/adminNavigation";
 import { routeToTabKey, useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
+import { errorMessage } from "@/lib/errorMessage";
 
 const quickActions = [
   { label: "Dispatch HQ", icon: Briefcase, path: "/dispatch", group: "HQ" },
@@ -99,7 +101,7 @@ function HubCard({ item, onNavigateSection }: { item: HubItem; onNavigateSection
 
 export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: string) => void }) {
   const { user } = useAuth();
-  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
+  const { data: metrics, isLoading: metricsLoading, isError: metricsError, error: metricsQueryError } = useDashboardMetrics();
   const { data: recentActivity } = useRecentActivity(5);
   const unreadSms = useUnreadSmsCount();
   const allowedTabs = useEmployeeTabAccess();
@@ -238,6 +240,16 @@ export function AdminHub({ onNavigateSection }: { onNavigateSection: (section: s
               </Card>
             ))}
           </div>
+
+          {metricsError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Admin counts need a quick check.</p>
+                <p className="text-xs opacity-90">{errorMessage(metricsQueryError)}. Refresh before trusting these numbers.</p>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-1 rounded-md border bg-card p-1">
             {(["Explore", "My apps", "All apps"] as MarketplaceMode[]).map((mode) => (
