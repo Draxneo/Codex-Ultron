@@ -37,6 +37,7 @@ import { RingtoneSettingsCard } from "@/components/RingtoneSettingsCard";
 import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard";
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
 import { VisualOperationsSettingsCard } from "@/components/admin/VisualOperationsSettingsCard";
+import { VisualControlRoom } from "@/components/admin/VisualControlRoom";
 
 import { LineItemTemplatesCard } from "@/components/LineItemTemplatesCard";
 import { MetaAudiencesCard } from "@/components/MetaAudiencesCard";
@@ -610,6 +611,8 @@ function AdminSectionContent({ section }: { section: string }) {
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
+    case "control-room":
+      return <VisualControlRoom />;
     case "data":
       return <CustomerDataTools />;
     case "dev":

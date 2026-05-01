@@ -20,6 +20,7 @@ import {
   Users,
   Activity,
   Database,
+  Eye,
 } from "lucide-react";
 
 export type ToolEntry = {
@@ -62,7 +63,7 @@ export const TOOL_CARDS: ToolEntry[] = [
 /* Settings (each card opens an Admin section) */
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
-    title: "Core Settings",
+    title: "Company Setup",
     icon: Settings2,
     cards: [
       { label: "Company", icon: Settings2, section: "company", color: "text-muted-foreground", bg: "bg-muted" },
@@ -72,12 +73,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     ],
   },
   {
-    title: "Data & Operations",
+    title: "Data Cleanup & System Health",
     icon: Activity,
     cards: [
+      { label: "Control Room", icon: Eye, section: "control-room", color: "text-sky-500", bg: "bg-sky-500/10" },
       { label: "Data Tools", icon: Database, section: "data", color: "text-orange-500", bg: "bg-orange-500/10" },
-      { label: "API Costs", icon: BarChart3, section: "reports", color: "text-amber-500", bg: "bg-amber-500/10" },
-      { label: "Dev / Ops", icon: Activity, section: "dev", color: "text-orange-500", bg: "bg-orange-500/10" },
+      { label: "Usage & Cost Watch", icon: BarChart3, section: "reports", color: "text-amber-500", bg: "bg-amber-500/10" },
+      { label: "System Health", icon: Activity, section: "dev", color: "text-orange-500", bg: "bg-orange-500/10" },
     ],
   },
 ];
