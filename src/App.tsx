@@ -331,7 +331,7 @@ function PhoneConsolePopup() {
     const handleOpen = (event: Event) => {
       const customEvent = event as CustomEvent<PhoneConsoleOpenDetail>;
       event.preventDefault();
-      setPhoneUrl(customEvent.detail.url);
+      setPhoneUrl((current) => current ?? customEvent.detail.url);
     };
 
     window.addEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
@@ -347,7 +347,6 @@ function PhoneConsolePopup() {
         </DialogHeader>
         {phoneUrl && (
           <iframe
-            key={phoneUrl}
             title="Phone"
             src={phoneUrl}
             className="h-full w-full border-0 bg-background"

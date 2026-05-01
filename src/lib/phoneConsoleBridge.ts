@@ -41,7 +41,26 @@ export function openPhoneConsole(
     cancelable: true,
     detail: { url, number, context },
   });
+
+  const sendDial = () => {
+    if (!number) return;
+    const channel = createPhoneConsoleChannel();
+    channel?.postMessage({
+      type: "dial",
+      number,
+      contactName: context?.contactName,
+      jobId: context?.jobId,
+      customerId: context?.customerId,
+      autoDial: context?.autoDial === true,
+    } satisfies PhoneConsoleMessage);
+    channel?.close();
+  };
+
   const shouldFallbackToWindow = window.dispatchEvent(openEvent);
+  if (number) {
+    window.setTimeout(sendDial, 400);
+    window.setTimeout(sendDial, 1200);
+  }
   if (!shouldFallbackToWindow) return;
 
   const win = window.open(url, "UltraOfficePhone", "width=420,height=720");
@@ -49,22 +68,5 @@ export function openPhoneConsole(
     win.focus();
   } else {
     window.location.assign(url);
-  }
-
-  if (number) {
-    const sendDial = () => {
-      const channel = createPhoneConsoleChannel();
-      channel?.postMessage({
-        type: "dial",
-        number,
-        contactName: context?.contactName,
-        jobId: context?.jobId,
-        customerId: context?.customerId,
-        autoDial: context?.autoDial === true,
-      } satisfies PhoneConsoleMessage);
-      channel?.close();
-    };
-    window.setTimeout(sendDial, 400);
-    window.setTimeout(sendDial, 1200);
   }
 }
