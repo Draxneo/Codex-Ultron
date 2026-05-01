@@ -108,7 +108,11 @@ const QuickQuoteCustomerView = lazy(() => import("./pages/QuickQuoteCustomerView
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 15_000,
+      gcTime: 5 * 60_000,
       refetchOnReconnect: true,
+      refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 });
