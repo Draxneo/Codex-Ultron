@@ -126,6 +126,15 @@ type TeamNotification = {
   created_at: string;
 };
 
+type TeamNowAction = {
+  id: string;
+  status: string | null;
+  title: string | null;
+  description: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+};
+
 type LooseSupabaseClient = {
   from: (table: string) => ReturnType<typeof supabase.from>;
 };
@@ -368,6 +377,21 @@ export default function TeamCommunications() {
     [calls, selectedConversation?.id]
   );
 
+  const { data: teamNowActions = [] } = useQuery({
+    queryKey: ["team-now-action-items"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("action_items" as any)
+        .select("id, status, title, description, metadata, created_at")
+        .eq("source", "team_communications")
+        .order("created_at", { ascending: false })
+        .limit(120);
+      if (error) throw error;
+      return (data ?? []) as TeamNowAction[];
+    },
+  });
+
   const { data: unreadNotifications = [] } = useQuery({
     queryKey: ["team-notifications", user?.id],
     enabled: !!user,
@@ -398,6 +422,10 @@ export default function TeamCommunications() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "team_notifications" }, () => {
         queryClient.invalidateQueries({ queryKey: ["team-notifications", user.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "action_items" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["team-now-action-items"] });
+        queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
       })
       .subscribe();
 
@@ -827,6 +855,20 @@ export default function TeamCommunications() {
     .filter((message) => !message.deleted_at && (message.body?.trim() || (message.attachments?.length ?? 0) > 0))
     .slice(-4)
     .reverse();
+  const teamNowByMessageId = useMemo(() => {
+    const map = new Map<string, TeamNowAction>();
+    for (const item of teamNowActions) {
+      const messageId = item.metadata?.team_message_id;
+      if (messageId && !map.has(messageId)) map.set(messageId, item);
+    }
+    return map;
+  }, [teamNowActions]);
+  const selectedConversationNowActions = teamNowActions.filter(
+    (item) => item.metadata?.conversation_id === selectedConversation?.id
+  );
+  const pendingTeamNowActions = selectedConversationNowActions.filter(
+    (item) => !["done", "handled", "dismissed", "completed", "closed"].includes(String(item.status || "").toLowerCase())
+  );
   const sidebarLoading = teamUsersLoading || conversationsLoading || membersLoading;
   const pageHasError = teamUsersError || conversationsError;
   const visibleSharedLinks = sharedLinks.length > 0 ? sharedLinks : usefulWebLinks.map((item, index) => ({
@@ -1428,7 +1470,9 @@ export default function TeamCommunications() {
                     <div className="rounded-md border bg-background p-3 text-xs">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold">{selectedConversation ? conversationTitle(selectedConversation) : "No room selected"}</span>
-                        <Badge variant={activeCall ? "default" : "secondary"}>{activeCall ? "call live" : "quiet"}</Badge>
+                        <Badge variant={pendingTeamNowActions.length ? "default" : activeCall ? "default" : "secondary"}>
+                          {pendingTeamNowActions.length ? `${pendingTeamNowActions.length} in Now` : activeCall ? "call live" : "quiet"}
+                        </Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-muted-foreground">
                         {operationCandidates[0]?.body || (operationCandidates[0]?.attachments?.length ? "Latest update has attachments." : "Pick a chat to see what is going on.")}
@@ -1448,20 +1492,59 @@ export default function TeamCommunications() {
                               {message.body || `${message.attachments?.length ?? 0} attachment${message.attachments?.length === 1 ? "" : "s"}`}
                             </p>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 shrink-0 px-2 text-[11px]"
-                            onClick={() => sendMessageToNow.mutate(message)}
-                            disabled={sendMessageToNow.isPending}
-                          >
-                            Now
-                          </Button>
+                          {teamNowByMessageId.get(message.id) ? (
+                            <Button asChild size="sm" variant="secondary" className="h-7 shrink-0 px-2 text-[11px]">
+                              <Link to={`/now?action_items=1&action_id=${teamNowByMessageId.get(message.id)!.id}`}>
+                                Sent
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 shrink-0 px-2 text-[11px]"
+                              onClick={() => sendMessageToNow.mutate(message)}
+                              disabled={sendMessageToNow.isPending}
+                            >
+                              Now
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
                     {operationCandidates.length === 0 && (
                       <SidebarEmpty>Team blockers can be sent to Now once a message exists.</SidebarEmpty>
+                    )}
+                  </div>
+                </section>
+
+                <Separator />
+
+                <section>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Now Cards From This Chat</p>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedConversationNowActions.slice(0, 4).map((item) => (
+                      <Link
+                        key={item.id}
+                        to={`/now?action_items=1&action_id=${item.id}`}
+                        className="block rounded-md border bg-background px-3 py-2 text-xs hover:bg-muted"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate font-medium">{item.title || "Team follow-up"}</p>
+                          <Badge variant={item.status === "pending" ? "default" : "secondary"} className="text-[10px]">
+                            {item.status || "open"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-muted-foreground">
+                          {item.description || "Open Now HQ to finish this item."}
+                        </p>
+                      </Link>
+                    ))}
+                    {selectedConversationNowActions.length === 0 && (
+                      <SidebarEmpty>Nothing from this chat has been sent to Now yet.</SidebarEmpty>
                     )}
                   </div>
                 </section>

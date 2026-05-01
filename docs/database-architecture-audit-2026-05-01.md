@@ -106,6 +106,50 @@ Quote HQ now overlays `v_quote_pipeline` on top of the existing quote controls. 
 
 Customer HQ now shows a customer timeline sourced from `v_customer_timeline`, combining calls, texts, jobs, estimates, invoices, and attachments into one relationship story.
 
+Tech job screens now use `v_tech_work_summary` through `useTechWorkSummary(...)`, so the technician, dispatch board, and Jarvis all see the same next-step signal, photo/file count, and quote count.
+
+Now HQ quote cards now overlay `v_quote_pipeline`, so open quote cards carry the same customer/contact/latest-message context as Quote HQ instead of rebuilding quote context separately.
+
+## Team HQ Wiring Pass
+
+Team HQ is using the newer `team_*` tables as the active internal communication path:
+
+- `team_conversations`
+- `team_conversation_members`
+- `team_messages`
+- `team_audio_calls`
+- `team_notifications`
+
+The app now makes the Team-to-Now handoff visible in Team HQ. When a team message is sent to Now, Team HQ shows that the message was already escalated and links back to the Now action card. The right rail also lists Now cards created from the current team conversation.
+
+This keeps internal team chatter out of Intake while still allowing important team messages to become actionable workflow cards.
+
+## Direct Data Path Audit - First Findings
+
+The main active headquarters paths now have shared read hooks:
+
+- Intake: `useUnifiedCommunications(...)` / `get_unified_communications(...)`
+- Dispatch: `useDispatchLiveCards(...)` / `v_dispatch_live_cards`
+- Quote HQ: `useQuotePipeline(...)` / `v_quote_pipeline`
+- Customer HQ: `useCustomerTimeline(...)` / `v_customer_timeline`
+- Tech job view: `useTechWorkSummary(...)` / `v_tech_work_summary`
+- Now HQ: workflow/action-item builders plus quote-pipeline enrichment
+
+Remaining direct reads are not all bad. Some are mutation screens or admin tools that should write to the base tables. The cleanup rule is:
+
+- Keep direct writes where the screen is truly editing the record.
+- Move dashboard/read-only context behind canonical hooks/views.
+- Avoid giving Jarvis old raw-table paths when a canonical read model exists.
+
+The biggest old parallel communication path is still `chat_*`. It appears mostly unused by the current Team HQ, but some legacy helpers still reference it:
+
+- `src/hooks/useChat.ts`
+- `src/hooks/useChatNotifications.ts`
+- `src/pages/TechFormPublic.tsx` completion notification block
+- Jarvis tool labels for `read_chat_messages` / `send_chat_message`
+
+Recommended next step: either migrate useful `chat_*` history into `team_*`, or explicitly retire `chat_*` from the app and make any remaining tech-form/system notifications write to `team_*`, `activity_log`, or `action_items` depending on whether they are a chat message, a job event, or a true Now action.
+
 ## Merge Candidates
 
 The main real duplication is team communications:
