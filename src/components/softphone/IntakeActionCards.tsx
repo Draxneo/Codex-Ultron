@@ -57,6 +57,12 @@ function buildIntakeUrl(phoneNumber?: string) {
   return phoneNumber ? `/intake?phone=${encodeURIComponent(phoneNumber)}` : "/intake";
 }
 
+function isCurrentActionItem(row: any) {
+  const createdAt = Date.parse(row?.created_at || "");
+  const cutoff = Date.parse(APP_ACTION_GO_LIVE_ISO);
+  return Number.isFinite(createdAt) && createdAt >= cutoff;
+}
+
 export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid }: IntakeActionCardsProps) {
   const [cards, setCards] = useState<IntakeNowCard[]>([]);
   const [savingNowCard, setSavingNowCard] = useState(false);
@@ -110,7 +116,7 @@ export function IntakeActionCards({ phoneNumber, callerName, customerId, callSid
 
           const row = payload.new;
           const matchesPhone = last10(cardPhone(row)) === normalizedPhone;
-          const isOpenNowCard = row?.status === "pending" && NOW_CARD_CATEGORIES.includes(row.category);
+          const isOpenNowCard = isCurrentActionItem(row) && row?.status === "pending" && NOW_CARD_CATEGORIES.includes(row.category);
           if (!matchesPhone || !isOpenNowCard) {
             setCards((prev) => prev.filter((card) => card.id !== row?.id));
             return;

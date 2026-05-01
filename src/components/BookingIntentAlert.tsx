@@ -25,8 +25,15 @@ import {
   invalidateActionItemQueues,
   resolveActionItem,
 } from "@/lib/actionItemLifecycle";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 const BOOKING_CATEGORIES = ["new_appointment", "booking_confirm"];
+
+function isCurrentActionItem(row: any) {
+  const createdAt = Date.parse(row?.created_at || "");
+  const cutoff = Date.parse(APP_ACTION_GO_LIVE_ISO);
+  return Number.isFinite(createdAt) && createdAt >= cutoff;
+}
 
 type BookingAlert = {
   id: string;
@@ -93,6 +100,11 @@ export function BookingIntentAlert() {
           }
 
           const row = payload.new;
+          if (!isCurrentActionItem(row)) {
+            if (row?.id) dismiss(row.id);
+            return;
+          }
+
           if (row?.status !== ACTION_ITEM_STATUS.pending) {
             if (row?.id) dismiss(row.id);
             return;
