@@ -146,7 +146,7 @@ export function PageAccessCard() {
           Page Access
         </CardTitle>
         <CardDescription className="text-xs">
-          Each role has default access. Customize per-employee with checkboxes — a yellow dot marks customized rows.
+          These checkboxes decide which pages each active employee can open. Every role starts with a default setup; customized employees are marked.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -172,7 +172,7 @@ export function PageAccessCard() {
                 return [
                   <tr key={`hdr-${roleKey}`} className="bg-muted/40">
                     <td colSpan={allKeys.length + 2} className="py-1.5 px-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground sticky left-0 bg-muted/40">
-                      {ROLE_LABELS[roleKey]} · {list.length}
+                      {ROLE_LABELS[roleKey]} - {list.length}
                     </td>
                   </tr>,
                   ...list.map(emp => {
@@ -187,7 +187,7 @@ export function PageAccessCard() {
                             {isCustom && (
                               <span
                                 className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
-                                title="Customized — won't auto-update on role change"
+                                title="Customized access. This employee is not using the plain role default."
                               />
                             )}
                             <span className="truncate">{emp.name}</span>

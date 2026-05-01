@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Shield, DollarSign, Plus, Trash2, UserPlus, Mail, MessageSquare } from "lucide-react";
+import { Users, Shield, DollarSign, Plus, Trash2, UserPlus, Mail, MessageSquare, Power, KeyRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -139,24 +139,40 @@ function RosterTab() {
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base">Team Roster</CardTitle>
-            <CardDescription className="text-xs">{employees?.length ?? 0} employees · grouped by role</CardDescription>
+            <CardDescription className="text-xs">
+              {employees?.length ?? 0} employees grouped by role. This is who can be assigned, contacted, and shown around the app.
+            </CardDescription>
           </div>
           <Button size="sm" onClick={openAdd} className="gap-1.5">
             <Plus className="h-4 w-4" /> Add
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-2 rounded-lg border bg-muted/25 p-3 text-xs text-muted-foreground md:grid-cols-3">
+            <div className="flex items-start gap-2">
+              <Power className="mt-0.5 h-3.5 w-3.5 text-primary" />
+              <p><span className="font-semibold text-foreground">Active employee</span> means they show up for scheduling, pay, testing, and employee pickers.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <KeyRound className="mt-0.5 h-3.5 w-3.5 text-primary" />
+              <p><span className="font-semibold text-foreground">Login</span> creates or resets their app password. It does not control whether they are active.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Trash2 className="mt-0.5 h-3.5 w-3.5 text-destructive" />
+              <p><span className="font-semibold text-foreground">Delete</span> removes the roster record. Use inactive first when someone may return.</p>
+            </div>
+          </div>
           {CANONICAL_ROLES.map(roleKey => {
             const list = grouped[roleKey];
             if (list.length === 0) return null;
             return (
               <div key={roleKey}>
                 <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5">
-                  {ROLE_LABELS[roleKey]} · {list.length}
+                  {ROLE_LABELS[roleKey]} - {list.length}
                 </p>
                 <div className="space-y-1">
                   {list.map((emp: any) => (
-                    <div key={emp.id} className="flex items-center justify-between border rounded-md px-3 py-2 hover:bg-muted/30 transition-colors">
+                    <div key={emp.id} className="flex flex-col gap-3 border rounded-md px-3 py-3 hover:bg-muted/30 transition-colors lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(emp)}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{emp.name}</span>
@@ -188,25 +204,40 @@ function RosterTab() {
                           {emp.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{emp.email}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <Button
                           variant="outline" size="sm" className="h-7 px-2 text-[11px] gap-1"
                           onClick={() => {
                             setInviting(emp); setInviteEmail(emp.email || ""); setInvitePassword("");
                             setInviteRole(emp.role === "admin" ? "admin" : emp.role === "office" ? "office" : "tech");
                           }}
+                          title={emp.email ? "Reset this employee's app login password" : "Create an app login for this employee"}
                         >
-                          <UserPlus className="h-3 w-3" /> {emp.email ? "Reset PW" : "Invite"}
+                          <UserPlus className="h-3 w-3" /> {emp.email ? "Reset login" : "Create login"}
                         </Button>
-                        <Switch
-                          checked={emp.is_active ?? true}
-                          onCheckedChange={(v) => toggleEmployee.mutate({ id: emp.id, is_active: v })}
-                        />
+                        <div
+                          className="flex items-center gap-2 rounded-md border bg-background px-2 py-1"
+                          title="Turn this off to hide the employee from normal active staff lists without deleting them."
+                        >
+                          <Switch
+                            checked={emp.is_active ?? true}
+                            onCheckedChange={(v) => toggleEmployee.mutate({ id: emp.id, is_active: v })}
+                            aria-label={`${emp.name} active employee`}
+                          />
+                          <div className="min-w-[92px]">
+                            <p className="text-[11px] font-semibold leading-none">
+                              {emp.is_active === false ? "Inactive" : "Active"}
+                            </p>
+                            <p className="mt-0.5 text-[10px] leading-none text-muted-foreground">
+                              employee
+                            </p>
+                          </div>
+                        </div>
                         <Button
                           variant="ghost" size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleting(emp)}
-                          title="Delete"
+                          title="Delete employee record"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
