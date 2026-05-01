@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export type IvrConfig = {
   id: string;
@@ -77,9 +78,21 @@ export function useIvrConfig() {
 
     if (configRes.error) {
       console.error("IVR config fetch error:", configRes.error);
+      void logClientSystemError({
+        sourceName: "ivr-builder",
+        message: configRes.error.message || "IVR config fetch failed",
+        severity: "error",
+        context: { table: "ivr_config", operation: "fetch" },
+      });
     }
     if (menuRes.error) {
       console.error("IVR menu fetch error:", menuRes.error);
+      void logClientSystemError({
+        sourceName: "ivr-builder",
+        message: menuRes.error.message || "IVR menu fetch failed",
+        severity: "error",
+        context: { table: "ivr_menu_options", operation: "fetch" },
+      });
     }
 
     if (configRes.data) setConfig(configRes.data as any);
@@ -97,6 +110,12 @@ export function useIvrConfig() {
       .eq("id", config.id);
     if (error) {
       console.error("IVR config update error:", error);
+      void logClientSystemError({
+        sourceName: "ivr-builder",
+        message: error.message || "IVR config update failed",
+        severity: "error",
+        context: { table: "ivr_config", operation: "update", config_id: config.id },
+      });
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       setConfig((prev) => prev ? { ...prev, ...updates } : prev);
@@ -118,6 +137,12 @@ export function useIvrConfig() {
         .eq("id", existing.id);
       if (error) {
         console.error("IVR menu option update error:", error);
+        void logClientSystemError({
+          sourceName: "ivr-builder",
+          message: error.message || "IVR menu option update failed",
+          severity: "error",
+          context: { table: "ivr_menu_options", operation: "update", option_id: existing.id, digit: option.digit },
+        });
         toast({ title: "Error updating department", description: error.message, variant: "destructive" });
         return;
       }
@@ -138,6 +163,12 @@ export function useIvrConfig() {
 
       if (error) {
         console.error("IVR menu option insert error:", error);
+        void logClientSystemError({
+          sourceName: "ivr-builder",
+          message: error.message || "IVR menu option insert failed",
+          severity: "error",
+          context: { table: "ivr_menu_options", operation: "insert", digit: option.digit },
+        });
         if (error.code === "23505") {
           toast({ title: "Duplicate digit", description: `Key "${option.digit}" is already assigned.`, variant: "destructive" });
         } else {
@@ -156,6 +187,12 @@ export function useIvrConfig() {
     const { error } = await supabase.from("ivr_menu_options").delete().eq("id", id);
     if (error) {
       console.error("IVR menu option delete error:", error);
+      void logClientSystemError({
+        sourceName: "ivr-builder",
+        message: error.message || "IVR menu option delete failed",
+        severity: "error",
+        context: { table: "ivr_menu_options", operation: "delete", option_id: id },
+      });
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
