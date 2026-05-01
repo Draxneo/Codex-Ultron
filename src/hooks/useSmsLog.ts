@@ -796,8 +796,12 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       }
       return true;
     } catch (e: any) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      toast({ title: "SMS Failed", description: e.message, variant: "destructive" });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId ? { ...m, delivery_status: "failed" } : m
+        )
+      );
+      toast({ title: "SMS Failed", description: e.message || "Check the connection and try again.", variant: "destructive" });
       return false;
     } finally {
       setSending(false);
