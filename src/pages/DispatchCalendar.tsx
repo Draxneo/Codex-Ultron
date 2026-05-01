@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useCalendarJobs } from "@/hooks/useJobs";
+import { errorMessage } from "@/lib/errorMessage";
 
 type CalendarItem = {
   id: string;
@@ -72,12 +73,6 @@ function formatWeekRange(day: Date) {
   if (isSameMonth(start, end)) return `${format(start, "MMMM d")}-${format(end, "d, yyyy")}`;
   if (isSameYear(start, end)) return `${format(start, "MMM d")}-${format(end, "MMM d, yyyy")}`;
   return `${format(start, "MMM d, yyyy")}-${format(end, "MMM d, yyyy")}`;
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 export default function DispatchCalendar() {

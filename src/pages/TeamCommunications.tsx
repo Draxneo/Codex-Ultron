@@ -51,6 +51,7 @@ import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
 import { useQuickLinks } from "@/hooks/useQuickLinks";
 import { supabase } from "@/integrations/supabase/client";
 import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
+import { errorMessage } from "@/lib/errorMessage";
 import { formatBytes } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
 
@@ -155,12 +156,6 @@ const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389
 function showTeamActionError(title: string, error: unknown) {
   const description = error instanceof Error ? error.message : undefined;
   toast.error(title, description ? { description } : undefined);
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 const quickAccessItems = [

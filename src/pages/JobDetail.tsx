@@ -22,12 +22,7 @@ import { JobPurchasesPanel } from "@/components/job/JobPurchasesPanel";
 import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TechJobDetail from "@/pages/TechJobDetail";
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
-}
+import { errorMessage } from "@/lib/errorMessage";
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();

@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ModuleWorkbench } from "@/components/workbench/ModuleWorkbench";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errorMessage";
 import { formatRelativeDate } from "@/lib/formatters";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
@@ -36,12 +37,6 @@ function lastContactTone(customer: EnrichedCustomer) {
   if (customer.enrichment.last_contact_type === "sms") return "text-sky-600 bg-sky-500/10 dark:text-sky-300";
   if (customer.enrichment.last_contact_type === "call") return "text-emerald-600 bg-emerald-500/10 dark:text-emerald-300";
   return "text-muted-foreground bg-muted";
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 export default function Customers() {

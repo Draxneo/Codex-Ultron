@@ -64,6 +64,7 @@ import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
 import type { SmsConversation } from "@/hooks/useSmsLog";
 import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
 import { supabase } from "@/integrations/supabase/client";
+import { errorMessage } from "@/lib/errorMessage";
 import { formatPhone, toE164 } from "@/lib/formatters";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
@@ -184,12 +185,6 @@ function relativeTime(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return formatDistanceToNow(date, { addSuffix: true });
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 function techStatusLabel(status?: TechStatusInfo | null) {

@@ -6,12 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TechCartCard } from "@/components/tech/TechCartCard";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useJob } from "@/hooks/useJobs";
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
-}
+import { errorMessage } from "@/lib/errorMessage";
 
 export default function TechJobCart() {
   const { id } = useParams<{ id: string }>();

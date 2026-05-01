@@ -37,6 +37,7 @@ import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useJob } from "@/hooks/useJobs";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/google-maps";
+import { errorMessage } from "@/lib/errorMessage";
 import { launchNavigation } from "@/lib/launchNavigation";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
@@ -79,12 +80,6 @@ function jobProblem(job: any) {
     (job?.hcp_note && String(job.hcp_note).trim()) ||
     "Review the concern, document the diagnosis, and talk through the next step with the customer."
   );
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 export default function TechJobDetail() {

@@ -41,6 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { errorMessage } from "@/lib/errorMessage";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const tabTriggerClass =
@@ -85,12 +86,6 @@ function customerAddress(customer: any, overview: CustomerOverview) {
     .filter(Boolean)
     .join(", ");
   return fromOverview || fromCustomer || "No service address saved";
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 function SignalCard({

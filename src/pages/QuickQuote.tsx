@@ -29,6 +29,7 @@ import { GoodBetterBestPicker } from "@/components/tiers/GoodBetterBestPicker";
 import { TierPresetManager } from "@/components/tiers/TierPresetManager";
 import { useAuth } from "@/hooks/useAuth";
 import { useCapacitor } from "@/hooks/useCapacitor";
+import { errorMessage } from "@/lib/errorMessage";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 const QUICK_QUOTE_SECTION_IDS = ["filters", "tiers", "results", "presentation"] as const;
@@ -52,12 +53,6 @@ const LOCATION_ORIENTATIONS: Record<string, string[]> = {
   Attic: ["Multiposition", "Horizontal"],
   Closet: ["Multiposition", "Vertical"],
 };
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
-}
 
 export default function QuickQuote() {
   const navigate = useNavigate();

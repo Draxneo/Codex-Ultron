@@ -52,6 +52,7 @@ import { usePresentationsForEstimate, useResponsesForEstimate } from "@/hooks/us
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getExpectedJobItems } from "@/lib/expectedJobItems";
 import { paymentPreferenceLabel } from "@/lib/paymentOptions";
+import { errorMessage } from "@/lib/errorMessage";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY_NAME, DEFAULT_COMPANY_SHORT_NAME } from "@/lib/companyDefaults";
@@ -97,12 +98,6 @@ interface EstimateLineItem {
 
 function money(value: number | null | undefined) {
   return `$${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 function EstimateOptionsWorkbench({

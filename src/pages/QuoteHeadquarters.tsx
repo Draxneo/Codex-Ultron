@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQuotePipelineMap, type QuotePipelineRow } from "@/hooks/useCanonicalOperations";
 import { useEstimates, type Estimate } from "@/hooks/useEstimates";
 import { supabase } from "@/integrations/supabase/client";
+import { errorMessage } from "@/lib/errorMessage";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
@@ -105,12 +106,6 @@ function shortDate(value: string | null | undefined) {
   const date = safeDate(value);
   if (!date) return "Not set";
   return format(date, "MMM d, yyyy");
-}
-
-function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
-  return "Unknown error";
 }
 
 function firstName(estimate: Estimate) {
