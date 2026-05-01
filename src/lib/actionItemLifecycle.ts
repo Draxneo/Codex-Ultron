@@ -43,11 +43,15 @@ export async function resolveActionItem({
   }
 
   if (title || activityDetails) {
-    await supabase.from("activity_log").insert({
+    const { error: activityError } = await supabase.from("activity_log").insert({
       action: `action_item_${status}`,
       details: activityDetails || `${title} - ${status}`,
       job_id: jobId || null,
+      performed_by: userId || null,
     });
+    if (activityError) {
+      console.warn("[actionItemLifecycle] Action item was resolved, but activity logging failed.", activityError);
+    }
   }
 }
 
