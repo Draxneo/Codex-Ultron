@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 import { CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export type DispatchLiveAttachment = {
   id: string;
@@ -169,6 +170,15 @@ export function useDispatchLiveCards(jobIds: string[]) {
 
       if (readModelRes.error) {
         console.warn("Dispatch live read model unavailable; using raw field context only:", readModelRes.error.message);
+        void logClientSystemError({
+          sourceName: "dispatch-live-cards",
+          message: readModelRes.error.message || "Dispatch live read model unavailable",
+          severity: "warning",
+          context: {
+            table: "v_dispatch_live_cards",
+            job_count: stableJobIds.length,
+          },
+        });
       }
       if (transcriptsRes.error) throw transcriptsRes.error;
       if (activityRes.error) throw activityRes.error;
@@ -177,6 +187,15 @@ export function useDispatchLiveCards(jobIds: string[]) {
       if (cartsRes.error) throw cartsRes.error;
       if (repairItemsRes.error) {
         console.warn("Repair item context unavailable for dispatch live cards:", repairItemsRes.error.message);
+        void logClientSystemError({
+          sourceName: "dispatch-live-cards",
+          message: repairItemsRes.error.message || "Repair item context unavailable",
+          severity: "warning",
+          context: {
+            table: "job_repair_items",
+            job_count: stableJobIds.length,
+          },
+        });
       }
 
       const readModelByJob = new Map<string, any>();
