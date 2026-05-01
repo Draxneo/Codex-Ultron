@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { errorMessage } from "@/lib/errorMessage";
 
 type JarvisRecord = Record<string, unknown>;
 
@@ -82,6 +83,31 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
   const pendingSmsRef = useRef<{ phone: string; contactName?: string } | null>(null);
   const pendingVoicemailRef = useRef<{ voicemailId: string; phone: string; contactName?: string } | null>(null);
 
+  const stashContextBuilderFailure = useCallback((args: JarvisRecord, error: unknown) => {
+    const trigger = (args.trigger as JarvisContextPayload["trigger"]) || "crm";
+    const phone = textValue(args.phone);
+    const contactName = textValue(args.contact_name);
+    const message = errorMessage(error);
+    pendingContextRef.current = {
+      trigger,
+      built_at: new Date().toISOString(),
+      contact: phone || contactName ? { phone, name: contactName } : null,
+      artifact: {
+        type: trigger,
+        label: contactName || phone || trigger,
+        context_builder_status: "failed",
+        context_builder_error: message,
+        requested_context: args,
+      },
+      recent_history: { jobs: [], calls: [], sms: [] },
+      suggested_actions: [
+        "Tell the user the full customer context did not load",
+        "Work only from the visible record and the user's instructions",
+        "Ask the dispatcher to refresh before approving customer-facing actions",
+      ],
+    };
+  }, []);
+
   const toggle = useCallback(() => setOpen((p) => !p), []);
 
   const sendQuery = useCallback((query: string) => {
@@ -116,11 +142,13 @@ export function CopilotPanelProvider({ children }: { children: React.ReactNode }
         pendingContextRef.current = data as JarvisContextPayload;
         return data as JarvisContextPayload;
       }
+      stashContextBuilderFailure(args, error || data?.error || "Jarvis context builder returned no context");
     } catch (e) {
       console.warn("jarvis-context-builder failed", e);
+      stashContextBuilderFailure(args, e);
     }
     return null;
-  }, []);
+  }, [stashContextBuilderFailure]);
 
   const startCallSession = useCallback((phone: string, contactName?: string, callSid?: string) => {
     pendingCallRef.current = { phone, contactName, callSid };
