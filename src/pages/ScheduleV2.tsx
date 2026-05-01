@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
+import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,11 +52,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobPhotosGrid } from "@/components/job/JobPhotosGrid";
+import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { useDispatchLiveCards, type DispatchLiveCardContext } from "@/hooks/useDispatchLiveCards";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
 import { useTechStatusMap, type TechStatusInfo } from "@/hooks/useTechStatusMap";
+import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { toast } from "@/hooks/use-toast";
 import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
 import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
@@ -283,11 +286,13 @@ function MetricCard({
   value,
   detail,
   icon: Icon,
+  action,
 }: {
   label: string;
   value: string | number;
-  detail: string;
+  detail: React.ReactNode;
   icon: typeof CalendarDays;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border bg-card p-3 shadow-sm">
@@ -300,7 +305,10 @@ function MetricCard({
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">{detail}</p>
+      <div className="mt-2 flex min-h-5 items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="min-w-0">{detail}</div>
+        {action}
+      </div>
     </div>
   );
 }
@@ -769,10 +777,31 @@ function CommunicationContextDialog({
                 Open linked job
               </Button>
             )}
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Dispatch action", description: "Next pass can turn this into reschedule/book/add-note actions without leaving the board." })}>
-              <Sparkles className="h-4 w-4" />
-              Ask Jarvis
-            </Button>
+            <AskJarvisButton
+              contextType={isCall ? "call" : "sms"}
+              contextId={item.id}
+              label="Ask Jarvis"
+              variant="outline"
+              className="w-full justify-start"
+              stopPropagation={false}
+              prompt={`Review this ${isCall ? "call" : "text"} from ${item.name}. Tell dispatch what the customer needs, whether it affects today's schedule, and the next action to approve.`}
+              context={{
+                title: `${isCall ? "Call" : "Text"} from ${item.name}`,
+                customer_name: item.name,
+                phone: item.phone,
+                summary: item.summary,
+                detail: item.detail,
+                message_body: messageBody,
+                transcript,
+                ai_summary: summary,
+                latest_job_id: item.latestJobId || null,
+                suggested_actions: [
+                  "Summarize what dispatch needs to know",
+                  "Decide if this changes today's schedule",
+                  "Draft the next customer or team message for approval",
+                ],
+              }}
+            />
             <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
               This pop-up is the model: answer the call/text, understand intent, act on the board, then open the full record only when needed.
             </div>
@@ -1101,6 +1130,7 @@ export default function ScheduleV2() {
   const { data: jobs, isLoading: jobsLoading } = useJobs();
   const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
   const { data: employees = [] } = useEmployees();
+  const { data: forecastMap } = useWeatherForecast();
   const techStatusMap = useTechStatusMap();
   const [currentDay, setCurrentDay] = useState(() => new Date());
   const [query, setQuery] = useState("");
@@ -1203,9 +1233,19 @@ export default function ScheduleV2() {
     start: startOfWeek(currentDay, { weekStartsOn: 0 }),
     end: endOfWeek(currentDay, { weekStartsOn: 0 }),
   });
+  const currentDayKey = format(currentDay, "yyyy-MM-dd");
+  const dayForecast = forecastMap?.get(currentDayKey);
 
   const criticalItems = dayItems.filter((item) => !item.assigned_to || !item.arrival_start);
   const routeReadyCount = dayItems.filter((item) => item.assigned_to && item.address).length;
+  const backlogPreview = unscheduledItems.slice(0, 8).map((item) => ({
+    id: item.id,
+    type: item.item_type === "estimate" ? "estimate" : item.job_type,
+    customer_name: item.customer_name,
+    address: item.address,
+    description: item.description,
+    phone: item.customer_phone,
+  }));
   const loading = jobsLoading || estimatesLoading;
   const dispatchLiveJobIds = useMemo(
     () => filteredItems.filter((item) => item.item_type === "job").map((item) => item.id).slice(0, 200),
@@ -1313,10 +1353,51 @@ export default function ScheduleV2() {
         </div>
 
         <div className="grid shrink-0 grid-cols-2 gap-3 border-b bg-muted/30 p-4 lg:grid-cols-4">
-          <MetricCard label="Date" value={format(currentDay, "MMM d")} detail={isToday(currentDay) ? "Today" : format(currentDay, "EEEE")} icon={CalendarDays} />
+          <MetricCard
+            label="Date"
+            value={format(currentDay, "EEE, MMM d")}
+            detail={dayForecast ? (
+              <WeatherBadge forecast={dayForecast} className="-ml-1 !px-0" />
+            ) : (
+              isToday(currentDay) ? "Today" : format(currentDay, "EEEE")
+            )}
+            icon={CalendarDays}
+          />
           <MetricCard label="Stops" value={dayItems.length} detail={`${routeReadyCount} have a tech and address`} icon={Route} />
           <MetricCard label="Needs Fix" value={criticalItems.length} detail="Missing a tech or arrival time" icon={AlertTriangle} />
-          <MetricCard label="Backlog" value={unscheduledItems.length} detail="Waiting to be scheduled" icon={Sparkles} />
+          <MetricCard
+            label="Backlog"
+            value={unscheduledItems.length}
+            detail="Waiting to be scheduled"
+            icon={Sparkles}
+            action={unscheduledItems.length > 0 ? (
+              <AskJarvisButton
+                contextType="dispatch_card"
+                contextId={`dispatch-backlog-${currentDayKey}`}
+                label="Ask Jarvis"
+                variant="ghost"
+                size="sm"
+                className="h-7 shrink-0 px-2 text-[11px]"
+                stopPropagation={false}
+                prompt={`Look at the dispatch backlog for ${format(currentDay, "EEEE, MMMM d")}. Tell me which unscheduled job should be placed next, what info is missing, and the safest next step for dispatch.`}
+                context={{
+                  title: `Dispatch backlog for ${format(currentDay, "EEEE, MMMM d")}`,
+                  selected_date: currentDayKey,
+                  backlog_count: unscheduledItems.length,
+                  open_slots: Math.max(0, (employees || []).filter((employee: any) => employee.is_active !== false).length * 3 - dayItems.length),
+                  day_job_count: dayItems.length,
+                  route_ready_count: routeReadyCount,
+                  missing_schedule_count: criticalItems.length,
+                  backlog_preview: backlogPreview,
+                  suggested_actions: [
+                    "Pick the best backlog job to schedule next",
+                    "List any missing customer, address, or timing information",
+                    "Draft the dispatcher's next step for approval",
+                  ],
+                }}
+              />
+            ) : undefined}
+          />
         </div>
 
         <Tabs defaultValue="board" className="flex min-h-0 flex-1 flex-col overflow-hidden">
