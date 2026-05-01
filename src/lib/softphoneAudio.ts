@@ -1,5 +1,5 @@
 /**
- * Softphone audio utilities — DTMF dial tones + ringtone playback
+ * Softphone audio utilities - DTMF dial tones + ringtone playback
  * Uses Web Audio API for low-latency, zero-asset DTMF generation.
  * Supports custom uploaded audio ringtones via URL.
  */
@@ -15,7 +15,11 @@ let audioCtx: AudioContext | null = null;
 
 function getAudioCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
-  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch((error) => {
+      console.warn("[softphoneAudio] Could not resume audio context.", error);
+    });
+  }
   return audioCtx;
 }
 
@@ -23,7 +27,9 @@ function getAudioCtx(): AudioContext {
 export function warmAudioContext() {
   const ctx = getAudioCtx();
   if (ctx.state === "suspended") {
-    ctx.resume().catch(() => {});
+    ctx.resume().catch((error) => {
+      console.warn("[softphoneAudio] Could not warm audio context.", error);
+    });
   }
   // Play a silent buffer to unlock audio on iOS/Android
   const buf = ctx.createBuffer(1, 1, 22050);
@@ -62,7 +68,7 @@ export function playDtmfTone(key: string, durationMs = 120) {
   });
 }
 
-// ── Ringtone definitions ──
+// Ringtone definitions
 
 export interface RingtoneOption {
   id: string;
