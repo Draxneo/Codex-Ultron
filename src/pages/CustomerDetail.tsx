@@ -21,6 +21,7 @@ import {
 import { format, parseISO } from "date-fns";
 
 import { useCustomerOverview, type CustomerOverview } from "@/hooks/useCustomerOverview";
+import { useCustomerTimeline, type CustomerTimelineRow } from "@/hooks/useCanonicalOperations";
 import { useCustomerAgreements } from "@/hooks/useServiceAgreements";
 import { useCertificatesForCustomer } from "@/hooks/useCertificates";
 import { CustomerHeaderV2 } from "@/components/customer-v2/CustomerHeaderV2";
@@ -118,9 +119,11 @@ function SignalCard({
 function RelationshipBrief({
   overview,
   customerId,
+  timeline,
 }: {
   overview: CustomerOverview;
   customerId: string;
+  timeline: CustomerTimelineRow[];
 }) {
   const c = overview.customer;
   const nextAppointment = overview.upcoming_appointments?.[0];
@@ -208,6 +211,7 @@ function RelationshipBrief({
         </Card>
 
         <UpcomingAppointments appointments={overview.upcoming_appointments || []} />
+        <CustomerTimelinePreview timeline={timeline} />
         <AddressesPanel addresses={overview.addresses || []} customer={c} />
         <PrivateNotesPanel customerId={customerId} />
         <ActivityFeed customerId={customerId} />
@@ -232,6 +236,57 @@ function MiniContext({ label, value, detail }: { label: string; value: string; d
       <p className="mt-1 line-clamp-2 text-sm font-semibold">{value}</p>
       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{detail}</p>
     </div>
+  );
+}
+
+function timelineIcon(event: CustomerTimelineRow) {
+  if (event.event_group === "communication") return event.event_type === "sms" ? MessageSquare : Phone;
+  if (event.event_group === "quote") return FileText;
+  if (event.event_group === "money") return BadgeDollarSign;
+  if (event.event_group === "file") return Camera;
+  return ClipboardList;
+}
+
+function CustomerTimelinePreview({ timeline }: { timeline: CustomerTimelineRow[] }) {
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4 text-primary" />
+          Customer Timeline
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {timeline.length === 0 ? (
+          <div className="rounded-md border border-dashed p-5 text-sm text-muted-foreground">
+            No timeline events found yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {timeline.slice(0, 6).map((event) => {
+              const Icon = timelineIcon(event);
+              return (
+                <div key={event.timeline_id} className="flex gap-3 rounded-md border bg-muted/20 p-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-semibold">{event.title}</p>
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {event.event_group}
+                      </Badge>
+                    </div>
+                    {event.body && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{event.body}</p>}
+                    <p className="mt-1 text-[11px] text-muted-foreground">{formatShortDate(event.event_at)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -411,6 +466,7 @@ export default function CustomerDetail() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("snapshot");
   const { data: overview, isLoading, isError } = useCustomerOverview(id);
+  const { data: customerTimeline = [] } = useCustomerTimeline(id, 60);
 
   if (isLoading) {
     return (
@@ -548,7 +604,7 @@ export default function CustomerDetail() {
           </div>
 
           <TabsContent value="snapshot" className="mt-0">
-            <RelationshipBrief overview={overview} customerId={id} />
+            <RelationshipBrief overview={overview} customerId={id} timeline={customerTimeline} />
           </TabsContent>
 
           <TabsContent value="work" className="mt-0">

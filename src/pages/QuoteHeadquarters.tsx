@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useQuotePipelineMap, type QuotePipelineRow } from "@/hooks/useCanonicalOperations";
 import { useEstimates, type Estimate } from "@/hooks/useEstimates";
 import { supabase } from "@/integrations/supabase/client";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
@@ -60,6 +61,7 @@ type ResponseSummary = {
 
 type QuotePipelineItem = {
   estimate: Estimate;
+  canonical?: QuotePipelineRow;
   stage: QuoteStage;
   stageLabel: string;
   ageDays: number;
@@ -141,6 +143,16 @@ function draftFor(stage: QuoteStage, estimate: Estimate) {
     return `Hi ${name}, thank you for approving quote${number}. We are reviewing the next step so we can get the installation scheduled.`;
   }
   return `Hi ${name}, just following up on quote${number}. Do you have any questions or would you like help choosing the best option?`;
+}
+
+function quoteStageFromReadModel(row?: QuotePipelineRow): QuoteStage | null {
+  const stage = String(row?.pipeline_stage || "").toLowerCase();
+  if (!stage) return null;
+  if (stage.includes("approved")) return "approved";
+  if (stage.includes("waiting")) return "waiting";
+  if (stage.includes("scheduled")) return "waiting";
+  if (stage.includes("next")) return "needs_quote";
+  return null;
 }
 
 function stageVisual(stage: QuoteStage): SignalVisual {
@@ -277,6 +289,7 @@ function buildPipelineItem(
   estimate: Estimate,
   presentations: Map<string, PresentationSummary>,
   responses: Map<string, ResponseSummary>,
+  canonical?: QuotePipelineRow,
 ): QuotePipelineItem {
   const presentation = presentations.get(estimate.id);
   const response = responses.get(estimate.id);
@@ -307,8 +320,15 @@ function buildPipelineItem(
     nextAction = ageDays >= 2 ? "Text reminder" : "Wait for customer";
   }
 
+  const canonicalStage = quoteStageFromReadModel(canonical);
+  if (canonicalStage && canonicalStage !== stage) {
+    stage = canonicalStage;
+    if (canonical?.pipeline_stage) nextAction = canonical.pipeline_stage;
+  }
+
   return {
     estimate,
+    canonical,
     stage,
     stageLabel: STAGE_LABELS[stage],
     ageDays,
@@ -337,6 +357,7 @@ function StageBadge({ stage }: { stage: QuoteStage }) {
 export default function QuoteHeadquarters() {
   const navigate = useNavigate();
   const { data: estimates = [], isLoading } = useEstimates(false);
+  const { byEstimateId: quotePipelineById, isLoading: quotePipelineLoading } = useQuotePipelineMap(300);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<QuoteStage | "all">("all");
 
@@ -382,7 +403,7 @@ export default function QuoteHeadquarters() {
     }
 
     return estimates
-      .map((estimate) => buildPipelineItem(estimate, presentationMap, responseMap))
+      .map((estimate) => buildPipelineItem(estimate, presentationMap, responseMap, quotePipelineById.get(estimate.id)))
       .sort((a, b) => {
         const priority: Record<QuoteStage, number> = {
           approved: 0,
@@ -395,7 +416,7 @@ export default function QuoteHeadquarters() {
         if (priority[a.stage] !== priority[b.stage]) return priority[a.stage] - priority[b.stage];
         return b.ageDays - a.ageDays;
       });
-  }, [estimates, presentations, responses]);
+  }, [estimates, presentations, responses, quotePipelineById]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -501,7 +522,7 @@ export default function QuoteHeadquarters() {
           </div>
         </section>
 
-        {isLoading ? (
+        {isLoading || quotePipelineLoading ? (
           <div className="grid gap-3">
             {Array.from({ length: 6 }).map((_, index) => (
               <Skeleton key={index} className="h-32 w-full rounded-lg" />
@@ -578,9 +599,11 @@ function QuotePipelineCard({
   const followUp = followUpVisual(item);
   const FollowUpIcon = followUp.Icon;
   const signals = outcomeSignals(estimate, item.response);
+  const latestCommunicationDate = safeDate(item.canonical?.latest_communication_at);
   const lastTouched =
     item.response?.responded_at ||
     item.presentation?.last_viewed_at ||
+    item.canonical?.latest_communication_at ||
     item.presentation?.created_at ||
     estimate.presentation_sent_at ||
     estimate.created_at;
@@ -663,13 +686,20 @@ function QuotePipelineCard({
                 <Sparkles className="h-3.5 w-3.5 text-current" aria-label={followUp.label} />
               </div>
               <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.draft}</p>
-              <p className="mt-2 text-xs text-muted-foreground/90">
-                {lastTouchedDate
-                  ? formatDistanceToNow(lastTouchedDate, { addSuffix: true })
-                  : "No recent activity"}
-              </p>
-            </div>
-          </div>
+          <p className="mt-2 text-xs text-muted-foreground/90">
+            {lastTouchedDate
+              ? formatDistanceToNow(lastTouchedDate, { addSuffix: true })
+              : "No recent activity"}
+          </p>
+          {item.canonical?.latest_communication_summary && (
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+              Last {item.canonical.latest_communication_type || "message"}
+              {latestCommunicationDate ? ` ${formatDistanceToNow(latestCommunicationDate, { addSuffix: true })}` : ""}:{" "}
+              {item.canonical.latest_communication_summary}
+            </p>
+          )}
+        </div>
+      </div>
         </div>
 
         <div className="flex flex-wrap gap-2 xl:justify-end">

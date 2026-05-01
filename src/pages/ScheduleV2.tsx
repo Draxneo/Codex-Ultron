@@ -336,7 +336,9 @@ function JobCard({
     liveContext.responseCount > 0 ||
     liveContext.suggestedItemCount > 0 ||
     !!liveContext.latestTechNote ||
-    !!liveContext.latestActivity
+    !!liveContext.latestActivity ||
+    !!liveContext.latestCommunicationSummary ||
+    !!liveContext.openAlertCount
   );
 
   return (
@@ -423,6 +425,8 @@ function JobCard({
               {liveContext.responseCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.responseCount} checklist</Badge>}
               {liveContext.suggestedItemCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.suggestedItemCount} suggested</Badge>}
               {liveContext.attachmentCount > 0 && <Badge variant="outline" className="h-5 text-[10px]">{liveContext.attachmentCount} media</Badge>}
+              {!!liveContext.latestCommunicationSummary && <Badge variant="outline" className="h-5 text-[10px]">recent {liveContext.latestCommunicationType || "message"}</Badge>}
+              {!!liveContext.openAlertCount && <Badge variant="outline" className="h-5 border-amber-500/50 text-[10px]">{liveContext.openAlertCount} alert{liveContext.openAlertCount === 1 ? "" : "s"}</Badge>}
             </div>
           </div>
         )}

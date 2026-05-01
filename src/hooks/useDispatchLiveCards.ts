@@ -17,6 +17,12 @@ export type DispatchLiveAttachment = {
 
 export type DispatchLiveCardContext = {
   jobId: string;
+  cardStatus?: string | null;
+  latestCommunicationAt?: string | null;
+  latestCommunicationType?: string | null;
+  latestCommunicationSummary?: string | null;
+  openAlertCount?: number;
+  highestAlertSeverity?: string | null;
   latestTechNote?: {
     text: string;
     aiResponse?: string | null;
@@ -91,6 +97,10 @@ export function useDispatchLiveCards(jobIds: string[]) {
       { table: "tech_forms", queryKeys: [["dispatch-live-cards"]] },
       { table: "tech_form_photos", queryKeys: [["tech_form_photos"], ["dispatch-live-cards"]] },
       { table: "tech_form_responses", queryKeys: [["tech_form_responses"], ["dispatch-live-cards"]] },
+      { table: "sms_log", queryKeys: [["dispatch-live-cards"]] },
+      { table: "call_log", queryKeys: [["dispatch-live-cards"]] },
+      { table: "workflow_alerts", queryKeys: [["dispatch-live-cards"]] },
+      { table: "intake_thread_status", queryKeys: [["dispatch-live-cards"]] },
     ],
     "dispatch-live-card-context"
   );
@@ -114,7 +124,11 @@ export function useDispatchLiveCards(jobIds: string[]) {
         });
       }
 
-      const [transcriptsRes, activityRes, attachmentsRes, formsRes, cartsRes, repairItemsRes] = await Promise.all([
+      const [readModelRes, transcriptsRes, activityRes, attachmentsRes, formsRes, cartsRes, repairItemsRes] = await Promise.all([
+        (supabase as any)
+          .from("v_dispatch_live_cards")
+          .select("job_id, card_status, latest_communication_at, latest_communication_type, latest_communication_summary, open_alert_count, highest_alert_severity, attachment_count, latest_attachment_at")
+          .in("job_id", stableJobIds),
         (supabase as any)
           .from("job_transcripts")
           .select("id, job_id, transcript_text, ai_response, suggested_items, created_at")
@@ -152,6 +166,9 @@ export function useDispatchLiveCards(jobIds: string[]) {
           .limit(400),
       ]);
 
+      if (readModelRes.error) {
+        console.warn("Dispatch live read model unavailable; using raw field context only:", readModelRes.error.message);
+      }
       if (transcriptsRes.error) throw transcriptsRes.error;
       if (activityRes.error) throw activityRes.error;
       if (attachmentsRes.error) throw attachmentsRes.error;
@@ -159,6 +176,11 @@ export function useDispatchLiveCards(jobIds: string[]) {
       if (cartsRes.error) throw cartsRes.error;
       if (repairItemsRes.error) {
         console.warn("Repair item context unavailable for dispatch live cards:", repairItemsRes.error.message);
+      }
+
+      const readModelByJob = new Map<string, any>();
+      for (const row of ((readModelRes.error ? [] : readModelRes.data || []) as any[])) {
+        if (row.job_id) readModelByJob.set(row.job_id, row);
       }
 
       const forms = ((formsRes.data || []) as TechFormRow[]);
@@ -273,6 +295,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
 
       for (const jobId of stableJobIds) {
         const current = contexts.get(jobId)!;
+        const readModel = readModelByJob.get(jobId);
         const latestTranscript = latestByDate(transcriptsByJob.get(jobId) || []);
         const latestActivity = latestByDate(activityByJob.get(jobId) || []);
         const attachments = (attachmentsByJob.get(jobId) || []).sort((a, b) => {
@@ -302,16 +325,23 @@ export function useDispatchLiveCards(jobIds: string[]) {
           shortText(latestTranscript?.ai_response, 135) ||
           shortText(latestTranscript?.transcript_text, 135) ||
           shortText(proposalSummary, 135) ||
+          shortText(readModel?.latest_communication_summary, 135) ||
           shortText(latestActivity?.details, 135) ||
           (attachments.length ? `${attachments.length} field attachment${attachments.length === 1 ? "" : "s"} available.` : "Waiting for field updates.");
-        const liveTone = latestTranscript || suggestedItemCount > 0 || latestCart?.status === "approved"
+        const liveTone = latestTranscript || suggestedItemCount > 0 || latestCart?.status === "approved" || Number(readModel?.open_alert_count || 0) > 0
           ? "attention"
-          : attachments.length || responseCount > 0 || latestActivity || latestCart || repairItemCount > 0
+          : attachments.length || responseCount > 0 || latestActivity || latestCart || repairItemCount > 0 || readModel?.latest_communication_summary
             ? "active"
             : "quiet";
 
         contexts.set(jobId, {
           ...current,
+          cardStatus: readModel?.card_status || null,
+          latestCommunicationAt: readModel?.latest_communication_at || null,
+          latestCommunicationType: readModel?.latest_communication_type || null,
+          latestCommunicationSummary: readModel?.latest_communication_summary || null,
+          openAlertCount: Number(readModel?.open_alert_count || 0),
+          highestAlertSeverity: readModel?.highest_alert_severity || null,
           latestTechNote: latestTranscript
             ? {
                 text: latestTranscript.transcript_text,

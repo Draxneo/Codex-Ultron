@@ -92,6 +92,20 @@ Commit `f462e12` starts moving Intake and Jarvis onto the communication read mod
 
 This is the correct transition pattern: the UI can keep working while the source-of-truth read path is centralized underneath it.
 
+## Headquarters Wiring Pass
+
+The next wiring pass added reusable frontend hooks for the read models:
+
+- `useQuotePipeline(...)` / `useQuotePipelineMap(...)`
+- `useCustomerTimeline(...)`
+- `useTechWorkSummary(...)`
+
+Dispatch HQ live cards now enrich their existing field-update context with `v_dispatch_live_cards`, so the card can see canonical status, recent customer communication, and workflow alerts without each screen rebuilding that logic.
+
+Quote HQ now overlays `v_quote_pipeline` on top of the existing quote controls. The page still uses the current estimate actions, but Jarvis and the operator see the shared pipeline stage and latest communication signal.
+
+Customer HQ now shows a customer timeline sourced from `v_customer_timeline`, combining calls, texts, jobs, estimates, invoices, and attachments into one relationship story.
+
 ## Merge Candidates
 
 The main real duplication is team communications:
