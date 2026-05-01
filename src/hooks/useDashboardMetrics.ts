@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_ACTION_GO_LIVE_DATE } from "@/lib/appLifecycle";
 
 export function useDashboardMetrics() {
   return useQuery({
@@ -8,34 +9,40 @@ export function useDashboardMetrics() {
       const today = new Date().toISOString().split("T")[0];
 
       // Jobs dispatched today
-      const { count: dispatchedToday } = await supabase
+      const { count: dispatchedToday, error: dispatchedError } = await supabase
         .from("jobs")
         .select("id", { count: "exact", head: true })
         .eq("scheduled_date", today)
         .not("dispatch_sent_at", "is", null);
+      if (dispatchedError) throw dispatchedError;
 
       // Jobs awaiting payment (invoice sent but not paid)
-      const { count: awaitingPayment } = await supabase
+      const { count: awaitingPayment, error: awaitingPaymentError } = await supabase
         .from("jobs")
         .select("id", { count: "exact", head: true })
         .not("invoice_sent_at", "is", null)
         .is("payment_collected_at", null)
-        .not("status", "in", '("canceled")');
+        .not("status", "in", '("canceled","cancelled","done","invoiced","completed","complete","closed","paid")')
+        .gte("created_at", APP_ACTION_GO_LIVE_DATE);
+      if (awaitingPaymentError) throw awaitingPaymentError;
 
       // Jobs completed this week
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      const { count: completedThisWeek } = await supabase
+      const { count: completedThisWeek, error: completedError } = await supabase
         .from("jobs")
         .select("id", { count: "exact", head: true })
         .in("status", ["done", "invoiced"])
         .gte("completed_at", weekAgo.toISOString());
+      if (completedError) throw completedError;
 
       // Total active jobs
-      const { count: totalActive } = await supabase
+      const { count: totalActive, error: activeError } = await supabase
         .from("jobs")
         .select("id", { count: "exact", head: true })
-        .not("status", "in", '("done","invoiced","canceled")');
+        .not("status", "in", '("done","invoiced","canceled","cancelled","completed","complete","closed","paid")')
+        .gte("created_at", APP_ACTION_GO_LIVE_DATE);
+      if (activeError) throw activeError;
 
       return {
         dispatchedToday: dispatchedToday || 0,
