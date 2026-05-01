@@ -152,6 +152,11 @@ const urlPattern = /(https?:\/\/[^\s]+)/g;
 const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
 const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389}", "\u{1F440}", "\u{1F4A1}", "\u{1F4CC}"];
 
+function showTeamActionError(title: string, error: unknown) {
+  const description = error instanceof Error ? error.message : undefined;
+  toast.error(title, description ? { description } : undefined);
+}
+
 const quickAccessItems = [
   { label: "Dispatch HQ", href: "/dispatch", icon: CalendarDays },
   { label: "Intake HQ", href: "/intake", icon: Inbox },
@@ -498,7 +503,7 @@ export default function TeamCommunications() {
       setEditingText("");
       queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
     },
-    onError: () => toast.error("Could not edit message"),
+    onError: (error) => showTeamActionError("Could not edit message", error),
   });
 
   const deleteMessage = useMutation({
@@ -511,7 +516,7 @@ export default function TeamCommunications() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] }),
-    onError: () => toast.error("Could not delete message"),
+    onError: (error) => showTeamActionError("Could not delete message", error),
   });
 
   const getOrCreateDirect = useMutation({
@@ -555,7 +560,7 @@ export default function TeamCommunications() {
       queryClient.invalidateQueries({ queryKey: ["team-conversation-members"] });
       setSelectedConversationId(conversation.id);
     },
-    onError: () => toast.error("Could not open direct message"),
+    onError: (error) => showTeamActionError("Could not open direct message", error),
   });
 
   const createRoom = useMutation({
@@ -589,7 +594,7 @@ export default function TeamCommunications() {
       queryClient.invalidateQueries({ queryKey: ["team-conversation-members"] });
       if (conversationId) setSelectedConversationId(conversationId);
     },
-    onError: () => toast.error("Could not create room"),
+    onError: (error) => showTeamActionError("Could not create room", error),
   });
 
   const startCall = useMutation({
@@ -619,7 +624,7 @@ export default function TeamCommunications() {
       queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] });
       queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] });
     },
-    onError: () => toast.error("Could not start call"),
+    onError: (error) => showTeamActionError("Could not start call", error),
   });
 
   const joinCall = useMutation({
@@ -641,7 +646,7 @@ export default function TeamCommunications() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] }),
-    onError: () => toast.error("Could not join call"),
+    onError: (error) => showTeamActionError("Could not join call", error),
   });
 
   const leaveCall = useMutation({
@@ -655,7 +660,7 @@ export default function TeamCommunications() {
       if (error) throw error;
     },
     onSuccess: () => toast.success("Left call"),
-    onError: () => toast.error("Could not leave call"),
+    onError: (error) => showTeamActionError("Could not leave call", error),
   });
 
   const endCall = useMutation({
@@ -672,7 +677,7 @@ export default function TeamCommunications() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-audio-calls"] }),
-    onError: () => toast.error("Could not end call"),
+    onError: (error) => showTeamActionError("Could not end call", error),
   });
 
   const markNotificationsRead = useMutation({
@@ -791,7 +796,7 @@ export default function TeamCommunications() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-messages", selectedConversation?.id] }),
-    onError: () => toast.error("Could not update pin"),
+    onError: (error) => showTeamActionError("Could not update pin", error),
   });
 
   const composer = useComposerIntelligence({
