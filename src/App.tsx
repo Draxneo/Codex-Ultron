@@ -51,8 +51,6 @@ function CallsRedirectComponent() {
 import { SoftphoneProvider } from "./components/SoftphoneProvider";
 import { ViewAsProvider } from "./contexts/ViewAsContext";
 import { AdminViewAsBar } from "./components/AdminViewAsBar";
-import { SmsPanel } from "./components/SmsPanel";
-import { useUnreadSmsCount } from "./hooks/useUnreadSmsCount";
 import { PHONE_CONSOLE_OPEN_EVENT, type PhoneConsoleOpenDetail } from "@/lib/phoneConsoleBridge";
 
 const TechMySchedule = lazy(() => import("./pages/TechMySchedule"));
