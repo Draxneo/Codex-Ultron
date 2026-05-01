@@ -1819,7 +1819,7 @@ function CustomerWorkspace({
   const queryClient = useQueryClient();
   const { user, employeeId } = useAuth();
   const { data: employees = [] } = useEmployees();
-  const { startCallSession, startSmsSession, startRecordSession } = useCopilotPanel();
+  const { startRecordSession } = useCopilotPanel();
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [jarvisDialogOpen, setJarvisDialogOpen] = useState(false);
   const [handledStamp, setHandledStamp] = useState<{ id: string; label: string; at: string } | null>(null);
@@ -1896,11 +1896,9 @@ function CustomerWorkspace({
   const missingFields = liveIntakeFields.filter((field) => field.status !== "captured");
   const capturedFields = liveIntakeFields.filter((field) => field.status === "captured");
   const openCall = () => {
-    startCallSession(dialable, displayName);
     openPhoneConsole(dialable, { contactName: displayName, customerId: customer?.id, autoDial: false });
   };
   const openText = () => {
-    startSmsSession(dialable, displayName);
     setSmsDialogOpen(true);
   };
   const markHandled = async () => {
