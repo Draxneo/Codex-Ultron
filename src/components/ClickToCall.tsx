@@ -1,5 +1,4 @@
 import { Phone } from "lucide-react";
-import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { formatPhone } from "@/lib/formatters";
 import { toE164 } from "@/lib/formatters";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
@@ -39,8 +38,6 @@ export function ClickToCall({
   children,
   showIcon = true,
 }: ClickToCallProps) {
-  const { startCallSession } = useCopilotPanel();
-
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -48,7 +45,6 @@ export function ClickToCall({
     // Universal Twilio normalization — every path gets E.164 (or raw if non-US)
     const e164 = toE164(phone) || phone;
 
-    startCallSession(e164, contactName);
     openPhoneConsole(e164, { contactName, jobId, customerId });
   };
 
