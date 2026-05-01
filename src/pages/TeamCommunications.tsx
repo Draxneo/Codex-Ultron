@@ -157,6 +157,12 @@ function showTeamActionError(title: string, error: unknown) {
   toast.error(title, description ? { description } : undefined);
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 const quickAccessItems = [
   { label: "Dispatch HQ", href: "/dispatch", icon: CalendarDays },
   { label: "Intake HQ", href: "/intake", icon: Inbox },
@@ -251,6 +257,8 @@ export default function TeamCommunications() {
     links: sharedLinks,
     categories: sharedCategories,
     isLoading: sharedLinksLoading,
+    isError: sharedLinksError,
+    error: sharedLinksQueryError,
     addLink: addQuickLink,
   } = useQuickLinks();
 
@@ -258,6 +266,7 @@ export default function TeamCommunications() {
     data: teamUsers = [],
     isLoading: teamUsersLoading,
     isError: teamUsersError,
+    error: teamUsersQueryError,
   } = useQuery({
     queryKey: ["team-users"],
     enabled: !!user,
@@ -285,6 +294,7 @@ export default function TeamCommunications() {
     data: conversations = [],
     isLoading: conversationsLoading,
     isError: conversationsError,
+    error: conversationsQueryError,
   } = useQuery({
     queryKey: ["team-conversations", user?.id],
     enabled: !!user,
@@ -300,7 +310,7 @@ export default function TeamCommunications() {
 
   const conversationIds = useMemo(() => conversations.map((conversation) => conversation.id), [conversations]);
 
-  const { data: members = [], isLoading: membersLoading } = useQuery({
+  const { data: members = [], isLoading: membersLoading, isError: membersError, error: membersQueryError } = useQuery({
     queryKey: ["team-conversation-members", conversationIds.join(",")],
     enabled: conversationIds.length > 0,
     queryFn: async () => {
@@ -332,6 +342,7 @@ export default function TeamCommunications() {
     data: messages = [],
     isLoading: messagesLoading,
     isError: messagesError,
+    error: messagesQueryError,
   } = useQuery({
     queryKey: ["team-messages", selectedConversation?.id],
     enabled: !!selectedConversation,
@@ -362,7 +373,7 @@ export default function TeamCommunications() {
     },
   });
 
-  const { data: calls = [] } = useQuery({
+  const { data: calls = [], isError: callsError, error: callsQueryError } = useQuery({
     queryKey: ["team-audio-calls", conversationIds.join(",")],
     enabled: conversationIds.length > 0,
     queryFn: async () => {
@@ -382,7 +393,7 @@ export default function TeamCommunications() {
     [calls, selectedConversation?.id]
   );
 
-  const { data: teamNowActions = [] } = useQuery({
+  const { data: teamNowActions = [], isError: teamNowActionsError, error: teamNowActionsQueryError } = useQuery({
     queryKey: ["team-now-action-items"],
     enabled: !!user,
     queryFn: async () => {
@@ -397,7 +408,7 @@ export default function TeamCommunications() {
     },
   });
 
-  const { data: unreadNotifications = [] } = useQuery({
+  const { data: unreadNotifications = [], isError: notificationsError, error: notificationsQueryError } = useQuery({
     queryKey: ["team-notifications", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -876,6 +887,13 @@ export default function TeamCommunications() {
   );
   const sidebarLoading = teamUsersLoading || conversationsLoading || membersLoading;
   const pageHasError = teamUsersError || conversationsError;
+  const teamDataIssues = [
+    membersError ? `room members (${errorMessage(membersQueryError)})` : null,
+    callsError ? `team calls (${errorMessage(callsQueryError)})` : null,
+    teamNowActionsError ? `team Now cards (${errorMessage(teamNowActionsQueryError)})` : null,
+    notificationsError ? `notifications (${errorMessage(notificationsQueryError)})` : null,
+    sharedLinksError ? `team resources (${errorMessage(sharedLinksQueryError)})` : null,
+  ].filter(Boolean);
   const visibleSharedLinks = sharedLinks.length > 0 ? sharedLinks : usefulWebLinks.map((item, index) => ({
     id: `fallback-${index}`,
     href: item.href,
@@ -1137,14 +1155,29 @@ export default function TeamCommunications() {
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Team chat could not load</AlertTitle>
-                    <AlertDescription>Refresh the page or try again after the connection recovers.</AlertDescription>
+                    <AlertDescription>
+                      Refresh the page or try again after the connection recovers.
+                      {teamUsersError && ` Roster: ${errorMessage(teamUsersQueryError)}.`}
+                      {conversationsError && ` Rooms: ${errorMessage(conversationsQueryError)}.`}
+                    </AlertDescription>
                   </Alert>
                 )}
                 {messagesError && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Messages could not load</AlertTitle>
-                    <AlertDescription>The room list is available, but this conversation did not return messages.</AlertDescription>
+                    <AlertDescription>
+                      The room list is available, but this conversation did not return messages. {errorMessage(messagesQueryError)}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {teamDataIssues.length > 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Part of Team HQ is behind</AlertTitle>
+                    <AlertDescription>
+                      Team HQ is open, but these feeds need a refresh: {teamDataIssues.join(", ")}.
+                    </AlertDescription>
                   </Alert>
                 )}
                 {messagesLoading &&

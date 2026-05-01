@@ -29,7 +29,7 @@ function rowToLink(r: DbRow): QuickLinkData {
 export function useQuickLinks() {
   const qc = useQueryClient();
 
-  const { data: links = [], isLoading: linksLoading } = useQuery({
+  const { data: links = [], isLoading: linksLoading, isError: linksError, error: linksQueryError } = useQuery({
     queryKey: ["quick-links"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -41,7 +41,7 @@ export function useQuickLinks() {
     },
   });
 
-  const { data: categories = [], isLoading: catsLoading } = useQuery({
+  const { data: categories = [], isLoading: catsLoading, isError: catsError, error: catsQueryError } = useQuery({
     queryKey: ["quick-link-categories"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -142,6 +142,8 @@ export function useQuickLinks() {
     links,
     categories,
     isLoading: linksLoading || catsLoading,
+    isError: linksError || catsError,
+    error: linksQueryError || catsQueryError,
     addLink,
     deleteLink,
     reorderLinks,
