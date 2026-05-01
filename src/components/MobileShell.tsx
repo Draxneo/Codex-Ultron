@@ -150,7 +150,11 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
 
 
   // Pre-warm haptics on mount so first tap is instant
-  useEffect(() => { triggerLightHaptic().catch(() => {}); }, []);
+  useEffect(() => {
+    triggerLightHaptic().catch((error) => {
+      console.warn("[MobileShell] Could not pre-warm haptics:", error);
+    });
+  }, []);
 
   useEffect(() => {
     const channel = createPhoneConsoleChannel();

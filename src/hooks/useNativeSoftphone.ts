@@ -869,7 +869,13 @@ export function useNativeSoftphone(enabled: boolean = true) {
 
         // Try immediately, then retry once after 1.5s if the row didn't exist yet
         const ok = await applyPatch();
-        if (!ok) setTimeout(() => { applyPatch().catch(() => {}); }, 1500);
+        if (!ok) {
+          setTimeout(() => {
+            applyPatch().catch((error) => {
+              console.warn("[useNativeSoftphone] Could not patch outbound call log after retry:", error);
+            });
+          }, 1500);
+        }
       }
     } catch (err: any) {
       dispatchLifecycle({ type: "CALL_FAILED", error: err.message });
@@ -1175,7 +1181,9 @@ export function useNativeSoftphone(enabled: boolean = true) {
           removeNativeListener = () => handle.remove();
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn("[useNativeSoftphone] Could not register app state listener:", error);
+      });
 
     return () => {
       clearTimeout(coldStartTimer);
@@ -1190,7 +1198,9 @@ export function useNativeSoftphone(enabled: boolean = true) {
       clearRegistrationRetries();
       stopTimer();
       for (const handle of listenerHandlesRef.current) {
-        Promise.resolve(handle?.remove?.()).catch(() => {});
+        Promise.resolve(handle?.remove?.()).catch((error) => {
+          console.warn("[useNativeSoftphone] Could not remove native listener:", error);
+        });
       }
       listenerHandlesRef.current = [];
       listenersRegisteredRef.current = false;
