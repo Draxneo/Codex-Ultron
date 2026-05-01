@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,7 +42,7 @@ export function PropertyCard({ address }: { address: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const fetchedRef = useRef(false);
 
-  const fetchProperty = async (force = false) => {
+  const fetchProperty = useCallback(async (force = false) => {
     try {
       const { data: result, error } = await supabase.functions.invoke("lookup-property", {
         body: { address, force },
@@ -60,7 +60,7 @@ export function PropertyCard({ address }: { address: string }) {
     }
     setLoading(false);
     setRefreshing(false);
-  };
+  }, [address]);
 
   useEffect(() => {
     if (!address) {
@@ -115,7 +115,7 @@ export function PropertyCard({ address }: { address: string }) {
     })();
 
     return () => { cancelled = true; };
-  }, [address]);
+  }, [address, fetchProperty]);
 
   if (!address) return null;
 
