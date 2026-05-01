@@ -22,11 +22,12 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseAdmin();
 
     // Load cart + items
-    let { data: cart, error: cartErr } = await supabase
+    const { data: loadedCart, error: cartErr } = await supabase
       .from("job_carts")
       .select("*")
       .eq("public_token", cart_token)
       .maybeSingle();
+    let cart = loadedCart;
 
     if (cartErr || !cart) {
       return new Response(JSON.stringify({ error: "Cart not found" }), {
