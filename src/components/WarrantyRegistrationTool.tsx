@@ -42,10 +42,18 @@ function getBrandPortal(brand?: string) {
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
-  const copy = () => {
+  const copy = async () => {
     if (!value) return;
-    navigator.clipboard.writeText(value);
-    toast({ title: "Copied", description: `${label} copied to clipboard` });
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: "Copied", description: `${label} copied to clipboard` });
+    } catch (error: any) {
+      toast({
+        title: "Copy failed",
+        description: error?.message || "Your browser blocked clipboard access. Highlight the value and copy it manually.",
+        variant: "destructive",
+      });
+    }
   };
   return (
     <div className="flex items-center gap-2">
@@ -125,7 +133,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
     setLiveViewOpen(true);
 
     try {
-      // Phase 1: Create browser session → get liveViewUrl
+      // Phase 1: Create browser session, then get liveViewUrl.
       const { data: sessionData, error: sessionError } = await supabase.functions.invoke("auto-register-warranty", {
         body: { job_id: jobId, action: "create_session" },
       });
@@ -161,7 +169,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
       } else {
         setLiveStatus("failed");
         toast({
-          title: "Form filled — verify submission",
+          title: "Form filled - verify submission",
           description: data?.message || "Check the live view for details.",
           variant: "destructive",
         });
@@ -231,7 +239,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
         {hasConflicts && (
           <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 p-2 text-xs text-destructive font-medium">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Serial/model conflict detected across sources — verify before registering
+            Serial/model conflict detected across sources - verify before registering
           </div>
         )}
         {serialNumbers.length > 0 ? (
@@ -269,7 +277,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
           <div className="space-y-2">
             <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 p-2 text-xs text-destructive font-medium">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              No customer email on file — {companySettings.company_email || "company email"} will be used. Reach out to the customer to get their email for warranty registration.
+              No customer email on file - {companySettings.company_email || "company email"} will be used. Reach out to the customer to get their email for warranty registration.
             </div>
             {phone && (
               <Button
@@ -297,7 +305,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
                 }}
               >
                 {sendingEmailSms ? (
-                  <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> Sending…</>
+                  <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> Sending...</>
                 ) : (
                   <><MessageSquare className="h-3 w-3 mr-1.5" /> Text Customer for Email</>
                 )}
@@ -347,7 +355,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
                 variant="default"
               >
                 {autoRegistering ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Auto-Registering…</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Auto-Registering...</>
                 ) : (
                   <><Bot className="h-4 w-4 mr-2" /> Auto-Register via {portal.label}</>
                 )}
