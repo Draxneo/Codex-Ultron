@@ -6,7 +6,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Badge } from "@/components/ui/badge";
 import {
   Phone, PhoneIncoming, PhoneForwarded, Calendar, MessageSquare,
-  Voicemail, Moon, Power, Users, Clock, GitBranch, UserCheck, UserPlus, PhoneMissed, Headset, Music
+  Voicemail, Moon, Power, Users, Clock, PhoneMissed, Headset, Music
 } from "lucide-react";
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -19,16 +19,12 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   after_hours: <Moon className="h-4 w-4" />,
   hangup: <Power className="h-4 w-4" />,
   sms: <MessageSquare className="h-4 w-4" />,
-  post_call_check: <GitBranch className="h-4 w-4" />,
-  post_call_customer: <UserCheck className="h-4 w-4" />,
-  post_call_unknown: <UserPlus className="h-4 w-4" />,
   overflow: <Headset className="h-4 w-4" />,
-  missed_call_master: <PhoneMissed className="h-4 w-4" />,
   hold_music: <Music className="h-4 w-4" />,
 };
 
 export interface IvrNodeData extends Record<string, unknown> {
-  nodeType: "incoming" | "holiday" | "greeting" | "department" | "no_answer" | "voicemail" | "after_hours" | "hangup" | "sms" | "post_call_check" | "post_call_customer" | "post_call_unknown" | "overflow" | "missed_call_master" | "hold_music";
+  nodeType: "incoming" | "holiday" | "greeting" | "department" | "no_answer" | "voicemail" | "after_hours" | "hangup" | "sms" | "overflow" | "hold_music";
   label: string;
   subtitle?: string;
   digit?: string;
@@ -40,7 +36,7 @@ export interface IvrNodeData extends Record<string, unknown> {
 
 function IvrNodeComponent({ id, data, selected }: NodeProps & { data: IvrNodeData }) {
   const d = data as IvrNodeData;
-  const isTerminal = d.nodeType === "hangup" || d.nodeType === "post_call_customer" || d.nodeType === "post_call_unknown";
+  const isTerminal = d.nodeType === "hangup";
   const hasSourceHandle = !isTerminal && d.nodeType !== "incoming";
   const isEntry = d.nodeType === "incoming";
   const isSms = d.nodeType === "sms";
@@ -61,12 +57,8 @@ function IvrNodeComponent({ id, data, selected }: NodeProps & { data: IvrNodeDat
           min-w-[180px] max-w-[240px] rounded-lg border bg-card text-card-foreground shadow-md
           cursor-pointer transition-all hover:shadow-lg
           ${selected ? "ring-2 ring-primary border-primary" : "border-border"}
-          ${d.nodeType === "post_call_check" ? "border-purple-400/60 bg-purple-50/50 dark:bg-purple-950/20" : ""}
-          ${d.nodeType === "post_call_customer" ? "border-emerald-400/60 bg-emerald-50/50 dark:bg-emerald-950/20" : ""}
-          ${d.nodeType === "post_call_unknown" ? "border-amber-400/60 bg-amber-50/50 dark:bg-amber-950/20" : ""}
           ${d.nodeType === "overflow" ? "border-cyan-400/70 bg-cyan-50/60 dark:bg-cyan-950/20 ring-1 ring-cyan-300/40" : ""}
           ${d.nodeType === "hold_music" ? "border-violet-400/70 bg-violet-50/60 dark:bg-violet-950/20 ring-1 ring-violet-300/40" : ""}
-          ${d.nodeType === "missed_call_master" ? "border-rose-400/70 bg-rose-50/60 dark:bg-rose-950/20 ring-1 ring-rose-300/40" : ""}
           ${isSms && d.nodeType === "sms" ? "border-blue-400/60 bg-blue-50/50 dark:bg-blue-950/20" : d.nodeType === "no_answer" ? "border-orange-400/60 bg-orange-50/50 dark:bg-orange-950/20" : (d.nodeType === "voicemail" || d.nodeType === "hangup") ? "border-dashed opacity-80" : ""}
         `}
       >

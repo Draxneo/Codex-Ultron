@@ -3,7 +3,7 @@
  * Full editing for greeting, department, and read-only for terminal nodes.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Clock, Phone, PhoneForwarded, Users, MessageSquare, Voicemail, Check, GitBranch, UserCheck, UserPlus, Headset, AlertTriangle, PhoneMissed } from "lucide-react";
+import { X, Clock, Phone, PhoneForwarded, Users, MessageSquare, Voicemail, Check, Headset, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -100,10 +100,6 @@ interface IvrNodeDetailProps {
   onUpdateConfig: (updates: Partial<IvrConfig>) => void;
   onUpdateDept: (updates: IvrMenuOptionUpdate, silent?: boolean) => void;
   onDeleteDept: (id: string) => void;
-  postCallSettings?: { enabled: boolean; customerTemplate: string; customerTemplateKey: string; unknownTemplate: string; unknownTemplateKey: string };
-  onUpdatePostCallSettings?: (updates: Record<string, string>) => void;
-  missedCallSettings?: { enabled: boolean; duringHoursTemplate: string; duringHoursTemplateKey: string; afterHoursTemplate: string; afterHoursTemplateKey: string };
-  onUpdateMissedCallSettings?: (updates: Record<string, string>) => void;
 }
 
 type IvrMenuOptionWithRoutingKey = IvrMenuOption & { routing_department_key?: string | null };
@@ -859,12 +855,13 @@ function HoldMusicEditor({ config, onUpdateConfig }: { config: IvrConfig; onUpda
   );
 }
 
-export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, profiles, onUpdateConfig, onUpdateDept, onDeleteDept, postCallSettings, onUpdatePostCallSettings, missedCallSettings, onUpdateMissedCallSettings }: IvrNodeDetailProps) {
+export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, profiles, onUpdateConfig, onUpdateDept, onDeleteDept }: IvrNodeDetailProps) {
   const handleSilentSave = useCallback((updates: IvrMenuOptionUpdate) => {
     onUpdateDept(updates, true);
   }, [onUpdateDept]);
 
   const isAfterHoursSms = nodeId.startsWith("sms-ah-");
+  const isPostCallSms = nodeId.startsWith("sms-post-");
 
   const nodeTitle = nodeType === "greeting" ? "Greeting & Menu"
     : nodeType === "department" ? (menuOption?.label || "Department")
@@ -873,13 +870,9 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
     : nodeType === "voicemail" ? "Voicemail"
     : nodeType === "after_hours" ? "After Hours"
     : nodeType === "hangup" ? "Hangup"
-    : nodeType === "sms" ? (isAfterHoursSms ? "After-Hours SMS" : "Missed Call SMS")
-    : nodeType === "post_call_check" ? "Post-Call Auto SMS"
-    : nodeType === "post_call_customer" ? "Customer Thank You SMS"
-    : nodeType === "post_call_unknown" ? "New Caller Intake SMS"
+    : nodeType === "sms" ? (isAfterHoursSms ? "After-Hours SMS" : isPostCallSms ? "Post-Call SMS" : "Missed Call SMS")
     : nodeType === "overflow" ? "24/7 Answering Service"
     : nodeType === "hold_music" ? "Hold Queue"
-    : nodeType === "missed_call_master" ? "Universal Missed-Call SMS"
     : "Incoming Call";
 
   return (
@@ -1033,11 +1026,46 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
           </div>
         )}
 
-        {nodeType === "sms" && menuOption && (() => {
+        {nodeType === "sms" && menuOption && isPostCallSms && (() => {
+          const postCallEnabled = menuOption.dept_post_call_sms_enabled === true;
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Auto-sends an SMS after a completed inbound call to {menuOption.label}. This is limited to once per day per caller.
+              </p>
+              <Separator />
+              <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/5 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Enable Post-Call SMS</Label>
+                    <p className="text-[11px] text-muted-foreground">This node is the source of truth for thank-you texts after calls.</p>
+                  </div>
+                  <Switch
+                    checked={postCallEnabled}
+                    onCheckedChange={(v) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms_enabled: v }, true)}
+                  />
+                </div>
+                <div className={`transition-opacity ${!postCallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
+                  <TemplateBindingCard
+                    title="Post-Call Body"
+                    description="Sent after a completed call to this department."
+                    value={menuOption.dept_post_call_sms || ""}
+                    templateKey={null}
+                    placeholder="Thanks for calling Carnes and Sons. We appreciate you thinking of our family to help yours. If there is anything else you need to share, you can text us back here."
+                    categoryFilter={["ivr", "post_call", "voice", "general"]}
+                    onSaveText={(v) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: v }, true)}
+                    onSelectTemplate={(t) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: t.template_body }, true)}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {nodeType === "sms" && menuOption && !isPostCallSms && (() => {
           const enabledField = isAfterHoursSms ? "dept_after_hours_sms_enabled" : "dept_missed_call_sms_enabled";
           const isEnabled = menuOption[enabledField] !== false;
           const noVmEnabled = menuOption.dept_no_vm_missed_call_sms_enabled !== false;
-          const postCallEnabled = menuOption.dept_post_call_sms_enabled === true;
           return (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
@@ -1111,31 +1139,6 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                       />
                     </div>
                   </div>
-
-                  <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/5 p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label className="text-sm font-semibold">Post-Call Thank-You SMS</Label>
-                        <p className="text-[11px] text-muted-foreground">Sent after a completed call to this dept (1x/day per caller)</p>
-                      </div>
-                      <Switch
-                        checked={postCallEnabled}
-                        onCheckedChange={(v) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms_enabled: v }, true)}
-                      />
-                    </div>
-                    <div className={`transition-opacity ${!postCallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
-                      <TemplateBindingCard
-                        title="Post-Call Body"
-                        description="Main setting for after-call texts. This replaces the old global setting."
-                        value={menuOption.dept_post_call_sms || ""}
-                        templateKey={null}
-                        placeholder="Hey! Thanks so much for calling — we really appreciate you! Text us back here anytime. 😊"
-                        categoryFilter={["ivr", "post_call", "voice", "general"]}
-                        onSaveText={(v) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: v }, true)}
-                        onSelectTemplate={(t) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: t.template_body }, true)}
-                      />
-                    </div>
-                  </div>
                 </>
               )}
             </div>
@@ -1148,169 +1151,6 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
           </p>
         )}
 
-        {nodeType === "post_call_check" && postCallSettings && onUpdatePostCallSettings && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              After any completed inbound call, automatically texts the caller once per day — with different messages for existing customers vs. new callers.
-            </p>
-            <Separator />
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div>
-                <Label className="text-sm">Enable Post-Call SMS</Label>
-                <p className="text-xs text-muted-foreground">Send auto-SMS after every completed call</p>
-              </div>
-              <Switch
-                checked={postCallSettings.enabled}
-                onCheckedChange={(v) => onUpdatePostCallSettings({ post_call_sms_enabled: v ? "true" : "false" })}
-              />
-            </div>
-            <div className="space-y-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-              <TemplateBindingCard
-                title="Customer Template"
-                description="Used for recognized customers after a completed call."
-                value={postCallSettings.customerTemplate}
-                templateKey={postCallSettings.customerTemplateKey}
-                placeholder="Hey! Thanks so much for calling — we really appreciate you! If there's anything else you need, just text us back here anytime. 😊"
-                categoryFilter={["ivr", "post_call", "voice", "general"]}
-                onSaveText={(v) => onUpdatePostCallSettings({ post_call_sms_customer: v })}
-                onSelectTemplate={(template) => onUpdatePostCallSettings({
-                  post_call_sms_customer: template.template_body,
-                  post_call_sms_customer_template_key: template.name,
-                })}
-              />
-            </div>
-            <div className="space-y-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <TemplateBindingCard
-                title="New Caller Template"
-                description="Used for unknown callers so you can continue intake by text."
-                value={postCallSettings.unknownTemplate}
-                templateKey={postCallSettings.unknownTemplateKey}
-                placeholder="Hey! Thanks so much for calling — we really appreciate you! If there's anything else you need, just text us back here anytime. 😊"
-                categoryFilter={["ivr", "post_call", "voice", "general"]}
-                onSaveText={(v) => onUpdatePostCallSettings({ post_call_sms_unknown: v })}
-                onSelectTemplate={(template) => onUpdatePostCallSettings({
-                  post_call_sms_unknown: template.template_body,
-                  post_call_sms_unknown_template_key: template.name,
-                })}
-              />
-            </div>
-          </div>
-        )}
-
-        {nodeType === "post_call_customer" && postCallSettings && onUpdatePostCallSettings && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Sent to callers we recognize as existing customers. Warm, appreciative tone — no info gathering needed.
-            </p>
-            <Separator />
-            <div className="space-y-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-              <TemplateBindingCard
-                title="Thank You SMS Template"
-                description="Recognized-customer post-call message."
-                value={postCallSettings.customerTemplate}
-                templateKey={postCallSettings.customerTemplateKey}
-                placeholder="Hey! Thanks so much for calling — we really appreciate you! If there's anything else you need, just text us back here anytime. 😊"
-                categoryFilter={["ivr", "post_call", "voice", "general"]}
-                onSaveText={(v) => onUpdatePostCallSettings({ post_call_sms_customer: v })}
-                onSelectTemplate={(template) => onUpdatePostCallSettings({
-                  post_call_sms_customer: template.template_body,
-                  post_call_sms_customer_template_key: template.name,
-                })}
-              />
-            </div>
-          </div>
-        )}
-
-        {nodeType === "post_call_unknown" && postCallSettings && onUpdatePostCallSettings && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Sent to new callers we don't have on file. Asks for their info so you can follow up with estimates & invoices.
-            </p>
-            <Separator />
-            <div className="space-y-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <TemplateBindingCard
-                title="Intake SMS Template"
-                description="Unknown-caller follow-up after a completed call."
-                value={postCallSettings.unknownTemplate}
-                templateKey={postCallSettings.unknownTemplateKey}
-                placeholder="Hey! Thanks so much for calling — we really appreciate you! If there's anything else you need, just text us back here anytime. 😊"
-                categoryFilter={["ivr", "post_call", "voice", "general"]}
-                onSaveText={(v) => onUpdatePostCallSettings({ post_call_sms_unknown: v })}
-                onSelectTemplate={(template) => onUpdatePostCallSettings({
-                  post_call_sms_unknown: template.template_body,
-                  post_call_sms_unknown_template_key: template.name,
-                })}
-              />
-            </div>
-          </div>
-        )}
-
-        {nodeType === "missed_call_master" && missedCallSettings && onUpdateMissedCallSettings && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-rose-300/40 bg-gradient-to-br from-rose-500/10 to-rose-500/5 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <PhoneMissed className="h-5 w-5 text-rose-600" />
-                <div className="flex-1">
-                  <p className="text-sm font-bold">Universal Missed-Call SMS</p>
-                  <p className="text-[11px] text-muted-foreground">Auto-replies to ALL unanswered inbound calls — even direct dials that bypass the menu.</p>
-                </div>
-                <Badge variant={missedCallSettings.enabled ? "default" : "outline"} className={missedCallSettings.enabled ? "bg-rose-600" : ""}>
-                  {missedCallSettings.enabled ? "Active" : "Off"}
-                </Badge>
-              </div>
-              <p className="text-[11px] text-muted-foreground pt-1 border-t border-rose-300/20">
-                Skipped when: suspected bot, answering service handled it, or another SMS was sent in the last 30 min.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div>
-                <Label className="text-sm font-semibold">Enable Universal SMS</Label>
-                <p className="text-[11px] text-muted-foreground">Master switch — turns on missed-call auto-replies for every unanswered call</p>
-              </div>
-              <Switch
-                checked={missedCallSettings.enabled}
-                onCheckedChange={(v) => onUpdateMissedCallSettings({ missed_call_sms_enabled: v ? "true" : "false" })}
-              />
-            </div>
-
-            <div className={`space-y-4 transition-opacity ${!missedCallSettings.enabled ? "opacity-50 pointer-events-none" : ""}`}>
-              <div className="space-y-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                <TemplateBindingCard
-                  title="During Business Hours"
-                  description="Sent when a live inbound call is missed while your office is open."
-                  value={missedCallSettings.duringHoursTemplate}
-                  templateKey={missedCallSettings.duringHoursTemplateKey}
-                  placeholder="Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here."
-                  categoryFilter={["ivr", "missed_call", "voice", "general"]}
-                  onSaveText={(v) => onUpdateMissedCallSettings({ missed_call_sms_during_hours: v })}
-                  onSelectTemplate={(template) => onUpdateMissedCallSettings({
-                    missed_call_sms_during_hours: template.template_body,
-                    missed_call_sms_during_hours_template_key: template.name,
-                  })}
-                />
-                <p className="text-[10px] text-muted-foreground">Sent when caller misses you during open hours.</p>
-              </div>
-
-              <div className="space-y-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
-                <TemplateBindingCard
-                  title="After Hours / Closed"
-                  description="Sent when the missed call lands outside your configured business hours." 
-                  value={missedCallSettings.afterHoursTemplate}
-                  templateKey={missedCallSettings.afterHoursTemplateKey}
-                  placeholder="Hi, thanks for calling Carnes and Sons. Our office is closed right now, but our family will follow up as quickly as we can. For emergencies, text EMERGENCY."
-                  categoryFilter={["ivr", "after_hours", "missed_call", "voice", "general"]}
-                  onSaveText={(v) => onUpdateMissedCallSettings({ missed_call_sms_after_hours: v })}
-                  onSelectTemplate={(template) => onUpdateMissedCallSettings({
-                    missed_call_sms_after_hours: template.template_body,
-                    missed_call_sms_after_hours_template_key: template.name,
-                  })}
-                />
-                <p className="text-[10px] text-muted-foreground">Sent outside business hours / on closed days.</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

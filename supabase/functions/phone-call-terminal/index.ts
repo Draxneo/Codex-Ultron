@@ -90,7 +90,7 @@ async function maybeSendCanvasMissedSms({
 
   const enabled = deptOption?.dept_no_vm_missed_call_sms_enabled !== false;
   const fallbackBody = (deptOption?.dept_no_vm_missed_call_sms || deptOption?.dept_missed_call_sms || "").trim();
-  if (!enabled || !fallbackBody) {
+  if (!enabled || (!fallbackBody && !deptOption?.dept_missed_call_sms_template_key)) {
     await logSystemTrace({
       sourceType: "voice",
       sourceName: "phone-call-terminal",

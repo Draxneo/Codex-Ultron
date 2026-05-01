@@ -425,20 +425,22 @@ Deno.serve(async (req) => {
         const { data: option } = await supabase
           .from("ivr_menu_options")
           .select(
-            "dept_missed_call_sms, dept_missed_call_sms_enabled, dept_missed_call_sms_template_key",
+            "dept_no_vm_missed_call_sms, dept_no_vm_missed_call_sms_enabled, dept_missed_call_sms, dept_missed_call_sms_enabled, dept_missed_call_sms_template_key",
           )
           .eq("digit", digit)
           .maybeSingle();
         // Send the dept-specific message immediately so caller gets it during the VM prompt
+        const voicemailSmsBody = (option?.dept_no_vm_missed_call_sms ||
+          option?.dept_missed_call_sms ||
+          "").trim();
         if (
-          option?.dept_missed_call_sms_enabled !== false &&
-          (option?.dept_missed_call_sms ||
-            option?.dept_missed_call_sms_template_key)
+          option?.dept_no_vm_missed_call_sms_enabled !== false &&
+          (voicemailSmsBody || option?.dept_missed_call_sms_template_key)
         ) {
           const resolvedSms = await resolveSmsTemplateBody({
             supabase,
             templateKey: option?.dept_missed_call_sms_template_key,
-            fallbackBody: option?.dept_missed_call_sms,
+            fallbackBody: voicemailSmsBody,
             extraVars: { customer_name: contactName || "" },
           });
           await sendIvrSms({

@@ -348,12 +348,13 @@ Deno.serve(async (req) => {
                   extracted_data: { ...existing, overflow_to: (config as any).answering_service_label || "Answering Service", overflow_reason: "after_hours" },
                 }).eq("id", callRow.id);
               }
-              if (option.dept_after_hours_sms_enabled !== false) {
+              const afterHoursSmsBody = (option.dept_after_hours_sms || "").trim();
+              if (option.dept_after_hours_sms_enabled !== false && (afterHoursSmsBody || option.dept_after_hours_sms_template_key)) {
                 const hoursStr = buildHoursString(option);
                 const resolvedSms = await resolveSmsTemplateBody({
                   supabase,
                   templateKey: option.dept_after_hours_sms_template_key,
-                  fallbackBody: option.dept_after_hours_sms || "Hi! Thanks for reaching out. We're outside normal hours, but we do monitor texts after hours and will get back to you as soon as we can.",
+                  fallbackBody: afterHoursSmsBody,
                   extraVars: {
                     hours: hoursStr || "our normal business hours",
                     customer_name: contactName || "",
@@ -398,12 +399,13 @@ Deno.serve(async (req) => {
           metadata: { digit, department: option.label },
         });
 
-        if (option.dept_after_hours_sms_enabled !== false) {
+        const afterHoursSmsBody = (option.dept_after_hours_sms || "").trim();
+        if (option.dept_after_hours_sms_enabled !== false && (afterHoursSmsBody || option.dept_after_hours_sms_template_key)) {
           const hoursStr = buildHoursString(option);
           const resolvedSms = await resolveSmsTemplateBody({
             supabase,
             templateKey: option.dept_after_hours_sms_template_key,
-            fallbackBody: option.dept_after_hours_sms || "Hi! Thanks for reaching out. We're outside normal hours, but we do monitor texts after hours and will get back to you as soon as we can.",
+            fallbackBody: afterHoursSmsBody,
             extraVars: {
               hours: hoursStr || "our normal business hours",
               customer_name: contactName || "",

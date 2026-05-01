@@ -17,7 +17,6 @@ import "@xyflow/react/dist/style.css";
 import { Save, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvasPositions } from "@/hooks/useCanvasPositions";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
 import IvrNodeComponent, { type IvrNodeData } from "./IvrNode";
 import { IvrNodeDetail } from "./IvrNodeDetail";
 import type { IvrConfig, IvrMenuOption } from "@/hooks/useIvrConfig";
@@ -133,12 +132,12 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
         animated: false, style: { stroke: "hsl(var(--muted-foreground))", strokeDasharray: "5 5" }, label: "No answer",
       });
 
-      // Missed Call SMS node — fires immediately on no-answer (no VM required)
+      // Missed Call SMS node — fires on no-answer/no-VM paths (voicemail flow uses the same body as fallback)
       const smsId = `sms-${opt.digit}`;
       const smsPreview = previewTemplate(
-        opt.dept_missed_call_sms,
+        opt.dept_no_vm_missed_call_sms || opt.dept_missed_call_sms,
         opt.dept_missed_call_sms_template_key,
-        "Auto-reply to missed callers"
+        "No missed-call SMS configured"
       );
       nodes.push({
         id: smsId, type: "ivrNode",
@@ -148,6 +147,21 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
       edges.push({
         id: `e-${naId}-sms`, source: naId, target: smsId,
         animated: false, style: { stroke: "hsl(var(--blue-500, 210 100% 50%))" }, label: "Auto SMS",
+      });
+
+      // Post-call SMS node — fires after a completed inbound call to this department
+      const postCallSmsId = `sms-post-${opt.digit}`;
+      const postCallPreview = opt.dept_post_call_sms_enabled === true
+        ? previewTemplate(opt.dept_post_call_sms, null, "No post-call SMS body configured")
+        : "Off";
+      nodes.push({
+        id: postCallSmsId, type: "ivrNode",
+        position: { x: X_GAP * 4, y: deptStartY + i * Y_GAP - 82 },
+        data: { nodeType: "sms", label: "Post-Call SMS", subtitle: postCallPreview, onSelect } satisfies IvrNodeData,
+      });
+      edges.push({
+        id: `e-${deptId}-post-sms`, source: deptId, target: postCallSmsId,
+        animated: false, style: { stroke: "hsl(142 72% 40%)" }, label: "Completed call",
       });
 
       // Voicemail node — optional, caller may or may not leave one
@@ -304,8 +318,7 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
     }
   }
 
-  // Post-call thank-you and missed-call SMS are now configured per-department
-  // on each department node (see dept_post_call_sms / dept_no_vm_missed_call_sms).
+  // Normal call-related SMS now lives on visible per-department SMS nodes.
 
   return { nodes, edges };
 }
@@ -314,31 +327,6 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const { applyPositions, savePositions, positionsReady } = useCanvasPositions("ivr");
-  const { settings, updateSettings } = useCompanySettings();
-
-  const postCallSettings = useMemo(() => ({
-    enabled: settings.post_call_sms_enabled === "true",
-    customerTemplate: settings.post_call_sms_customer || "",
-    customerTemplateKey: settings.post_call_sms_customer_template_key || "",
-    unknownTemplate: settings.post_call_sms_unknown || "",
-    unknownTemplateKey: settings.post_call_sms_unknown_template_key || "",
-  }), [settings]);
-
-  const missedCallSettings = useMemo(() => ({
-    enabled: settings.missed_call_sms_enabled !== "false",
-    duringHoursTemplate: settings.missed_call_sms_during_hours || "",
-    duringHoursTemplateKey: settings.missed_call_sms_during_hours_template_key || "",
-    afterHoursTemplate: settings.missed_call_sms_after_hours || "",
-    afterHoursTemplateKey: settings.missed_call_sms_after_hours_template_key || "",
-  }), [settings]);
-
-  const handleUpdatePostCallSettings = useCallback((updates: Record<string, string>) => {
-    updateSettings.mutate(updates as any);
-  }, [updateSettings]);
-
-  const handleUpdateMissedCallSettings = useCallback((updates: Record<string, string>) => {
-    updateSettings.mutate(updates as any);
-  }, [updateSettings]);
 
   const onSelect = useCallback((id: string) => {
     setSelectedNodeId(id);
@@ -382,8 +370,8 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
   // Determine selected node type and associated data
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
   const selectedType = selectedNode ? (selectedNode.data as IvrNodeData).nodeType : null;
-  // Extract digit from dept-X, vm-X, sms-X, sms-ah-X, ah-X patterns
-  const selectedDigit = selectedNodeId?.match(/(?:dept|vm|sms|sms-ah|ah|na|hold)-(\d+)/)?.[1] || null;
+  // Extract digit from dept-X, vm-X, sms-X, sms-ah-X, sms-post-X, ah-X patterns
+  const selectedDigit = selectedNodeId?.match(/(?:dept|vm|sms-post|sms-ah|sms|ah|na|hold)-(\d+)/)?.[1] || null;
   const selectedMenuOption = selectedDigit ? menuOptions.find(o => o.digit === selectedDigit) : undefined;
 
   return (
@@ -434,10 +422,6 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
             onUpdateConfig={onUpdateConfig}
             onUpdateDept={onUpdateDept}
             onDeleteDept={(id) => { onDeleteDept(id); setSelectedNodeId(null); }}
-            postCallSettings={postCallSettings}
-            onUpdatePostCallSettings={handleUpdatePostCallSettings}
-            missedCallSettings={missedCallSettings}
-            onUpdateMissedCallSettings={handleUpdateMissedCallSettings}
           />
         )}
       </div>
