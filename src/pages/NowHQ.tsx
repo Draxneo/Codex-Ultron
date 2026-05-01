@@ -834,25 +834,25 @@ export default function NowHQ() {
                 <Card className="bg-orange-500/5">
                   <CardContent className="p-4">
                     <p className="text-2xl font-bold">{humanCards.length}</p>
-                    <p className="text-xs text-muted-foreground">need a human</p>
+                    <p className="text-xs text-muted-foreground">Need review</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-2xl font-bold">{jarvisWatching}</p>
-                    <p className="text-xs text-muted-foreground">Handled for now</p>
+                    <p className="text-xs text-muted-foreground">Being tracked</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-2xl font-bold">{counts.pastDue}</p>
-                    <p className="text-xs text-muted-foreground">past due</p>
+                    <p className="text-xs text-muted-foreground">Late or stuck</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-2xl font-bold">{counts.closeout}</p>
-                    <p className="text-xs text-muted-foreground">closeout cards</p>
+                    <p className="text-xs text-muted-foreground">Install closeout</p>
                   </CardContent>
                 </Card>
               </div>

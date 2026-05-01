@@ -804,7 +804,7 @@ function CommunicationContextDialog({
               }}
             />
             <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              This pop-up is the model: answer the call/text, understand intent, act on the board, then open the full record only when needed.
+              Handle the call or text here. If it changes today&apos;s schedule, update the job or ask Jarvis to draft the next step.
             </div>
           </aside>
         </div>
