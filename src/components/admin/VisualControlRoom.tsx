@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatabaseHygienePanel } from "@/components/admin/DatabaseHygienePanel";
 
 type CountResult = {
   key: string;
@@ -320,6 +321,8 @@ export function VisualControlRoom() {
           </div>
         </CardContent>
       </Card>
+
+      <DatabaseHygienePanel />
 
       <Card>
         <CardHeader>
