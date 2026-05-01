@@ -20,7 +20,7 @@ export const MODEL_OPTIONS: ModelOption[] = [
 
 const VALID_MODEL_IDS = new Set(MODEL_OPTIONS.map(m => m.id));
 
-/** Get the selected copilot_chat model — used by CopilotChatPanel to pick the model for API calls */
+/** Get the selected Jarvis model used by CopilotChatPanel to pick the model for API calls. */
 export function getSelectedModel(): string {
   try {
     const cached = localStorage.getItem("copilot_model_cache");
@@ -85,7 +85,7 @@ export function CopilotModelSelector() {
         </Select>
         {selected && (
           <p className="text-xs text-muted-foreground">
-            Currently using: <strong>{selected.label}</strong> — {selected.description}
+            Currently using: <strong>{selected.label}</strong> - {selected.description}
           </p>
         )}
       </CardContent>

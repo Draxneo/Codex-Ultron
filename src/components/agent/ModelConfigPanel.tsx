@@ -59,7 +59,11 @@ export function ModelConfigPanel() {
     toast({ title: "Model updated", description: `${TASK_META[taskKey]?.description?.split(" - ")[0] || taskKey} -> ${opt?.label || model}` });
 
     if (taskKey === "copilot_chat") {
-      try { localStorage.setItem("copilot_model_cache", model); } catch {}
+      try {
+        localStorage.setItem("copilot_model_cache", model);
+      } catch (err) {
+        console.warn("[ModelConfigPanel] Could not cache Jarvis model selection:", err);
+      }
     }
   };
 
