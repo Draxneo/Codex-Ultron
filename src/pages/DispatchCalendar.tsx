@@ -11,7 +11,7 @@ import {
   startOfWeek,
   subDays,
 } from "date-fns";
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { WeekCalendarBoard } from "@/components/job/WeekCalendarBoard";
 import { CalendarSettings, useCalendarSettings } from "@/components/job/CalendarSettings";
@@ -74,11 +74,17 @@ function formatWeekRange(day: Date) {
   return `${format(start, "MMM d, yyyy")}-${format(end, "MMM d, yyyy")}`;
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 export default function DispatchCalendar() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: jobs, isLoading: jobsLoading } = useCalendarJobs();
-  const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
+  const { data: jobs, isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useCalendarJobs();
+  const { data: estimates, isLoading: estimatesLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(true);
   const { data: employees = [] } = useEmployees();
   const { settings: calendarSettings, update: setCalendarSettings } = useCalendarSettings();
   const [currentDay, setCurrentDayState] = useState(() => parseDateParam(searchParams.get("date")));
@@ -151,6 +157,10 @@ export default function DispatchCalendar() {
   const currentDayCount = filteredItems.filter((item) => item.scheduled_date && isSameDay(parseISO(item.scheduled_date), currentDay)).length;
   const activeFilterLabel = FILTERS.find((option) => option.value === filter)?.label || "All";
   const loading = jobsLoading || estimatesLoading;
+  const calendarDataIssues = [
+    jobsError ? `jobs (${errorMessage(jobsQueryError)})` : null,
+    estimatesError ? `estimates (${errorMessage(estimatesQueryError)})` : null,
+  ].filter(Boolean);
 
   const openItem = (item: CalendarItem) => {
     navigate(item.item_type === "estimate" ? `/estimates/${item.id}` : `/jobs/${item.id}`);
@@ -222,6 +232,16 @@ export default function DispatchCalendar() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {calendarDataIssues.length > 0 && (
+            <div className="shrink-0 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Calendar is open, but part of the schedule did not load: {calendarDataIssues.join(", ")}. Refresh before relying on this view.
+                </p>
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="grid flex-1 gap-3 p-4">
               <Skeleton className="h-full min-h-96 rounded-lg" />

@@ -186,6 +186,12 @@ function relativeTime(value?: string | null) {
   return formatDistanceToNow(date, { addSuffix: true });
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error && "message" in error) return String((error as { message?: unknown }).message || "Unknown error");
+  return "Unknown error";
+}
+
 function techStatusLabel(status?: TechStatusInfo | null) {
   if (!status) return null;
   if (status.status === "on_site") return "On site";
@@ -1128,8 +1134,8 @@ function JobMediaDialog({
 
 export default function ScheduleV2() {
   const navigate = useNavigate();
-  const { data: jobs, isLoading: jobsLoading } = useJobs();
-  const { data: estimates, isLoading: estimatesLoading } = useEstimates(true);
+  const { data: jobs, isLoading: jobsLoading, isError: jobsError, error: jobsQueryError } = useJobs();
+  const { data: estimates, isLoading: estimatesLoading, isError: estimatesError, error: estimatesQueryError } = useEstimates(true);
   const { data: employees = [] } = useEmployees();
   const { data: forecastMap } = useWeatherForecast();
   const techStatusMap = useTechStatusMap();
@@ -1252,7 +1258,16 @@ export default function ScheduleV2() {
     () => filteredItems.filter((item) => item.item_type === "job").map((item) => item.id).slice(0, 200),
     [filteredItems]
   );
-  const { data: dispatchLiveCards = new Map<string, DispatchLiveCardContext>() } = useDispatchLiveCards(dispatchLiveJobIds);
+  const {
+    data: dispatchLiveCards = new Map<string, DispatchLiveCardContext>(),
+    isError: dispatchLiveError,
+    error: dispatchLiveQueryError,
+  } = useDispatchLiveCards(dispatchLiveJobIds);
+  const dispatchDataIssues = [
+    jobsError ? `jobs (${errorMessage(jobsQueryError)})` : null,
+    estimatesError ? `estimates (${errorMessage(estimatesQueryError)})` : null,
+    dispatchLiveError ? `field updates (${errorMessage(dispatchLiveQueryError)})` : null,
+  ].filter(Boolean);
 
   const getLiveContext = (item: ScheduleItem) => item.item_type === "job" ? dispatchLiveCards.get(item.id) : undefined;
   const getTechStatus = (item: ScheduleItem) => {
@@ -1352,6 +1367,17 @@ export default function ScheduleV2() {
             </div>
           </div>
         </div>
+
+        {dispatchDataIssues.length > 0 && (
+          <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                Dispatch is open, but part of the board did not load: {dispatchDataIssues.join(", ")}. Refresh before making schedule decisions.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid shrink-0 grid-cols-2 gap-3 border-b bg-muted/30 p-4 lg:grid-cols-4">
           <MetricCard
