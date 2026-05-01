@@ -70,7 +70,8 @@ async function fetchRecentErrors() {
       .limit(5);
     if (error) throw error;
     return data ?? [];
-  } catch {
+  } catch (error) {
+    console.warn("Could not read recent system errors for Control Room", error);
     return [];
   }
 }

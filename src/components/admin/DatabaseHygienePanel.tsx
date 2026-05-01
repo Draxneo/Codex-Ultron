@@ -105,7 +105,7 @@ function toneForStatus(status?: string | null) {
 }
 
 export function DatabaseHygienePanel() {
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch, error } = useQuery({
     queryKey: ["database-hygiene-report"],
     queryFn: async () => {
       const { data: report, error } = await (supabase as any).rpc("get_database_hygiene_report");
@@ -141,6 +141,12 @@ export function DatabaseHygienePanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {error ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+            Database hygiene report needs wiring: {(error as Error).message}
+          </div>
+        ) : null}
+
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
