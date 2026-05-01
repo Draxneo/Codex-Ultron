@@ -59,7 +59,12 @@ export function useVoiceToText({
 
   const clearSilenceDetection = useCallback(() => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
-    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch((err) => {
+        console.warn("[useVoiceToText] Could not close audio context:", err);
+      });
+      audioCtxRef.current = null;
+    }
     analyserRef.current = null;
   }, []);
 

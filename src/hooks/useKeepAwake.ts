@@ -29,7 +29,7 @@ export function useKeepAwake() {
         await KeepAwake.keepAwake();
         acquired = true;
       } catch (err) {
-        // Plugin not installed or not supported — fail silently
+        // Plugin not installed or not supported.
         console.warn("[KeepAwake] Could not acquire wake lock:", err);
       }
     };
@@ -40,7 +40,9 @@ export function useKeepAwake() {
       if (!acquired) return;
       import("@capacitor-community/keep-awake")
         .then(({ KeepAwake }) => KeepAwake.allowSleep())
-        .catch(() => {});
+        .catch((err) => {
+          console.warn("[KeepAwake] Could not release wake lock:", err);
+        });
     };
   }, [isNative]);
 }

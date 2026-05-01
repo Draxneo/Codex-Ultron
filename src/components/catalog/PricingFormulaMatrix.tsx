@@ -161,7 +161,11 @@ export function PricingFormulaMatrix() {
         .from("company_settings")
         .upsert({ key: RECALC_SETTING_KEY, value: now }, { onConflict: "key" });
       // Clean up old per-browser value if present
-      try { localStorage.removeItem("pricing_last_recalc_at"); } catch {}
+      try {
+        localStorage.removeItem("pricing_last_recalc_at");
+      } catch (err) {
+        console.warn("[PricingFormulaMatrix] Could not clear browser-only recalc timestamp:", err);
+      }
       queryClient.invalidateQueries({ queryKey: ["company_settings", RECALC_SETTING_KEY] });
     } finally {
       setRecalcProgress(null);

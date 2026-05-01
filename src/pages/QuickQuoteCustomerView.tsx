@@ -57,7 +57,9 @@ export default function QuickQuoteCustomerView() {
   // Track view once when link loads
   useEffect(() => {
     if (link && token) {
-      trackQuickQuoteView(token, link.view_count).catch(() => {});
+      trackQuickQuoteView(token, link.view_count).catch((err) => {
+        console.warn("[QuickQuoteCustomerView] Could not track quote view:", err);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [link?.id]);
