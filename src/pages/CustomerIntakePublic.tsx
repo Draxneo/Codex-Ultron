@@ -172,7 +172,7 @@ export default function CustomerIntakePublic() {
               <AddressAutocomplete
                 value={form.address}
                 onChange={(val) => setForm({ ...form, address: val })}
-                placeholder="Start typing your address…"
+                placeholder="Start typing your address..."
                 autoComplete="street-address"
                 name="street-address"
               />
@@ -210,7 +210,7 @@ export default function CustomerIntakePublic() {
             <Textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Briefly describe the issue or service needed…"
+              placeholder="Briefly describe the issue or service needed..."
               className="mt-1 min-h-[80px]"
             />
           </div>

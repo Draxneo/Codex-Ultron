@@ -134,7 +134,7 @@ export default function IntakeFormPreview() {
 
                   <div>
                     <Label className="text-sm">Service Address *</Label>
-                    <Input placeholder="Start typing your address…" className="mt-1" disabled />
+                    <Input placeholder="Start typing your address..." className="mt-1" disabled />
                   </div>
 
                   <div>
@@ -150,7 +150,7 @@ export default function IntakeFormPreview() {
                   <div>
                     <Label className="text-sm">What's going on? (optional)</Label>
                     <Textarea
-                      placeholder="Briefly describe the issue or service needed…"
+                      placeholder="Briefly describe the issue or service needed..."
                       className="mt-1 min-h-[80px]"
                       disabled
                     />

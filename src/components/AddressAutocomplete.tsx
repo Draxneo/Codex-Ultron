@@ -19,7 +19,7 @@ interface Suggestion {
   mainText: string;
 }
 
-export function AddressAutocomplete({ value, onChange, placeholder = "Start typing an address…", className, autoComplete, name }: Props) {
+export function AddressAutocomplete({ value, onChange, placeholder = "Start typing an address...", className, autoComplete, name }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);

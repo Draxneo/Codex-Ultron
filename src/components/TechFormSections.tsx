@@ -775,13 +775,13 @@ function VoiceFirstTextarea({ fieldId, value, onTextChange, isDemo }: {
         onChange={e => onTextChange(fieldId, e.target.value)}
         rows={3}
         className="min-h-[44px] text-base"
-        placeholder="Tap Dictate to speak, or type here…"
+        placeholder="Tap Dictate to speak, or type here..."
       />
     </div>
   );
 }
 
-/* ── Temperature Differential sub-component ── */
+/* Temperature Differential sub-component */
 function TempDifferentialField({ fieldId, allValues, onTextChange }: {
   fieldId: string; allValues: Record<string, string>;
   onTextChange: (fieldId: string, val: string) => void;
@@ -813,27 +813,27 @@ function TempDifferentialField({ fieldId, allValues, onTextChange }: {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs font-medium flex items-center gap-1.5">
-            <Snowflake className="h-3.5 w-3.5 text-blue-500" /> Supply Temp (°F)
+            <Snowflake className="h-3.5 w-3.5 text-blue-500" /> Supply Temp (F)
           </Label>
           <Input
             type="number"
             inputMode="decimal"
             value={supplyStr}
             onChange={e => onTextChange(`${fieldId}_supply`, e.target.value)}
-            placeholder="—"
+            placeholder="-"
             className="min-h-[52px] text-xl font-bold text-center"
           />
         </div>
         <div className="space-y-1">
           <Label className="text-xs font-medium flex items-center gap-1.5">
-            <Thermometer className="h-3.5 w-3.5 text-orange-500" /> Return Temp (°F)
+            <Thermometer className="h-3.5 w-3.5 text-orange-500" /> Return Temp (F)
           </Label>
           <Input
             type="number"
             inputMode="decimal"
             value={returnStr}
             onChange={e => onTextChange(`${fieldId}_return`, e.target.value)}
-            placeholder="—"
+            placeholder="-"
             className="min-h-[52px] text-xl font-bold text-center"
           />
         </div>
