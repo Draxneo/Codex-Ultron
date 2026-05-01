@@ -54,6 +54,7 @@ import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatBytes } from "@/lib/fileTypes";
 import { cn } from "@/lib/utils";
+import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 type ConversationType = "direct" | "room";
 
@@ -396,6 +397,8 @@ export default function TeamCommunications() {
         .from("action_items" as any)
         .select("id, status, title, description, metadata, created_at")
         .eq("source", "team_communications")
+        .not("status", "in", '("done","handled","dismissed","completed","closed")')
+        .gte("created_at", APP_ACTION_GO_LIVE_ISO)
         .order("created_at", { ascending: false })
         .limit(120);
       if (error) throw error;
