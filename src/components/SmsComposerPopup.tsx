@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SmsThreadView } from "@/components/SmsThreadView";
-import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
-import { formatPhone, normalizeLast10, toE164 } from "@/lib/formatters";
+import { formatPhone, toE164 } from "@/lib/formatters";
 import { SMS_COMPOSER_OPEN_EVENT, type SmsComposerOpenDetail } from "@/lib/smsComposerBridge";
+
+const SmsComposerDialogBody = lazy(() =>
+  import("@/components/SmsComposerDialogBody").then((module) => ({ default: module.SmsComposerDialogBody }))
+);
 
 export function SmsComposerPopup() {
   const [detail, setDetail] = useState<SmsComposerOpenDetail | null>(null);
@@ -39,43 +41,13 @@ export function SmsComposerPopup() {
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1">
-          {detail && <SmsComposerDialogBody detail={detail} onClose={() => setDetail(null)} />}
+          {detail && (
+            <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading messages...</div>}>
+              <SmsComposerDialogBody detail={detail} onClose={() => setDetail(null)} />
+            </Suspense>
+          )}
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SmsComposerDialogBody({ detail, onClose }: { detail: SmsComposerOpenDetail; onClose: () => void }) {
-  const { conversations, sending, sendSms, markAsRead, setThreadStatus, hasMore, loadMore, loadingMore } = useSmsLogScoped();
-  const phone = detail.phone || "";
-  const phoneLast10 = normalizeLast10(phone);
-  const conversation = useMemo(() => {
-    if (!phoneLast10) return null;
-    return conversations.find((item) => normalizeLast10(item.phoneNumber) === phoneLast10) || null;
-  }, [conversations, phoneLast10]);
-
-  const handleSend = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
-    const success = await sendSms(to, body, jobId || detail?.jobId, contactName || detail?.contactName, mediaUrls);
-    if (success) onClose();
-    return success;
-  };
-
-  return (
-    <SmsThreadView
-      key={`${phone}-${detail.draft || ""}`}
-      conversation={conversation}
-      sending={sending}
-      onSend={handleSend}
-      onMarkRead={markAsRead}
-      onStatusChange={setThreadStatus}
-      onBack={onClose}
-      newMessageMode={!conversation}
-      prefillPhone={!conversation ? phone : undefined}
-      prefillBody={detail.draft}
-      hasMore={hasMore}
-      loadingMore={loadingMore}
-      onLoadMore={loadMore}
-    />
   );
 }
