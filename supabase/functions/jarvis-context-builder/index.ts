@@ -141,7 +141,7 @@ serve(async (req) => {
 
       // ── 3. Recent history (parallel) ─────────────────────────────────────
       const customerId = fullCustomer?.id;
-      const [jobsRes, callsRes, smsRes, emailsRes] = await Promise.all([
+      const [jobsRes, unifiedRes, emailsRes] = await Promise.all([
         customerId
           ? sb.from("jobs")
               .select("id, hcp_job_number, job_type, status, scheduled_date, customer_name, address, assigned_to, total_amount")
@@ -149,16 +149,12 @@ serve(async (req) => {
               .order("scheduled_date", { ascending: false })
               .limit(5)
           : Promise.resolve({ data: [] as any[] }),
-        sb.from("call_log")
-          .select("id, direction, status, duration_seconds, ai_summary, created_at")
-          .eq(digits.length === 10 ? "phone_number" : "id", digits.length === 10 ? phoneForLookup : "")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        sb.from("sms_log")
-          .select("id, direction, body, created_at")
-          .eq("phone_number", phoneForLookup)
-          .order("created_at", { ascending: false })
-          .limit(5),
+        sb.rpc("get_unified_communications", {
+          p_limit: 25,
+          p_offset: 0,
+          p_view: "all",
+          p_search: phoneForLookup,
+        }),
         customerId
           ? sb.from("emails")
               .select("id, subject, from_address, to_address, snippet, received_at, is_outbound")
@@ -168,10 +164,77 @@ serve(async (req) => {
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
+      let unifiedRows = (unifiedRes as any).data || [];
+      if ((unifiedRes as any).error) {
+        console.warn("get_unified_communications failed; falling back to legacy call/SMS reads", (unifiedRes as any).error);
+        const [callsFallback, smsFallback] = await Promise.all([
+          sb.from("call_log")
+            .select("id, direction, status, duration_seconds, ai_summary, transcription, recording_url, created_at")
+            .eq(digits.length === 10 ? "phone_number" : "id", digits.length === 10 ? phoneForLookup : "")
+            .order("created_at", { ascending: false })
+            .limit(5),
+          sb.from("sms_log")
+            .select("id, direction, body, created_at, related_job_id")
+            .eq("phone_number", phoneForLookup)
+            .order("created_at", { ascending: false })
+            .limit(5),
+        ]);
+        unifiedRows = [
+          ...((callsFallback.data || []) as any[]).map((row: any) => ({
+            source_type: "call",
+            source_id: row.id,
+            direction: row.direction,
+            status: row.status,
+            ai_summary: row.ai_summary,
+            transcription: row.transcription,
+            recording_url: row.recording_url,
+            event_at: row.created_at,
+          })),
+          ...((smsFallback.data || []) as any[]).map((row: any) => ({
+            source_type: "sms",
+            source_id: row.id,
+            direction: row.direction,
+            body: row.body,
+            event_at: row.created_at,
+            job_id: row.related_job_id,
+          })),
+        ].sort((a, b) => new Date(b.event_at || 0).getTime() - new Date(a.event_at || 0).getTime());
+      }
+
+      const recentCalls = unifiedRows
+        .filter((row: any) => row.source_type === "call" || row.source_type === "voicemail")
+        .slice(0, 5)
+        .map((row: any) => ({
+          id: row.source_id,
+          direction: row.direction,
+          status: row.status,
+          ai_summary: row.ai_summary || row.summary_text,
+          transcription: row.transcription,
+          recording_url: row.recording_url,
+          created_at: row.event_at,
+          intake_status: row.intake_status,
+          customer_id: row.customer_id,
+          job_id: row.job_id,
+          estimate_id: row.estimate_id,
+        }));
+      const recentSms = unifiedRows
+        .filter((row: any) => row.source_type === "sms")
+        .slice(0, 5)
+        .map((row: any) => ({
+          id: row.source_id,
+          direction: row.direction,
+          body: row.body || row.summary_text,
+          created_at: row.event_at,
+          related_job_id: row.job_id,
+          intake_status: row.intake_status,
+          customer_id: row.customer_id,
+          estimate_id: row.estimate_id,
+        }));
+
       payload.recent_history = {
         jobs: jobsRes.data || [],
-        calls: callsRes.data || [],
-        sms: smsRes.data || [],
+        calls: recentCalls,
+        sms: recentSms,
         emails: emailsRes.data || [],
       };
 
@@ -244,10 +307,10 @@ serve(async (req) => {
         const textChunks: string[] = [];
         if (resolvedFromVoicemail?.transcription) textChunks.push(resolvedFromVoicemail.transcription);
         if (resolvedFromVoicemail?.ai_summary) textChunks.push(resolvedFromVoicemail.ai_summary);
-        for (const c of (callsRes.data || []).slice(0, 3)) {
+        for (const c of recentCalls.slice(0, 3)) {
           if ((c as any).ai_summary) textChunks.push((c as any).ai_summary);
         }
-        for (const s of (smsRes.data || []).slice(0, 5)) {
+        for (const s of recentSms.slice(0, 5)) {
           if ((s as any).body) textChunks.push((s as any).body);
         }
         const combined = textChunks.join("\n");

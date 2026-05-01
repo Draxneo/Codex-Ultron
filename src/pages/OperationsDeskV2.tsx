@@ -59,6 +59,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useJobs } from "@/hooks/useJobs";
 import { useSmsLog, type SmsConversation } from "@/hooks/useSmsLog";
 import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
+import { useUnifiedCommunications, type UnifiedCommunication } from "@/hooks/useUnifiedCommunications";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
@@ -87,6 +88,7 @@ type DeskConversation = {
   unread: boolean;
   latestJobId?: string | null;
   raw: CallConversation | SmsConversation;
+  canonical?: UnifiedCommunication | null;
 };
 
 type IntakeThreadStatusRow = {
@@ -558,6 +560,56 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
     unread: conversation.unreadCount > 0,
     latestJobId: conversation.latestJobId,
     raw: conversation,
+  };
+}
+
+function unifiedSourceKey(sourceTable?: string | null, sourceId?: string | null) {
+  if (!sourceTable || !sourceId) return null;
+  return `${sourceTable}:${sourceId}`;
+}
+
+function unifiedKeyForDeskItem(item: DeskConversation) {
+  if (item.kind === "call") {
+    const call = (item.raw as CallConversation).lastCall;
+    return unifiedSourceKey("call_log", call.id);
+  }
+
+  const message = (item.raw as SmsConversation).lastMessage;
+  return unifiedSourceKey("sms_log", message.id);
+}
+
+function applyUnifiedCommunication(
+  item: DeskConversation,
+  canonicalBySource: Map<string, UnifiedCommunication>,
+): DeskConversation {
+  const canonical = canonicalBySource.get(unifiedKeyForDeskItem(item) || "");
+  if (!canonical) return item;
+
+  return {
+    ...item,
+    canonical,
+    name: item.name || canonical.contact_name,
+    customerType: item.customerType || canonical.contact_type || item.customerType,
+    latestJobId: item.latestJobId || canonical.job_id,
+    summary: item.summary || canonical.summary_text || item.summary,
+    detail: item.detail || canonical.body || canonical.transcription || canonical.ai_summary || item.detail,
+  };
+}
+
+function canonicalCommunicationContext(canonical?: UnifiedCommunication | null) {
+  if (!canonical) return null;
+  return {
+    communication_id: canonical.communication_id,
+    source_table: canonical.source_table,
+    source_id: canonical.source_id,
+    source_type: canonical.source_type,
+    intake_channel: canonical.intake_channel,
+    intake_status: canonical.intake_status,
+    customer_id: canonical.customer_id,
+    job_id: canonical.job_id,
+    estimate_id: canonical.estimate_id,
+    handled_by_name: canonical.handled_by_name,
+    handled_at: canonical.handled_at,
   };
 }
 
@@ -1864,9 +1916,13 @@ function CustomerWorkspace({
     const latestCall = selected.kind === "call" ? (selected.raw as CallConversation).lastCall : null;
     const smsConversation = selected.kind === "sms" ? selected.raw as SmsConversation : null;
     const communicationId = selected.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id;
+    const canonical = selected.canonical || null;
     const details = {
       conversation_id: selected.id,
       communication_id: communicationId || null,
+      canonical_communication_id: canonical?.communication_id || null,
+      canonical_source_table: canonical?.source_table || null,
+      canonical_source_id: canonical?.source_id || null,
       communication_type: selected.kind,
       direction: selected.direction,
       phone_last10: phoneLast10 || null,
@@ -1887,19 +1943,19 @@ function CustomerWorkspace({
         await onMarkCallRead(selected.phone);
       }
       if (phoneLast10) {
-        const { error: sharedStatusError } = await (supabase as any)
-          .from("intake_thread_status")
-          .upsert({
-            channel: selected.kind,
-            phone_last10: phoneLast10,
-            status: "handled",
-            handled_by_user_id: user.id,
-            handled_by_name: employeeName,
-            handled_at: handledAt,
-            last_signal_at: selected.createdAt,
-            updated_at: handledAt,
-          }, { onConflict: "channel,phone_last10" });
+        const { data: handledResult, error: sharedStatusError } = await (supabase as any)
+          .rpc("mark_intake_communication_handled", {
+            _channel: canonical?.intake_channel || selected.kind,
+            _phone_number: selected.phone,
+            _handled_by_name: employeeName,
+            _source_table: canonical?.source_table || (selected.kind === "call" ? "call_log" : "sms_log"),
+            _source_event_id: canonical?.source_id || communicationId || null,
+            _metadata: details,
+          });
         if (sharedStatusError) throw sharedStatusError;
+        if (handledResult && handledResult.ok === false) {
+          throw new Error(handledResult.reason || "The intake handled stamp was not saved.");
+        }
       }
 
       const auditResults = await Promise.all([
@@ -1939,6 +1995,7 @@ function CustomerWorkspace({
       onHandled(selected.id);
       queryClient.invalidateQueries({ queryKey: ["call_log"] });
       queryClient.invalidateQueries({ queryKey: ["sms_log"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-communications"] });
       queryClient.invalidateQueries({ queryKey: ["intake-thread-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["activity_log"] });
       if (customer?.id) queryClient.invalidateQueries({ queryKey: ["customer-activity-feed", customer.id] });
@@ -1981,6 +2038,7 @@ function CustomerWorkspace({
         summary: selected.summary,
         detail: selected.detail,
         transcript_or_thread: contextText,
+        canonical_communication: canonicalCommunicationContext(selected.canonical),
         suggested_actions: [
           "Summarize this selected conversation",
           "Detect booking, estimate, maintenance, reschedule, customer-note, warranty, or billing intent",
@@ -2485,6 +2543,7 @@ function ActionPanel({
         summary: selected.summary,
         detail: selected.detail,
         transcript_or_thread: contextText,
+        canonical_communication: canonicalCommunicationContext(selected.canonical),
         recent_calls: selected.kind === "call"
           ? (selected.raw as CallConversation).calls.slice(0, 5).map((call) => ({
               id: call.id,
@@ -3282,6 +3341,10 @@ export default function OperationsDeskV2() {
     markAsRead: markSmsAsRead,
     setThreadStatus: setSmsThreadStatus,
   } = useSmsLogScoped();
+  const { communications: unifiedCommunications, loading: unifiedLoading } = useUnifiedCommunications({
+    limit: 250,
+    view: "all",
+  });
   const { data: intakeThreadStatuses = [] } = useQuery({
     queryKey: ["intake-thread-statuses"],
     queryFn: async () => {
@@ -3304,6 +3367,14 @@ export default function OperationsDeskV2() {
     }
     return map;
   }, [intakeThreadStatuses]);
+  const canonicalBySource = useMemo(() => {
+    const map = new Map<string, UnifiedCommunication>();
+    for (const communication of unifiedCommunications) {
+      const key = unifiedSourceKey(communication.source_table, communication.source_id);
+      if (key) map.set(key, communication);
+    }
+    return map;
+  }, [unifiedCommunications]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DeskConversation | null>(null);
   const [newJobOpen, setNewJobOpen] = useState(false);
@@ -3314,6 +3385,7 @@ export default function OperationsDeskV2() {
       ...callConversations.map(callToDeskItem),
       ...smsConversations.map(smsToDeskItem),
     ]
+      .map((item) => applyUnifiedCommunication(item, canonicalBySource))
       .map((item) => {
         const phoneLast10 = normalizeLast10(item.phone);
         const sharedStatus = sharedStatusByThread.get(`${item.kind}:${phoneLast10}`);
@@ -3340,7 +3412,7 @@ export default function OperationsDeskV2() {
       ].join(" ").toLowerCase();
       return haystack.includes(q);
     });
-  }, [callConversations, smsConversations, search, sharedStatusByThread]);
+  }, [callConversations, smsConversations, canonicalBySource, search, sharedStatusByThread]);
 
   const selectConversation = (item: DeskConversation) => {
     setSelected(item);
@@ -3376,7 +3448,7 @@ export default function OperationsDeskV2() {
     localStorage.setItem("intake_tutorial_mode", String(tutorialMode));
   }, [tutorialMode]);
 
-  const loading = callsLoading || smsLoading;
+  const loading = callsLoading || smsLoading || unifiedLoading;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
