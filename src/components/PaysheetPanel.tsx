@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
@@ -84,11 +84,7 @@ export function PaysheetPanel() {
   const { start, end } = getWeekBounds(weekOffset);
   const showGrouped = role === "admin" || role === "office";
 
-  useEffect(() => {
-    fetchEntries();
-  }, [weekOffset, role, employeeId]);
-
-  const fetchEntries = async () => {
+  const fetchEntries = useCallback(async () => {
     setLoading(true);
     if (showGrouped) {
       const { data: emps } = await supabase
@@ -145,7 +141,11 @@ export function PaysheetPanel() {
     setWeekEstimates((estimates || []) as WeekEstimate[]);
 
     setLoading(false);
-  };
+  }, [showGrouped, start, end, role, employeeId]);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
 
   const nonHeldEntries = entries.filter(e => e.status !== "held");
   const heldEntries = entries.filter(e => e.status === "held");
