@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Package, Plus, UserPlus, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NewJobDialog } from "@/components/NewJobDialog";
-import { NewEstimateDialog } from "@/components/NewEstimateDialog";
-import { NewCustomerDialog } from "@/components/NewCustomerDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
+
+const NewJobDialog = lazy(() => import("@/components/NewJobDialog").then((module) => ({ default: module.NewJobDialog })));
+const NewEstimateDialog = lazy(() => import("@/components/NewEstimateDialog").then((module) => ({ default: module.NewEstimateDialog })));
+const NewCustomerDialog = lazy(() => import("@/components/NewCustomerDialog").then((module) => ({ default: module.NewCustomerDialog })));
 
 export function NewItemDropdown() {
   const [showNewJob, setShowNewJob] = useState(false);
@@ -50,9 +51,21 @@ export function NewItemDropdown() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <NewJobDialog open={showNewJob} onOpenChange={setShowNewJob} />
-      <NewEstimateDialog open={showNewEstimate} onOpenChange={setShowNewEstimate} />
-      <NewCustomerDialog open={showNewCustomer} onOpenChange={setShowNewCustomer} />
+      {showNewJob && (
+        <Suspense fallback={null}>
+          <NewJobDialog open={showNewJob} onOpenChange={setShowNewJob} />
+        </Suspense>
+      )}
+      {showNewEstimate && (
+        <Suspense fallback={null}>
+          <NewEstimateDialog open={showNewEstimate} onOpenChange={setShowNewEstimate} />
+        </Suspense>
+      )}
+      {showNewCustomer && (
+        <Suspense fallback={null}>
+          <NewCustomerDialog open={showNewCustomer} onOpenChange={setShowNewCustomer} />
+        </Suspense>
+      )}
     </>
   );
 }
