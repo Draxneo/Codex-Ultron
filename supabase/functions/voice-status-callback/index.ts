@@ -1,5 +1,5 @@
 import { fetchRecordingWithAuth } from "../_shared/twilioRecording.ts";
-import { recentOutboundExists, sendIvrSms } from "../_shared/smsHelper.ts";
+import { isSmsTestNumber, recentOutboundExists, sendIvrSms } from "../_shared/smsHelper.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -846,8 +846,9 @@ Deno.serve(async (req) => {
     const isSuspectedBot = currentRow?.status === "suspected-bot";
 
     const finalDuration = parsedDuration || existingRow.duration_seconds || 0;
+    const smsTestNumberBypass = await isSmsTestNumber(supabase, existingRow.phone_number);
     if (
-      effectiveStatus === "completed" && !isSuspectedBot && finalDuration >= 60
+      effectiveStatus === "completed" && !isSuspectedBot && (finalDuration >= 60 || smsTestNumberBypass)
     ) {
       try {
         // Re-fetch the full call_log row to get direction, phone, contact info, ivr selection
@@ -912,7 +913,7 @@ Deno.serve(async (req) => {
             // (e.g. CSR already sent an intake link during the call)
             const isCustomer = callRow.contact_type === "customer";
             let skipIntake = false;
-            if (!isCustomer) {
+            if (!isCustomer && !smsTestNumberBypass) {
               const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
               const { count: recentCount } = await supabase
                 .from("sms_log")
@@ -929,14 +930,14 @@ Deno.serve(async (req) => {
               }
             }
 
-            if ((count || 0) === 0 && !skipIntake) {
+            if (smsTestNumberBypass || ((count || 0) === 0 && !skipIntake)) {
               await sendIvrSms({
                 to: callRow.phone_number,
                 body: resolvedTemplate.body,
                 contactName: callRow.contact_name,
                 contactType: callRow.contact_type,
                 supabase,
-                skipEmployeeFilter: allowEmployeeTestSms,
+                skipEmployeeFilter: allowEmployeeTestSms || smsTestNumberBypass,
                 sourceFunction: "voice-status-post-call",
                 templateKey: resolvedTemplate.templateKey,
               });

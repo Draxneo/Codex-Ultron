@@ -1,5 +1,37 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+function last10(phone: string | null | undefined): string {
+  return String(phone || "").replace(/\D/g, "").slice(-10);
+}
+
+function splitSettingList(value: string | null | undefined): string[] {
+  return String(value || "")
+    .split(/[,\n;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export async function isSmsTestNumber(
+  supabase: ReturnType<typeof createClient>,
+  phone: string | null | undefined,
+): Promise<boolean> {
+  const target = last10(phone);
+  if (target.length !== 10) return false;
+
+  try {
+    const { data } = await supabase
+      .from("company_settings")
+      .select("value")
+      .eq("key", "sms_test_numbers")
+      .maybeSingle();
+
+    return splitSettingList((data as any)?.value).some((candidate) => last10(candidate) === target);
+  } catch (error) {
+    console.warn("SMS test number lookup failed:", error);
+    return false;
+  }
+}
+
 /**
  * Shared SMS sender for IVR auto-reply messages.
  * Routes ALL sends through `send-sms` for centralized:
@@ -23,8 +55,9 @@ export async function sendIvrSms(opts: {
   const { to, body, contactType, supabase, skipEmployeeFilter, jobId, sourceFunction, templateKey } = opts;
 
   // Skip employee numbers unless explicitly overridden
-  if (!skipEmployeeFilter && (contactType === "employee" || !to)) return;
   if (!to) return;
+  const testNumberBypass = await isSmsTestNumber(supabase, to);
+  if (!skipEmployeeFilter && !testNumberBypass && contactType === "employee") return;
 
   try {
     const { data: companyNameRow } = await supabase

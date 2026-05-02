@@ -69,6 +69,13 @@ function callDebug(tag: string, data: Record<string, any> = {}) {
 }
 function markCallStart() { _callStartedAt = Date.now(); callDebug("call.start.marked"); }
 function markCallEnd() { _callStartedAt = null; }
+function normalizeOutboundDialNumber(value: string): string | null {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (/^\+1\d{10}$/.test(String(value || "").trim())) return String(value).trim();
+  return null;
+}
 if (typeof window !== "undefined") {
   (window as any).__callDebugLog = () => {
     console.table(CALL_DEBUG_BUFFER);
@@ -1189,6 +1196,16 @@ export function useSoftphone(enabled: boolean = true) {
       const resolvedJobId = jobId || pendingJobId;
 
       const resolvedName = contactName || await resolveCallerName(number);
+      const normalizedDialNumber = normalizeOutboundDialNumber(number);
+      if (!normalizedDialNumber) {
+        callDebug("outgoing.connect.request", {
+          blocked: true,
+          reason: "invalid_destination",
+          providedLength: String(number || "").replace(/\D/g, "").length,
+        });
+        setState((s) => ({ ...s, status: deviceRef.current ? "ready" : "offline", error: "Enter a full 10-digit phone number before calling." }));
+        return;
+      }
 
       // Resolve customer_id: explicit > pending > derived from job/estimate
       let resolvedCustomerId: string | null = customerId || pendingCustomerId || null;
@@ -1210,7 +1227,7 @@ export function useSoftphone(enabled: boolean = true) {
           type: "OUTBOUND_DIAL",
           call: {
             direction: "outbound",
-            customerNumber: number,
+            customerNumber: normalizedDialNumber,
             agentIdentity: currentEmployeeNameRef.current,
           },
         });
@@ -1224,15 +1241,27 @@ export function useSoftphone(enabled: boolean = true) {
         setState((s) => ({
           ...s,
           status: "connecting",
-          callerInfo: { number, name: resolvedName },
+          callerInfo: { number: normalizedDialNumber, name: resolvedName },
           error: null,
         }));
         startSafetyTimer();
 
-        const connectParams: Record<string, string> = { To: number };
+        const connectParams: Record<string, string> = {
+          To: normalizedDialNumber,
+          to: normalizedDialNumber,
+          phone: normalizedDialNumber,
+        };
         if (resolvedJobId) connectParams.jobId = resolvedJobId;
         if (resolvedCustomerId) connectParams.customerId = resolvedCustomerId;
         if (resolvedName) connectParams.contactName = resolvedName;
+
+        callDebug("outgoing.connect.request", {
+          blocked: false,
+          toLast4: normalizedDialNumber.slice(-4),
+          hasJobId: Boolean(resolvedJobId),
+          hasCustomerId: Boolean(resolvedCustomerId),
+          hasContactName: Boolean(resolvedName),
+        });
 
         const call = await deviceRef.current.connect({
           params: connectParams,
@@ -1288,6 +1317,12 @@ export function useSoftphone(enabled: boolean = true) {
         });
         setState((s) => ({ ...s, activeCall: call, status: "ringing" }));
       } catch (err: any) {
+        callDebug("call.error", {
+          phase: "outbound_connect",
+          message: err?.message || "Dial failed",
+          code: err?.code,
+          name: err?.name,
+        });
         dispatchLifecycle({ type: "CALL_FAILED", error: err?.message || "Dial failed" });
         clearSafetyTimer();
         // Pending context is preserved so the user can retry. Surface a clean

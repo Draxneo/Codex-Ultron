@@ -76,11 +76,12 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
   } = useSoftphoneContext();
 
   const [number, setNumber] = useState(() => formatPhoneInput(initialNumber));
+  const [localError, setLocalError] = useState<string | null>(null);
   const isIncomingCall = status === "ringing" && !!incomingCall;
   const activeCall = status === "connecting" || status === "ringing" || status === "on-call";
-  const canDial = number.trim().length > 0 && !activeCall && status !== "registering";
+  const validDialNumber = useMemo(() => toE164(number), [number]);
+  const canDial = Boolean(validDialNumber) && !activeCall && status !== "registering";
   const displayNumber = activeCall ? formatPhoneInput(callerInfo?.number || number) : number;
-  const normalizedNumber = useMemo(() => toE164(number) || number.trim(), [number]);
   const statusInfo = statusCopy(status);
   const StatusIcon = statusInfo.icon;
 
@@ -103,18 +104,25 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
       sendDigit(digit);
       return;
     }
+    setLocalError(null);
     setNumber((current) => formatPhoneInput(`${current}${digit}`));
   }, [activeCall, sendDigit]);
 
   const removeDigit = useCallback(() => {
     if (activeCall) return;
+    setLocalError(null);
     setNumber((current) => formatPhoneInput(current.replace(/\D/g, "").slice(0, -1)));
   }, [activeCall]);
 
   const handleCall = useCallback(() => {
+    if (!validDialNumber) {
+      setLocalError("Enter the full 10-digit phone number first.");
+      return;
+    }
     if (!canDial) return;
-    void dial(normalizedNumber, contactName, jobId, customerId);
-  }, [canDial, contactName, customerId, dial, jobId, normalizedNumber]);
+    setLocalError(null);
+    void dial(validDialNumber, contactName, jobId, customerId);
+  }, [canDial, contactName, customerId, dial, jobId, validDialNumber]);
 
   return (
     <div className="h-screen overflow-hidden bg-background text-foreground">
@@ -151,7 +159,10 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
 
           <Input
             value={displayNumber}
-            onChange={(event) => setNumber(formatPhoneInput(event.target.value))}
+            onChange={(event) => {
+              setLocalError(null);
+              setNumber(formatPhoneInput(event.target.value));
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") handleCall();
             }}
@@ -248,9 +259,9 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
           </Button>
         )}
 
-        {error && (
+        {(localError || error) && (
           <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
+            {localError || error}
           </div>
         )}
 
