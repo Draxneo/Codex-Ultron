@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import type { Node } from "@xyflow/react";
 
 type PositionMap = Record<string, { x: number; y: number }>;
+type SavePositionOptions = { silent?: boolean };
 
 function settingsKey(canvasKey: string) {
   return `canvas_positions_${canvasKey}`;
@@ -34,9 +35,11 @@ async function persistPositions(canvasKey: string, positions: PositionMap) {
     .eq("key", key)
     .maybeSingle();
   if (existing) {
-    await supabase.from("company_settings").update({ value } as any).eq("id", existing.id);
+    const { error } = await supabase.from("company_settings").update({ value } as any).eq("id", existing.id);
+    if (error) throw error;
   } else {
-    await supabase.from("company_settings").insert({ key, value } as any);
+    const { error } = await supabase.from("company_settings").insert({ key, value } as any);
+    if (error) throw error;
   }
 }
 
@@ -65,12 +68,25 @@ export function useCanvasPositions(canvasKey: string) {
   }, []);
 
   /** Save current node positions to DB */
-  const savePositions = useCallback(async (nodes: Node[]) => {
+  const savePositions = useCallback(async (nodes: Node[], options: SavePositionOptions = {}) => {
     const posMap: PositionMap = {};
     nodes.forEach((n) => { posMap[n.id] = n.position; });
     positionsRef.current = posMap;
-    await persistPositions(canvasKey, posMap);
-    toast({ title: "Layout saved", description: "Canvas positions saved" });
+    try {
+      await persistPositions(canvasKey, posMap);
+      if (!options.silent) {
+        toast({ title: "Layout saved", description: "Canvas positions saved" });
+      }
+    } catch (error: any) {
+      if (!options.silent) {
+        toast({
+          title: "Layout did not save",
+          description: error?.message || "Canvas positions could not be saved.",
+          variant: "destructive",
+        });
+      }
+      throw error;
+    }
   }, [canvasKey]);
 
   return { applyPositions, savePositions, positionsReady: ready };

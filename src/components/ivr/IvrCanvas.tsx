@@ -12,6 +12,7 @@ import {
   type Node,
   type Edge,
   type NodeTypes,
+  type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Save, Check } from "lucide-react";
@@ -367,6 +368,12 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
     setTimeout(() => setSaved(false), 2000);
   }, [nodes, onUpdateConfig, savePositions]);
 
+  const handleNodeDragStop = useCallback<OnNodeDrag<Node>>((_event, _node, currentNodes) => {
+    void savePositions(currentNodes.length ? currentNodes : nodes, { silent: true }).catch((error) => {
+      console.error("IVR canvas layout autosave failed:", error);
+    });
+  }, [nodes, savePositions]);
+
   // Determine selected node type and associated data
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
   const selectedType = selectedNode ? (selectedNode.data as IvrNodeData).nodeType : null;
@@ -388,6 +395,7 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onNodeDragStop={handleNodeDragStop}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.3 }}
