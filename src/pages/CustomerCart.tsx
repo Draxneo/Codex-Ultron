@@ -42,11 +42,13 @@ const INSTALL_INCLUDED = [
   "Thermostat setup and homeowner walkthrough",
 ];
 
+const DEFAULT_PUBLIC_COMPANY_NAME = "the office";
+
 interface CartView {
   cart: JobCart;
   items: JobCartItem[];
   job: { customer_name?: string | null; address?: string | null; assigned_to?: string | null; job_number?: string | null } | null;
-  company: { name: string; phone: string; tagline?: string; financingDisclaimer?: string; logoUrl?: string };
+  company: { name: string; phone: string; tagline?: string; financingDisclaimer?: string; logoUrl?: string; businessUnitSlug?: string | null };
   pricing: Record<string, any>;
   memberInfo?: ComfortClubPublicInfo | null;
 }
@@ -72,11 +74,12 @@ export default function CustomerCart() {
           items: (publicCart.items || []) as JobCartItem[],
           job: (publicCart.job as any) || null,
           company: {
-            name: settingsMap.company_name || "Carnes and Sons Air Conditioning",
+            name: settingsMap.company_name || DEFAULT_PUBLIC_COMPANY_NAME,
             phone: settingsMap.company_phone || "",
             tagline: settingsMap.company_tagline || "",
             financingDisclaimer: settingsMap.cart_financing_disclaimer || "",
             logoUrl: settingsMap.company_logo_url || "",
+            businessUnitSlug: settingsMap.business_unit_slug || null,
           },
           pricing: (publicCart.pricing || publicCart.cart?.pricing_summary || {}) as Record<string, any>,
           memberInfo: (publicCart.memberInfo as ComfortClubPublicInfo | null) || null,
@@ -159,6 +162,7 @@ export default function CustomerCart() {
   const primaryEquipment = equipmentItems[0] || null;
   const primaryMeta = (primaryEquipment?.metadata || {}) as Record<string, any>;
   const hasActionableCart = items.length > 0 && total > 0;
+  const isHvacCart = isHvacCompany(company.businessUnitSlug) || items.some(isHvacCartItem);
   const isPaid = cart.status === "paid";
   const isApproved = cart.status === "approved";
   const isDeclined = cart.status === "declined";
@@ -169,7 +173,7 @@ export default function CustomerCart() {
 
   // System-purchase pricing framing — shows the same A/B/C stack the tech showed in person
   const hasEquipment = equipmentItems.length > 0;
-  const showPaymentStack = total >= 1500;
+  const showPaymentStack = isHvacCart && total >= 1500;
   const monthly36 = Number((cart as any).financing_monthly_36 ?? pricing?.financing?.monthly_36 ?? calcMonthly36(total) ?? 0);
   const monthly120 = Number((cart as any).financing_monthly_120 ?? pricing?.financing?.monthly_120 ?? calcMonthly120(total) ?? 0);
   // Option 1: only show rebate price (Option C) when there is real system equipment in the cart
@@ -315,7 +319,7 @@ export default function CustomerCart() {
           <Card className="overflow-hidden border-primary/20 bg-background shadow-sm">
             <div className="bg-primary px-4 py-4 text-primary-foreground">
               <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Decision guide</p>
-              <h2 className="mt-1 text-xl font-bold">Clear enough to decide without knowing HVAC.</h2>
+              <h2 className="mt-1 text-xl font-bold">Clear enough to make a confident decision.</h2>
               <p className="mt-1 text-sm text-primary-foreground/80">
                 We keep the technical proof attached, but the decision starts with what matters to your family.
               </p>
@@ -384,7 +388,7 @@ export default function CustomerCart() {
                 ))}
               </div>
 
-              {Number(primaryMeta.early_rebate || primaryMeta.burnout_rebate || 0) > 0 && (
+              {isHvacCart && Number(primaryMeta.early_rebate || primaryMeta.burnout_rebate || 0) > 0 && (
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3">
                   <div className="flex items-start gap-3">
                     <BadgePercent className="mt-0.5 h-5 w-5 text-emerald-700 dark:text-emerald-400" />
@@ -422,7 +426,7 @@ export default function CustomerCart() {
           </Card>
         )}
 
-        {comfortClub.isActive ? (
+        {isHvacCart && comfortClub.isActive ? (
           <Card className="p-4 bg-emerald-500/10 border-emerald-500/25">
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
@@ -457,7 +461,7 @@ export default function CustomerCart() {
               </div>
             </div>
           </Card>
-        ) : (
+        ) : isHvacCart ? (
           <Card className="p-4 bg-amber-500/10 border-amber-500/25">
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
@@ -488,7 +492,7 @@ export default function CustomerCart() {
               </div>
             </div>
           </Card>
-        )}
+        ) : null}
 
         {/* Items */}
         <Card className="overflow-hidden">
@@ -556,7 +560,7 @@ export default function CustomerCart() {
           )}
           {comfortClubDiscountAmount > 0 && (
             <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
-              <span>Comfort Club ({comfortClubDiscountPercent.toFixed(0)}%)</span>
+              <span>{isHvacCart ? "Comfort Club" : "Member"} ({comfortClubDiscountPercent.toFixed(0)}%)</span>
               <span>-${comfortClubDiscountAmount.toFixed(2)}</span>
             </div>
           )}
@@ -587,7 +591,7 @@ export default function CustomerCart() {
         ) : null}
 
         {/* Rebate paperwork assistance — only when there's real system equipment */}
-        {canEditCart && hasEquipment && (
+        {canEditCart && hasEquipment && isHvacCart && (
           <div className="space-y-4">
             <Card className="p-4">
               <div className="flex items-start gap-3">
@@ -737,4 +741,33 @@ function buildSpecChips(item: JobCartItem) {
     { label: "System", value: meta.system_type_label || item.kind },
     { label: "Brand", value: meta.brand || "Matched" },
   ];
+}
+
+function isHvacCompany(slug?: string | null) {
+  const value = String(slug || "").toLowerCase();
+  return ["carnes", "carnes-and-sons", "carnes_sons", "hvac"].includes(value);
+}
+
+function isHvacCartItem(item: JobCartItem) {
+  if (item.kind === "equipment") return true;
+  const meta = (item.metadata || {}) as Record<string, any>;
+  const haystack = [
+    item.name,
+    item.description,
+    meta.brand,
+    meta.system_type,
+    meta.system_type_label,
+    meta.application,
+    meta.model_summary,
+  ].join(" ").toLowerCase();
+
+  return Boolean(
+    meta.seer2 ||
+    meta.eer2 ||
+    meta.hspf2 ||
+    meta.afue ||
+    meta.ahri_number ||
+    meta.cps_rebate_tier ||
+    /\b(hvac|heat pump|air handler|furnace|condenser|coil|seer|ahri|refrigerant)\b/.test(haystack),
+  );
 }

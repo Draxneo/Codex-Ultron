@@ -79,7 +79,7 @@ export function buildDefaultDecisionMetadata(action: {
     why_now: isReplacement
       ? "Comfort equipment usually fails harder when it is already stressed by heat. Handling it now protects comfort, schedule, and available options."
       : isRepair
-        ? "Small HVAC problems can turn into larger failures when the system keeps running under stress. Fixing it now helps protect the equipment and the home."
+        ? "Small repair problems can turn into larger failures when the system keeps running under stress. Fixing it now helps protect the equipment and the home."
         : "This keeps the job moving while the details are fresh and the technician can still verify the result.",
     risk_if_waiting: isReplacement
       ? "Waiting can mean more uncomfortable days, emergency scheduling, and fewer equipment choices if the old system quits completely."
@@ -88,7 +88,7 @@ export function buildDefaultDecisionMetadata(action: {
       { title: "Comfort", body: "This option is meant to restore dependable cooling and help the home feel comfortable again." },
       { title: "Reliability", body: "It addresses the problem while the technician is already on site and can verify operation." },
       { title: "Peace of mind", body: "You get a clear approval path and a record of what was recommended." },
-      { title: "Why now", body: isRepair ? "HVAC issues usually get more expensive when the system keeps running while damaged." : "Approving now helps protect your schedule and comfort." },
+      { title: "Why now", body: isRepair ? "Repair issues usually get more expensive when the system keeps running while damaged." : "Approving now helps protect your schedule and comfort." },
     ],
     field_evidence_summary: action.sourceLine || description || name,
   };
@@ -132,7 +132,7 @@ export function buildCustomerDecisionStory(items: AnyItem[], job?: Record<string
       title: "Why it matters now",
       body: firstText(
         meta.why_now,
-        "HVAC problems usually get more stressful when they are left alone. Taking care of it now protects comfort, schedule, and the equipment around the failed part.",
+        "Problems usually get more stressful when they are left alone. Taking care of it now protects comfort, schedule, and the equipment around the failed part.",
       ),
     },
     riskIfWaiting: {
