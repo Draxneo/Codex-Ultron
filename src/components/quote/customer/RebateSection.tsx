@@ -26,6 +26,9 @@ export function RebateSection({ matchup }: Props) {
   const tier = matchup.cps_rebate_tier || "Tier 1";
   const early = matchup.early_rebate;
   const burnout = matchup.burnout_rebate;
+  const hasRebateContext = Boolean(matchup.cps_rebate_tier || early || burnout);
+
+  if (!hasRebateContext) return null;
 
   return (
     <Card className="p-6 md:p-8 bg-gradient-to-br from-accent/5 to-background border-accent/20">

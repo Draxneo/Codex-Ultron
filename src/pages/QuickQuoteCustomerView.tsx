@@ -136,16 +136,20 @@ export default function QuickQuoteCustomerView() {
       <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-5">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={draftOrder} strategy={verticalListSortingStrategy}>
-            {draftOrder.map((id) => (
-              <SortableSectionShell
-                key={id}
-                id={id}
-                editing={editing}
-                label={CUSTOMER_QUOTE_SECTION_LABELS[id]}
-              >
-                {sectionMap[id]}
-              </SortableSectionShell>
-            ))}
+            {draftOrder.map((id) => {
+              const section = sectionMap[id];
+              if (!section) return null;
+              return (
+                <SortableSectionShell
+                  key={id}
+                  id={id}
+                  editing={editing}
+                  label={CUSTOMER_QUOTE_SECTION_LABELS[id]}
+                >
+                  {section}
+                </SortableSectionShell>
+              );
+            })}
           </SortableContext>
         </DndContext>
       </main>
