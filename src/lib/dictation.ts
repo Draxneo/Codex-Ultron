@@ -10,9 +10,9 @@ export type DictationContext =
 export const DEFAULT_DICTATION_PROVIDER: DictationProvider = "openai";
 
 const GENERAL_DICTATION_PROMPT = [
-  "Transcribe this as business dictation for Carnes and Sons Air Conditioning.",
+  "Transcribe this as business dictation for a home-service company.",
   "Use clean punctuation, normal capitalization, and readable sentence spacing.",
-  "Preserve customer names, phone numbers, addresses, HVAC terms, brands, model numbers, prices, dates, and time windows.",
+  "Preserve customer names, phone numbers, addresses, HVAC terms, construction terms, brands, model numbers, prices, dates, and time windows.",
   "Do not add information that was not spoken.",
 ].join(" ");
 

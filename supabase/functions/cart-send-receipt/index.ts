@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
 
     const { data: cart, error: cartErr } = await supabase
       .from("job_carts")
-      .select("*, jobs:job_id(customer_name, customer_phone, address, job_number, customer_id)")
+      .select("*, jobs:job_id(customer_name, customer_phone, address, job_number, customer_id, business_unit_id)")
       .eq("id", cart_id)
       .maybeSingle();
 
@@ -55,15 +55,25 @@ Deno.serve(async (req) => {
     const cs: Record<string, string> = {};
     for (const r of (settings as any[]) || []) cs[r.key] = r.value;
 
+    const job = (cart as any).jobs;
+    let businessUnit: any = null;
+    if (job?.business_unit_id) {
+      const { data } = await supabase
+        .from("business_units")
+        .select("display_name, legal_name, billing_name, primary_phone_number")
+        .eq("id", job.business_unit_id)
+        .maybeSingle();
+      businessUnit = data;
+    }
+
     const company = {
-      name: cs.company_name || "Carnes and Sons Air Conditioning",
-      phone: cs.company_phone || "",
+      name: businessUnit?.billing_name || businessUnit?.legal_name || businessUnit?.display_name || cs.company_name || "our team",
+      phone: businessUnit?.primary_phone_number || cs.company_phone || "",
       email: cs.company_email || "",
       address: cs.company_address || "",
       license: cs.license_number || "",
     };
 
-    const job = (cart as any).jobs;
     // Optional SMS notification with link
     let smsSent = false;
     if (job?.customer_phone) {

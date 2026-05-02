@@ -264,7 +264,7 @@ function progressFromStep(stepNumber: number, totalSteps: number) {
 
 function recommendationFor(cardTitle: string, owner: WorkflowOwner, recordLabel: string) {
   if (owner === "system") return `Jarvis should run or verify "${cardTitle}" and only alert dispatch if it fails.`;
-  if (owner === "customer") return `Watch for customer response on ${recordLabel}. If no movement, queue a friendly Carnes follow-up.`;
+  if (owner === "customer") return `Watch for customer response on ${recordLabel}. If nothing moves, queue a friendly follow-up.`;
   if (owner === "tech") return `Keep the universal tech flow moving: on my way, arrive, photos, voice memo, AI review, parts, after photos, submit.`;
   return `Put this in front of dispatch: ${cardTitle}. Once confirmed, flip the workflow to the next card.`;
 }

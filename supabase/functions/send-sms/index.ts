@@ -60,9 +60,10 @@ async function inferBusinessUnitIdFromContext(
   if (!customerId && jobId) {
     const { data: job } = await supabase
       .from("jobs")
-      .select("customer_id")
+      .select("customer_id, business_unit_id")
       .eq("id", jobId)
       .maybeSingle();
+    if ((job as any)?.business_unit_id) return (job as any).business_unit_id;
     customerId = (job as any)?.customer_id || null;
   }
 

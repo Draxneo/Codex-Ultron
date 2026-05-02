@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SMS_SIGNATURE, appendSmsSignature } from "./smsSignature";
 
 describe("appendSmsSignature", () => {
-  it("adds the Carnes and Sons footer once", () => {
+  it("adds the SMS footer once", () => {
     const signed = appendSmsSignature("We are on the way.");
 
     expect(signed).toContain(SMS_SIGNATURE);

@@ -624,7 +624,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
         description="Use a department-specific governed template for missed live calls during open hours."
         value={option.dept_missed_call_sms || ""}
         templateKey={option.dept_missed_call_sms_template_key}
-        placeholder="e.g. Sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can."
+        placeholder="e.g. Sorry we missed you. This is {{company_name}}, and we'll call you back as soon as we can."
         categoryFilter={["ivr", "ivr_missed_call", "voice", "general"]}
         onSaveText={(v) => onSaveSilent({ digit: option.digit, dept_missed_call_sms: v })}
         onSelectTemplate={(template) => onSave({
@@ -943,7 +943,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
               textValue={config.voicemail_greeting}
               onTextChange={(v) => onUpdateConfig({ voicemail_greeting: v })}
               onAudioChange={(url) => onUpdateConfig({ voicemail_audio_url: url })}
-              placeholder="e.g. Happy Holidays from Carnes & Sons! We're closed today — leave a message and we'll call you back first thing."
+              placeholder="e.g. Happy Holidays from {{company_name}}. We're closed today, so leave a message and we'll call you back first thing."
               bucketPath="holiday-vm"
             />
           </div>
@@ -1056,7 +1056,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                     description="Sent after a completed call to this department."
                     value={menuOption.dept_post_call_sms || ""}
                     templateKey={null}
-                    placeholder="Thanks for calling Carnes and Sons. We appreciate you thinking of our family to help yours. If there is anything else you need to share, you can text us back here."
+                    placeholder="Thanks for calling {{company_name}}. We appreciate you thinking of our team to help yours. If there is anything else you need to share, you can text us back here."
                     categoryFilter={["ivr", "post_call", "voice", "general"]}
                     onSaveText={(v) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: v }, true)}
                     onSelectTemplate={(t) => onUpdateDept({ digit: menuOption.digit, dept_post_call_sms: t.template_body }, true)}
@@ -1099,7 +1099,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                   templateKey={isAfterHoursSms ? menuOption.dept_after_hours_sms_template_key : menuOption.dept_missed_call_sms_template_key}
                   placeholder={isAfterHoursSms
                     ? `e.g. Thanks for calling ${menuOption.label}. We are a local family company and will get back to you first thing tomorrow.`
-                    : `e.g. Sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can.`}
+                    : `e.g. Sorry we missed you. This is {{company_name}}, and we'll call you back as soon as we can.`}
                   categoryFilter={isAfterHoursSms ? ["ivr", "ivr_after_hours", "voice", "general"] : ["ivr", "ivr_missed_call", "voice", "general"]}
                   onSaveText={(v) => {
                     const field = isAfterHoursSms ? "dept_after_hours_sms" : "dept_missed_call_sms";
@@ -1137,7 +1137,7 @@ export function IvrNodeDetail({ nodeId, nodeType, onClose, config, menuOption, p
                         description="Main setting for missed-call texts. This replaces the old global setting."
                         value={menuOption.dept_no_vm_missed_call_sms || ""}
                         templateKey={null}
-                        placeholder="Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here."
+                        placeholder="Hi, sorry we missed you. This is {{company_name}}, and we'll call you back as soon as we can. Need us sooner? Text us here."
                         categoryFilter={["ivr", "missed_call", "voice", "general"]}
                         onSaveText={(v) => onUpdateDept({ digit: menuOption.digit, dept_no_vm_missed_call_sms: v }, true)}
                         onSelectTemplate={(t) => onUpdateDept({ digit: menuOption.digit, dept_no_vm_missed_call_sms: t.template_body }, true)}

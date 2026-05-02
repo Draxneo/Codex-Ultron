@@ -1,9 +1,9 @@
-export const DEFAULT_SMS_SIGNATURE = "—Carnes and Sons Air Conditioning";
+export const DEFAULT_SMS_SIGNATURE = "-our team";
 export const SMS_SIGNATURE = DEFAULT_SMS_SIGNATURE;
 
 export function smsSignatureForCompany(companyName?: string | null) {
   const cleanName = (companyName || "").trim();
-  return cleanName ? `—${cleanName}` : DEFAULT_SMS_SIGNATURE;
+  return cleanName ? `-${cleanName}` : DEFAULT_SMS_SIGNATURE;
 }
 
 export function appendSmsSignature(body: string, maxLength = 1600, signature = DEFAULT_SMS_SIGNATURE) {

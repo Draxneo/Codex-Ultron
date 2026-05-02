@@ -15,11 +15,12 @@ function buildReminderSms(job: any, dateLabel: string): string {
   const typeLabel = (job.job_type || "service").replace("_", " ");
   const isPhoneCall = job.job_type === "phone_call";
   const friendlyDate = formatDateFriendly(job.scheduled_date);
+  const companyName = job.company_name || "{{company_name}}";
 
   if (isPhoneCall) {
-    return `Hi ${firstName}, just a reminder from the Carnes family: we'll be calling you${friendlyDate ? ` on ${friendlyDate}` : ""}${timeWindow}. Reply R if you need to reschedule.`;
+    return `Hi ${firstName}, just a reminder from ${companyName}: we'll be calling you${friendlyDate ? ` on ${friendlyDate}` : ""}${timeWindow}. Reply R if you need to reschedule.`;
   }
-  return `Hi ${firstName}, this is a friendly reminder from the Carnes family that your ${typeLabel} appointment is ${dateLabel}${friendlyDate ? ` (${friendlyDate})` : ""}${timeWindow}. You'll get a 30-minute heads up when we're on the way. Reply C to confirm, R to reschedule, or send any gate code, pet note, or access instructions here.`;
+  return `Hi ${firstName}, this is a friendly reminder from ${companyName} that your ${typeLabel} appointment is ${dateLabel}${friendlyDate ? ` (${friendlyDate})` : ""}${timeWindow}. You'll get a 30-minute heads up when we're on the way. Reply C to confirm, R to reschedule, or send any gate code, pet note, or access instructions here.`;
 }
 
 async function buildReminderSmsFromTemplate(
@@ -34,6 +35,7 @@ async function buildReminderSmsFromTemplate(
     templateKey,
     fallbackBody,
     job,
+    businessUnitId: job?.business_unit_id || null,
     extraVars: { date_label: dateLabel },
   });
   return { body: resolved.body.trim(), templateKey: resolved.templateKey };
@@ -46,7 +48,7 @@ async function sendReminderForJob(
   dateLabel: string,
 ): Promise<boolean> {
   const { data: job } = await supabase.from("jobs")
-    .select("customer_name, customer_phone, customer_email, customer_id, scheduled_date, job_type, address, arrival_start, arrival_end")
+    .select("customer_name, customer_phone, customer_email, customer_id, scheduled_date, job_type, address, arrival_start, arrival_end, business_unit_id")
     .eq("id", jobId).single();
 
   if (!job?.customer_phone) return false;
@@ -98,7 +100,7 @@ Deno.serve(async (req) => {
     // ─── Path 1: Manual single-job reminder (booking confirmation) ───
     if (manualJobId) {
       const { data: job } = await supabase.from("jobs")
-        .select("customer_name, customer_phone, customer_email, customer_id, scheduled_date, job_type, address, arrival_start, arrival_end")
+        .select("customer_name, customer_phone, customer_email, customer_id, scheduled_date, job_type, address, arrival_start, arrival_end, business_unit_id")
         .eq("id", manualJobId).single();
 
       if (!job?.customer_phone) {

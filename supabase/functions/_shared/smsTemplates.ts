@@ -1,4 +1,5 @@
 import { resolveTemplate, loadCompanySettings } from "./templateEngine.ts";
+import { resolveBusinessUnitById } from "./businessUnits.ts";
 
 export type SmsTemplateRecord = {
   id: string;
@@ -37,11 +38,17 @@ export async function resolveSmsTemplateBody(opts: {
   job?: Record<string, any> | null;
   employee?: Record<string, any> | null;
   extraVars?: Record<string, string | null | undefined>;
+  businessUnitId?: string | null;
 }) {
-  const { supabase, templateKey, fallbackBody, job, employee, extraVars } = opts;
+  const { supabase, templateKey, fallbackBody, job, employee, extraVars, businessUnitId } = opts;
   const template = await loadSmsTemplateByKey(supabase, templateKey);
   const bodySource = template?.template_body || fallbackBody || "";
   const company = await loadCompanySettings(supabase, ["company_name", "company_phone", "a2p_footer"]);
+  const unit = await resolveBusinessUnitById(supabase, businessUnitId || job?.business_unit_id || null);
+  if (unit) {
+    company.company_name = unit.display_name || company.company_name || "";
+    company.company_phone = unit.primary_phone_number || company.company_phone || "";
+  }
 
   let preparedBody = bodySource;
   if (extraVars) {

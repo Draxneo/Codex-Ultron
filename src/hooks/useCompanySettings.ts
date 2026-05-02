@@ -130,9 +130,9 @@ const DEFAULTS: CompanySettings = {
   ai_sms_auto_draft: "true",
   jarvis_max_daily_alerts: "50",
   missed_call_sms_enabled: "true",
-  missed_call_sms_during_hours: "Hi, sorry we missed you. This is the Carnes family, and we'll call you back as soon as we can. Need us sooner? Text us here with your name, service address, and what is going on.",
+  missed_call_sms_during_hours: "Hi, sorry we missed you. This is {{company_name}}, and we'll call you back as soon as we can. Need us sooner? Text us here with your name, service address, and what is going on.",
   missed_call_sms_during_hours_template_key: "",
-  missed_call_sms_after_hours: "Hi, thanks for calling Carnes and Sons. Our office is closed right now, but you can text us here with your name, service address, and what is going on. For emergencies, text EMERGENCY and our family will follow up as quickly as we can.",
+  missed_call_sms_after_hours: "Hi, thanks for calling {{company_name}}. Our office is closed right now, but you can text us here with your name, service address, and what is going on. For emergencies, text EMERGENCY and our team will follow up as quickly as we can.",
   missed_call_sms_after_hours_template_key: "",
 };
 

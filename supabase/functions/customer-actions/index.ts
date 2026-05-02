@@ -44,7 +44,7 @@ async function parseCustomerSMS(text: string, openaiApiKey: string, model: strin
       messages: [
         {
           role: "system",
-          content: `You are a data extraction assistant for an HVAC company. Extract customer info from messy SMS text. Format properly: title case names, format phone as (XXX) XXX-XXXX, proper address formatting, 2-letter state codes. If info is missing, use empty string. Any mention of HVAC issues goes in notes/job_description.`,
+          content: `You are a data extraction assistant for a home-service company. Extract customer info from messy SMS text. Format properly: title case names, format phone as (XXX) XXX-XXXX, proper address formatting, 2-letter state codes. If info is missing, use empty string. Any mention of service issues goes in notes/job_description.`,
         },
         { role: "user", content: text },
       ],
@@ -430,7 +430,9 @@ serve(async (req) => {
         headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           to: phone,
-          body: `Hi, this is the Carnes family. To make sure we take good care of you, could you fill out this quick form when you have a minute?\n${intakeUrl}`,
+          body: `Hi, this is our office. To make sure we take good care of you, could you fill out this quick form when you have a minute?\n${intakeUrl}`,
+          business_unit_id: body.business_unit_id || null,
+          from_number: body.from_number || null,
         }),
       });
 

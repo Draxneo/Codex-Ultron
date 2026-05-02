@@ -18,9 +18,9 @@ export type TranscriptionResult = {
 };
 
 const DEFAULT_PROMPT = [
-  "Transcribe this as a short business dictation message for an HVAC company.",
+  "Transcribe this as a short business dictation message for a home-service company.",
   "Use clean punctuation, normal capitalization, and readable sentence spacing.",
-  "Preserve names, phone numbers, addresses, HVAC terms, brands, model numbers, and dates.",
+  "Preserve names, phone numbers, addresses, HVAC terms, construction terms, brands, model numbers, and dates.",
   "Do not add information that was not spoken.",
 ].join(" ");
 

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getJobCartPermissions } from "@/lib/jobCartStatus";
 import { CLOSED_CART_STATUS_FILTER } from "@/lib/appLifecycle";
+import { getJobCompanyName } from "@/lib/jobCompany";
 
 export interface JobCart {
   id: string;
@@ -220,10 +221,11 @@ export function useJobCart(jobId: string | undefined) {
       const greeting = customerName ? `Hi ${customerName.split(" ")[0]}, ` : "";
       const linkLabel = permissions.canSendPaymentLink && !permissions.canSendForApproval ? "payment link" : "estimate";
       const estimateLabel = cartQuery.data.estimate_number ? ` ${cartQuery.data.estimate_number}` : "";
+      const companyName = await getJobCompanyName(jobId);
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
       const smsResult = await sendSmsImpl({
         to: phone,
-        body: `${greeting}the Carnes family put together your ${linkLabel}${estimateLabel}. You can review it here, and text us back with any questions: ${link}`,
+        body: `${greeting}${companyName} put together your ${linkLabel}${estimateLabel}. You can review it here, and text us back with any questions: ${link}`,
         jobId,
         contactName: customerName || null,
         contactType: "customer",

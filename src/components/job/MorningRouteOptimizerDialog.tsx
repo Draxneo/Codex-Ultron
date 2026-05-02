@@ -192,7 +192,7 @@ export function MorningRouteOptimizerDialog({ open, onOpenChange, date, items, e
         const { item } = itemById.get(suggested.stop.id) || {};
         const consent = isTextAllowed(item?.customer_id || null, customerConsent);
         const body = buildRouteSmsDraftBody(suggested.stop, suggested.suggestedOrder, {
-          companyName: "Carnes and Sons",
+          companyName: "our office",
           includeStopNumber: true,
           technicianName: group.technicianName || undefined,
         });

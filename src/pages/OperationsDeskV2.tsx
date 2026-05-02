@@ -2556,8 +2556,8 @@ function ActionPanel({
   const textCustomerForAddress = () => {
     const candidate = addressDraft.trim() || addressVerification.standardized || addressVerification.address;
     const message = candidate
-      ? `Hi, this is Carnes and Sons. I may have heard the service address incorrectly. Is this the correct address: ${candidate}?`
-      : "Hi, this is Carnes and Sons. I may have heard the service address incorrectly. Can you please text me the correct service address?";
+      ? `Hi, this is our office. I may have heard the service address incorrectly. Is this the correct address: ${candidate}?`
+      : "Hi, this is our office. I may have heard the service address incorrectly. Can you please text me the correct service address?";
     setAddressDialogOpen(false);
     openSmsComposer(toE164(selected.phone) || selected.phone, {
       contactName: displayName,
