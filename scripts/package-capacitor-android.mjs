@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -7,6 +7,7 @@ const dryRun = args.has("--dry-run");
 const skipBuild = args.has("--skip-build");
 const mode = process.argv.find((arg) => arg === "debug" || arg === "release") || "debug";
 const root = process.cwd();
+const unsafeTwilioVoiceHook = "capacitor:sync:after";
 
 function resolveJavaEnv() {
   const env = { ...process.env };
@@ -27,6 +28,26 @@ function windowsAndroidStudioJbr() {
   if (process.platform !== "win32") return null;
   const androidStudioJbr = "C:\\Program Files\\Android\\Android Studio\\jbr";
   return existsSync(join(androidStudioJbr, "bin", "java.exe")) ? androidStudioJbr : null;
+}
+
+function removeWindowsUnsafeTwilioVoiceHook() {
+  if (process.platform !== "win32" || dryRun) return;
+
+  const packagePath = join(root, "node_modules", "@capgo", "capacitor-twilio-voice", "package.json");
+  if (!existsSync(packagePath)) return;
+
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+  const scripts = packageJson.scripts || {};
+  const syncHook = scripts[unsafeTwilioVoiceHook];
+  if (typeof syncHook !== "string") return;
+
+  const usesUnixPipe = syncHook.includes("base64 -d") && syncHook.includes("| bash");
+  if (!usesUnixPipe) return;
+
+  delete scripts[unsafeTwilioVoiceHook];
+  packageJson.scripts = scripts;
+  writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+  console.log("\nRemoved Windows-unsafe Twilio Voice Capacitor sync hook.");
 }
 
 function run(command, commandArgs, options = {}) {
@@ -55,7 +76,9 @@ if (!existsSync(join(root, "android"))) {
   run("npx", ["cap", "add", "android"]);
 }
 
-const syncStatus = run("npx", ["cap", "sync", "android"], { allowFailure: process.platform === "win32" });
+removeWindowsUnsafeTwilioVoiceHook();
+
+const syncStatus = run("npx", ["cap", "sync", "android"], { allowFailure: false });
 if (syncStatus !== 0) {
   const copiedIndex = join(root, "android", "app", "src", "main", "assets", "public", "index.html");
   if (!existsSync(copiedIndex)) {
