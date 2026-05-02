@@ -279,7 +279,7 @@ export default function InvoicePublic() {
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
                     <p className="font-semibold">Payment link did not open.</p>
-                    <p>Please call Carnes and Sons Air Conditioning so we can help finish this invoice.</p>
+                    <p>Please call {cs.company_name || DEFAULT_COMPANY_NAME} so we can help finish this invoice.</p>
                     <p className="mt-1 text-xs opacity-80">{payError}</p>
                   </div>
                 </div>

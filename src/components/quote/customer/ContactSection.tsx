@@ -25,10 +25,12 @@ export function ContactSection({ company }: Props) {
         <a href={`tel:${company.phone.replace(/\D/g, "")}`} className="flex items-center gap-2 text-primary font-semibold hover:underline">
           <Phone className="h-4 w-4" /> {company.phone}
         </a>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <BadgeCheck className="h-4 w-4" />
-          <span>Texas HVAC Masters License #{company.tacla}</span>
-        </div>
+        {company.tacla && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <BadgeCheck className="h-4 w-4" />
+            <span>License #{company.tacla}</span>
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -18,10 +18,10 @@ export type CustomerQuoteSectionId = (typeof CUSTOMER_QUOTE_SECTION_IDS)[number]
 export const CUSTOMER_QUOTE_SECTION_LABELS: Record<CustomerQuoteSectionId, string> = {
   hero: "Hero",
   investment: "Payment Options",
-  specs: "Equipment & Specs",
+  specs: "Scope & Specs",
   included: "What's Included",
   protection: "Your Protection",
-  rebate: "CPS Energy Rebate",
-  whyus: "Why Carnes & Sons",
+  rebate: "Rebate",
+  whyus: "Why Us",
   contact: "Contact",
 };

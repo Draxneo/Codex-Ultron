@@ -400,7 +400,8 @@ export default function QuickQuote() {
       const url = `${window.location.origin}/q/${link.token}`;
       const firstName = (customerName || "").split(" ")[0] || "there";
       const sysLabel = `${m.brand} ${m.tonnage ? `${m.tonnage}T ` : ""}${m.system_type || "system"}`.trim();
-      const body = `Hi ${firstName}, the Carnes family put together your ${sysLabel} quote with a few clear options. You can review it here and text us back with any questions: ${url}`;
+      const companyName = company.name || "our team";
+      const body = `Hi ${firstName}, ${companyName} put together your ${sysLabel} quote with a few clear options. You can review it here and text us back with any questions: ${url}`;
       openSmsComposer(customerPhone, {
         contactName: customerName || undefined,
         jobId: jobId || undefined,
@@ -445,7 +446,8 @@ export default function QuickQuote() {
       return;
     }
     const firstName = customerName.split(" ")[0] || "there";
-    const body = `Hi ${firstName}, the Carnes family has your system replacement quote ready when you have a minute. You can review it here and text us back with any questions: ${presentationUrl}`;
+    const companyName = company?.name || "our team";
+    const body = `Hi ${firstName}, ${companyName} has your system replacement quote ready when you have a minute. You can review it here and text us back with any questions: ${presentationUrl}`;
     openSmsComposer(customerPhone, {
       contactName: customerName || undefined,
       jobId: jobId || undefined,

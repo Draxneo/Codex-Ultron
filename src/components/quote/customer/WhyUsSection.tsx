@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import type { CompanyContact } from "@/lib/quoteTemplate";
 
 const POINTS = [
   { icon: "👨‍👦", title: "Family-Owned & Operated", body: "Three generations serving San Antonio." },
@@ -6,15 +7,21 @@ const POINTS = [
   { icon: "🛡️", title: "10-Year Parts Warranty", body: "Registered for you with the manufacturer." },
   { icon: "🔧", title: "Comfort Club Included", body: "2 years of maintenance & priority service." },
   { icon: "🤝", title: "Clean, Respectful Service", body: "We treat your home like our own." },
-  { icon: "⭐", title: "Licensed Texas HVAC Masters", body: "Certified, insured, and accountable." },
+  { icon: "⭐", title: "Licensed and Accountable", body: "Certified, insured, and accountable." },
 ];
 
-export function WhyUsSection() {
+interface Props {
+  company?: CompanyContact | null;
+}
+
+export function WhyUsSection({ company }: Props) {
+  const companyName = company?.name || "our team";
+
   return (
     <Card className="p-6 md:p-8">
       <div className="flex items-center gap-2 mb-5">
         <span className="text-2xl">🤷‍♂️</span>
-        <h2 className="text-xl md:text-2xl font-bold text-foreground">Why Carnes &amp; Sons</h2>
+        <h2 className="text-xl md:text-2xl font-bold text-foreground">Why {companyName}</h2>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">

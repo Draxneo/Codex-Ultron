@@ -94,7 +94,7 @@ export default function QuickQuoteCustomerView() {
       included: <InstallIncludedSection />,
       protection: <ProtectionSection brand={m.brand} />,
       rebate: <RebateSection matchup={m} />,
-      whyus: <WhyUsSection />,
+      whyus: <WhyUsSection company={link.company_snapshot} />,
       contact: <ContactSection company={link.company_snapshot} />,
     } as Record<CustomerQuoteSectionId, React.ReactNode>;
   }, [link]);
