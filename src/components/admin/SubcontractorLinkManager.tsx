@@ -208,7 +208,7 @@ export function SubcontractorLinkManager() {
     retry: 1,
   });
 
-  const jobs = jobsQuery.data || [];
+  const jobs = useMemo(() => jobsQuery.data || [], [jobsQuery.data]);
   const filteredJobs = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return jobs.slice(0, 25);

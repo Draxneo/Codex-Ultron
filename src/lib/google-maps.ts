@@ -32,7 +32,7 @@ export async function loadGoogleMaps(): Promise<void> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry,marker&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry,marker&v=weekly&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();

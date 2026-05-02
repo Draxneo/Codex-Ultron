@@ -33,15 +33,19 @@ if (!dryRun) {
   mkdirSync(desktopReleaseDir, { recursive: true });
 
   const electronSource = join(process.cwd(), "electron-release", "UltraOffice-win32-x64");
-  const electronTarget = join(desktopReleaseDir, "UltraOffice-win32-x64");
   if (existsSync(electronSource)) {
-    rmSync(electronTarget, { recursive: true, force: true });
-    cpSync(electronSource, electronTarget, { recursive: true });
+    for (const folderName of ["UltraOffice-win32-x64", "UltraOffice Desktop - Windows"]) {
+      const electronTarget = join(desktopReleaseDir, folderName);
+      rmSync(electronTarget, { recursive: true, force: true });
+      cpSync(electronSource, electronTarget, { recursive: true });
+    }
   }
 
   const apkSource = join(process.cwd(), "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
   if (existsSync(apkSource)) {
-    cpSync(apkSource, join(desktopReleaseDir, "UltraOffice-debug.apk"));
+    for (const fileName of ["UltraOffice-debug.apk", "UltraOffice Android Debug.apk"]) {
+      cpSync(apkSource, join(desktopReleaseDir, fileName));
+    }
   }
 
   console.log(`\nLatest Windows and Android builds copied to ${desktopReleaseDir}`);

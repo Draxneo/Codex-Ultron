@@ -2,7 +2,7 @@
  * useCanvasPositions — Shared hook for persisting React Flow node positions.
  * Stores positions in company_settings as JSON keyed by canvasKey.
  */
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { Node } from "@xyflow/react";
@@ -47,10 +47,12 @@ export function useCanvasPositions(canvasKey: string, fallbackCanvasKeys: string
   const loaded = useRef(false);
   const positionsRef = useRef<PositionMap | null>(null);
   const [ready, setReady] = useState(false);
+  const fallbackKeySignature = useMemo(() => fallbackCanvasKeys.join("|"), [fallbackCanvasKeys]);
 
   // Load saved positions on mount
   useEffect(() => {
     let cancelled = false;
+    const fallbackKeys = fallbackKeySignature ? fallbackKeySignature.split("|") : [];
     setReady(false);
     loaded.current = false;
     positionsRef.current = null;
@@ -58,7 +60,7 @@ export function useCanvasPositions(canvasKey: string, fallbackCanvasKeys: string
     const loadScopedPositions = async () => {
       let saved = await loadPositions(canvasKey);
       if (!saved) {
-        for (const fallbackKey of fallbackCanvasKeys) {
+        for (const fallbackKey of fallbackKeys) {
           saved = await loadPositions(fallbackKey);
           if (saved) break;
         }
@@ -73,7 +75,7 @@ export function useCanvasPositions(canvasKey: string, fallbackCanvasKeys: string
     return () => {
       cancelled = true;
     };
-  }, [canvasKey, fallbackCanvasKeys.join("|")]);
+  }, [canvasKey, fallbackKeySignature]);
 
   /** Apply saved positions to a set of nodes (call during node init or sync) */
   const applyPositions = useCallback(<T extends Node>(nodes: T[]): T[] => {
