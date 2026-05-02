@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { useParams } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Camera, CheckCircle2, Loader2, MapPin, Navigation, UploadCloud } from "lucide-react";
+import { AlertTriangle, CalendarClock, Camera, CheckCircle2, Loader2, MapPin, Navigation, Phone, UploadCloud, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPhone } from "@/lib/formatters";
 import { launchNavigation } from "@/lib/launchNavigation";
 import { cn } from "@/lib/utils";
 
@@ -25,11 +27,16 @@ type SubcontractorJobPayload = {
   job_id: string;
   job_number: string | null;
   customer_name: string | null;
+  customer_phone: string | null;
   address: string | null;
   scheduled_date: string | null;
   arrival_start: string | null;
   arrival_end: string | null;
   job_type: string | null;
+  brand: string | null;
+  tonnage: number | null;
+  system_type: string | null;
+  orientation: string | null;
   scope: string | null;
   equipment_summary: string | null;
   subcontractor_name: string | null;
@@ -52,14 +59,56 @@ function formatDate(date?: string | null) {
   if (!date) return "Date not set";
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "long",
-    month: "short",
+    month: "long",
     day: "numeric",
+    year: "numeric",
   });
+}
+
+function formatTimeUS(value?: string | null) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (timeMatch) {
+    const date = new Date();
+    date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString("en-US", {
+      timeZone: "America/Chicago",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  return raw;
 }
 
 function formatWindow(start?: string | null, end?: string | null) {
   if (!start && !end) return "Arrival window not set";
-  return [start, end].filter(Boolean).join(" - ");
+  const formatted = [formatTimeUS(start), formatTimeUS(end)].filter(Boolean);
+  if (formatted.length === 2 && formatted[0] === formatted[1]) return formatted[0];
+  return formatted.join(" - ");
+}
+
+function titleText(value?: string | number | null) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/_/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function equipmentSummary(job: SubcontractorJobPayload) {
+  if (job.equipment_summary) return job.equipment_summary;
+  return [job.brand, job.tonnage ? `${job.tonnage}-ton` : null, job.system_type, job.orientation]
+    .filter(Boolean)
+    .map((part) => titleText(part))
+    .join(" ");
 }
 
 export default function SubcontractorJobPublic() {
@@ -178,11 +227,14 @@ export default function SubcontractorJobPublic() {
 
   const slots = job.required_photo_slots?.length ? job.required_photo_slots : ["before", "after"];
   const completed = Boolean(job.completed_at);
+  const formattedPhone = formatPhone(job.customer_phone) || job.customer_phone || "";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <main className="mx-auto flex w-full max-w-xl flex-col gap-3 px-4 py-4 pb-8">
-        <section className="rounded-xl border border-white/10 bg-slate-900 p-4 shadow-xl">
+        <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl">
+          <StreetViewThumbnail address={job.address} className="rounded-none" />
+          <div className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Carnes and Sons</p>
@@ -197,25 +249,40 @@ export default function SubcontractorJobPublic() {
           <div className="mt-4 grid gap-2">
             <InfoRow icon={MapPin} label="Address" value={job.address || "Address not set"} />
             <InfoRow icon={CalendarClock} label="Schedule" value={`${formatDate(job.scheduled_date)} - ${formatWindow(job.arrival_start, job.arrival_end)}`} />
+            {formattedPhone ? <InfoRow icon={Phone} label="Customer Phone" value={formattedPhone} /> : null}
           </div>
 
-          {job.address ? (
-            <Button className="mt-4 h-12 w-full gap-2 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => launchNavigation(job.address!)}>
-              <Navigation className="h-4 w-4" />
-              Navigate
-            </Button>
-          ) : null}
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {job.address ? (
+              <Button className="h-12 gap-2 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => launchNavigation(job.address!)}>
+                <Navigation className="h-4 w-4" />
+                Navigate
+              </Button>
+            ) : null}
+            {formattedPhone ? (
+              <Button asChild variant="outline" className="h-12 gap-2 border-white/15 bg-white/5 text-white hover:bg-white/10">
+                <a href={`tel:${job.customer_phone}`}>
+                  <Phone className="h-4 w-4" />
+                  Call Customer
+                </a>
+              </Button>
+            ) : null}
+          </div>
+          </div>
         </section>
 
         <section className="rounded-xl border border-white/10 bg-slate-900 p-4">
-          <h2 className="text-lg font-bold">Work to complete</h2>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <Wrench className="h-5 w-5 text-amber-300" />
+            Work to complete
+          </h2>
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
             {job.scope || "No scope has been entered yet."}
           </p>
-          {job.equipment_summary ? (
+          {equipmentSummary(job) ? (
             <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Equipment</p>
-              <p className="mt-1 text-sm font-semibold text-white">{job.equipment_summary}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{equipmentSummary(job)}</p>
             </div>
           ) : null}
         </section>

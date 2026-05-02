@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import type { ElementType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
   CheckCircle2,
+  Clock,
   Copy,
   ExternalLink,
   HardHat,
@@ -12,6 +14,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPhone } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 type JobOption = {
@@ -33,9 +37,14 @@ type JobOption = {
   arrival_start: string | null;
   arrival_end: string | null;
   assigned_to: string | null;
+  brand: string | null;
+  customer_phone: string | null;
   job_type: string | null;
+  orientation: string | null;
   status: string | null;
   description: string | null;
+  system_type: string | null;
+  tonnage: number | null;
 };
 
 type SubcontractorLink = {
@@ -53,6 +62,7 @@ type SubcontractorLink = {
   jobs?: {
     job_number: string | null;
     customer_name: string | null;
+    customer_phone: string | null;
     address: string | null;
     scheduled_date: string | null;
   } | null;
@@ -69,15 +79,62 @@ const PHOTO_SLOTS = [
 function formatDate(date?: string | null) {
   if (!date) return "No date";
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
+    weekday: "long",
+    month: "long",
     day: "numeric",
+    year: "numeric",
   });
+}
+
+function formatTimeUS(value?: string | null) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (timeMatch) {
+    const date = new Date();
+    date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString("en-US", {
+      timeZone: "America/Chicago",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  return raw;
 }
 
 function formatWindow(start?: string | null, end?: string | null) {
   if (!start && !end) return "No time window";
-  return [start, end].filter(Boolean).join(" - ");
+  const formatted = [formatTimeUS(start), formatTimeUS(end)].filter(Boolean);
+  if (formatted.length === 2 && formatted[0] === formatted[1]) return formatted[0];
+  return formatted.join(" - ");
+}
+
+function titleText(value?: string | number | null) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/_/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function jobEquipmentSummary(job: JobOption | null) {
+  if (!job) return "";
+  return [
+    job.brand,
+    job.tonnage ? `${job.tonnage}-ton` : null,
+    job.system_type,
+    job.orientation,
+  ]
+    .filter(Boolean)
+    .map((part) => titleText(part))
+    .join(" ");
 }
 
 function publicUrlForToken(token: string) {
@@ -101,7 +158,7 @@ export function SubcontractorLinkManager() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("jobs")
-        .select("id, job_number, customer_name, address, scheduled_date, arrival_start, arrival_end, assigned_to, job_type, status, description")
+        .select("id, job_number, customer_name, customer_phone, address, scheduled_date, arrival_start, arrival_end, assigned_to, brand, tonnage, system_type, orientation, job_type, status, description")
         .order("scheduled_date", { ascending: false, nullsFirst: false })
         .limit(100);
       if (error) throw error;
@@ -126,7 +183,7 @@ export function SubcontractorLinkManager() {
           expires_at,
           completed_at,
           created_at,
-          jobs(job_number, customer_name, address, scheduled_date)
+          jobs(job_number, customer_name, customer_phone, address, scheduled_date)
         `)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -189,6 +246,9 @@ export function SubcontractorLinkManager() {
     setSelectedJobId(job.id);
     if (!scope.trim()) {
       setScope(job.description || job.job_type || "");
+    }
+    if (!equipment.trim()) {
+      setEquipment(jobEquipmentSummary(job));
     }
     setPreviewToken(null);
   };
@@ -261,6 +321,9 @@ export function SubcontractorLinkManager() {
                           {job.status ? <Badge variant="outline">{job.status}</Badge> : null}
                         </div>
                         <p className="mt-1 truncate text-sm text-muted-foreground">{job.address || "No address on job"}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {[formatPhone(job.customer_phone) || job.customer_phone, jobEquipmentSummary(job)].filter(Boolean).join(" • ")}
+                        </p>
                       </div>
                       <div className="shrink-0 text-right text-xs text-muted-foreground">
                         <p>{formatDate(job.scheduled_date)}</p>
@@ -406,9 +469,17 @@ export function SubcontractorLinkManager() {
           <CardContent>
             {previewUrl ? (
               <iframe title="Subcontractor preview" src={previewUrl} className="h-[680px] w-full rounded-xl border bg-slate-950" />
+            ) : selectedJob ? (
+              <DraftSubcontractorPreview
+                job={selectedJob}
+                subcontractorName={subName}
+                scope={scope}
+                equipment={equipment}
+                slots={slots}
+              />
             ) : (
               <div className="flex h-[360px] items-center justify-center rounded-xl border border-dashed bg-muted/20 p-6 text-center text-muted-foreground">
-                Create or pick a recent link to preview the subcontractor page here.
+                Pick a job to preview the subcontractor page here.
               </div>
             )}
           </CardContent>
@@ -435,7 +506,7 @@ export function SubcontractorLinkManager() {
               (linksQuery.data || []).map((link) => {
                 const url = publicUrlForToken(link.token);
                 return (
-                  <div key={link.id} className="rounded-xl border bg-background p-3">
+                  <button key={link.id} type="button" className="w-full rounded-xl border bg-background p-3 text-left transition hover:border-orange-400" onClick={() => setPreviewToken(link.token)}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -451,15 +522,17 @@ export function SubcontractorLinkManager() {
                           )}
                         </div>
                         <p className="mt-1 truncate text-sm text-muted-foreground">{link.jobs?.address || link.scope || "No address shown"}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{formatPhone(link.jobs?.customer_phone) || link.jobs?.customer_phone || ""}</p>
                       </div>
                       <div className="flex shrink-0 gap-1">
-                        <Button variant="outline" size="icon" onClick={() => setPreviewToken(link.token)}>
+                        <Button variant="outline" size="icon" onClick={(event) => { event.stopPropagation(); setPreviewToken(link.token); }}>
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={async () => {
+                          onClick={async (event) => {
+                            event.stopPropagation();
                             await navigator.clipboard.writeText(url);
                             toast.success("Link copied");
                           }}
@@ -468,7 +541,7 @@ export function SubcontractorLinkManager() {
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
@@ -479,3 +552,96 @@ export function SubcontractorLinkManager() {
   );
 }
 
+function DraftSubcontractorPreview({
+  job,
+  subcontractorName,
+  scope,
+  equipment,
+  slots,
+}: {
+  job: JobOption;
+  subcontractorName: string;
+  scope: string;
+  equipment: string;
+  slots: string[];
+}) {
+  const schedule = `${formatDate(job.scheduled_date)} - ${formatWindow(job.arrival_start, job.arrival_end)}`;
+  const displaySlots = slots.length ? slots : ["before", "after"];
+
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-slate-950 text-white shadow-xl">
+      <div className="border-b border-white/10 bg-slate-900 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-300">Carnes and Sons</p>
+            <h3 className="mt-1 truncate text-2xl font-bold">{job.customer_name || "Selected Job"}</h3>
+            <p className="mt-1 text-sm text-slate-300">Job {job.job_number || job.id.slice(0, 8)}</p>
+          </div>
+          <Badge className="bg-orange-500 text-white">Draft</Badge>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4">
+        <PreviewRow icon={MapPin} label="Address" value={job.address || "Address not set"} />
+        <PreviewRow icon={Clock} label="Schedule" value={schedule} />
+        <PreviewRow icon={HardHat} label="Subcontractor" value={subcontractorName.trim() || "Name not set"} />
+        <PreviewRow icon={Wrench} label="Phone" value={formatPhone(job.customer_phone) || job.customer_phone || "Phone not set"} />
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Work To Complete</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white">
+            {scope.trim() || job.description || "Scope not entered yet."}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Equipment</p>
+          <p className="mt-2 text-sm font-semibold text-white">
+            {equipment.trim() || jobEquipmentSummary(job) || "Equipment not entered yet."}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold">Photos back to office</p>
+              <p className="text-sm text-slate-400">These are the buttons they will see.</p>
+            </div>
+            <Camera className="h-5 w-5 text-orange-300" />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {displaySlots.map((slot) => (
+              <div key={slot} className="rounded-lg border border-dashed border-orange-400/40 bg-orange-400/10 px-3 py-3 text-sm font-bold text-orange-100">
+                Add {titleText(slot)} Photos
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Button disabled className="h-12 bg-emerald-500 text-white opacity-90">
+          Done - Send To Office
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PreviewRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ElementType;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="mt-0.5 text-sm font-semibold text-white">{value}</p>
+      </div>
+    </div>
+  );
+}
