@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Phone, PhoneOff, Voicemail, Wifi, Delete, Bot } from "lucide-react";
+import { ArrowUpRight, Delete, Phone, PhoneOff, Voicemail, Bot } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { CallPanel } from "@/components/CallPanel";
 import { VoicemailPanel } from "@/components/VoicemailPanel";
@@ -8,12 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useVoicemails } from "@/hooks/useVoicemails";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
+import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { playDtmfTone } from "@/lib/softphoneAudio";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getCompanySetting } from "@/lib/companySettings";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { formatPhone } from "@/lib/formatters";
+import { ctHeaderLabel } from "@/lib/dateGrouping";
 
 const DIAL_KEYS: { key: string; sub?: string }[][] = [
   [{ key: "1", sub: "" }, { key: "2", sub: "ABC" }, { key: "3", sub: "DEF" }],
@@ -26,7 +31,6 @@ function MobileDialPad() {
   const softphone = useSoftphoneContext();
   const { consumeDialNumber, pendingDialNumber } = softphone;
   const [dialInput, setDialInput] = useState("");
-  const [showDialpad, setShowDialpad] = useState(true);
 
   // Consume pending dial number from ClickToCall
   useEffect(() => {
@@ -44,8 +48,6 @@ function MobileDialPad() {
   const dialTonesEnabled = dialTonesSetting !== "false";
   const isActive = ["connecting", "ringing", "on-call"].includes(softphone.status);
   const isOnCall = softphone.status === "on-call";
-  const isReady = softphone.status === "ready";
-  const isOffline = softphone.status === "offline";
 
   const handleDigitPress = (digit: string) => {
     if (dialTonesEnabled) playDtmfTone(digit);
@@ -70,22 +72,8 @@ function MobileDialPad() {
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
 
-  const statusDot = isOnCall
-    ? "bg-[hsl(var(--success))]"
-    : isReady
-      ? "bg-[hsl(var(--success)/0.6)]"
-      : "bg-muted-foreground/40";
-
   return (
     <div className="p-4 space-y-4">
-      {/* Status indicator */}
-      <div className="flex items-center justify-center gap-2">
-        <span className={cn("h-2.5 w-2.5 rounded-full", statusDot)} />
-        <span className="text-xs font-medium text-muted-foreground">
-          {isOnCall ? "On Call" : isReady ? "Ready" : isOffline ? "Offline" : softphone.status}
-        </span>
-      </div>
-
       {/* Active call display */}
       {isActive && (
         <div className="text-center space-y-3 py-2">
@@ -180,21 +168,149 @@ function MobileDialPad() {
         </div>
       )}
 
-      {/* Connect button if offline */}
-      {isOffline && (
-        <button
-          onClick={() => openPhoneConsole(dialInput.trim() || undefined)}
-          className="w-full h-11 rounded-xl bg-accent text-accent-foreground flex items-center justify-center gap-2 text-sm font-medium hover:bg-accent/90 transition-colors active:scale-[0.98]"
-        >
-          <Wifi className="h-4 w-4" />
-          Open Phone Console
-        </button>
-      )}
-
       {softphone.error && (
         <p className="text-xs text-destructive bg-destructive/5 rounded-lg px-3 py-2 text-center">{softphone.error}</p>
       )}
     </div>
+  );
+}
+
+function normalizeName(value?: string | null) {
+  return (value || "").trim().toLowerCase();
+}
+
+function MobileRecentCalls() {
+  const { conversations, loading } = useCallLog();
+  const { employeeId } = useAuth();
+  const [visibleCount, setVisibleCount] = useState(5);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: employeeName } = useQuery({
+    queryKey: ["current_employee_name_for_phone", employeeId],
+    enabled: Boolean(employeeId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("name")
+        .eq("id", employeeId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.name || null;
+    },
+  });
+
+  const recentOutbound = useMemo(() => {
+    const currentEmployee = normalizeName(employeeName);
+    const outbound = conversations
+      .map((conversation) => {
+        const calls = conversation.calls.filter((call) => call.direction === "outbound");
+        if (!calls.length) return null;
+        const lastCall = calls[0];
+        return { ...conversation, calls, lastCall };
+      })
+      .filter(Boolean) as CallConversation[];
+
+    const mine = currentEmployee
+      ? outbound.filter((conversation) =>
+          conversation.calls.some((call) => normalizeName(call.answered_by) === currentEmployee)
+        )
+      : [];
+
+    const source = mine.length ? mine : outbound;
+    return source.sort((a, b) => new Date(b.lastCall.created_at).getTime() - new Date(a.lastCall.created_at).getTime());
+  }, [conversations, employeeName]);
+
+  const visibleCalls = recentOutbound.slice(0, visibleCount);
+  const canLoadMore = visibleCount < recentOutbound.length;
+
+  useEffect(() => {
+    setVisibleCount(5);
+  }, [employeeName]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !canLoadMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((current) => Math.min(current + 10, recentOutbound.length));
+      }
+    }, { rootMargin: "120px" });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canLoadMore, recentOutbound.length, visibleCount]);
+
+  if (loading) {
+    return (
+      <section className="border-t px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent calls</p>
+        <div className="mt-3 space-y-2">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="h-14 rounded-xl bg-muted/50 animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-t px-4 py-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent calls</p>
+          <p className="text-[11px] text-muted-foreground">Last five first. Older calls load as you scroll.</p>
+        </div>
+        {recentOutbound.length > 0 && (
+          <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+            {recentOutbound.length}
+          </span>
+        )}
+      </div>
+
+      {visibleCalls.length === 0 ? (
+        <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+          No outbound calls yet.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {visibleCalls.map((conversation) => (
+            <RecentCallRow key={conversation.phoneNumber} conversation={conversation} />
+          ))}
+          {canLoadMore && (
+            <div ref={loadMoreRef} className="py-2 text-center text-[11px] font-semibold text-muted-foreground">
+              Loading older calls...
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecentCallRow({ conversation }: { conversation: CallConversation }) {
+  const phone = conversation.phoneNumber;
+  const name = conversation.contactName || formatPhone(phone) || phone;
+  const lastCall = conversation.lastCall;
+
+  return (
+    <button
+      type="button"
+      onClick={() => openPhoneConsole(phone)}
+      className="flex w-full items-center gap-3 rounded-xl border bg-card px-3 py-3 text-left shadow-sm transition hover:bg-muted/40 active:scale-[0.99]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <ArrowUpRight className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
+        <span className="block truncate text-xs text-muted-foreground">{formatPhone(phone) || phone}</span>
+      </span>
+      <span className="text-right text-[11px] text-muted-foreground">
+        {ctHeaderLabel(lastCall.created_at)}
+      </span>
+    </button>
   );
 }
 
@@ -210,6 +326,21 @@ export default function CallsPage({ embedded = false, defaultTab = "calls" }: { 
   useEffect(() => {
     setActiveTab(tabParam === "voicemail" ? "voicemail" : defaultTab);
   }, [defaultTab, tabParam]);
+
+  if (isMobile) {
+    return (
+      <div className="h-full bg-background flex flex-col overflow-hidden">
+        <div className="shrink-0 border-b bg-card px-4 py-3">
+          <h1 className="text-base font-bold">Phone</h1>
+          <p className="text-xs text-muted-foreground">Dial out and see your latest customer calls.</p>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <MobileDialPad />
+          <MobileRecentCalls />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full bg-background flex flex-col overflow-hidden">
@@ -258,16 +389,7 @@ export default function CallsPage({ embedded = false, defaultTab = "calls" }: { 
           </button>
         </div>
         <TabsContent value="calls" className="flex-1 min-h-0 m-0 overflow-y-auto">
-          {isMobile ? (
-            <div className="flex flex-col">
-              <MobileDialPad />
-              <div className="border-t">
-                <CallPanel hideBots={hideBots} />
-              </div>
-            </div>
-          ) : (
-            <CallPanel hideBots={hideBots} />
-          )}
+          <CallPanel hideBots={hideBots} />
         </TabsContent>
         <TabsContent value="voicemail" className="flex-1 min-h-0 m-0">
           <VoicemailPanel />

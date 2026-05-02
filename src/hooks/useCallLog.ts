@@ -33,6 +33,7 @@ export type CallRow = {
   id: string;
   direction: "inbound" | "outbound";
   phone_number: string;
+  answered_by: string | null;
   duration_seconds: number | null;
   status: string;
   contact_name: string | null;
@@ -89,7 +90,7 @@ export function useCallLog() {
       // (no client-side timezone drift).
       const { data, error } = await (supabase as any)
         .from("v_call_log_with_day")
-        .select("id, direction, phone_number, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
+        .select("id, direction, phone_number, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
