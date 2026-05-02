@@ -180,11 +180,12 @@ export function useGeofenceTracking() {
           console.log(`[Geofence] ENTERED ${target.type}: ${target.name} (${Math.round(dist)}m)`);
 
           if (target.type === "job") {
+            const arrivedAt = new Date().toISOString();
             await supabase
               .from("jobs")
-              .update({ status: "on_site" })
+              .update({ status: "in_progress", started_at: arrivedAt, arrival_time: arrivedAt } as any)
               .eq("id", target.id)
-              .in("status", ["scheduled", "dispatched", "en_route"]);
+              .in("status", ["scheduled", "dispatched", "en_route", "on_my_way", "on_site"]);
 
             await supabase.from("tech_location_events").insert({
               employee_id: employeeId,

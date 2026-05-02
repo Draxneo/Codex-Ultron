@@ -13,13 +13,13 @@ const appName = process.env.ELECTRON_APP_NAME || "UltraOffice";
 const outputDir = process.env.ELECTRON_OUT_DIR || "electron-release";
 
 function run(command, commandArgs, options = {}) {
+  const executable = process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command;
   const printable = [command, ...commandArgs].join(" ");
   console.log(`\n> ${printable}`);
   if (dryRun) return;
-  const result = spawnSync(command, commandArgs, {
+  const result = spawnSync(executable, commandArgs, {
     cwd: root,
     stdio: "inherit",
-    shell: process.platform === "win32",
     ...options,
   });
   if (result.status !== 0) {
@@ -52,8 +52,11 @@ run("npx", [
   "--ignore=^/\\.env",
   "--ignore=^/android($|/)",
   "--ignore=^/ios($|/)",
+  "--ignore=^/docs($|/)",
   "--ignore=^/exports($|/)",
   "--ignore=^/electron-release($|/)",
+  "--ignore=^/electron-release-new($|/)",
+  "--ignore=^/coverage($|/)",
   "--ignore=^/supabase/.temp($|/)",
 ]);
 

@@ -76,7 +76,7 @@ export function RainDayAlertBar({ visibleDates, jobCountByDate }: Props) {
               {drafting === date ? <Loader2 className="h-3 w-3 animate-spin" /> : <CloudRain className="h-3 w-3" />}
               Draft reschedule texts
             </Button>
-            <Link to="/sms-outbox" className="text-xs text-amber-900/80 dark:text-amber-200/80 hover:underline inline-flex items-center gap-1">
+            <Link to="/sms?tab=outbox" className="text-xs text-amber-900/80 dark:text-amber-200/80 hover:underline inline-flex items-center gap-1">
               Outbox <ExternalLink className="h-3 w-3" />
             </Link>
           </div>

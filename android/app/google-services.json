@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "622049112369",
+    "project_id": "organize-plus-e9b6b",
+    "storage_bucket": "organize-plus-e9b6b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:622049112369:android:a030bd654b2b9d13c78010",
+        "android_client_info": {
+          "package_name": "com.carnesandsons.organizeplus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgG1Mw4jFMUOeVh3XPCCpAmiAUK2VatHA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

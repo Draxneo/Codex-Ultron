@@ -582,22 +582,8 @@ function dismissToast(entry) {
 }
 
 app.whenReady().then(() => {
-  // ── Power management: keep the app awake so the softphone is always reachable ──
-  // "prevent-display-sleep" also implies "prevent-app-suspension".
-  // This is a phone — it MUST stay alive even when the monitor turns off.
-  try {
-    powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
-    console.log('[Power] prevent-display-sleep started, id=', powerSaveBlockerId);
-  } catch (e) {
-    console.warn('[Power] Failed to start display-sleep blocker:', e);
-    try {
-      appSuspensionBlockerId = powerSaveBlocker.start('prevent-app-suspension');
-      console.log('[Power] prevent-app-suspension started, id=', appSuspensionBlockerId);
-    } catch (e2) {
-      console.warn('[Power] Failed to start app-suspension blocker:', e2);
-    }
-  }
-
+  // Power management is enabled only when the logged-in user has desk calls on.
+  // That keeps the phone reachable without forcing the monitor to stay awake.
   syncAppSuspensionBlocker();
 
   // On resume / unlock, tell the renderer to re-warm audio + re-register Twilio
@@ -641,6 +627,8 @@ app.whenReady().then(() => {
   // ── Wake the screen / pop the phone window for an incoming call ──
   ipcMain.on('incoming-call-wake', (_event, payload) => {
     try {
+      shell.beep();
+
       if (payload?.shouldLaunchUltraphone) {
         launchUltraphone(payload || {});
       } else if (phoneWindow && !phoneWindow.isDestroyed()) {

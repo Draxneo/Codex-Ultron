@@ -1,3 +1,5 @@
+import { isElectronMain, sendDialToPopout, sendToMain } from "@/lib/electron";
+
 const PHONE_CHANNEL_NAME = "ultraoffice-phone-console";
 export const PHONE_CONSOLE_OPEN_EVENT = "ultraoffice:open-phone-console";
 
@@ -28,6 +30,16 @@ export function openPhoneConsole(
   number?: string,
   context?: { contactName?: string; jobId?: string; customerId?: string; autoDial?: boolean }
 ) {
+  if (isElectronMain()) {
+    if (number) {
+      sendDialToPopout(number, context?.contactName, context?.jobId, context?.customerId);
+      return;
+    }
+
+    sendToMain("ensure-phone-window");
+    return;
+  }
+
   const params = new URLSearchParams();
   params.set("view", "softphone");
   if (number) params.set("dial", number);

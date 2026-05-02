@@ -156,6 +156,7 @@ function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
 export function SoftphoneProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { user } = useAuth();
+  const { isNative } = useCapacitor();
   const isPhoneConsole = location.pathname === "/phone-console" || new URLSearchParams(location.search).get("view") === "softphone";
 
   const publicPrefixes = [
@@ -170,21 +171,24 @@ export function SoftphoneProvider({ children }: { children: ReactNode }) {
     "/certificate/",
     "/invoice/",
     "/intake/",
+    "/subcontractor/",
   ];
 
   const isPublicRoute = publicPrefixes.some((prefix) =>
     location.pathname === prefix || location.pathname.startsWith(prefix)
   );
 
+  const shouldEnableSoftphone = !isPublicRoute && Boolean(user) && (isPhoneConsole || isNative);
+
   useEffect(() => {
     sendToMain("telephony-policy-updated", {
       isHandoff: false,
-      softphoneEnabled: isPhoneConsole && !isPublicRoute && Boolean(user),
+      softphoneEnabled: shouldEnableSoftphone,
       callTargets: null,
     });
-  }, [isPhoneConsole, isPublicRoute, user]);
+  }, [shouldEnableSoftphone]);
 
-  if (isPublicRoute || !user || !isPhoneConsole) {
+  if (!shouldEnableSoftphone) {
     return <SoftphoneContext.Provider value={disabledSoftphoneValue}>{children}</SoftphoneContext.Provider>;
   }
 

@@ -38,6 +38,7 @@ import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard"
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
 import { VisualOperationsSettingsCard } from "@/components/admin/VisualOperationsSettingsCard";
 import { VisualControlRoom } from "@/components/admin/VisualControlRoom";
+import { SubcontractorLinkManager } from "@/components/admin/SubcontractorLinkManager";
 
 import { LineItemTemplatesCard } from "@/components/LineItemTemplatesCard";
 import { MetaAudiencesCard } from "@/components/MetaAudiencesCard";
@@ -610,6 +611,8 @@ function AdminSectionContent({ section }: { section: string }) {
       return <EmployeeHub />;
     case "voice":
       return <div className="space-y-4"><RegisteredDevicesCard /><AnnouncerSettingsCard /><RingtoneSettingsCard /></div>;
+    case "subcontractors":
+      return <SubcontractorLinkManager />;
     case "payments":
       return <div className="space-y-4"><PaymentPlanRulesCard /><LineItemTemplatesCard /></div>;
     case "control-room":

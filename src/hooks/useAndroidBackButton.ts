@@ -21,7 +21,20 @@ export function useAndroidBackButton() {
         const { App } = await import("@capacitor/app");
         const listener = await App.addListener("backButton", ({ canGoBack }) => {
           // If at root pages, minimize the app instead of going back
-          const rootPaths = ["/", "/tech", "/admin/hub"];
+          const rootPaths = [
+            "/",
+            "/tech",
+            "/intake",
+            "/now",
+            "/dispatch",
+            "/phone",
+            "/sms",
+            "/team",
+            "/customers",
+            "/quick-quote",
+            "/admin",
+            "/admin/hub",
+          ];
           if (rootPaths.includes(location.pathname)) {
             App.minimizeApp();
           } else if (canGoBack) {

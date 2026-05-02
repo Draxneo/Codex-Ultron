@@ -50,6 +50,15 @@ export function useIncomingCallNotification(
           const perm = await LocalNotifications.requestPermissions();
           if (perm.display !== "granted") return;
 
+          await LocalNotifications.createChannel?.({
+            id: "incoming_calls",
+            name: "Incoming calls",
+            description: "Incoming customer call alerts",
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+          });
+
           await LocalNotifications.schedule({
             notifications: [
               {
@@ -58,7 +67,6 @@ export function useIncomingCallNotification(
                 body: callerName
                   ? `${callerName} (${callerNumber || ""})`
                   : callerNumber || "Unknown caller",
-                sound: "ringtone.wav",
                 channelId: "incoming_calls",
                 ongoing: true,
                 autoCancel: false,

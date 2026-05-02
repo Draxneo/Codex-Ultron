@@ -22,7 +22,7 @@ import { usePreWarmCache } from "@/hooks/usePreWarmCache";
 import { useAppResume } from "@/hooks/useAppResume";
 import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useLiveTranscriptBySid } from "@/hooks/useLiveTranscript";
-import { onMainMessage } from "@/lib/electron";
+import { isElectronMain, onMainMessage } from "@/lib/electron";
 import { SmsComposerPopup } from "./components/SmsComposerPopup";
 
 /** Redirect legacy /inbox sections to their split communication routes. */
@@ -106,6 +106,7 @@ const Catalog = lazy(() => import("./pages/Catalog"));
 const QuickQuote = lazy(() => import("./pages/QuickQuote"));
 const QuoteHeadquarters = lazy(() => import("./pages/QuoteHeadquarters"));
 const QuickQuoteCustomerView = lazy(() => import("./pages/QuickQuoteCustomerView"));
+const SubcontractorJobPublic = lazy(() => import("./pages/SubcontractorJobPublic"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -159,6 +160,7 @@ function NotificationListeners() {
     "/invoice/",
     "/presentation/",
     "/intake/",
+    "/subcontractor/",
     "/cart/",
     "/q/",
   ];
@@ -331,6 +333,7 @@ function PostCallActionsView() {
 }
 
 function PhoneConsolePopup() {
+  const isDesktopMainWindow = isElectronMain();
   const [phoneUrl, setPhoneUrl] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 24, y: 88 });
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -347,6 +350,8 @@ function PhoneConsolePopup() {
   }, []);
 
   useEffect(() => {
+    if (isDesktopMainWindow) return;
+
     const handleOpen = (event: Event) => {
       const customEvent = event as CustomEvent<PhoneConsoleOpenDetail>;
       event.preventDefault();
@@ -356,13 +361,15 @@ function PhoneConsolePopup() {
 
     window.addEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
     return () => window.removeEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
-  }, [clampPosition]);
+  }, [clampPosition, isDesktopMainWindow]);
 
   useEffect(() => {
+    if (isDesktopMainWindow) return;
+
     const handleResize = () => setPosition((current) => clampPosition(current.x, current.y));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [clampPosition]);
+  }, [clampPosition, isDesktopMainWindow]);
 
   const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     draggingRef.current = true;
@@ -391,7 +398,7 @@ function PhoneConsolePopup() {
     }
   }, []);
 
-  if (!phoneUrl) return null;
+  if (isDesktopMainWindow || !phoneUrl) return null;
 
   return (
     <div
@@ -469,6 +476,7 @@ function AppRouter() {
         <Route path="/invoice/:token" element={<InvoicePublic />} />
         <Route path="/presentation/:token" element={<EstimatePresentationPublic />} />
         <Route path="/intake/:token" element={<CustomerIntakePublic />} />
+        <Route path="/subcontractor/:token" element={<SubcontractorJobPublic />} />
         <Route path="/cart/:token" element={<CustomerCart />} />
         <Route path="/q/:token" element={<QuickQuoteCustomerView />} />
 
@@ -567,7 +575,7 @@ function SmsLogGate({ children }: { children: React.ReactNode }) {
   const publicPrefixes = [
     "/login", "/reset-password", "/form/", "/photos/",
     "/refer/", "/certificate/",
-    "/invoice/", "/presentation/", "/intake/", "/cart/", "/q/",
+    "/invoice/", "/presentation/", "/intake/", "/subcontractor/", "/cart/", "/q/",
   ];
   const isPublicRoute = publicPrefixes.some((p) =>
     location.pathname === p || location.pathname.startsWith(p)
