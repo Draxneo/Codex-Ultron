@@ -79,7 +79,7 @@ export function useDesktopNotifications() {
       const n = new Notification(title, {
         body,
         tag: tag || undefined,
-        icon: "/favicon.ico",
+        icon: "/ultraoffice-icon.svg?v=20260502",
         requireInteraction: false,
       });
       setTimeout(() => n.close(), 8000);

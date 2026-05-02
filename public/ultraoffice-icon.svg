@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Carnes and Sons UltraOffice</title>
+  <desc id="desc">A navy app icon with an orange spark, green check, and blue comfort wave.</desc>
+  <defs>
+    <linearGradient id="bg" x1="96" y1="48" x2="416" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f2d52"/>
+      <stop offset="0.58" stop-color="#14243b"/>
+      <stop offset="1" stop-color="#07111f"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="172" y1="112" x2="364" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="0.44" stop-color="#ff9f1c"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="382" cy="132" r="40" fill="#22c55e" opacity="0.18"/>
+  <circle cx="382" cy="132" r="17" fill="#22c55e"/>
+  <path
+    d="M149 302c41-37 77-55 116-55 33 0 58 12 87 29 19 11 39 21 64 24"
+    fill="none"
+    stroke="#38bdf8"
+    stroke-width="28"
+    stroke-linecap="round"
+    opacity="0.86"
+  />
+  <path
+    d="M265 74 156 267h84l-31 171 151-232h-93l58-132z"
+    fill="url(#spark)"
+    filter="url(#shadow)"
+  />
+  <path
+    d="m168 348 42 43 93-104"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="30"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.95"
+  />
+  <path
+    d="M139 157c31-30 69-46 114-46 38 0 74 12 102 34"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="22"
+    stroke-linecap="round"
+    opacity="0.18"
+  />
+</svg>
