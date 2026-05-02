@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { ThemeProvider } from "next-themes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
@@ -7,7 +7,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -333,35 +332,101 @@ function PostCallActionsView() {
 
 function PhoneConsolePopup() {
   const [phoneUrl, setPhoneUrl] = useState<string | null>(null);
+  const [position, setPosition] = useState({ x: 24, y: 88 });
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const draggingRef = useRef(false);
+
+  const clampPosition = useCallback((x: number, y: number) => {
+    if (typeof window === "undefined") return { x, y };
+    const panelWidth = Math.min(420, window.innerWidth - 24);
+    const panelHeight = Math.min(720, window.innerHeight - 24);
+    return {
+      x: Math.max(12, Math.min(x, window.innerWidth - panelWidth - 12)),
+      y: Math.max(12, Math.min(y, window.innerHeight - panelHeight - 12)),
+    };
+  }, []);
 
   useEffect(() => {
     const handleOpen = (event: Event) => {
       const customEvent = event as CustomEvent<PhoneConsoleOpenDetail>;
       event.preventDefault();
       setPhoneUrl((current) => current ?? customEvent.detail.url);
+      setPosition((current) => clampPosition(current.x, current.y));
     };
 
     window.addEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
     return () => window.removeEventListener(PHONE_CONSOLE_OPEN_EVENT, handleOpen);
+  }, [clampPosition]);
+
+  useEffect(() => {
+    const handleResize = () => setPosition((current) => clampPosition(current.x, current.y));
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [clampPosition]);
+
+  const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = true;
+    dragOffsetRef.current = {
+      x: event.clientX - position.x,
+      y: event.clientY - position.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [position.x, position.y]);
+
+  const moveDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    const next = clampPosition(
+      event.clientX - dragOffsetRef.current.x,
+      event.clientY - dragOffsetRef.current.y,
+    );
+    setPosition(next);
+  }, [clampPosition]);
+
+  const stopDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = false;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // The pointer may already be released if the user drags fast outside the panel.
+    }
   }, []);
 
+  if (!phoneUrl) return null;
+
   return (
-    <Dialog open={!!phoneUrl} onOpenChange={(open) => !open && setPhoneUrl(null)}>
-      <DialogContent className="h-[720px] max-h-[92vh] w-[420px] max-w-[95vw] gap-0 overflow-hidden p-0">
-        <DialogHeader className="sr-only">
-          <DialogTitle>Phone</DialogTitle>
-          <DialogDescription>Softphone dialer</DialogDescription>
-        </DialogHeader>
-        {phoneUrl && (
-          <iframe
-            title="Phone"
-            src={phoneUrl}
-            className="h-full w-full border-0 bg-background"
-            allow="microphone; autoplay"
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <div
+      className="fixed z-[70] overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: "min(420px, calc(100vw - 24px))",
+        height: "min(720px, calc(100vh - 24px))",
+      }}
+    >
+      <div
+        className="flex h-10 cursor-move select-none items-center justify-between border-b bg-card px-3 text-sm font-semibold text-foreground"
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={stopDrag}
+        onPointerCancel={stopDrag}
+      >
+        <span>Phone</span>
+        <button
+          type="button"
+          className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={() => setPhoneUrl(null)}
+          aria-label="Close phone"
+        >
+          ×
+        </button>
+      </div>
+      <iframe
+        title="Phone"
+        src={phoneUrl}
+        className="h-[calc(100%-2.5rem)] w-full border-0 bg-background"
+        allow="microphone; autoplay"
+      />
+    </div>
   );
 }
 

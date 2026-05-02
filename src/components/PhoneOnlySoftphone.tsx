@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Delete, Phone, PhoneCall, PhoneOff, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Delete, Mic, MicOff, Phone, PhoneCall, PhoneIncoming, PhoneOff, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { Badge } from "@/components/ui/badge";
@@ -63,14 +63,20 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
     callDuration,
     callerInfo,
     pendingDialNumber,
+    incomingCall,
+    isMuted,
     initialize,
     dial,
     hangUp,
+    acceptCall,
+    rejectCall,
+    toggleMute,
     sendDigit,
     consumeDialNumber,
   } = useSoftphoneContext();
 
   const [number, setNumber] = useState(() => formatPhoneInput(initialNumber));
+  const isIncomingCall = status === "ringing" && !!incomingCall;
   const activeCall = status === "connecting" || status === "ringing" || status === "on-call";
   const canDial = number.trim().length > 0 && !activeCall && status !== "registering";
   const displayNumber = activeCall ? formatPhoneInput(callerInfo?.number || number) : number;
@@ -134,7 +140,7 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
         <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {activeCall ? "Current call" : "Dial number"}
+              {isIncomingCall ? "Incoming call" : activeCall ? "Current call" : "Dial number"}
             </span>
             {status === "on-call" && (
               <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
@@ -176,38 +182,71 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
           ))}
         </section>
 
-        <div className="mt-4 grid grid-cols-[1fr_72px] gap-2">
-          {activeCall ? (
+        {isIncomingCall ? (
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <Button
               type="button"
-              onClick={hangUp}
+              onClick={acceptCall}
+              className="h-12 rounded-md bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700"
+            >
+              <PhoneIncoming className="mr-2 h-4 w-4" />
+              Answer
+            </Button>
+            <Button
+              type="button"
+              onClick={rejectCall}
               className="h-12 rounded-md bg-red-600 text-base font-semibold text-white hover:bg-red-700"
             >
               <PhoneOff className="mr-2 h-4 w-4" />
-              Hang up
+              Decline
             </Button>
-          ) : (
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-[1fr_72px] gap-2">
+            {activeCall ? (
+              <Button
+                type="button"
+                onClick={hangUp}
+                className="h-12 rounded-md bg-red-600 text-base font-semibold text-white hover:bg-red-700"
+              >
+                <PhoneOff className="mr-2 h-4 w-4" />
+                Hang up
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleCall}
+                disabled={!canDial}
+                className="h-12 rounded-md bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground"
+              >
+                <PhoneCall className="mr-2 h-4 w-4" />
+                Call
+              </Button>
+            )}
             <Button
               type="button"
-              onClick={handleCall}
-              disabled={!canDial}
-              className="h-12 rounded-md bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground"
+              variant="outline"
+              onClick={removeDigit}
+              disabled={activeCall || !number}
+              className="h-12 rounded-md border-border bg-card"
+              aria-label="Backspace"
             >
-              <PhoneCall className="mr-2 h-4 w-4" />
-              Call
+              <Delete className="h-5 w-5" />
             </Button>
-          )}
+          </div>
+        )}
+
+        {status === "on-call" && (
           <Button
             type="button"
             variant="outline"
-            onClick={removeDigit}
-            disabled={activeCall || !number}
-            className="h-12 rounded-md border-border bg-card"
-            aria-label="Backspace"
+            onClick={toggleMute}
+            className="mt-2 h-11 w-full rounded-md border-border bg-card text-sm font-semibold"
           >
-            <Delete className="h-5 w-5" />
+            {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+            {isMuted ? "Unmute" : "Mute"}
           </Button>
-        </div>
+        )}
 
         {error && (
           <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
