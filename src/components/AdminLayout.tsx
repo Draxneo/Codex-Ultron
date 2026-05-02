@@ -5,14 +5,16 @@
  * Includes unread badges on SMS and missed calls on Phone.
  */
 
-import { Home, Phone, MessageSquare, Users, Settings } from "lucide-react";
+import { Home, Phone, MessageSquare, Users, Settings, MessagesSquare } from "lucide-react";
 import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
+import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 
 const TAB_KEY_MAP: Record<string, string> = {
   "/": "jobs",
+  "/communications": "phone",
   "/phone": "phone",
   "/sms": "sms",
   "/customers": "customers",
@@ -23,6 +25,8 @@ function useAdminTabs(): MobileTab[] {
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: missedCalls } = useVoicemails();
   const allowedTabs = useEmployeeTabAccess();
+  const { role } = useEffectiveAuth();
+  const adminCleanComms = role === "admin";
 
   const allTabs: MobileTab[] = [
     {
@@ -31,7 +35,13 @@ function useAdminTabs(): MobileTab[] {
       label: "Dispatch",
       match: (p: string) => p === "/" || p.startsWith("/jobs"),
     },
-    {
+    ...(adminCleanComms ? [{
+      path: "/communications",
+      icon: MessagesSquare,
+      label: "Comms",
+      match: (p: string) => p.startsWith("/communications"),
+      badge: () => unreadSms + missedCalls,
+    } as MobileTab] : [{
       path: "/phone",
       icon: Phone,
       label: "Phone",
@@ -44,7 +54,7 @@ function useAdminTabs(): MobileTab[] {
       label: "SMS",
       match: (p: string) => p.startsWith("/sms") || (p.includes("/inbox") && p.includes("sms")),
       badge: () => unreadSms,
-    },
+    }] as MobileTab[]),
     {
       path: "/customers",
       icon: Users,

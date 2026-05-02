@@ -47,8 +47,11 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   let layoutNode: React.ReactNode;
+  const isCleanCommunications = location.pathname.startsWith("/communications");
 
-  if (viewAs.active) {
+  if (isCleanCommunications) {
+    layoutNode = <>{children}</>;
+  } else if (viewAs.active) {
     if (role === "tech" || role === "supervisor") {
       layoutNode = <TechLayout>{children}</TechLayout>;
     } else if (role === "installer") {

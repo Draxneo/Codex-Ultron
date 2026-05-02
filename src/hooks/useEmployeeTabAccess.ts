@@ -29,6 +29,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
     pathname.startsWith("/jobs") ||
     pathname.startsWith("/records/") ||
     pathname === "/tech" ||
+    pathname.startsWith("/tech/team-schedule") ||
     pathname.startsWith("/tech/jobs") ||
     pathname.startsWith("/estimates") ||
     pathname.startsWith("/form/")
@@ -43,6 +44,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
     return "sms";
   }
   if (pathname.startsWith("/calls")) return "phone";
+  if (pathname.startsWith("/communications")) return "phone";
   if (pathname.startsWith("/phone")) return "phone";
   if (pathname.startsWith("/phone-console")) return "phone";
   if (pathname.startsWith("/sms")) return "sms";

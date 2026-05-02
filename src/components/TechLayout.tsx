@@ -5,13 +5,15 @@
  * Backlog stays out of field bottom navigation.
  */
 
-import { Briefcase, Phone, MessageSquare, DollarSign, Users, Bot, Settings } from "lucide-react";
+import { Briefcase, Phone, MessageSquare, DollarSign, Users, Bot, Settings, MapPinned } from "lucide-react";
 import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
+import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 
 /** Tab key used for filtering via employee_tab_access */
 const TAB_KEY_MAP: Record<string, string> = {
   "/tech": "jobs",
+  "/tech/team-schedule": "jobs",
   "/jobs/backlog": "jobs",
   "/phone": "phone",
   "/tech/sms": "sms",
@@ -23,6 +25,8 @@ const TAB_KEY_MAP: Record<string, string> = {
 
 function useTechTabs(): MobileTab[] {
   const allowedTabs = useEmployeeTabAccess();
+  const { role } = useEffectiveAuth();
+  const canViewTeamSchedule = role === "supervisor" || role === "admin";
 
   const allTabs: MobileTab[] = [
     {
@@ -31,6 +35,12 @@ function useTechTabs(): MobileTab[] {
       label: "My Jobs",
       match: (p: string) => p === "/tech" || p === "/" || p.startsWith("/form/"),
     },
+    ...(canViewTeamSchedule ? [{
+      path: "/tech/team-schedule",
+      icon: MapPinned,
+      label: "Team",
+      match: (p: string) => p.startsWith("/tech/team-schedule"),
+    } as MobileTab] : []),
     {
       path: "/phone",
       icon: Phone,

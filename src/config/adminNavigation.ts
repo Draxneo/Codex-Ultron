@@ -14,6 +14,7 @@ import {
   GitBranch,
   Package,
   Phone,
+  MessagesSquare,
   CreditCard,
   HardHat,
   Settings2,
@@ -56,6 +57,7 @@ export type AdminSettingSection = {
 /* Tools & Builders (links to standalone routes) */
 export const TOOL_CARDS: ToolEntry[] = [
   { label: "JARVIS", icon: Brain, path: "/copilot", color: "text-violet-500", bg: "bg-violet-500/10" },
+  { label: "Clean Comms", icon: MessagesSquare, path: "/communications", color: "text-sky-500", bg: "bg-sky-500/10" },
   { label: "Workflow Maps", icon: GitBranch, path: "/workflows", color: "text-emerald-500", bg: "bg-emerald-500/10" },
   { label: "Catalog & Pricebook", icon: Package, path: "/catalog", color: "text-orange-500", bg: "bg-orange-500/10" },
   { label: "IVR Builder", icon: Phone, path: "/ivr-builder", color: "text-cyan-500", bg: "bg-cyan-500/10" },

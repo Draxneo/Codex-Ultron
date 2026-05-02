@@ -48,6 +48,7 @@ import { AdminViewAsBar } from "./components/AdminViewAsBar";
 import { PHONE_CONSOLE_OPEN_EVENT, type PhoneConsoleOpenDetail } from "@/lib/phoneConsoleBridge";
 
 const TechMySchedule = lazy(() => import("./pages/TechMySchedule"));
+const TechTeamSchedule = lazy(() => import("./pages/TechTeamSchedule"));
 const TechSms = lazy(() => import("./pages/TechSms"));
 const TechJobDetail = lazy(() => import("./pages/TechJobDetail"));
 const TechJobCart = lazy(() => import("./pages/TechJobCart"));
@@ -75,6 +76,7 @@ const Payments = lazy(() => import("./pages/Payments"));
 const Reports = lazy(() => import("./pages/Reports"));
 const SmsPage = lazy(() => import("./pages/SmsPage"));
 const CallsPage = lazy(() => import("./pages/CallsPage"));
+const CommunicationsOnly = lazy(() => import("./pages/CommunicationsOnly"));
 const TeamCommunications = lazy(() => import("./pages/TeamCommunications"));
 const PhoneConsole = lazy(() => import("./pages/PhoneConsole"));
 const PhoneOnlySoftphone = lazy(() =>
@@ -491,6 +493,7 @@ function AppRouter() {
         <Route path="/dispatch-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/schedule-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/tech" element={<ProtectedRoute><TechMySchedule /></ProtectedRoute>} />
+        <Route path="/tech/team-schedule" element={<ProtectedRoute><TechTeamSchedule /></ProtectedRoute>} />
         <Route path="/tech/sms" element={<ProtectedRoute><TechSms /></ProtectedRoute>} />
         
         <Route path="/tech/jobs/:id" element={<ProtectedRoute><TechJobDetail /></ProtectedRoute>} />
@@ -502,6 +505,7 @@ function AppRouter() {
         <Route path="/team" element={<ProtectedRoute><TeamCommunications /></ProtectedRoute>} />
         <Route path="/phone-console" element={<ProtectedRoute><PhoneConsole /></ProtectedRoute>} />
         <Route path="/email" element={<Navigate to="/sms" replace />} />
+        <Route path="/communications" element={<ProtectedRoute><CommunicationsOnly /></ProtectedRoute>} />
         <Route path="/sms" element={<ProtectedRoute><SmsPage /></ProtectedRoute>} />
         <Route path="/phone" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
         <Route path="/calls" element={<CallsRedirectComponent />} />
