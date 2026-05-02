@@ -68,6 +68,25 @@ export function playDtmfTone(key: string, durationMs = 120) {
   });
 }
 
+/** User feedback for tapping a phone keypad key. */
+export function playPhoneKeyFeedback(
+  key: string,
+  options: { tone?: boolean; haptic?: boolean } = {},
+) {
+  const tone = options.tone ?? true;
+  const haptic = options.haptic ?? true;
+
+  if (tone) playDtmfTone(key);
+
+  if (haptic) {
+    try {
+      navigator.vibrate?.(12);
+    } catch {
+      // Vibration is best-effort and unavailable on many desktop browsers.
+    }
+  }
+}
+
 // Ringtone definitions
 
 export interface RingtoneOption {

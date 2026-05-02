@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Delete, Mic, MicOff, Phone, PhoneCall, PhoneIncoming, PhoneOff, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SoftphoneStatus } from "@/hooks/useSoftphone";
+import { getCompanySetting } from "@/lib/companySettings";
 import { formatPhoneInput, toE164 } from "@/lib/formatters";
+import { playPhoneKeyFeedback } from "@/lib/softphoneAudio";
 import { cn } from "@/lib/utils";
 
 type PhoneOnlySoftphoneProps = {
@@ -77,8 +80,13 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
 
   const [number, setNumber] = useState(() => formatPhoneInput(initialNumber));
   const [localError, setLocalError] = useState<string | null>(null);
+  const { data: dialTonesSetting } = useQuery({
+    queryKey: ["company_settings", "softphone_dial_tones"],
+    queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
+  });
   const isIncomingCall = status === "ringing" && !!incomingCall;
   const activeCall = status === "connecting" || status === "ringing" || status === "on-call";
+  const dialTonesEnabled = dialTonesSetting !== "false";
   const validDialNumber = useMemo(() => toE164(number), [number]);
   const canDial = Boolean(validDialNumber) && !activeCall && status !== "registering";
   const displayNumber = activeCall ? formatPhoneInput(callerInfo?.number || number) : number;
@@ -100,13 +108,14 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
   }, [consumeDialNumber, pendingDialNumber]);
 
   const appendDigit = useCallback((digit: string) => {
+    playPhoneKeyFeedback(digit, { tone: dialTonesEnabled });
     if (activeCall) {
       sendDigit(digit);
       return;
     }
     setLocalError(null);
     setNumber((current) => formatPhoneInput(`${current}${digit}`));
-  }, [activeCall, sendDigit]);
+  }, [activeCall, dialTonesEnabled, sendDigit]);
 
   const removeDigit = useCallback(() => {
     if (activeCall) return;

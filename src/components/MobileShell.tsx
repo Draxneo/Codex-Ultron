@@ -41,6 +41,8 @@ import { MobileCallScreen } from "@/components/MobileCallScreen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { getCompanySetting } from "@/lib/companySettings";
+import { playPhoneKeyFeedback } from "@/lib/softphoneAudio";
 
 import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
 import { useStatusBar } from "@/hooks/useStatusBar";
@@ -99,6 +101,11 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   
   const softphone = useSoftphoneContext();
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
+  const { data: dialTonesSetting } = useQuery({
+    queryKey: ["company_settings", "softphone_dial_tones"],
+    queryFn: () => getCompanySetting("softphone_dial_tones", "true"),
+  });
+  const dialTonesEnabled = dialTonesSetting !== "false";
   const [phoneConsoleState, setPhoneConsoleState] = useState<Extract<PhoneConsoleMessage, { type: "status" }> | null>(null);
   const [callExpanded, setCallExpanded] = useState(false);
   const [showCallKeypad, setShowCallKeypad] = useState(false);
@@ -224,6 +231,11 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   const sendDigit = (digit: string) => {
     if (softphone.activeCall) softphone.sendDigit(digit);
     else sendPhoneCommand("sendDigit", digit);
+  };
+
+  const handleCallDigitPress = (key: string) => {
+    playPhoneKeyFeedback(key, { tone: dialTonesEnabled });
+    sendDigit(key);
   };
 
   const fullPath = location.pathname + location.search;
@@ -371,7 +383,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
                     <button
                       key={key}
                       type="button"
-                      onClick={() => sendDigit(key)}
+                      onClick={() => handleCallDigitPress(key)}
                       className="flex h-12 flex-col items-center justify-center rounded-xl bg-background text-foreground shadow-sm active:scale-[0.97]"
                     >
                       <span className="text-base font-semibold leading-none">{key}</span>
