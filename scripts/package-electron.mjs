@@ -13,18 +13,32 @@ const appName = process.env.ELECTRON_APP_NAME || "UltraOffice";
 const outputDir = process.env.ELECTRON_OUT_DIR || "electron-release";
 
 function run(command, commandArgs, options = {}) {
-  const executable = process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command;
   const printable = [command, ...commandArgs].join(" ");
   console.log(`\n> ${printable}`);
   if (dryRun) return;
-  const result = spawnSync(executable, commandArgs, {
-    cwd: root,
-    stdio: "inherit",
-    ...options,
-  });
+
+  const result = process.platform === "win32" && ["npm", "npx"].includes(command)
+    ? spawnSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", quoteWindowsCommand([command, ...commandArgs])], {
+        cwd: root,
+        stdio: "inherit",
+        ...options,
+      })
+    : spawnSync(command, commandArgs, {
+        cwd: root,
+        stdio: "inherit",
+        ...options,
+      });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+}
+
+function quoteWindowsCommand(parts) {
+  return parts.map((part) => {
+    const value = String(part);
+    if (!/[\s&()^|<>"]/.test(value)) return value;
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }).join(" ");
 }
 
 if (!skipBuild) {
