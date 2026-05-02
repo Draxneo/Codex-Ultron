@@ -1,5 +1,5 @@
 /**
- * TechStatusCard.tsx - Tech status card with 4 big circles:
+ * TechStatusCard.tsx - compact tech status actions:
  * On My Way · Start · Pause · Finish
  *
  * Wires into our existing data model:
@@ -198,9 +198,8 @@ export function TechStatusCard({
         <Badge className={cn("font-bold text-[10px] tracking-wider px-2.5 py-1", statusColor)}>{statusLabel}</Badge>
       </div>
 
-      {/* 4 big status circles */}
-      <div className="grid grid-cols-4 gap-2 px-3 py-5">
-        <StatusCircle
+      <div className="grid grid-cols-2 gap-2 px-3 py-3">
+        <StatusActionButton
           icon={Navigation}
           label="On My Way"
           done={omwDone}
@@ -208,7 +207,7 @@ export function TechStatusCard({
           loading={sendingOMW}
           timestamp={onMyWaySentAt}
         />
-        <StatusCircle
+        <StatusActionButton
           icon={Play}
           label={isPaused ? "Resume" : "Start"}
           done={startDone && !isPaused}
@@ -216,7 +215,7 @@ export function TechStatusCard({
           loading={busy === "start"}
           timestamp={startedAt}
         />
-        <StatusCircle
+        <StatusActionButton
           icon={Pause}
           label="Pause"
           done={false}
@@ -226,7 +225,7 @@ export function TechStatusCard({
           disabled={!startDone || finishDone}
           timestamp={isPaused ? pausedAt || null : null}
         />
-        <StatusCircle
+        <StatusActionButton
           icon={Check}
           label="Finish"
           done={finishDone}
@@ -292,7 +291,7 @@ export function TechStatusCard({
   );
 }
 
-interface StatusCircleProps {
+interface StatusActionButtonProps {
   icon: typeof Navigation;
   label: string;
   done: boolean;
@@ -303,29 +302,33 @@ interface StatusCircleProps {
   timestamp?: string | null;
 }
 
-function StatusCircle({ icon: Icon, label, done, paused, onClick, loading, disabled, timestamp }: StatusCircleProps) {
+function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading, disabled, timestamp }: StatusActionButtonProps) {
   const time = timestamp
     ? new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled || loading || (!onClick && !done && !paused)}
-        className={cn(
-          "h-16 w-16 rounded-full flex items-center justify-center border-2 transition-all",
-          done && "bg-[hsl(var(--complete))]/15 border-[hsl(var(--complete))] text-[hsl(var(--complete))]",
-          paused && "bg-amber-500/15 border-amber-500 text-amber-600 animate-pulse",
-          !done && !paused && disabled && "bg-muted border-border text-muted-foreground/40",
-          !done && !paused && !disabled && "bg-primary/10 border-primary text-primary active:scale-95",
-        )}
-      >
-        {done ? <Check className="h-7 w-7" /> : <Icon className="h-6 w-6" />}
-      </button>
-      <span className="min-h-[28px] text-center text-[11px] font-semibold leading-tight text-foreground">{label}</span>
-      {time && <span className="text-[10px] text-muted-foreground">{time}</span>}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading || (!onClick && !done && !paused)}
+      className={cn(
+        "flex min-h-[58px] items-center gap-2 rounded-lg border p-3 text-left transition active:scale-[0.98]",
+        done && "border-[hsl(var(--complete))]/50 bg-[hsl(var(--complete))]/10 text-[hsl(var(--complete))]",
+        paused && "border-amber-500/60 bg-amber-500/10 text-amber-600 animate-pulse",
+        !done && !paused && disabled && "border-border bg-muted/40 text-muted-foreground/50",
+        !done && !paused && !disabled && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
+      )}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background/70">
+        {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold leading-tight text-foreground">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
+          {loading ? "Working..." : time || (disabled ? "Not yet" : "Tap when ready")}
+        </span>
+      </span>
+    </button>
   );
 }

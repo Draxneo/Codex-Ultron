@@ -19,7 +19,6 @@ import {
   Mic,
   Navigation,
   Phone,
-  SendHorizontal,
   Sparkles,
   Wrench,
 } from "lucide-react";
@@ -200,19 +199,6 @@ export default function TechJobDetail() {
           />
         </section>
 
-        <UniversalTechFlow
-          onMyWaySentAt={(job as any).on_my_way_sent_at || null}
-          startedAt={(job as any).started_at || null}
-          completedAt={(job as any).completed_at || null}
-          techWork={techWork}
-          onOpenStatus={() => scrollToSection("tech-status")}
-          onOpenPhotos={() => scrollToSection("tech-findings")}
-          onOpenJarvis={() => scrollToSection("tech-jarvis")}
-          onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
-        />
-
-        <TechWorkBrief techWork={techWork} onOpenPhotos={() => scrollToSection("tech-findings")} onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)} />
-
         <div id="tech-status" className="scroll-mt-16">
           <TechStatusCard
             jobId={id!}
@@ -230,6 +216,20 @@ export default function TechJobDetail() {
             employeeId={employeeId || null}
           />
         </div>
+
+        <TechNowCard
+          onMyWaySentAt={(job as any).on_my_way_sent_at || null}
+          startedAt={(job as any).started_at || null}
+          completedAt={(job as any).completed_at || null}
+          isFinished={["done", "invoiced"].includes(String(job.status || "").toLowerCase())}
+          techWork={techWork}
+          onOpenStatus={() => scrollToSection("tech-status")}
+          onOpenPhotos={() => scrollToSection("tech-findings")}
+          onOpenJarvis={() => scrollToSection("tech-jarvis")}
+          onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
+        />
+
+        <TechWorkBrief techWork={techWork} onOpenPhotos={() => scrollToSection("tech-findings")} onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)} />
 
         <TechCollapsibleCard
           icon={Mic}
@@ -400,10 +400,11 @@ function DestinationCard({
   );
 }
 
-function UniversalTechFlow({
+function TechNowCard({
   onMyWaySentAt,
   startedAt,
   completedAt,
+  isFinished,
   techWork,
   onOpenStatus,
   onOpenPhotos,
@@ -413,6 +414,7 @@ function UniversalTechFlow({
   onMyWaySentAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  isFinished: boolean;
   techWork: TechWorkSummaryRow | null;
   onOpenStatus: () => void;
   onOpenPhotos: () => void;
@@ -422,80 +424,112 @@ function UniversalTechFlow({
   const hasPhotos = Number(techWork?.attachment_count || 0) > 0 || Boolean(techWork?.photos_uploaded_at);
   const hasEstimate = Number(techWork?.estimate_count || 0) > 0 || Boolean(techWork?.latest_estimate_at);
   const nextStep = techWork?.tech_next_step || null;
-  const actions = [
-    {
-      title: "On My Way",
-      detail: actionTime(onMyWaySentAt) || "Send ETA text",
-      icon: Navigation,
-      done: Boolean(onMyWaySentAt),
-      onClick: onOpenStatus,
-    },
-    {
-      title: "Arrive",
-      detail: actionTime(startedAt) || "Start job timer",
-      icon: MapPin,
-      done: Boolean(startedAt),
-      onClick: onOpenStatus,
-    },
-    {
-      title: "Snap Photos",
-      detail: hasPhotos ? `${techWork?.attachment_count || 1} file${Number(techWork?.attachment_count || 1) === 1 ? "" : "s"} saved` : "Unit, plate, readings",
-      icon: ImagePlus,
-      done: hasPhotos,
-      onClick: onOpenPhotos,
-    },
-    {
-      title: "Voice Memo",
-      detail: "Hold mic and talk",
-      icon: Mic,
-      done: false,
-      onClick: onOpenJarvis,
-    },
-    {
-      title: "AI Review",
-      detail: nextStep || "Jarvis drafts diagnosis",
-      icon: Sparkles,
-      done: Boolean(nextStep && nextStep !== "Send ETA and start travel."),
-      onClick: onOpenJarvis,
-    },
-    {
-      title: "Add Parts",
-      detail: hasEstimate ? `${techWork?.estimate_count || 1} estimate${Number(techWork?.estimate_count || 1) === 1 ? "" : "s"} started` : "Build estimate items",
-      icon: Wrench,
-      done: hasEstimate,
-      onClick: onOpenCart,
-    },
-    {
-      title: "After Photos",
-      detail: "Final proof shots",
+  const attachmentCount = Number(techWork?.attachment_count || 0);
+  const estimateCount = Number(techWork?.estimate_count || 0);
+  const completed = Boolean(completedAt) || isFinished;
+
+  const primaryAction = (() => {
+    if (completed) {
+      return {
+        title: "Job finished",
+        detail: `Completed ${actionTime(completedAt) || "today"}. Office can review the photos, quote, and notes.`,
+        icon: CheckCircle2,
+        onClick: onOpenStatus,
+        tone: "done" as const,
+      };
+    }
+    if (!onMyWaySentAt) {
+      return {
+        title: "Send the on-my-way text",
+        detail: "Tell the customer you are headed over before you start driving.",
+        icon: Navigation,
+        onClick: onOpenStatus,
+        tone: "urgent" as const,
+      };
+    }
+    if (!startedAt) {
+      return {
+        title: "Arrive and start the job",
+        detail: "When you get to the house, start the job so dispatch knows you are on site.",
+        icon: MapPin,
+        onClick: onOpenStatus,
+        tone: "urgent" as const,
+      };
+    }
+    if (!hasPhotos) {
+      return {
+        title: "Take the first photos",
+        detail: "Get the unit, data plate, problem area, and anything the customer should see.",
+        icon: ImagePlus,
+        onClick: onOpenPhotos,
+        tone: "normal" as const,
+      };
+    }
+    if (!nextStep) {
+      return {
+        title: "Tell Jarvis what you found",
+        detail: "Use push-to-talk. Jarvis will clean it up and help write the repair or replacement quote.",
+        icon: Mic,
+        onClick: onOpenJarvis,
+        tone: "normal" as const,
+      };
+    }
+    if (!hasEstimate) {
+      return {
+        title: "Build the customer option",
+        detail: nextStep,
+        icon: Wrench,
+        onClick: onOpenCart,
+        tone: "normal" as const,
+      };
+    }
+    return {
+      title: "Review, add after photos, then finish",
+      detail: "Make sure the customer-facing quote and final proof photos are ready before closing the job.",
       icon: ClipboardCheck,
-      done: false,
       onClick: onOpenPhotos,
-    },
-    {
-      title: "Submit",
-      detail: actionTime(completedAt) || "Finish and notify",
-      icon: SendHorizontal,
-      done: Boolean(completedAt),
-      onClick: onOpenStatus,
-    },
-  ];
+      tone: "normal" as const,
+    };
+  })();
+  const PrimaryIcon = primaryAction.icon;
+  const etaSentAt = actionTime(onMyWaySentAt);
 
   return (
-    <section className="rounded-lg border bg-background p-3 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Universal Tech Flow</h2>
-          <p className="text-xs text-muted-foreground">One pass through the job, top to bottom.</p>
+    <section className="rounded-lg border bg-background shadow-sm">
+      <button
+        type="button"
+        onClick={primaryAction.onClick}
+        className={cn(
+          "flex w-full items-start gap-3 p-4 text-left transition active:scale-[0.99]",
+          primaryAction.tone === "done" ? "bg-emerald-500/10" : "bg-primary/5",
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-md",
+            primaryAction.tone === "done" ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
+          )}
+        >
+          <PrimaryIcon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Do this now</p>
+            {etaSentAt ? (
+              <Badge variant="outline" className="rounded-sm text-[10px]">
+                ETA sent {etaSentAt}
+              </Badge>
+            ) : null}
+          </div>
+          <h2 className="mt-1 text-lg font-bold leading-tight text-foreground">{primaryAction.title}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{primaryAction.detail}</p>
         </div>
-        <Badge variant="outline" className="shrink-0 rounded-sm text-[10px]">
-          Field
-        </Badge>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {actions.map((action) => (
-          <FlowActionCard key={action.title} {...action} />
-        ))}
+      </button>
+
+      <div className="grid grid-cols-3 gap-2 border-t p-3">
+        <MiniActionButton icon={Mic} label="Talk" detail="Jarvis" onClick={onOpenJarvis} />
+        <MiniActionButton icon={ImagePlus} label="Photos" detail={`${attachmentCount} saved`} onClick={onOpenPhotos} />
+        <MiniActionButton icon={Wrench} label="Quote" detail={`${estimateCount} started`} onClick={onOpenCart} />
       </div>
     </section>
   );
@@ -510,7 +544,7 @@ function TechWorkBrief({
   onOpenPhotos: () => void;
   onOpenCart: () => void;
 }) {
-  const nextStep = techWork?.tech_next_step || "Follow the tech flow from left to right.";
+  const nextStep = techWork?.tech_next_step || "No field notes yet. As you talk to Jarvis and add photos, the office will see the latest update here.";
   const attachmentCount = Number(techWork?.attachment_count || 0);
   const estimateCount = Number(techWork?.estimate_count || 0);
 
@@ -522,7 +556,7 @@ function TechWorkBrief({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">Shared job signal</h2>
+            <h2 className="text-base font-semibold text-foreground">What the office can see</h2>
             <Badge variant="outline" className="rounded-sm text-[10px]">
               Office sees this too
             </Badge>
@@ -559,40 +593,26 @@ function actionTime(timestamp?: string | null) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function FlowActionCard({
-  title,
-  detail,
+function MiniActionButton({
   icon: Icon,
-  done,
+  label,
+  detail,
   onClick,
 }: {
-  title: string;
-  detail: string;
   icon: React.ComponentType<{ className?: string }>;
-  done: boolean;
+  label: string;
+  detail: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "min-h-[92px] rounded-lg border bg-card p-3 text-left shadow-sm transition active:scale-[0.98]",
-        done ? "border-emerald-500/40 bg-emerald-500/5" : "hover:border-primary/40 hover:bg-muted/30",
-      )}
+      className="rounded-lg border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted/30 active:scale-[0.98]"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-            done ? "bg-emerald-500 text-white" : "bg-primary/10 text-primary",
-          )}
-        >
-          {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-        </span>
-      </div>
-      <p className="mt-3 text-sm font-semibold leading-tight text-foreground">{title}</p>
-      <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{detail}</p>
+      <Icon className="h-5 w-5 text-primary" />
+      <p className="mt-2 text-sm font-semibold leading-tight text-foreground">{label}</p>
+      <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{detail}</p>
     </button>
   );
 }
