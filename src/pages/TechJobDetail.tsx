@@ -5,13 +5,13 @@
  * diagnosis/estimate drafting, then photos and supporting details.
  */
 
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
-  ClipboardCheck,
   FileText,
   ImagePlus,
   MapPin,
@@ -30,7 +30,7 @@ import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechScheduleCard } from "@/components/tech/TechScheduleCard";
 import { TechStatusCard } from "@/components/tech/TechStatusCard";
 import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
-import { useTechWorkSummary, type TechWorkSummaryRow } from "@/hooks/useCanonicalOperations";
+import { useTechWorkSummary } from "@/hooks/useCanonicalOperations";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useJob } from "@/hooks/useJobs";
@@ -88,10 +88,7 @@ export default function TechJobDetail() {
   const { data: linkedCustomer, isError: customerError, error: customerQueryError } = useCustomer(job?.customer_id || undefined);
   const { data: techWorkRows = [], isError: techWorkError, error: techWorkQueryError } = useTechWorkSummary(id ? [id] : []);
   const techWork = techWorkRows[0] || null;
-
-  const scrollToSection = (sectionId: string) => {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const [manualStage, setManualStage] = useState<TechStage | null>(null);
 
   if (isLoading) {
     return (
@@ -136,6 +133,23 @@ export default function TechJobDetail() {
   const arrivalEnd = (job as any).arrival_end || null;
   const schedule = formatSchedule(job.scheduled_date || null, arrivalStart, arrivalEnd);
   const problemSummary = jobProblem(job);
+  const onMyWaySentAt = (job as any).on_my_way_sent_at || null;
+  const startedAt = (job as any).started_at || null;
+  const completedAt = (job as any).completed_at || null;
+  const isFinished = ["done", "invoiced"].includes(String(job.status || "").toLowerCase()) || Boolean(completedAt);
+  const hasPhotos = Number(techWork?.attachment_count || 0) > 0 || Boolean(techWork?.photos_uploaded_at);
+  const hasEstimate = Number(techWork?.estimate_count || 0) > 0 || Boolean(techWork?.latest_estimate_at);
+  const hasFindings = Boolean(techWork?.tech_next_step);
+  const techStage: TechStage = (() => {
+    if (isFinished) return "done";
+    if (!onMyWaySentAt) return "destination";
+    if (!startedAt) return "arrive";
+    if (!hasPhotos) return "photos";
+    if (!hasFindings) return "jarvis";
+    if (!hasEstimate) return "quote";
+    return "wrap";
+  })();
+  const activeStage = manualStage || techStage;
   const contextIssues = [
     customerError ? `customer details (${errorMessage(customerQueryError)})` : null,
     techWorkError ? `field-work summary (${errorMessage(techWorkQueryError)})` : null,
@@ -160,6 +174,22 @@ export default function TechJobDetail() {
     launchNavigation(customerAddress);
   };
 
+  const statusProps = {
+    jobId: id!,
+    status: job.status || "new",
+    onMyWaySentAt,
+    startedAt,
+    completedAt,
+    pausedAt: (job as any).paused_at || null,
+    description: job.description || null,
+    hcpNote: (job as any).hcp_note || null,
+    customerPhone,
+    customerName,
+    jobAddress: customerAddress,
+    employeeName,
+    employeeId: employeeId || null,
+  };
+
   return (
     <div className="min-h-screen bg-muted/20 pb-6">
       <TechHeader
@@ -175,107 +205,124 @@ export default function TechJobDetail() {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-semibold">Some job context did not load.</p>
-                <p className="mt-1 text-xs leading-relaxed">
-                  Missing {contextIssues.join(", ")}. Refresh before writing up the final diagnosis or proposal.
-                </p>
+                <p className="mt-1 text-xs leading-relaxed">Missing {contextIssues.join(", ")}.</p>
               </div>
             </div>
           </div>
         ) : null}
 
-        <section className="overflow-hidden rounded-lg border bg-background shadow-sm">
-          <DestinationCard
-            customerName={customerName}
-            customerPhone={customerPhone}
-            customerEmail={customerEmail}
-            customerAddress={customerAddress}
-            schedule={schedule}
-            assignedTo={employeeName}
-            status={statusLabel(job)}
-            onNavigate={openNavigation}
-            onCall={callCustomer}
-            onSms={openSms}
-          />
-        </section>
-
-        <div id="tech-status" className="scroll-mt-16">
-          <TechStatusCard
-            jobId={id!}
-            status={job.status || "new"}
-            onMyWaySentAt={(job as any).on_my_way_sent_at || null}
-            startedAt={(job as any).started_at || null}
-            completedAt={(job as any).completed_at || null}
-            pausedAt={(job as any).paused_at || null}
-            description={job.description || null}
-            hcpNote={(job as any).hcp_note || null}
-            customerPhone={customerPhone}
-            customerName={customerName}
-            jobAddress={customerAddress}
-            employeeName={employeeName}
-            employeeId={employeeId || null}
-          />
-        </div>
-
-        <TechNowCard
-          onMyWaySentAt={(job as any).on_my_way_sent_at || null}
-          startedAt={(job as any).started_at || null}
-          completedAt={(job as any).completed_at || null}
-          isFinished={["done", "invoiced"].includes(String(job.status || "").toLowerCase())}
-          techWork={techWork}
-          onOpenStatus={() => scrollToSection("tech-status")}
-          onOpenPhotos={() => scrollToSection("tech-findings")}
-          onOpenJarvis={() => scrollToSection("tech-jarvis")}
-          onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
+        <CustomerStrip
+          customerName={customerName}
+          customerPhone={customerPhone}
+          customerEmail={customerEmail}
+          customerAddress={customerAddress}
+          schedule={schedule}
+          assignedTo={employeeName}
+          status={statusLabel(job)}
+          showNavigate={activeStage === "destination" || activeStage === "arrive"}
+          onNavigate={openNavigation}
+          onCall={callCustomer}
+          onSms={openSms}
         />
 
-        <TechCollapsibleCard
-          icon={Mic}
-          title="Jarvis"
-          iconBg="bg-purple-500/10"
-          iconColor="text-purple-500"
-          collapsible={false}
-          id="tech-jarvis"
-          className="scroll-mt-16"
-        >
-          <TechJarvisPushToTalk
-            jobId={id!}
-            jobNumber={jobNumber}
-            customerName={customerName}
-            bare
-            onOpenPhotos={() => scrollToSection("tech-findings")}
-            onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
-            enableProposalActions
-          />
-        </TechCollapsibleCard>
+        {activeStage === "destination" ? (
+          <StageShell icon={Navigation} label="Next" title="Head to job">
+            <DestinationMedia address={customerAddress} />
+            <TechStatusCard {...statusProps} display="single" singleAction="omw" />
+          </StageShell>
+        ) : null}
 
-        <TechCollapsibleCard icon={FileText} title="Notes" iconBg="bg-amber-500/10" iconColor="text-amber-600" collapsible={false}>
-          <div className="space-y-3 p-4">
-            <InfoBlock label="Customer" value={problemSummary} />
-            <div className="grid grid-cols-2 gap-2">
-              <FieldTile icon={Wrench} label="Type" value={cleanLabel(job.job_type || "Service")} />
-              <FieldTile icon={CheckCircle2} label="Goal" value="Customer approval" />
-            </div>
-          </div>
-        </TechCollapsibleCard>
+        {activeStage === "arrive" ? (
+          <StageShell icon={MapPin} label="Next" title="Arrive">
+            <DestinationMedia address={customerAddress} compact />
+            <TechStatusCard {...statusProps} display="single" singleAction="arrive" />
+          </StageShell>
+        ) : null}
 
-        <TechCollapsibleCard
-          icon={ImagePlus}
-          title="Findings + Photos"
-          iconBg="bg-rose-500/10"
-          iconColor="text-rose-500"
-          collapsible={false}
-          id="tech-findings"
-          className="scroll-mt-16"
-        >
-          <TechAttachmentsCard
-            jobId={id!}
-            hcpId={(job as any).hcp_id || null}
-            customerPhone={customerPhone}
-            jobNumber={jobNumber}
-            techName={job.assigned_to || null}
-            bare
-          />
-        </TechCollapsibleCard>
+        {activeStage === "photos" ? (
+          <StageShell icon={ImagePlus} label="Next" title="Photos" id="tech-findings">
+            <TechAttachmentsCard
+              jobId={id!}
+              hcpId={(job as any).hcp_id || null}
+              customerPhone={customerPhone}
+              jobNumber={jobNumber}
+              techName={job.assigned_to || null}
+              bare
+            />
+            <StageShortcutButtons
+              onJarvis={() => setManualStage("jarvis")}
+              onPhotos={() => setManualStage("photos")}
+              onQuote={() => navigate(`/tech/jobs/${id}/cart`)}
+              active="photos"
+            />
+          </StageShell>
+        ) : null}
+
+        {activeStage === "jarvis" ? (
+          <StageShell icon={Mic} label="Next" title="Jarvis" id="tech-jarvis">
+            <TechJarvisPushToTalk
+              jobId={id!}
+              jobNumber={jobNumber}
+              customerName={customerName}
+              bare
+              onOpenPhotos={() => setManualStage("photos")}
+              onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
+              enableProposalActions
+            />
+            <StageShortcutButtons
+              onJarvis={() => setManualStage("jarvis")}
+              onPhotos={() => setManualStage("photos")}
+              onQuote={() => navigate(`/tech/jobs/${id}/cart`)}
+              active="jarvis"
+            />
+          </StageShell>
+        ) : null}
+
+        {activeStage === "quote" ? (
+          <StageShell icon={Wrench} label="Next" title="Quote">
+            <button
+              type="button"
+              onClick={() => navigate(`/tech/jobs/${id}/cart`)}
+              className="flex min-h-[86px] w-full items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4 text-left transition active:scale-[0.99]"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <Wrench className="h-6 w-6" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-lg font-bold text-foreground">Build Quote</span>
+                {techWork?.tech_next_step ? <span className="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">{techWork.tech_next_step}</span> : null}
+              </span>
+            </button>
+            <StageShortcutButtons
+              onJarvis={() => setManualStage("jarvis")}
+              onPhotos={() => setManualStage("photos")}
+              onQuote={() => navigate(`/tech/jobs/${id}/cart`)}
+              active="quote"
+            />
+          </StageShell>
+        ) : null}
+
+        {activeStage === "wrap" ? (
+          <StageShell icon={CheckCircle2} label="Next" title="Finish">
+            <TechStatusCard {...statusProps} display="single" singleAction="finish" />
+            <StageShortcutButtons
+              onJarvis={() => setManualStage("jarvis")}
+              onPhotos={() => setManualStage("photos")}
+              onQuote={() => navigate(`/tech/jobs/${id}/cart`)}
+            />
+          </StageShell>
+        ) : null}
+
+        {activeStage === "done" ? (
+          <StageShell icon={CheckCircle2} label="Done" title="Finished">
+            <TechStatusCard {...statusProps} display="single" singleAction="finish" />
+            <StageShortcutButtons
+              onJarvis={() => setManualStage("jarvis")}
+              onPhotos={() => setManualStage("photos")}
+              onQuote={() => navigate(`/tech/jobs/${id}/cart`)}
+            />
+          </StageShell>
+        ) : null}
 
         <TechCollapsibleCard icon={CalendarClock} title="Schedule" iconBg="bg-indigo-500/10" iconColor="text-indigo-500" defaultOpen={false}>
           <TechScheduleCard
@@ -288,10 +335,22 @@ export default function TechJobDetail() {
             bare
           />
         </TechCollapsibleCard>
+
+        <TechCollapsibleCard icon={FileText} title="Notes" iconBg="bg-amber-500/10" iconColor="text-amber-600" defaultOpen={false}>
+          <div className="space-y-3 p-4">
+            <InfoBlock label="Customer" value={problemSummary} />
+            <div className="grid grid-cols-2 gap-2">
+              <FieldTile icon={Wrench} label="Type" value={cleanLabel(job.job_type || "Service")} />
+              <FieldTile icon={CheckCircle2} label="Goal" value="Customer approval" />
+            </div>
+          </div>
+        </TechCollapsibleCard>
       </main>
     </div>
   );
 }
+
+type TechStage = "destination" | "arrive" | "photos" | "jarvis" | "quote" | "wrap" | "done";
 
 function TechHeader({ title, subtitle, onBack }: { title: string; subtitle: string; onBack: () => void }) {
   return (
@@ -308,7 +367,7 @@ function TechHeader({ title, subtitle, onBack }: { title: string; subtitle: stri
   );
 }
 
-function DestinationCard({
+function CustomerStrip({
   customerName,
   customerPhone,
   customerEmail,
@@ -316,6 +375,7 @@ function DestinationCard({
   schedule,
   assignedTo,
   status,
+  showNavigate,
   onNavigate,
   onCall,
   onSms,
@@ -327,228 +387,137 @@ function DestinationCard({
   schedule: string;
   assignedTo: string | null;
   status: string;
+  showNavigate: boolean;
   onNavigate: () => void;
   onCall: () => void;
   onSms: () => void;
 }) {
   return (
-    <div className="border-b bg-card">
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold leading-tight text-foreground">{customerName}</h1>
-            <div className="mt-2 space-y-1 text-sm leading-snug text-muted-foreground">
-              <p className="flex gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{customerAddress || "No address on file"}</span>
-              </p>
-              <p className="flex gap-2">
-                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{schedule}{assignedTo ? ` - ${assignedTo}` : ""}</span>
-              </p>
-              {customerPhone && <p>{customerPhone}</p>}
-              {customerEmail && <p className="truncate">{customerEmail}</p>}
-            </div>
+    <section className="overflow-hidden rounded-lg border bg-background shadow-sm">
+      <div className="flex items-start justify-between gap-3 p-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-lg font-bold leading-tight text-foreground">{customerName}</h1>
+            <Badge className="shrink-0 rounded-sm text-[10px]">{status}</Badge>
           </div>
-          <Badge className="shrink-0 rounded-sm">{status}</Badge>
+          <div className="mt-1 space-y-0.5 text-xs leading-snug text-muted-foreground">
+            <p className="flex gap-1.5">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="line-clamp-1">{customerAddress || "No address"}</span>
+            </p>
+            <p className="flex gap-1.5">
+              <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="line-clamp-1">{schedule}{assignedTo ? ` - ${assignedTo}` : ""}</span>
+            </p>
+            {customerPhone && <p>{customerPhone}</p>}
+            {customerEmail && <p className="truncate">{customerEmail}</p>}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-[1.15fr_0.85fr] gap-2 px-4 pb-4">
-        <TownMapPreview address={customerAddress} />
-        <StreetViewThumbnail address={customerAddress} aspect="square" className="min-h-[150px]" />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-        <Button className="h-12 gap-2" onClick={onNavigate} disabled={!customerAddress}>
-          <Navigation className="h-4 w-4" />
-          Navigate
-        </Button>
-        <Button variant="outline" className="h-12 gap-2" onClick={onCall} disabled={!customerPhone}>
+      <div className={cn("grid gap-2 border-t p-2", showNavigate ? "grid-cols-3" : "grid-cols-2")}>
+        {showNavigate ? (
+          <Button className="h-11 gap-2" onClick={onNavigate} disabled={!customerAddress}>
+            <Navigation className="h-4 w-4" />
+            Navigate
+          </Button>
+        ) : null}
+        <Button variant="outline" className="h-11 gap-2" onClick={onCall} disabled={!customerPhone}>
           <Phone className="h-4 w-4" />
           Call
         </Button>
-        <Button variant="outline" className="h-12 gap-2" onClick={onSms} disabled={!customerPhone}>
+        <Button variant="outline" className="h-11 gap-2" onClick={onSms} disabled={!customerPhone}>
           <MessageSquare className="h-4 w-4" />
           Text
         </Button>
-      </div>
-    </div>
-  );
-}
-
-function TechNowCard({
-  onMyWaySentAt,
-  startedAt,
-  completedAt,
-  isFinished,
-  techWork,
-  onOpenStatus,
-  onOpenPhotos,
-  onOpenJarvis,
-  onOpenCart,
-}: {
-  onMyWaySentAt: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  isFinished: boolean;
-  techWork: TechWorkSummaryRow | null;
-  onOpenStatus: () => void;
-  onOpenPhotos: () => void;
-  onOpenJarvis: () => void;
-  onOpenCart: () => void;
-}) {
-  const hasPhotos = Number(techWork?.attachment_count || 0) > 0 || Boolean(techWork?.photos_uploaded_at);
-  const hasEstimate = Number(techWork?.estimate_count || 0) > 0 || Boolean(techWork?.latest_estimate_at);
-  const nextStep = techWork?.tech_next_step || null;
-  const attachmentCount = Number(techWork?.attachment_count || 0);
-  const estimateCount = Number(techWork?.estimate_count || 0);
-  const completed = Boolean(completedAt) || isFinished;
-
-  const primaryAction = (() => {
-    if (completed) {
-      return {
-        title: "Finished",
-        detail: actionTime(completedAt) || "Done",
-        icon: CheckCircle2,
-        onClick: onOpenStatus,
-        tone: "done" as const,
-      };
-    }
-    if (!onMyWaySentAt) {
-      return {
-        title: "On My Way",
-        detail: "Send ETA",
-        icon: Navigation,
-        onClick: onOpenStatus,
-        tone: "urgent" as const,
-      };
-    }
-    if (!startedAt) {
-      return {
-        title: "Arrive",
-        detail: "Start job",
-        icon: MapPin,
-        onClick: onOpenStatus,
-        tone: "urgent" as const,
-      };
-    }
-    if (!hasPhotos) {
-      return {
-        title: "Photos",
-        detail: "Add first set",
-        icon: ImagePlus,
-        onClick: onOpenPhotos,
-        tone: "normal" as const,
-      };
-    }
-    if (!nextStep) {
-      return {
-        title: "Jarvis",
-        detail: "Findings",
-        icon: Mic,
-        onClick: onOpenJarvis,
-        tone: "normal" as const,
-      };
-    }
-    if (!hasEstimate) {
-      return {
-        title: "Quote",
-        detail: nextStep,
-        icon: Wrench,
-        onClick: onOpenCart,
-        tone: "normal" as const,
-      };
-    }
-    return {
-      title: "Wrap Up",
-      detail: "Photos, quote, finish",
-      icon: ClipboardCheck,
-      onClick: onOpenPhotos,
-      tone: "normal" as const,
-    };
-  })();
-  const PrimaryIcon = primaryAction.icon;
-  const etaSentAt = actionTime(onMyWaySentAt);
-
-  return (
-    <section className="rounded-lg border bg-background shadow-sm">
-      <button
-        type="button"
-        onClick={primaryAction.onClick}
-        className={cn(
-          "flex w-full items-start gap-3 p-4 text-left transition active:scale-[0.99]",
-          primaryAction.tone === "done" ? "bg-emerald-500/10" : "bg-primary/5",
-        )}
-      >
-        <span
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-md",
-            primaryAction.tone === "done" ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
-          )}
-        >
-          <PrimaryIcon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Next</p>
-            {etaSentAt ? (
-              <Badge variant="outline" className="rounded-sm text-[10px]">
-                {etaSentAt}
-              </Badge>
-            ) : null}
-          </div>
-          <h2 className="mt-1 text-lg font-bold leading-tight text-foreground">{primaryAction.title}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{primaryAction.detail}</p>
-        </div>
-      </button>
-
-      <div className="grid grid-cols-3 gap-2 border-t p-3">
-        <MiniActionButton icon={Mic} label="Jarvis" onClick={onOpenJarvis} />
-        <MiniActionButton icon={ImagePlus} label="Photos" count={attachmentCount} onClick={onOpenPhotos} />
-        <MiniActionButton icon={Wrench} label="Quote" count={estimateCount} onClick={onOpenCart} />
       </div>
     </section>
   );
 }
 
-function actionTime(timestamp?: string | null) {
-  if (!timestamp) return null;
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-function MiniActionButton({
+function StageShell({
   icon: Icon,
   label,
-  count,
-  onClick,
+  title,
+  id,
+  children,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  count?: number;
-  onClick: () => void;
+  title: string;
+  id?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-lg border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted/30 active:scale-[0.98]"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <Icon className="h-5 w-5 text-primary" />
-        {typeof count === "number" ? <span className="text-xs font-bold text-muted-foreground">{count}</span> : null}
+    <section id={id} className="scroll-mt-16 overflow-hidden rounded-lg border bg-background shadow-sm">
+      <div className="flex items-center gap-3 border-b p-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <h2 className="text-lg font-bold leading-tight text-foreground">{title}</h2>
+        </div>
       </div>
-      <p className="mt-2 text-sm font-semibold leading-tight text-foreground">{label}</p>
-    </button>
+      <div className="space-y-3 p-3">{children}</div>
+    </section>
   );
 }
 
-function TownMapPreview({ address }: { address: string | null }) {
+function DestinationMedia({ address, compact }: { address: string | null; compact?: boolean }) {
+  return (
+    <div className={cn("grid gap-2", compact ? "grid-cols-[0.8fr_1.2fr]" : "grid-cols-[1.15fr_0.85fr]")}>
+      <TownMapPreview address={address} compact={compact} />
+      <StreetViewThumbnail address={address} aspect="square" className={compact ? "min-h-[120px]" : "min-h-[160px]"} />
+    </div>
+  );
+}
+
+function StageShortcutButtons({
+  onJarvis,
+  onPhotos,
+  onQuote,
+  active,
+}: {
+  onJarvis: () => void;
+  onPhotos: () => void;
+  onQuote: () => void;
+  active?: "jarvis" | "photos" | "quote";
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <button
+        type="button"
+        onClick={onJarvis}
+        className={cn("rounded-lg border bg-card p-3 text-left transition active:scale-[0.98]", active === "jarvis" && "border-primary/50 bg-primary/10")}
+      >
+        <Mic className="h-5 w-5 text-primary" />
+        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Jarvis</p>
+      </button>
+      <button
+        type="button"
+        onClick={onPhotos}
+        className={cn("rounded-lg border bg-card p-3 text-left transition active:scale-[0.98]", active === "photos" && "border-primary/50 bg-primary/10")}
+      >
+        <ImagePlus className="h-5 w-5 text-primary" />
+        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Photos</p>
+      </button>
+      <button
+        type="button"
+        onClick={onQuote}
+        className={cn("rounded-lg border bg-card p-3 text-left transition active:scale-[0.98]", active === "quote" && "border-primary/50 bg-primary/10")}
+      >
+        <Wrench className="h-5 w-5 text-primary" />
+        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Quote</p>
+      </button>
+    </div>
+  );
+}
+
+function TownMapPreview({ address, compact }: { address: string | null; compact?: boolean }) {
   if (!address || !GOOGLE_MAPS_API_KEY) {
     return (
-      <div className="flex min-h-[150px] items-center justify-center rounded-lg border bg-muted text-muted-foreground">
+      <div className={cn("flex items-center justify-center rounded-lg border bg-muted text-muted-foreground", compact ? "min-h-[120px]" : "min-h-[160px]")}>
         <MapPin className="h-6 w-6 opacity-50" />
       </div>
     );
@@ -560,17 +529,16 @@ function TownMapPreview({ address }: { address: string | null }) {
     <button
       type="button"
       onClick={() => launchNavigation(address)}
-      className="relative min-h-[150px] overflow-hidden rounded-lg border bg-muted"
+      className={cn("relative overflow-hidden rounded-lg border bg-muted", compact ? "min-h-[120px]" : "min-h-[160px]")}
       aria-label="Open map"
     >
       <img src={mapUrl} alt={`Map near ${address}`} className="h-full w-full object-cover" loading="lazy" />
       <div className="absolute bottom-2 left-2 rounded-sm bg-background/90 px-2 py-1 text-[10px] font-semibold text-foreground shadow-sm">
-        Area map
+        Map
       </div>
     </button>
   );
 }
-
 function FieldTile({
   icon: Icon,
   label,

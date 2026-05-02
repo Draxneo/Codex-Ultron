@@ -46,6 +46,9 @@ interface TechStatusCardProps {
   jobAddress: string | null;
   employeeName: string | null;
   employeeId: string | null;
+  display?: "grid" | "single";
+  singleAction?: "omw" | "arrive" | "finish";
+  className?: string;
 }
 
 export function TechStatusCard({
@@ -62,6 +65,9 @@ export function TechStatusCard({
   jobAddress,
   employeeName,
   employeeId,
+  display = "grid",
+  singleAction,
+  className,
 }: TechStatusCardProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -192,8 +198,85 @@ export function TechStatusCard({
     setBusy(null);
   };
 
+  const primaryAction = (() => {
+    if (singleAction === "omw") {
+      return {
+        icon: Navigation,
+        label: "On My Way",
+        done: omwDone,
+        onClick: !omwDone ? handleOMW : undefined,
+        loading: sendingOMW,
+        disabled: false,
+        timestamp: onMyWaySentAt,
+      };
+    }
+    if (singleAction === "arrive") {
+      return {
+        icon: Play,
+        label: isPaused ? "Resume" : "Arrive",
+        done: startDone && !isPaused,
+        onClick: !startDone || isPaused ? handleStart : undefined,
+        loading: busy === "start",
+        disabled: false,
+        timestamp: startedAt,
+      };
+    }
+    return {
+      icon: Check,
+      label: finishDone ? "Finished" : "Finish",
+      done: finishDone,
+      onClick: !finishDone && startDone && !isPaused ? handleFinish : undefined,
+      loading: busy === "finish",
+      disabled: !startDone || isPaused,
+      timestamp: completedAt,
+    };
+  })();
+
+  if (display === "single") {
+    return (
+      <Card className={cn("overflow-hidden", className)}>
+        <div className="flex items-center justify-between gap-3 p-3">
+          <Badge className={cn("font-bold text-[10px] tracking-wider px-2.5 py-1", statusColor)}>{statusLabel}</Badge>
+          {startDone && !finishDone ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={openPauseDialog}
+              disabled={isPaused || busy === "pause"}
+            >
+              Pause
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="px-3 pb-3">
+          <StatusActionButton
+            icon={primaryAction.icon}
+            label={primaryAction.label}
+            done={primaryAction.done}
+            onClick={primaryAction.onClick}
+            loading={primaryAction.loading}
+            disabled={primaryAction.disabled}
+            timestamp={primaryAction.timestamp}
+            large
+          />
+        </div>
+
+        <PauseDialog
+          open={pauseDialogOpen}
+          onOpenChange={setPauseDialogOpen}
+          value={pauseReason}
+          onChange={setPauseReason}
+          onConfirm={handlePauseConfirm}
+        />
+      </Card>
+    );
+  }
+
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn("overflow-hidden", className)}>
       <div className="flex justify-end p-3 pb-0">
         <Badge className={cn("font-bold text-[10px] tracking-wider px-2.5 py-1", statusColor)}>{statusLabel}</Badge>
       </div>
@@ -264,29 +347,13 @@ export function TechStatusCard({
         </div>
       )}
 
-      <Dialog open={pauseDialogOpen} onOpenChange={setPauseDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Pause job</DialogTitle>
-            <DialogDescription>Reason</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={pauseReason}
-            onChange={(e) => setPauseReason(e.target.value)}
-            placeholder="Waiting on parts"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handlePauseConfirm();
-            }}
-          />
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setPauseDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handlePauseConfirm}>Pause job</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PauseDialog
+        open={pauseDialogOpen}
+        onOpenChange={setPauseDialogOpen}
+        value={pauseReason}
+        onChange={setPauseReason}
+        onConfirm={handlePauseConfirm}
+      />
     </Card>
   );
 }
@@ -300,9 +367,10 @@ interface StatusActionButtonProps {
   loading?: boolean;
   disabled?: boolean;
   timestamp?: string | null;
+  large?: boolean;
 }
 
-function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading, disabled, timestamp }: StatusActionButtonProps) {
+function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading, disabled, timestamp, large }: StatusActionButtonProps) {
   const time = timestamp
     ? new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;
@@ -313,18 +381,19 @@ function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading,
       onClick={onClick}
       disabled={disabled || loading || (!onClick && !done && !paused)}
       className={cn(
-        "flex min-h-[58px] items-center gap-2 rounded-lg border p-3 text-left transition active:scale-[0.98]",
+        "flex items-center gap-2 rounded-lg border p-3 text-left transition active:scale-[0.98]",
+        large ? "min-h-[72px]" : "min-h-[58px]",
         done && "border-[hsl(var(--complete))]/50 bg-[hsl(var(--complete))]/10 text-[hsl(var(--complete))]",
         paused && "border-amber-500/60 bg-amber-500/10 text-amber-600 animate-pulse",
         !done && !paused && disabled && "border-border bg-muted/40 text-muted-foreground/50",
         !done && !paused && !disabled && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
       )}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background/70">
-        {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+      <span className={cn("flex shrink-0 items-center justify-center rounded-md bg-background/70", large ? "h-12 w-12" : "h-9 w-9")}>
+        {done ? <Check className={large ? "h-6 w-6" : "h-5 w-5"} /> : <Icon className={large ? "h-6 w-6" : "h-5 w-5"} />}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-bold leading-tight text-foreground">{label}</span>
+        <span className={cn("block font-bold leading-tight text-foreground", large ? "text-lg" : "text-sm")}>{label}</span>
         {loading || time ? (
           <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
             {loading ? "..." : time}
@@ -332,5 +401,45 @@ function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading,
         ) : null}
       </span>
     </button>
+  );
+}
+
+function PauseDialog({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Pause job</DialogTitle>
+          <DialogDescription>Reason</DialogDescription>
+        </DialogHeader>
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Waiting on parts"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onConfirm();
+          }}
+        />
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={onConfirm}>Pause job</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
