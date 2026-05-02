@@ -633,7 +633,9 @@ Deno.serve(async (req) => {
         sourceName: "voice-webhook",
       });
 
-      const generalForwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, "general");
+      const generalForwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, "general", [], {
+        ivrConfigId: config?.id || null,
+      });
       if (
         generalForwardingNumbers.length > 0 &&
         preparedGeneralDialList.clientIdentities.length === 0 &&

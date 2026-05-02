@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
     // Fetch the call
     const { data: call, error: callErr } = await supabase
       .from("call_log")
-      .select("id, transcription, phone_number, direction, contact_name, contact_type, related_customer_id, related_job_id, twilio_sid, answered_by")
+      .select("id, transcription, phone_number, called_number, business_unit_id, direction, contact_name, contact_type, related_customer_id, related_job_id, twilio_sid, answered_by")
       .eq("id", call_id)
       .single();
 
@@ -194,6 +194,10 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const callCompanyMetadata = {
+      business_unit_id: call.business_unit_id || null,
+      company_phone_number: call.called_number || null,
+    };
 
     if (!call.transcription || call.transcription.trim().length < 20) {
       console.log(`Call ${call_id}: transcript too short, skipping summarization`);
@@ -965,6 +969,7 @@ INTENT EXTRACTION:
             job_id: activeJob.id,
             suggested_action: `Review job ${jobRef} notes — caller has work in progress`,
             metadata: buildJarvisIntentMetadata(intentDecision, {
+              ...callCompanyMetadata,
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -1000,6 +1005,7 @@ INTENT EXTRACTION:
             customer_phone: call.phone_number || null,
             suggested_action: intentDecision.suggestedAction || `Review estimate ${estimateRef} - caller likely has an update or question`,
             metadata: buildJarvisIntentMetadata(intentDecision, {
+              ...callCompanyMetadata,
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -1025,6 +1031,7 @@ INTENT EXTRACTION:
             customer_phone: call.phone_number || null,
             suggested_action: "Choose the correct property before booking",
             metadata: buildJarvisIntentMetadata(intentDecision, {
+              ...callCompanyMetadata,
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -1059,6 +1066,7 @@ INTENT EXTRACTION:
             customer_phone: call.phone_number || null,
             suggested_action: `Book ${extracted.service_type || "service call"} for ${customerName || call.phone_number}`,
             metadata: buildJarvisIntentMetadata(intentDecision, {
+              ...callCompanyMetadata,
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,
@@ -1094,6 +1102,7 @@ INTENT EXTRACTION:
             customer_phone: call.phone_number || null,
             suggested_action: intentDecision.suggestedAction,
             metadata: buildJarvisIntentMetadata(intentDecision, {
+              ...callCompanyMetadata,
               customer_name: customerName || null,
               customer_id: resolvedCustomerId || null,
               phone: call.phone_number || null,

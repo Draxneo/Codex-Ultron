@@ -16,6 +16,18 @@ function phoneDigits(value?: string | null): string {
   return String(value || "").replace(/\D/g, "").slice(-10);
 }
 
+function businessContextKey(metadata: Record<string, unknown> | null | undefined): string {
+  const businessUnitId = String(metadata?.business_unit_id || metadata?.businessUnitId || "").trim();
+  if (businessUnitId) return `bu:${businessUnitId}`;
+  const companyLine = phoneDigits(
+    (metadata?.company_phone_number as string | null | undefined) ||
+    (metadata?.company_phone as string | null | undefined) ||
+    (metadata?.to_number as string | null | undefined) ||
+    (metadata?.from_number as string | null | undefined),
+  );
+  return companyLine ? `line:${companyLine}` : "";
+}
+
 function priorityRank(value?: string | null): number {
   const key = String(value || "normal").toLowerCase();
   if (key === "critical") return 4;
@@ -43,6 +55,7 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
 
   let existing: any = null;
   if (digits.length === 10) {
+    const incomingBusinessKey = businessContextKey(metadata);
     const { data } = await supabase
       .from("action_items")
       .select("*")
@@ -55,10 +68,12 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
     existing = (data || []).find((row: any) => {
       const rowMeta = row.metadata || {};
       const rowDigits = phoneDigits(row.customer_phone || rowMeta.phone || rowMeta.customer_phone || rowMeta.callback_phone);
+      const rowBusinessKey = businessContextKey(rowMeta);
       const samePhone = rowDigits === digits;
       const sameJob = input.job_id && row.job_id === input.job_id;
       const sameEstimate = (metadata as any).active_estimate_id && rowMeta.active_estimate_id === (metadata as any).active_estimate_id;
-      return samePhone && (sameJob || sameEstimate || !input.job_id);
+      const sameBusiness = !incomingBusinessKey || !rowBusinessKey || incomingBusinessKey === rowBusinessKey;
+      return samePhone && sameBusiness && (sameJob || sameEstimate || !input.job_id);
     }) || null;
   }
 

@@ -16,6 +16,7 @@ export type DepartmentRoutingKey = typeof DEPARTMENT_ROUTING_KEYS[number];
 
 export type DepartmentForwardingNumber = {
   id: string;
+  ivr_config_id?: string | null;
   department_key: string;
   label: string | null;
   phone_number: string;
@@ -93,6 +94,7 @@ export async function fetchDepartmentForwardingNumbers(
   supabase: any,
   department: string,
   fallbackDepartments: string[] = [],
+  opts: { ivrConfigId?: string | null; allowLegacyFallback?: boolean } = {},
 ): Promise<DepartmentForwardingNumber[]> {
   const requestedDepartment = normalizeRoutingDepartmentValue(department);
   const candidates = Array.from(new Set([
@@ -102,12 +104,20 @@ export async function fetchDepartmentForwardingNumbers(
 
   for (const candidate of candidates) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("department_forwarding_numbers")
-        .select("id, department_key, label, phone_number, priority")
+        .select("id, ivr_config_id, department_key, label, phone_number, priority")
         .eq("department_key", candidate)
         .eq("enabled", true)
         .order("priority", { ascending: true });
+
+      if (opts.ivrConfigId) {
+        query = query.eq("ivr_config_id", opts.ivrConfigId);
+      } else if (!opts.allowLegacyFallback) {
+        query = query.is("ivr_config_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.warn(`[callRouting] forwarding number lookup failed for ${candidate}:`, error.message || error);
@@ -119,6 +129,26 @@ export async function fetchDepartmentForwardingNumbers(
         .filter((row) => row.phone_number);
 
       if (rows.length > 0) return rows;
+
+      if (opts.ivrConfigId && opts.allowLegacyFallback) {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from("department_forwarding_numbers")
+          .select("id, ivr_config_id, department_key, label, phone_number, priority")
+          .is("ivr_config_id", null)
+          .eq("department_key", candidate)
+          .eq("enabled", true)
+          .order("priority", { ascending: true });
+
+        if (legacyError) {
+          console.warn(`[callRouting] legacy forwarding number lookup failed for ${candidate}:`, legacyError.message || legacyError);
+          continue;
+        }
+
+        const legacyRows = ((legacyData || []) as DepartmentForwardingNumber[])
+          .map((row) => ({ ...row, phone_number: normalizeE164Phone(row.phone_number) }))
+          .filter((row) => row.phone_number);
+        if (legacyRows.length > 0) return legacyRows;
+      }
     } catch (e) {
       console.warn(`[callRouting] forwarding number lookup threw for ${candidate}:`, e);
     }

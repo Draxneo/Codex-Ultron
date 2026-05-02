@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ type SubcontractorLink = {
   equipment_summary: string | null;
   required_photo_slots: string[] | null;
   expires_at: string;
+  revoked_at: string | null;
   completed_at: string | null;
   created_at: string;
   jobs?: {
@@ -193,6 +195,7 @@ export function SubcontractorLinkManager() {
           equipment_summary,
           required_photo_slots,
           expires_at,
+          revoked_at,
           completed_at,
           created_at,
           jobs(job_number, customer_name, customer_phone, address, scheduled_date)
@@ -312,6 +315,25 @@ export function SubcontractorLinkManager() {
     onError: (error: any) => {
       toast.error("Could not create link", {
         description: error?.message || "Check the migration and try again.",
+      });
+    },
+  });
+
+  const revokeLink = useMutation({
+    mutationFn: async (linkId: string) => {
+      const { error } = await (supabase as any)
+        .from("subcontractor_job_links")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", linkId);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-subcontractor-links"] });
+      toast.success("Subcontractor link revoked");
+    },
+    onError: (error: any) => {
+      toast.error("Could not revoke link", {
+        description: error?.message || "Try again in a minute.",
       });
     },
   });
@@ -630,7 +652,9 @@ export function SubcontractorLinkManager() {
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-semibold">{link.jobs?.customer_name || link.subcontractor_name || "Subcontractor job"}</p>
                           {link.jobs?.job_number ? <Badge variant="secondary">#{link.jobs.job_number}</Badge> : null}
-                          {link.completed_at ? (
+                          {link.revoked_at ? (
+                            <Badge variant="destructive">Revoked</Badge>
+                          ) : link.completed_at ? (
                             <Badge className="bg-emerald-500 text-white">
                               <CheckCircle2 className="mr-1 h-3 w-3" />
                               Complete
@@ -649,6 +673,7 @@ export function SubcontractorLinkManager() {
                         <Button
                           variant="outline"
                           size="icon"
+                          disabled={Boolean(link.revoked_at)}
                           onClick={async (event) => {
                             event.stopPropagation();
                             await navigator.clipboard.writeText(url);
@@ -656,6 +681,18 @@ export function SubcontractorLinkManager() {
                           }}
                         >
                           <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={Boolean(link.revoked_at) || revokeLink.isPending}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            revokeLink.mutate(link.id);
+                          }}
+                          title="Revoke link"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>

@@ -129,6 +129,7 @@ function routingDepartmentKeyForOption(option: IvrMenuOptionWithRoutingKey): str
 
 type ForwardingNumber = {
   id: string;
+  ivr_config_id?: string | null;
   department_key: string;
   label: string;
   phone_number: string;
@@ -260,22 +261,25 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
   profiles: { id: string; full_name: string }[];
 }) {
   const departmentKey = routingDepartmentKeyForOption(option);
+  const ivrConfigId = option.ivr_config_id || null;
   const [forwardingNumbers, setForwardingNumbers] = useState<ForwardingNumber[]>([]);
   const [newForwardLabel, setNewForwardLabel] = useState("");
   const [newForwardPhone, setNewForwardPhone] = useState("");
 
   const loadForwardingNumbers = useCallback(async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("department_forwarding_numbers" as any)
       .select("*")
       .eq("department_key", departmentKey)
       .order("priority", { ascending: true });
+    query = ivrConfigId ? query.eq("ivr_config_id", ivrConfigId) : query.is("ivr_config_id", null);
+    const { data, error } = await query;
     if (error) {
       console.error("Forwarding number load error:", error);
       return;
     }
     setForwardingNumbers((data || []) as unknown as ForwardingNumber[]);
-  }, [departmentKey]);
+  }, [departmentKey, ivrConfigId]);
 
   useEffect(() => {
     void loadForwardingNumbers();
@@ -288,6 +292,7 @@ function DepartmentEditor({ option, onSave, onSaveSilent, onDelete, profiles }: 
       ? Math.max(...forwardingNumbers.map((row) => row.priority || 100)) + 1
       : 1;
     const { error } = await supabase.from("department_forwarding_numbers" as any).insert({
+      ivr_config_id: ivrConfigId,
       department_key: departmentKey,
       label: newForwardLabel.trim() || "Cell",
       phone_number: phone,

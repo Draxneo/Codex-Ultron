@@ -343,6 +343,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const businessUnit = (await resolveBusinessUnitByPhone(supabase, toNumber)) ||
       (await getDefaultBusinessUnit(supabase));
+    const messageCompanyMetadata = {
+      business_unit_id: businessUnit?.id || null,
+      business_unit_slug: businessUnit?.slug || null,
+      company_phone_number: toNumber,
+    };
 
     const normalizedFrom = from.replace(/\D/g, "").slice(-10);
 
@@ -430,9 +435,10 @@ Deno.serve(async (req) => {
       let matchedReminder: any = null;
       for (const r of reminders || []) {
         const { data: job } = await supabase.from("jobs")
-          .select("customer_phone")
+          .select("customer_phone, business_unit_id")
           .eq("id", r.job_id)
           .single();
+        if (businessUnit?.id && job?.business_unit_id && job.business_unit_id !== businessUnit.id) continue;
         if (job?.customer_phone && job.customer_phone.replace(/\D/g, "").slice(-10) === normalizedFrom) {
           matchedReminder = { ...r, customer_phone: job.customer_phone };
           break;
@@ -471,6 +477,7 @@ Deno.serve(async (req) => {
           customer_phone: from,
           job_id: matchedReminder.job_id,
           metadata: {
+            ...messageCompanyMetadata,
             jarvis_intent: normalizedBody === "C" ? "appointment_confirmed" : "reschedule_requested",
             source_event_id: messageSid,
             inbound_message: body,
@@ -569,6 +576,7 @@ Deno.serve(async (req) => {
           suggested_action: "Review this owner instruction. This does not execute automatically.",
           customer_phone: from,
           metadata: {
+            ...messageCompanyMetadata,
             owner_input_request_id: pendingRequest?.id || null,
             owner_phone_last10: ownerInputDigits,
             prompt: pendingRequest?.prompt || null,
@@ -755,6 +763,7 @@ Deno.serve(async (req) => {
           status: "pending",
           customer_phone: callerPhoneRaw || from,
           metadata: {
+            ...messageCompanyMetadata,
             customer_name: displayName,
             callback_phone: callerPhoneRaw,
             relay_phone: from,
@@ -811,6 +820,7 @@ Deno.serve(async (req) => {
           job_id: linkedJobId,
           suggested_action: "Capture the customer's real phone number, then link or create the customer.",
           metadata: {
+            ...messageCompanyMetadata,
             relay_phone: from,
             relay_source: "google",
             auto_capture_sms_sent: !recentCapture,
@@ -858,7 +868,7 @@ Deno.serve(async (req) => {
           source: "jarvis",
           status: "pending",
           customer_phone: from,
-          metadata: { customer_name: contactName, message_preview: body.slice(0, 300) },
+          metadata: { ...messageCompanyMetadata, customer_name: contactName, message_preview: body.slice(0, 300) },
         });
         console.log(`Observer: created new_lead action_item for ${from}`);
       }
@@ -1139,7 +1149,11 @@ IMPORTANT RULES:
           // Use array+[0] (NOT maybeSingle) — once 2+ pending cards exist, maybeSingle errors
           // out silently and we'd create yet another duplicate forever. This is the bug that
           // produced 4 stacked Justo/Jesus Lopez cards.
-          const existingBooking = existingBookings?.[0] || null;
+          const existingBooking = (existingBookings || []).find((row: any) => {
+            const meta = row.metadata || {};
+            if (!businessUnit?.id) return true;
+            return !meta.business_unit_id || meta.business_unit_id === businessUnit.id;
+          }) || null;
           const activeWorkLookup = await lookupActiveWorkContext(supabase, {
             customerId: resolvedCustomerId || promptCustomerId,
             phone: from,
@@ -1242,6 +1256,7 @@ IMPORTANT RULES:
               job_id: hasActiveJob ? activeWorkContext.activeJob.id : null,
               suggested_action: `Review ${ref} — customer messaged with new info`,
               metadata: buildJarvisIntentMetadata(intentDecision, {
+                ...messageCompanyMetadata,
                 customer_name: customerName,
                 customer_id: resolvedCustomerId,
                 phone: from,
@@ -1292,6 +1307,7 @@ IMPORTANT RULES:
             }
 
             const bookingMetadata = {
+              ...messageCompanyMetadata,
               customer_name: customerName,
               customer_id: resolvedCustomerId,
               customer_phone: from,
@@ -1434,12 +1450,16 @@ IMPORTANT RULES:
             // (To-Do creation removed — lockbox codes / scheduling notes now flow through action_items + booking card only.)
 
           } else if (!isInfoReply && intentDecision.actionCategory !== "new_appointment" && intentDecision.intent !== "general_question") {
-            await supabase.from("action_items")
+            let staleNewLeadDelete = supabase.from("action_items")
               .delete()
               .eq("category", "new_lead")
               .eq("customer_phone", from)
               .eq("status", "pending")
               .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+            if (businessUnit?.id) {
+              staleNewLeadDelete = staleNewLeadDelete.eq("metadata->>business_unit_id", businessUnit.id);
+            }
+            await staleNewLeadDelete;
             await supabase.from("action_items").insert({
               title: `${customerName} - ${intentDecision.intent.replaceAll("_", " ")}`,
               description: intentDecision.summary || extracted.summary || body.slice(0, 200),
@@ -1451,6 +1471,7 @@ IMPORTANT RULES:
               job_id: linkedJobId,
               suggested_action: intentDecision.suggestedAction,
               metadata: buildJarvisIntentMetadata(intentDecision, {
+                ...messageCompanyMetadata,
                 customer_name: customerName,
                 customer_id: resolvedCustomerId,
                 phone: from,
@@ -1500,6 +1521,7 @@ IMPORTANT RULES:
                 customer_phone: from,
                 job_id: linkedJobId,
                 metadata: {
+                  ...messageCompanyMetadata,
                   sms_extraction: extracted,
                   customer_name: customerName,
                   customer_id: resolvedCustomerId,
@@ -1529,7 +1551,7 @@ IMPORTANT RULES:
               status: "pending",
               customer_phone: from,
               job_id: linkedJobId,
-              metadata: { fallback: true, error: String(obsErr), message_preview: body.slice(0, 300), media_urls: mediaUrls.length > 0 ? mediaUrls : undefined },
+              metadata: { ...messageCompanyMetadata, fallback: true, error: String(obsErr), message_preview: body.slice(0, 300), media_urls: mediaUrls.length > 0 ? mediaUrls : undefined },
             });
             console.log(`Observer: created FALLBACK action_item for ${from} after AI failure`);
           } catch (fallbackErr) {

@@ -550,7 +550,9 @@ Deno.serve(async (req) => {
     // forward_client — build list of Client identities to ring
     const twilioNumber = businessCallerId;
 
-    const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys);
+    const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys, {
+      ivrConfigId: ivrConfig?.id || null,
+    });
     const inboundRouteMode = ((option as any).inbound_route_mode || "cell_forwarding").toLowerCase();
     let preparedDesktopDialList: any = null;
     if (forwardingNumbers.length > 0 && inboundRouteMode !== "softphone") {
