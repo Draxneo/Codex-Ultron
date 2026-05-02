@@ -7,6 +7,13 @@ function formatUsPhone(phone?: string | null): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+function isHvacBusinessUnit(settingsMap: Record<string, string>): boolean {
+  const slug = String(settingsMap.business_unit_slug || "").toLowerCase();
+  const name = String(settingsMap.company_display_name || settingsMap.company_name || "").toLowerCase();
+  return ["carnes", "carnes-and-sons", "carnes_sons", "hvac"].includes(slug) ||
+    /\b(air conditioning|hvac|heating|cooling)\b/.test(name);
+}
+
 async function applyBusinessUnitHeading(supabase: any, settingsMap: Record<string, string>, invoice: any, job: any) {
   const customer = job?.customers || {};
   const explicitBusinessUnitId =
@@ -103,6 +110,7 @@ Deno.serve(async (req) => {
       companySettings[row.key] = row.value;
     }
     const brandedCompanySettings = await applyBusinessUnitHeading(supabase, companySettings, invoice, job);
+    const includeHvacBlocks = isHvacBusinessUnit(brandedCompanySettings);
 
     // Fetch approved estimate data linked to this job
     let approvedEstimate = null;
@@ -156,7 +164,7 @@ Deno.serve(async (req) => {
     const customerId = job?.customer_id;
     const jobId = invoice.job_id;
 
-    if (jobId) {
+    if (jobId && includeHvacBlocks) {
       // Old equipment (customer_equipment)
       const { data: oldEquipment } = await supabase
         .from("customer_equipment")
@@ -246,7 +254,7 @@ Deno.serve(async (req) => {
       { name: "Tier 5", min: 20.0, max: 99, earlyPer: 310, burnoutPer: 275 },
     ];
 
-    if (equipmentDocs && equipmentDocs.ahri.length > 0) {
+    if (includeHvacBlocks && equipmentDocs && equipmentDocs.ahri.length > 0) {
       const ahri = equipmentDocs.ahri[0];
       const seer2 = ahri.seer2 ?? 0;
       const eer2 = ahri.eer2 ?? 0;
