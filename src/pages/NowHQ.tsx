@@ -343,7 +343,12 @@ function WorkflowCard({
                 type="button"
                 variant="outline"
                 className="justify-between"
-                onClick={() => openSmsComposer(card.customerPhone, { contactName: card.customerName })}
+                onClick={() => openSmsComposer(card.customerPhone, {
+                  contactName: card.customerName,
+                  threadKey: card.smsThreadKey,
+                  fromNumber: card.smsFromNumber,
+                  businessUnitId: card.businessUnitId,
+                })}
               >
                 Text customer <MessageSquare className="h-4 w-4" />
               </Button>

@@ -724,6 +724,11 @@ Deno.serve(async (req) => {
             phone,
             customer_name: existingRow.contact_name || null,
             call_id: existingRow.id,
+            source_table: "call_log",
+            source_event_id: existingRow.id,
+            business_unit_id: existingRow.business_unit_id || null,
+            company_phone_number: existingRow.called_number || null,
+            company_phone_last10: String(existingRow.called_number || "").replace(/\D/g, "").slice(-10) || null,
           },
         });
         console.log(`Missed call action_item created for ${callerDisplay}`);

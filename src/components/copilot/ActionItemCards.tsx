@@ -59,6 +59,27 @@ const PRIORITY_COLORS: Record<string, string> = {
   low:      "bg-muted/50 text-muted-foreground/70 border-border/50",
 };
 
+function getActionItemSmsContext(item: any) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  return {
+    contactName: meta.customer_name || item.customer_name || undefined,
+    jobId: item.job_id || meta.job_id || undefined,
+    customerId: item.customer_id || meta.customer_id || undefined,
+    threadKey: meta.thread_key || meta.threadKey || null,
+    fromNumber:
+      meta.company_phone_number ||
+      meta.companyPhoneNumber ||
+      meta.called_number ||
+      meta.calledNumber ||
+      meta.from_number ||
+      meta.fromNumber ||
+      meta.to_number ||
+      meta.toNumber ||
+      null,
+    businessUnitId: meta.business_unit_id || meta.businessUnitId || null,
+  };
+}
+
 export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -105,8 +126,13 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
     setSendingId(item.id);
     try {
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
+      const smsContext = getActionItemSmsContext(item);
       const result = await sendSmsImpl({
         to: phone, body: draft, jobId: item.job_id || null,
+        fromNumber: smsContext.fromNumber,
+        businessUnitId: smsContext.businessUnitId,
+        contactName: smsContext.contactName,
+        relatedCustomerId: smsContext.customerId,
         source: "action_item_reply", hitlApproved: true, silent: true,
       });
       if (!result.success) throw new Error(result.error || "Send failed");
@@ -476,7 +502,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                   closeAsAccepted();
                 };
                 const textPhone = () => {
-                  if (phone) openSmsComposer(phone);
+                  if (phone) openSmsComposer(phone, getActionItemSmsContext(item));
                   closeAsAccepted();
                 };
 

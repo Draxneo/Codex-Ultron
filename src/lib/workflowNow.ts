@@ -36,6 +36,9 @@ export type WorkflowNowCard = {
   customerName: string;
   customerPhone?: string | null;
   customerEmail?: string | null;
+  smsThreadKey?: string | null;
+  smsFromNumber?: string | null;
+  businessUnitId?: string | null;
   address?: string | null;
   status?: string | null;
   source?: string | null;
@@ -628,6 +631,18 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
     customerName: customer,
     customerPhone: phone,
     customerEmail: metadata.email || null,
+    smsThreadKey: metadata.thread_key || metadata.threadKey || null,
+    smsFromNumber:
+      metadata.company_phone_number ||
+      metadata.companyPhoneNumber ||
+      metadata.called_number ||
+      metadata.calledNumber ||
+      metadata.from_number ||
+      metadata.fromNumber ||
+      metadata.to_number ||
+      metadata.toNumber ||
+      null,
+    businessUnitId: metadata.business_unit_id || metadata.businessUnitId || null,
     address: metadata.address || metadata.mentioned_address || null,
     status: item.status,
     source: item.category,

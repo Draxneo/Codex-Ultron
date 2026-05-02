@@ -40,6 +40,10 @@ function normalizeMedia(input: unknown): NormalizedMedia[] {
   return out;
 }
 
+function phoneLast10(value?: string | null): string {
+  return String(value || "").replace(/\D/g, "").slice(-10);
+}
+
 const retiredSmsSources = new Set([
   "auto-advance-workflow",
   "run-lead-drip",
@@ -462,7 +466,9 @@ Deno.serve(async (req) => {
     // ── Auto-dismiss lead-triage action_items for this recipient (best-effort) ──
     if (!isInternalAlert) (globalThis as any).EdgeRuntime?.waitUntil((async () => {
       try {
-        const last10 = normalizedTo.replace(/\D/g, "").slice(-10);
+        const last10 = phoneLast10(normalizedTo);
+        const senderBusinessUnitId = senderResolution.businessUnit?.id || null;
+        const senderLineLast10 = phoneLast10(fromNumber);
         if (last10.length !== 10) return;
         const { data: matches } = await supabase
           .from("action_items")
@@ -470,18 +476,47 @@ Deno.serve(async (req) => {
           .eq("status", "pending")
           .in("category", ["new_lead", "new_appointment", "missed_call", "follow_up", "thread_attention", "schedule_change", "eta_request", "access_note", "pet_warning", "contact_update", "reschedule", "confirmation", "dispatch_callback"]);
         const toResolve = (matches || []).filter((row: any) => {
-          const d = String(row.customer_phone || "").replace(/\D/g, "").slice(-10);
-          return d === last10;
+          const d = phoneLast10(row.customer_phone);
+          if (d !== last10) return false;
+
+          const meta = row.metadata || {};
+          const itemBusinessUnitId = String(meta.business_unit_id || meta.businessUnitId || "").trim();
+          const itemLineLast10 = phoneLast10(
+            meta.company_phone_number ||
+            meta.companyPhoneNumber ||
+            meta.called_number ||
+            meta.calledNumber ||
+            meta.from_number ||
+            meta.fromNumber ||
+            meta.to_number ||
+            meta.toNumber
+          );
+
+          if (senderBusinessUnitId && itemBusinessUnitId) return itemBusinessUnitId === senderBusinessUnitId;
+          if (senderLineLast10 && itemLineLast10) return itemLineLast10 === senderLineLast10;
+
+          // Legacy cards without a company line should not be auto-dismissed in
+          // the multi-company app. A human can still clear those explicitly.
+          return !senderBusinessUnitId && !senderLineLast10 && !itemBusinessUnitId && !itemLineLast10;
         });
         if (toResolve.length === 0) return;
-        await supabase
-          .from("action_items")
-          .update({
-            status: "dismissed",
-            resolved_at: new Date().toISOString(),
-            metadata: { resolved_reason: "outbound_sms_sent", source: sourceFunction, sms_log_id: smsLogId },
-          })
-          .in("id", toResolve.map((r: any) => r.id));
+        for (const row of toResolve) {
+          await supabase
+            .from("action_items")
+            .update({
+              status: "dismissed",
+              resolved_at: new Date().toISOString(),
+              metadata: {
+                ...(row.metadata || {}),
+                resolved_reason: "outbound_sms_sent",
+                source: sourceFunction,
+                sms_log_id: smsLogId,
+                resolved_business_unit_id: senderBusinessUnitId,
+                resolved_from_number: fromNumber,
+              },
+            })
+            .eq("id", row.id);
+        }
         console.log(`Auto-dismissed ${toResolve.length} action_item(s) for ${last10} on outbound SMS`);
       } catch (e) {
         console.warn("Auto-dismiss action_items failed:", e);
