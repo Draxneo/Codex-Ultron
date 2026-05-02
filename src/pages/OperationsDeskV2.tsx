@@ -25,6 +25,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   UserPlus,
   UserRound,
   X,
@@ -1058,21 +1059,27 @@ function TeamInboxSignal() {
 function ConversationList({
   items,
   selectedId,
+  isAdmin,
   loading,
   readModelError,
   search,
   tutorialMode,
   onSearch,
   onSelect,
+  onClearForTesting,
+  clearingIds,
 }: {
   items: DeskConversation[];
   selectedId?: string;
+  isAdmin: boolean;
   loading: boolean;
   readModelError?: unknown;
   search: string;
   tutorialMode: boolean;
   onSearch: (value: string) => void;
   onSelect: (item: DeskConversation) => void;
+  onClearForTesting: (item: DeskConversation) => void;
+  clearingIds: Set<string>;
 }) {
   const PAGE_SIZE = 20;
   const hasSearch = search.trim().length > 0;
@@ -1242,23 +1249,49 @@ function ConversationList({
                 const summaryText = isChannelOnlyText(item.summary) ? "Review what happened" : item.summary;
                 const detailText = cleanConversationDetail(item.detail);
                 const isSelected = selectedId === item.id;
+                const showTestingDelete = isAdmin && group.key === "needs_action";
+                const isClearing = clearingIds.has(item.id);
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelect(item)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onSelect(item);
+                    }}
                     title={visual.label}
                     aria-pressed={isSelected}
                     className={cn(
-                      "group w-full rounded-lg border border-l-4 px-3 py-2 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
+                      "group relative w-full rounded-lg border border-l-4 px-3 py-2 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
                       isSelected ? cn(visual.selectedClass, "intake-selected-card animate-selected-card") : visual.cardClass,
                       primaryBadge?.label === "Urgent" && !isSelected && "border-red-300 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20",
                       primaryBadge?.label === "Needs reply" && !isSelected && "border-amber-300 bg-amber-50/70 dark:border-amber-900/70 dark:bg-amber-950/20",
                       item.unread && !isSelected && "ring-1 ring-primary/15"
                     )}
                   >
+                    {showTestingDelete && (
+                      <button
+                        type="button"
+                        title="Clear this testing card from Intake"
+                        aria-label="Clear this testing card from Intake"
+                        disabled={isClearing}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onClearForTesting(item);
+                        }}
+                        className={cn(
+                          "absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/90 text-muted-foreground opacity-0 shadow-sm transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus:opacity-100",
+                          isClearing && "pointer-events-none opacity-60"
+                        )}
+                      >
+                        {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
+                      <div className={cn("flex min-w-0 items-center gap-2", showTestingDelete && "pr-8")}>
                         <div
                           className={cn(
                             "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-transform duration-200 group-hover:scale-105",
@@ -1300,7 +1333,7 @@ function ConversationList({
                     </div>
                     <p className={cn("mt-2 truncate text-xs font-medium", isSelected ? "text-foreground" : "text-foreground/90")}>{summaryText}</p>
                     <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{detailText}</p>
-                  </button>
+                  </div>
                 );
               })}
               </div>
@@ -3340,7 +3373,8 @@ function HumanModeDesk({
 export default function OperationsDeskV2() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, role } = useAuth();
   const { conversations: callConversations, loading: callsLoading, markAsRead: markCallsAsRead } = useCallLog();
   const {
     conversations: smsConversations,
@@ -3388,6 +3422,7 @@ export default function OperationsDeskV2() {
   const [selected, setSelected] = useState<DeskConversation | null>(null);
   const [newJobOpen, setNewJobOpen] = useState(false);
   const [tutorialMode, setTutorialMode] = useState(() => localStorage.getItem("intake_tutorial_mode") === "true");
+  const [clearingIds, setClearingIds] = useState<Set<string>>(() => new Set());
 
   const conversations = useMemo(() => {
     const items = [
@@ -3429,6 +3464,75 @@ export default function OperationsDeskV2() {
 
   const handleConversationHandled = (conversationId: string) => {
     setSelected((current) => (current?.id === conversationId ? null : current));
+  };
+
+  const clearConversationForTesting = async (item: DeskConversation) => {
+    if (role !== "admin") {
+      toast({ title: "Admins only", description: "Only an admin can clear intake cards while testing.", variant: "destructive" });
+      return;
+    }
+    if (!user?.id) {
+      toast({ title: "Sign in required", description: "We need your user account so the cleanup stamp is accountable." });
+      return;
+    }
+    if (clearingIds.has(item.id)) return;
+
+    setClearingIds((current) => new Set(current).add(item.id));
+    const phoneLast10 = normalizeLast10(item.phone);
+    const canonical = item.canonical || null;
+    const latestCall = item.kind === "call" ? (item.raw as CallConversation).lastCall : null;
+    const smsConversation = item.kind === "sms" ? item.raw as SmsConversation : null;
+    const communicationId = item.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id;
+    const clearedBy = user.email || "Admin";
+
+    try {
+      if (item.kind === "sms") {
+        await markSmsAsRead(item.phone);
+        await setSmsThreadStatus(item.phone, "done");
+      } else {
+        await markCallsAsRead(item.phone);
+      }
+
+      const { data, error } = await (supabase as any)
+        .rpc("mark_intake_communication_handled", {
+          _channel: canonical?.intake_channel || item.kind,
+          _phone_number: item.phone,
+          _handled_by_name: clearedBy,
+          _source_table: canonical?.source_table || (item.kind === "call" ? "call_log" : "sms_log"),
+          _source_event_id: canonical?.source_id || communicationId || null,
+          _metadata: {
+            reason: "admin_testing_clear",
+            conversation_id: item.id,
+            communication_id: communicationId || null,
+            phone_last10: phoneLast10 || null,
+            summary: item.summary || null,
+            cleared_by_user_id: user.id,
+            cleared_by_name: clearedBy,
+            cleared_at: new Date().toISOString(),
+          },
+        });
+      if (error) throw error;
+      if (data && data.ok === false) throw new Error(data.reason || "The intake card was not cleared.");
+
+      setSelected((current) => (current?.id === item.id ? null : current));
+      queryClient.invalidateQueries({ queryKey: ["call_log"] });
+      queryClient.invalidateQueries({ queryKey: ["sms_log"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-communications"] });
+      queryClient.invalidateQueries({ queryKey: ["intake-thread-statuses"] });
+      toast({ title: "Intake card cleared", description: "The call/text history stayed saved, but this card is out of the testing queue." });
+    } catch (error: any) {
+      toast({
+        title: "Could not clear card",
+        description: error?.message || "The intake card stayed in the queue.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    }
   };
 
   useEffect(() => {
@@ -3492,12 +3596,15 @@ export default function OperationsDeskV2() {
         <ConversationList
           items={conversations}
           selectedId={selected?.id}
+          isAdmin={role === "admin"}
           loading={loading}
           readModelError={unifiedError}
           search={search}
           tutorialMode={tutorialMode}
           onSearch={setSearch}
           onSelect={selectConversation}
+          onClearForTesting={clearConversationForTesting}
+          clearingIds={clearingIds}
         />
         <CustomerWorkspace
           key={selected?.id || "empty"}
