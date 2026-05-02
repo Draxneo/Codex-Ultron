@@ -218,14 +218,6 @@ export function startRingtone(ringtoneId?: string, customUrl?: string) {
   stopRingtone();
   const id = ringtoneId || "classic";
 
-  // OS-level beep (Electron only) — guarantees an audible cue even if
-  // WebAudio is suspended or the audio device is asleep.
-  try {
-    (window as any).electronAPI?.playSystemBeep?.();
-  } catch {
-    // ignore
-  }
-
   // Custom uploaded audio
   if (isCustomRingtone(id) && customUrl) {
     customAudioEl = new Audio(customUrl);

@@ -652,10 +652,6 @@ app.whenReady().then(() => {
       } else {
         ensurePhoneWindow();
       }
-      // A few system beeps over ~2s — wakes the monitor on most Windows setups
-      shell.beep();
-      setTimeout(() => shell.beep(), 700);
-      setTimeout(() => shell.beep(), 1400);
     } catch (e) {
       console.warn('[Wake] incoming-call-wake failed:', e);
     }

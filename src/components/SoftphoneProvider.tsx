@@ -77,7 +77,12 @@ function SoftphoneRingtoneController({ softphone }: { softphone: SoftphoneContex
 
   useEffect(() => {
     const isIncomingRing = softphone.status === "ringing" && !!softphone.incomingCall;
-    if (!isIncomingRing) {
+    const isOutboundRingback =
+      (softphone.status === "connecting" || softphone.status === "ringing") &&
+      !!softphone.activeCall &&
+      !softphone.incomingCall;
+
+    if (!isIncomingRing && !isOutboundRingback) {
       stopRingtone();
       return;
     }
@@ -91,7 +96,7 @@ function SoftphoneRingtoneController({ softphone }: { softphone: SoftphoneContex
 
     startRingtone(ringtoneId, customUrl);
     return () => stopRingtone();
-  }, [softphone.status, softphone.incomingCall, ringtoneSetting]);
+  }, [softphone.status, softphone.incomingCall, softphone.activeCall, ringtoneSetting]);
 
   return null;
 }

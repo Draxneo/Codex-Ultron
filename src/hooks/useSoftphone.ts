@@ -58,6 +58,9 @@ export interface SoftphoneState {
 const CALL_DEBUG_BUFFER: Array<{ ts: string; tag: string; data: any }> = [];
 const CALL_DEBUG_MAX = 200;
 let _callStartedAt: number | null = null;
+const SILENT_TWILIO_SOUND =
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQQAAAAAAA==";
+
 function callDebug(tag: string, data: Record<string, any> = {}) {
   const ts = new Date().toISOString();
   const elapsedMs = _callStartedAt ? Date.now() - _callStartedAt : null;
@@ -690,10 +693,21 @@ export function useSoftphone(enabled: boolean = true) {
         closeProtection: true,
         allowIncomingWhileBusy: true,
         tokenRefreshMs: 10 * 60 * 1000,
-        sounds: { incoming: "", outgoing: "", disconnect: "" },
+        sounds: {
+          incoming: SILENT_TWILIO_SOUND,
+          outgoing: SILENT_TWILIO_SOUND,
+          disconnect: SILENT_TWILIO_SOUND,
+        },
       });
 
       deviceRef.current = device;
+      try {
+        device.audio?.incoming(false);
+        device.audio?.outgoing(false);
+        device.audio?.disconnect(false);
+      } catch (audioErr) {
+        console.warn("[Softphone] Could not disable Twilio built-in sounds:", audioErr);
+      }
 
       device.on("registered", () => {
         dispatchLifecycle({ type: "DEVICE_READY" });
