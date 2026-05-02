@@ -264,10 +264,11 @@ export function TechJarvisPushToTalk({
           description: match.description,
           unitPrice: match.unitPrice,
           quantity: 1,
-          kind: match.sourceType === "equipment" ? "equipment" : "repair",
+          kind: match.sourceType === "equipment" ? "equipment" : match.sourceType === "custom" ? "custom" : "repair",
           tier:
             match.sourceType === "equipment"
               ? inferEquipmentTier((match.metadata?.tier as string | null) || match.equipmentMatchup?.tier || null)
+              : match.sourceType === "custom" ? "recommended"
               : match.catalogItem?.default_severity === "necessary" ? "critical" : "recommended",
           sourceId: match.sourceId,
           confidence: match.confidence,
@@ -311,6 +312,7 @@ export function TechJarvisPushToTalk({
             : "Tech workflow: photos plus voice notes should become clear field notes, diagnosis summaries, repair/replacement recommendations, and next-step guidance.",
           "When discussing replacement equipment, think like the field team: brand, tonnage, system type, tier, then orientation/install location. Example: Carrier 3 ton Performance gas heat system in the attic.",
           "When discussing repairs, think like the field team: contactor, dual run capacitor, condenser fan motor, blower motor, drain flush, thermostat, control board, TXV, coil cleaning. Match field slang to the pricebook/catalog when possible.",
+          "Do not force variable OEM specialty parts into the pricebook. Control boards, CPU boards, inverter boards, ECM/variable-speed blower motors, and unusual OEM motors should become CUSTOM cart options with a clean label like 'OEM replacement part - CPU/control board'. Ask for the price if the tech did not say it.",
           "If the tech is trying to add a cart item but an important detail is missing, ask one simple follow-up question instead of guessing. Examples: capacitor MFD, motor horsepower, motor voltage.",
           enableProposalActions
             ? "If the tech describes options, respond with clear proposal item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved."

@@ -633,9 +633,12 @@ export default function CustomerCart() {
             <p className="text-sm font-semibold mb-2">
               {isPayAfterCompletion ? "Ready to pay for the completed work?" : "Choose how to proceed:"}
             </p>
+            <p className="text-xs text-muted-foreground">
+              If card checkout is not available, approve the scope and our office can collect payment another way.
+            </p>
             <Button className="w-full h-12 text-base" onClick={() => handlePay("stripe")} disabled={!!paying}>
               {paying === "stripe" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-5 w-5 mr-2" />}
-              Pay Now — ${Number(cart.total).toFixed(2)}
+              Pay by Card Now - ${Number(cart.total).toFixed(2)}
             </Button>
             <Button variant="outline" className="w-full h-11" onClick={() => handlePay("financing")} disabled={!!paying}>
               {paying === "financing" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <DollarSign className="h-5 w-5 mr-2" />}
@@ -647,7 +650,7 @@ export default function CustomerCart() {
             </Button>
             <Button variant="ghost" className="w-full h-10 text-sm" onClick={() => handlePay("approve")} disabled={!!paying}>
               {paying === "approve" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PenLine className="h-4 w-4 mr-2" />}
-              Approve Scope Only (Sign)
+              Approve Scope Only / Pay Later
             </Button>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
               <Button variant="ghost" className="h-10 text-sm" onClick={() => handlePay("contact")} disabled={!!paying}>

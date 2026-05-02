@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Plus, Send, Copy, ExternalLink, Trash2, Package, Wrench, Zap, Sparkles } from "lucide-react";
+import { AlertCircle, ShoppingCart, Plus, Send, Copy, ExternalLink, Trash2, Package, Wrench, Zap, Sparkles } from "lucide-react";
 import { useJobCart, type JobCartItem } from "@/hooks/useJobCart";
 import { JobCartPicker } from "@/components/cart/JobCartPicker";
 import { JobCartDrawer } from "@/components/cart/JobCartDrawer";
@@ -48,7 +48,7 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
   const [tierManagerOpen, setTierManagerOpen] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { cart, items, itemCount, removeItem, sendToCustomer, publicLink, isLoading, addItem } = useJobCart(jobId);
+  const { cart, items, itemCount, removeItem, sendToCustomer, syncBackupToHcp, publicLink, isLoading, addItem } = useJobCart(jobId);
   const statusInfo = getJobCartStatus(cart, itemCount);
   const permissions = getJobCartPermissions(cart, itemCount);
 
@@ -137,6 +137,30 @@ export function JobCartTab({ jobId, customerName, customerPhone }: Props) {
           </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
             <a href={publicLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
+          </Button>
+        </Card>
+      )}
+
+      {itemCount > 0 && (
+        <Card className="p-3 flex flex-col gap-2 border-amber-500/25 bg-amber-500/5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Emergency backup</p>
+              <p className="text-xs text-muted-foreground">
+                Copies this itemized estimate to the Housecall Pro job note if Stripe or the cart gives you trouble.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => syncBackupToHcp.mutate()}
+            disabled={syncBackupToHcp.isPending}
+          >
+            {syncBackupToHcp.isPending ? "Copying..." : "Copy to HCP"}
           </Button>
         </Card>
       )}

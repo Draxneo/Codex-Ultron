@@ -46,6 +46,25 @@ const ORIENTATION_OPTIONS = [
   { label: "Multiposition", value: "Multiposition", applications: ["Multiposition"] },
 ];
 
+const SPECIALTY_CUSTOM_PRESETS = [
+  {
+    name: "OEM replacement part - CPU/control board",
+    description: "Replace failed OEM control board or electronic module. Final price is based on model, availability, and warranty status.",
+  },
+  {
+    name: "OEM replacement part - variable-speed blower motor",
+    description: "Replace OEM ECM/X13/variable-speed indoor blower motor or module assembly.",
+  },
+  {
+    name: "OEM replacement part - condenser fan motor",
+    description: "Replace job-specific OEM outdoor condenser fan motor.",
+  },
+  {
+    name: "OEM replacement part - specialty component",
+    description: "Replace job-specific OEM part that is not a standard flat-rate catalog item.",
+  },
+];
+
 export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) {
   const isMobile = useIsMobile();
   const { itemCount, cart, addItem } = useJobCart(jobId);
@@ -143,6 +162,11 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
     setCustomDesc("");
   };
 
+  const applyCustomPreset = (preset: (typeof SPECIALTY_CUSTOM_PRESETS)[number]) => {
+    setCustomName(preset.name);
+    setCustomDesc(preset.description);
+  };
+
   const mobileBody = (
     <div className="flex h-full flex-col">
       {mobileMode === "menu" ? (
@@ -205,9 +229,10 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
             })} />}
             {mobileMode === "custom" && (
               <Card className="p-4 space-y-3">
+                <SpecialtyPresetButtons onSelect={applyCustomPreset} />
                 <div>
                   <Label htmlFor="mobile-custom-name">Item Name</Label>
-                  <Input id="mobile-custom-name" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. Diagnostic Fee" />
+                  <Input id="mobile-custom-name" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. OEM replacement part - CPU board" />
                 </div>
                 <div>
                   <Label htmlFor="mobile-custom-desc">Description (optional)</Label>
@@ -294,9 +319,10 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           </TabsContent>
           <TabsContent value="custom" className="mt-0">
             <Card className="p-4 space-y-3 max-w-md mx-auto">
+              <SpecialtyPresetButtons onSelect={applyCustomPreset} />
               <div>
                 <Label htmlFor="custom-name">Item Name</Label>
-                <Input id="custom-name" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. Diagnostic Fee" />
+                <Input id="custom-name" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. OEM replacement part - CPU board" />
               </div>
               <div>
                 <Label htmlFor="custom-desc">Description (optional)</Label>
@@ -395,6 +421,35 @@ function MobileAddChoice({
       </span>
       <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
     </button>
+  );
+}
+
+function SpecialtyPresetButtons({
+  onSelect,
+}: {
+  onSelect: (preset: (typeof SPECIALTY_CUSTOM_PRESETS)[number]) => void;
+}) {
+  return (
+    <div className="rounded-lg border bg-violet-500/5 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Specialty OEM shortcuts</p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">
+        Use these when the part price changes by model, supplier, or availability.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {SPECIALTY_CUSTOM_PRESETS.map((preset) => (
+          <Button
+            key={preset.name}
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-full px-2.5 text-xs"
+            onClick={() => onSelect(preset)}
+          >
+            {preset.name.replace("OEM replacement part - ", "")}
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }
 

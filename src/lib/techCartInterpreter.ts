@@ -56,7 +56,7 @@ export type TechCartCatalogItem = TechCartRepairCatalogItem;
 
 export type TechCartMatch = {
   id: string;
-  sourceType: "repair" | "equipment";
+  sourceType: "repair" | "equipment" | "custom";
   sourceId: string | null;
   catalogItem: TechCartRepairCatalogItem | null;
   equipmentMatchup?: TechCartEquipmentMatchup | null;
@@ -226,6 +226,20 @@ export function interpretTechCartSpeech(
     }
   }
 
+  for (const match of interpretSpecialtyCustomItems(transcript, text, specs)) {
+    if (seen.has(match.id)) continue;
+    seen.add(match.id);
+    matches.push(match);
+    if (match.missingSpecs.includes("price")) {
+      questions.push({
+        id: `${match.id}-price`,
+        itemName: match.name,
+        question: "What price should I put on this specialty OEM item?",
+        options: ["$850", "$1,250", "$1,750", "$2,500", "Not sure yet"],
+      });
+    }
+  }
+
   for (const match of interpretEquipment(transcript, text, specs, equipmentMatchups, approvedTerms)) {
     if (seen.has(match.id)) continue;
     seen.add(match.id);
@@ -255,6 +269,8 @@ function interpretRepairs(
 
   for (const intent of REPAIR_INTENTS) {
     if (!intent.speechNeedle.test(text)) continue;
+    if (intent.id === "control-board" && looksLikeSpecialtyCustomPart(text)) continue;
+    if (intent.id.includes("motor") && looksLikeSpecialtyCustomPart(text)) continue;
     const catalogItem = findIntentRepairItem(intent, items, text, trainingTerms);
     matches.push(buildRepairMatch(intent, catalogItem, transcript, specs));
   }
@@ -283,6 +299,89 @@ function interpretRepairs(
   }
 
   return matches;
+}
+
+function interpretSpecialtyCustomItems(
+  transcript: string,
+  text: string,
+  specs: Record<string, string>,
+): TechCartMatch[] {
+  if (!looksLikeSpecialtyCustomPart(text)) return [];
+  const specialty = detectSpecialtyPartLabel(text);
+  if (!specialty) return [];
+  const price = extractQuotedPrice(text);
+  const missingSpecs = price > 0 ? [] : ["price"];
+  return [{
+    id: `custom-specialty-${specialty.slug}`,
+    sourceType: "custom",
+    sourceId: null,
+    catalogItem: null,
+    name: specialty.name,
+    description: [
+      specialty.description,
+      "Pricing is job-specific because OEM specialty parts can vary by model, supplier, availability, and warranty status.",
+      `Tech said: ${transcript.trim()}`,
+    ].filter(Boolean).join(" "),
+    unitPrice: price,
+    confidence: price > 0 ? "medium" : "low",
+    capturedSpecs: { ...specs, specialty_part: specialty.slug, ...(price > 0 ? { price: String(price) } : {}) },
+    missingSpecs,
+    sourcePhrase: transcript.trim(),
+    metadata: {
+      match_reason: "specialty_oem_custom_item",
+      specialty_part: specialty.slug,
+      variable_pricing: true,
+      allow_custom_price: true,
+    },
+  }];
+}
+
+function looksLikeSpecialtyCustomPart(text: string) {
+  return /\b(oem|factory|special\s*order|variable[-\s]*speed|ecm|x13|cpu|module|control board|circuit board|defrost board|inverter board)\b/i.test(text)
+    && /\b(board|motor|module|part|replacement|cpu|oem|ecm|x13)\b/i.test(text);
+}
+
+function detectSpecialtyPartLabel(text: string) {
+  const labels = [
+    {
+      slug: "cpu-board",
+      needle: /\b(cpu|control board|circuit board|furnace board|defrost board|inverter board|board)\b/i,
+      name: "OEM replacement part - CPU/control board",
+      description: "Replace failed OEM control board or electronic module.",
+    },
+    {
+      slug: "variable-speed-blower-motor",
+      needle: /\b(variable[-\s]*speed|ecm|x13).*\b(blower|indoor)?\s*motor\b|\bblower motor\b/i,
+      name: "OEM replacement part - variable-speed blower motor",
+      description: "Replace OEM indoor blower motor or module assembly.",
+    },
+    {
+      slug: "blower-motor",
+      needle: /\bblower motor|indoor motor|air handler motor\b/i,
+      name: "OEM replacement part - blower motor",
+      description: "Replace OEM indoor blower motor.",
+    },
+    {
+      slug: "condenser-fan-motor",
+      needle: /\bcondenser fan motor|outdoor fan motor\b/i,
+      name: "OEM replacement part - condenser fan motor",
+      description: "Replace OEM outdoor condenser fan motor.",
+    },
+    {
+      slug: "specialty-oem-part",
+      needle: /\boem|factory|special\s*order\b/i,
+      name: "OEM replacement part - specialty component",
+      description: "Replace job-specific OEM component.",
+    },
+  ];
+  return labels.find((item) => item.needle.test(text)) || null;
+}
+
+function extractQuotedPrice(text: string) {
+  const money = text.match(/\$\s*([\d,]+(?:\.\d{1,2})?)\b/);
+  if (money) return Number(money[1].replace(/,/g, ""));
+  const verbal = text.match(/\b(?:for|at|price|priced|charge|quote)\s+([\d,]+(?:\.\d{1,2})?)\s*(?:dollars|bucks)?\b/i);
+  return verbal ? Number(verbal[1].replace(/,/g, "")) : 0;
 }
 
 function interpretEquipment(

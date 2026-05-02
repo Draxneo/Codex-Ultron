@@ -60,7 +60,7 @@ const KIND_ICON: Record<JobCartItem["kind"], typeof Package> = {
 const money = (value: number) => `$${Number(value || 0).toFixed(2)}`;
 
 export function TechCartCard({ jobId, customerId, customerPhone, customerName, bare = false, focused = false }: Props) {
-  const { cart, items, itemCount, addItem, removeItem, sendToCustomer, publicLink, presentLink } = useJobCart(jobId);
+  const { cart, items, itemCount, addItem, removeItem, sendToCustomer, syncBackupToHcp, publicLink, presentLink } = useJobCart(jobId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -289,6 +289,18 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
           <Button variant="outline" className="h-12 w-full gap-2" onClick={handleCollectPayment} disabled={!publicLink || !statusInfo.canCollectNow}>
             <CreditCard className="h-4 w-4" /> Collect Payment
           </Button>
+          {itemCount > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full gap-2"
+              onClick={() => syncBackupToHcp.mutate()}
+              disabled={syncBackupToHcp.isPending}
+            >
+              <AlertCircle className="h-4 w-4" />
+              {syncBackupToHcp.isPending ? "Copying backup..." : "Emergency copy to HCP"}
+            </Button>
+          )}
         </Card>
       </div>
 
@@ -573,6 +585,24 @@ export function TechCartCard({ jobId, customerId, customerPhone, customerName, b
 
       {/* Status-driven action row */}
       <div className="px-3 py-2.5 border-b border-border bg-muted/10">{renderActionRow()}</div>
+
+      {itemCount > 0 && (
+        <div className="border-b border-border bg-background px-3 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-full gap-2 text-xs"
+            onClick={() => syncBackupToHcp.mutate()}
+            disabled={syncBackupToHcp.isPending}
+          >
+            <AlertCircle className="h-4 w-4" />
+            {syncBackupToHcp.isPending ? "Copying backup..." : "Emergency copy to Housecall Pro"}
+          </Button>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            Backup only. Use if the cart or Stripe has trouble in the field.
+          </p>
+        </div>
+      )}
 
       {renderComfortClub()}
 

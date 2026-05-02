@@ -263,6 +263,48 @@ export function useJobCart(jobId: string | undefined) {
     onError: (e: any) => toast.error(e.message || "Failed to send"),
   });
 
+  const syncBackupToHcp = useMutation({
+    mutationFn: async () => {
+      if (!cartQuery.data?.id) throw new Error("No estimate to back up.");
+      if (!jobId) throw new Error("No job to attach the backup to.");
+      const items = itemsQuery.data || [];
+      if (items.length === 0) throw new Error("Add at least one item before creating a backup.");
+      const lineText = items
+        .map((item, index) => {
+          const qty = Number(item.quantity || 1);
+          const unit = Number(item.unit_price || 0);
+          const total = Number(item.total_price || qty * unit);
+          const desc = item.description ? ` - ${item.description}` : "";
+          return `${index + 1}. ${item.name}${desc} | qty ${qty} | ${formatCurrency(unit)} each | ${formatCurrency(total)}`;
+        })
+        .join("\n");
+      const note = [
+        "EMERGENCY ESTIMATE BACKUP",
+        `Estimate: ${cartQuery.data.estimate_number || cartQuery.data.public_token}`,
+        `Status: ${cartQuery.data.status}`,
+        `Total: ${formatCurrency(Number(cartQuery.data.total || 0))}`,
+        "",
+        lineText,
+        "",
+        "Use this as the Housecall Pro fallback record if the customer cart, Stripe, or payment link is unavailable. The customer approval link remains the source of truth in UltraOffice.",
+      ].join("\n");
+      const { data, error } = await supabase.functions.invoke("push-job-note-hcp", {
+        body: {
+          job_id: jobId,
+          note,
+          source: "UltraOffice cart backup",
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.hcp_error) {
+        throw new Error(`Backup saved locally, but Housecall Pro did not accept it: ${(data as any).hcp_error}`);
+      }
+      return data;
+    },
+    onSuccess: () => toast.success("Emergency backup copied to the job"),
+    onError: (e: any) => toast.error(e.message || "Backup could not be created"),
+  });
+
   const cart = cartQuery.data;
   const items = itemsQuery.data || [];
   const itemCount = items.reduce((s, i) => s + Number(i.quantity), 0);
@@ -277,8 +319,13 @@ export function useJobCart(jobId: string | undefined) {
     updateItem,
     removeItem,
     sendToCustomer,
+    syncBackupToHcp,
     publicLink,
     /** Fullscreen "present mode" link for in-home pitch */
     presentLink: publicLink,
   };
+}
+
+function formatCurrency(value: number) {
+  return `$${Number(value || 0).toFixed(2)}`;
 }

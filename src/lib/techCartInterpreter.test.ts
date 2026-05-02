@@ -166,4 +166,20 @@ describe("techCartInterpreter", () => {
     const match = result.matches.find((item) => item.sourceType === "equipment");
     expect(match?.sourceId).toBe("carrier-performance-3-gas-horizontal");
   });
+
+  it("turns variable OEM board work into a custom item instead of forcing pricebook", () => {
+    const result = interpretTechCartSpeech("Need an OEM CPU board for $925.", repairs, equipment);
+    const match = result.matches.find((item) => item.sourceType === "custom");
+    expect(match?.name).toContain("CPU/control board");
+    expect(match?.unitPrice).toBe(925);
+    expect(match?.missingSpecs).toEqual([]);
+  });
+
+  it("asks for price on specialty OEM motors when the tech leaves it out", () => {
+    const result = interpretTechCartSpeech("Need a variable speed blower motor.", repairs, equipment);
+    const match = result.matches.find((item) => item.sourceType === "custom");
+    expect(match?.name).toContain("variable-speed blower motor");
+    expect(match?.missingSpecs).toContain("price");
+    expect(result.questions[0].question).toContain("price");
+  });
 });
