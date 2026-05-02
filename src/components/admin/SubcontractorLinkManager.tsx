@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhone } from "@/lib/formatters";
+import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 import { cn } from "@/lib/utils";
 
 type JobOption = {
@@ -66,6 +67,17 @@ type SubcontractorLink = {
     address: string | null;
     scheduled_date: string | null;
   } | null;
+};
+
+type ExistingJobPhoto = {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  created_at: string;
+  bucket: "job-photos" | "tech-form-photos";
+  source: string;
+  category: string | null;
 };
 
 const PHOTO_SLOTS = [
@@ -215,6 +227,68 @@ export function SubcontractorLinkManager() {
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId) || null;
 
+  const selectedPhotosQuery = useQuery({
+    queryKey: ["admin-subcontractor-job-photos", selectedJobId],
+    enabled: !!selectedJobId,
+    queryFn: async () => {
+      if (!selectedJobId) return [];
+
+      const { data: attachments, error: attachmentError } = await (supabase as any)
+        .from("job_attachments")
+        .select("id, file_name, file_path, file_type, category, created_at, hidden_from_tech_share")
+        .eq("job_id", selectedJobId)
+        .order("created_at", { ascending: false });
+      if (attachmentError) throw attachmentError;
+
+      const { data: forms, error: formsError } = await supabase
+        .from("tech_forms")
+        .select("id")
+        .eq("job_id", selectedJobId);
+      if (formsError) throw formsError;
+
+      let techPhotos: any[] = [];
+      const formIds = (forms || []).map((form) => form.id);
+      if (formIds.length > 0) {
+        const { data, error } = await (supabase as any)
+          .from("tech_form_photos")
+          .select("id, file_path, photo_type, created_at")
+          .in("tech_form_id", formIds)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        techPhotos = data || [];
+      }
+
+      const jobPhotos = (attachments || [])
+        .filter((photo: any) => !photo.hidden_from_tech_share)
+        .filter((photo: any) => !String(photo.category || "").startsWith("subcontractor_"))
+        .map((photo: any) => ({
+          id: photo.id,
+          file_name: photo.file_name || "Job photo",
+          file_path: photo.file_path,
+          file_type: photo.file_type || "image/jpeg",
+          category: photo.category || null,
+          created_at: photo.created_at,
+          bucket: "job-photos" as const,
+          source: "Job photo",
+        }));
+
+      const fieldPhotos = techPhotos.map((photo: any) => ({
+        id: photo.id,
+        file_name: photo.file_path?.split("/")?.pop() || "Tech inspection photo",
+        file_path: photo.file_path,
+        file_type: "image/jpeg",
+        category: photo.photo_type || null,
+        created_at: photo.created_at,
+        bucket: "tech-form-photos" as const,
+        source: "Tech inspection",
+      }));
+
+      return [...fieldPhotos, ...jobPhotos]
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 24);
+    },
+  });
+
   const createLink = useMutation({
     mutationFn: async () => {
       if (!selectedJobId) throw new Error("Pick a job first.");
@@ -322,7 +396,7 @@ export function SubcontractorLinkManager() {
                         </div>
                         <p className="mt-1 truncate text-sm text-muted-foreground">{job.address || "No address on job"}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {[formatPhone(job.customer_phone) || job.customer_phone, jobEquipmentSummary(job)].filter(Boolean).join(" • ")}
+                          {[formatPhone(job.customer_phone) || job.customer_phone, jobEquipmentSummary(job)].filter(Boolean).join(" - ")}
                         </p>
                       </div>
                       <div className="shrink-0 text-right text-xs text-muted-foreground">
@@ -410,6 +484,49 @@ export function SubcontractorLinkManager() {
               </div>
             </div>
 
+            {selectedJob ? (
+              <div className="rounded-xl border bg-muted/20 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label>Inspection photos shared with subcontractor</Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Existing job photos are included on the public link so they can build their material list before pickup.
+                    </p>
+                  </div>
+                  <Badge variant="secondary">{selectedPhotosQuery.data?.length || 0} photos</Badge>
+                </div>
+                {selectedPhotosQuery.isLoading ? (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading photos
+                  </div>
+                ) : selectedPhotosQuery.data?.length ? (
+                  <div className="mt-3 grid grid-cols-6 gap-2">
+                    {selectedPhotosQuery.data.slice(0, 12).map((photo) => (
+                      <a
+                        key={`${photo.bucket}-${photo.id}`}
+                        href={resolveStorageMediaUrl(photo.file_path, photo.bucket)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="aspect-square overflow-hidden rounded-lg border bg-muted"
+                        title={photo.file_name}
+                      >
+                        <img
+                          src={resolveStorageMediaUrl(photo.file_path, photo.bucket)}
+                          alt={photo.file_name}
+                          className="h-full w-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                    No inspection photos are attached to this job yet.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
             <Button
               className="h-12 w-full gap-2 bg-orange-500 text-base font-bold text-white hover:bg-orange-600"
               onClick={() => createLink.mutate()}
@@ -476,6 +593,7 @@ export function SubcontractorLinkManager() {
                 scope={scope}
                 equipment={equipment}
                 slots={slots}
+                inspectionPhotos={selectedPhotosQuery.data || []}
               />
             ) : (
               <div className="flex h-[360px] items-center justify-center rounded-xl border border-dashed bg-muted/20 p-6 text-center text-muted-foreground">
@@ -558,12 +676,14 @@ function DraftSubcontractorPreview({
   scope,
   equipment,
   slots,
+  inspectionPhotos,
 }: {
   job: JobOption;
   subcontractorName: string;
   scope: string;
   equipment: string;
   slots: string[];
+  inspectionPhotos: ExistingJobPhoto[];
 }) {
   const schedule = `${formatDate(job.scheduled_date)} - ${formatWindow(job.arrival_start, job.arrival_end)}`;
   const displaySlots = slots.length ? slots : ["before", "after"];
@@ -599,6 +719,33 @@ function DraftSubcontractorPreview({
           <p className="mt-2 text-sm font-semibold text-white">
             {equipment.trim() || jobEquipmentSummary(job) || "Equipment not entered yet."}
           </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-bold">Photos from office</p>
+              <p className="text-sm text-slate-400">Inspection photos they can use to build the material list.</p>
+            </div>
+            <Badge className="bg-slate-700 text-white">{inspectionPhotos.length}</Badge>
+          </div>
+          {inspectionPhotos.length > 0 ? (
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {inspectionPhotos.slice(0, 8).map((photo) => (
+                <div key={`${photo.bucket}-${photo.id}`} className="aspect-square overflow-hidden rounded-lg border border-white/10 bg-slate-800">
+                  <img
+                    src={resolveStorageMediaUrl(photo.file_path, photo.bucket)}
+                    alt={photo.file_name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed border-white/10 p-3 text-sm text-slate-400">
+              No inspection photos attached yet.
+            </p>
+          )}
         </div>
 
         <div className="rounded-xl border border-white/10 bg-slate-900 p-4">

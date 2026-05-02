@@ -11,6 +11,7 @@ import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhone } from "@/lib/formatters";
 import { launchNavigation } from "@/lib/launchNavigation";
+import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 import { cn } from "@/lib/utils";
 
 type SubcontractorPhoto = {
@@ -20,6 +21,11 @@ type SubcontractorPhoto = {
   file_type: string | null;
   category: string | null;
   created_at: string;
+};
+
+type InspectionPhoto = SubcontractorPhoto & {
+  bucket: "job-photos" | "tech-form-photos";
+  source: string | null;
 };
 
 type SubcontractorJobPayload = {
@@ -44,6 +50,7 @@ type SubcontractorJobPayload = {
   completed_at: string | null;
   expires_at: string;
   photos: SubcontractorPhoto[];
+  inspection_photos: InspectionPhoto[];
 };
 
 function slotLabel(slot: string) {
@@ -53,6 +60,10 @@ function slotLabel(slot: string) {
 function photoUrl(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
   return supabase.storage.from("job-photos").getPublicUrl(path).data.publicUrl;
+}
+
+function inspectionPhotoUrl(photo: InspectionPhoto) {
+  return resolveStorageMediaUrl(photo.file_path, photo.bucket || "job-photos");
 }
 
 function formatDate(date?: string | null) {
@@ -285,6 +296,45 @@ export default function SubcontractorJobPublic() {
               <p className="mt-1 text-sm font-semibold text-white">{equipmentSummary(job)}</p>
             </div>
           ) : null}
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-slate-900 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Photos from the office</h2>
+              <p className="text-sm text-slate-400">Use these inspection photos to plan materials before pickup.</p>
+            </div>
+            <Camera className="h-6 w-6 text-amber-300" />
+          </div>
+
+          {job.inspection_photos?.length ? (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {job.inspection_photos.map((photo) => (
+                <a
+                  key={`${photo.bucket}-${photo.id}`}
+                  href={inspectionPhotoUrl(photo)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group overflow-hidden rounded-xl border border-white/10 bg-slate-950"
+                >
+                  <div className="aspect-square overflow-hidden">
+                    <img
+                      src={inspectionPhotoUrl(photo)}
+                      alt={photo.file_name || "Inspection photo"}
+                      className="h-full w-full object-cover transition group-active:scale-95"
+                    />
+                  </div>
+                  <div className="truncate border-t border-white/10 px-2 py-1 text-[11px] text-slate-300">
+                    {slotLabel(photo.category || photo.source || "Photo")}
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+              No inspection photos were attached to this work link yet.
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-white/10 bg-slate-900 p-4">
