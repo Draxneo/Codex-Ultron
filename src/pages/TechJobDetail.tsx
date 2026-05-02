@@ -19,7 +19,6 @@ import {
   Mic,
   Navigation,
   Phone,
-  Sparkles,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +76,7 @@ function jobProblem(job: any) {
   return (
     (job?.description && String(job.description).trim()) ||
     (job?.hcp_note && String(job.hcp_note).trim()) ||
-    "Review the concern, document the diagnosis, and talk through the next step with the customer."
+    "No notes yet."
   );
 }
 
@@ -229,11 +228,9 @@ export default function TechJobDetail() {
           onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)}
         />
 
-        <TechWorkBrief techWork={techWork} onOpenPhotos={() => scrollToSection("tech-findings")} onOpenCart={() => navigate(`/tech/jobs/${id}/cart`)} />
-
         <TechCollapsibleCard
           icon={Mic}
-          title="JARVIS Diagnosis + Estimate Draft"
+          title="Jarvis"
           iconBg="bg-purple-500/10"
           iconColor="text-purple-500"
           collapsible={false}
@@ -251,12 +248,12 @@ export default function TechJobDetail() {
           />
         </TechCollapsibleCard>
 
-        <TechCollapsibleCard icon={FileText} title="Job Brief" iconBg="bg-amber-500/10" iconColor="text-amber-600" collapsible={false}>
+        <TechCollapsibleCard icon={FileText} title="Notes" iconBg="bg-amber-500/10" iconColor="text-amber-600" collapsible={false}>
           <div className="space-y-3 p-4">
-            <InfoBlock label="Customer concern" value={problemSummary} />
+            <InfoBlock label="Customer" value={problemSummary} />
             <div className="grid grid-cols-2 gap-2">
-              <FieldTile icon={Wrench} label="Type" value={cleanLabel(job.job_type || "Service")} detail="Confirm repair or estimate path." />
-              <FieldTile icon={CheckCircle2} label="Goal" value="Approval-ready estimate" detail="JARVIS drafts line items; tech reviews before SMS." />
+              <FieldTile icon={Wrench} label="Type" value={cleanLabel(job.job_type || "Service")} />
+              <FieldTile icon={CheckCircle2} label="Goal" value="Customer approval" />
             </div>
           </div>
         </TechCollapsibleCard>
@@ -291,23 +288,6 @@ export default function TechJobDetail() {
             bare
           />
         </TechCollapsibleCard>
-
-        <section className="rounded-lg border bg-background p-4 shadow-sm">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base font-semibold text-foreground">Ready to send for approval?</h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                JARVIS can draft estimate line items from the diagnosis. Review the proposal before sending an approval link to the customer.
-              </p>
-              <Button className="mt-3 w-full gap-2" onClick={() => navigate(`/tech/jobs/${id}/cart`)}>
-                Open proposal workspace
-              </Button>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );
@@ -356,9 +336,6 @@ function DestinationCard({
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Badge variant="outline" className="mb-2 rounded-sm bg-background text-[10px]">
-              Destination
-            </Badge>
             <h1 className="text-xl font-bold leading-tight text-foreground">{customerName}</h1>
             <div className="mt-2 space-y-1 text-sm leading-snug text-muted-foreground">
               <p className="flex gap-2">
@@ -431,8 +408,8 @@ function TechNowCard({
   const primaryAction = (() => {
     if (completed) {
       return {
-        title: "Job finished",
-        detail: `Completed ${actionTime(completedAt) || "today"}. Office can review the photos, quote, and notes.`,
+        title: "Finished",
+        detail: actionTime(completedAt) || "Done",
         icon: CheckCircle2,
         onClick: onOpenStatus,
         tone: "done" as const,
@@ -440,8 +417,8 @@ function TechNowCard({
     }
     if (!onMyWaySentAt) {
       return {
-        title: "Send the on-my-way text",
-        detail: "Tell the customer you are headed over before you start driving.",
+        title: "On My Way",
+        detail: "Send ETA",
         icon: Navigation,
         onClick: onOpenStatus,
         tone: "urgent" as const,
@@ -449,8 +426,8 @@ function TechNowCard({
     }
     if (!startedAt) {
       return {
-        title: "Arrive and start the job",
-        detail: "When you get to the house, start the job so dispatch knows you are on site.",
+        title: "Arrive",
+        detail: "Start job",
         icon: MapPin,
         onClick: onOpenStatus,
         tone: "urgent" as const,
@@ -458,8 +435,8 @@ function TechNowCard({
     }
     if (!hasPhotos) {
       return {
-        title: "Take the first photos",
-        detail: "Get the unit, data plate, problem area, and anything the customer should see.",
+        title: "Photos",
+        detail: "Add first set",
         icon: ImagePlus,
         onClick: onOpenPhotos,
         tone: "normal" as const,
@@ -467,8 +444,8 @@ function TechNowCard({
     }
     if (!nextStep) {
       return {
-        title: "Tell Jarvis what you found",
-        detail: "Use push-to-talk. Jarvis will clean it up and help write the repair or replacement quote.",
+        title: "Jarvis",
+        detail: "Findings",
         icon: Mic,
         onClick: onOpenJarvis,
         tone: "normal" as const,
@@ -476,7 +453,7 @@ function TechNowCard({
     }
     if (!hasEstimate) {
       return {
-        title: "Build the customer option",
+        title: "Quote",
         detail: nextStep,
         icon: Wrench,
         onClick: onOpenCart,
@@ -484,8 +461,8 @@ function TechNowCard({
       };
     }
     return {
-      title: "Review, add after photos, then finish",
-      detail: "Make sure the customer-facing quote and final proof photos are ready before closing the job.",
+      title: "Wrap Up",
+      detail: "Photos, quote, finish",
       icon: ClipboardCheck,
       onClick: onOpenPhotos,
       tone: "normal" as const,
@@ -514,10 +491,10 @@ function TechNowCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Do this now</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Next</p>
             {etaSentAt ? (
               <Badge variant="outline" className="rounded-sm text-[10px]">
-                ETA sent {etaSentAt}
+                {etaSentAt}
               </Badge>
             ) : null}
           </div>
@@ -527,60 +504,9 @@ function TechNowCard({
       </button>
 
       <div className="grid grid-cols-3 gap-2 border-t p-3">
-        <MiniActionButton icon={Mic} label="Talk" detail="Jarvis" onClick={onOpenJarvis} />
-        <MiniActionButton icon={ImagePlus} label="Photos" detail={`${attachmentCount} saved`} onClick={onOpenPhotos} />
-        <MiniActionButton icon={Wrench} label="Quote" detail={`${estimateCount} started`} onClick={onOpenCart} />
-      </div>
-    </section>
-  );
-}
-
-function TechWorkBrief({
-  techWork,
-  onOpenPhotos,
-  onOpenCart,
-}: {
-  techWork: TechWorkSummaryRow | null;
-  onOpenPhotos: () => void;
-  onOpenCart: () => void;
-}) {
-  const nextStep = techWork?.tech_next_step || "No field notes yet. As you talk to Jarvis and add photos, the office will see the latest update here.";
-  const attachmentCount = Number(techWork?.attachment_count || 0);
-  const estimateCount = Number(techWork?.estimate_count || 0);
-
-  return (
-    <section className="rounded-lg border bg-background p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Sparkles className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">What the office can see</h2>
-            <Badge variant="outline" className="rounded-sm text-[10px]">
-              Office sees this too
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{nextStep}</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onOpenPhotos}
-              className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
-            >
-              <p className="text-lg font-bold text-foreground">{attachmentCount}</p>
-              <p className="text-xs text-muted-foreground">photos and files</p>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenCart}
-              className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
-            >
-              <p className="text-lg font-bold text-foreground">{estimateCount}</p>
-              <p className="text-xs text-muted-foreground">quotes started</p>
-            </button>
-          </div>
-        </div>
+        <MiniActionButton icon={Mic} label="Jarvis" onClick={onOpenJarvis} />
+        <MiniActionButton icon={ImagePlus} label="Photos" count={attachmentCount} onClick={onOpenPhotos} />
+        <MiniActionButton icon={Wrench} label="Quote" count={estimateCount} onClick={onOpenCart} />
       </div>
     </section>
   );
@@ -596,12 +522,12 @@ function actionTime(timestamp?: string | null) {
 function MiniActionButton({
   icon: Icon,
   label,
-  detail,
+  count,
   onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  detail: string;
+  count?: number;
   onClick: () => void;
 }) {
   return (
@@ -610,9 +536,11 @@ function MiniActionButton({
       onClick={onClick}
       className="rounded-lg border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-muted/30 active:scale-[0.98]"
     >
-      <Icon className="h-5 w-5 text-primary" />
+      <div className="flex items-center justify-between gap-2">
+        <Icon className="h-5 w-5 text-primary" />
+        {typeof count === "number" ? <span className="text-xs font-bold text-muted-foreground">{count}</span> : null}
+      </div>
       <p className="mt-2 text-sm font-semibold leading-tight text-foreground">{label}</p>
-      <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{detail}</p>
     </button>
   );
 }
@@ -653,7 +581,7 @@ function FieldTile({
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
   className?: string;
 }) {
   return (
@@ -665,7 +593,7 @@ function FieldTile({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       </div>
       <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{value}</p>
-      <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{detail}</p>
+      {detail ? <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">{detail}</p> : null}
     </div>
   );
 }

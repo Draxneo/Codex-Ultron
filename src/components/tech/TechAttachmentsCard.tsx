@@ -280,13 +280,6 @@ export function TechAttachmentsCard({
         </Link>
       </div>
 
-      <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
-        <p className="text-sm font-semibold text-foreground">Capture what JARVIS needs.</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Take the unit, model plate, failed part, readings, and the repair area before you talk through the options.
-        </p>
-      </div>
-
       {lastUploadError && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -313,7 +306,7 @@ export function TechAttachmentsCard({
           disabled={uploading}
         >
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-          Take Photos
+          Camera
         </Button>
         <Button
           variant="outline"
@@ -323,13 +316,9 @@ export function TechAttachmentsCard({
           disabled={uploading}
         >
           <FileUp className="h-5 w-5" />
-          Upload Files
+          Upload
         </Button>
       </div>
-
-      <p className="text-[11px] text-muted-foreground">
-        Tap thumbnails to select only what gets sent. Customer sharing uses temporary secure links.
-      </p>
 
       {visible.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">

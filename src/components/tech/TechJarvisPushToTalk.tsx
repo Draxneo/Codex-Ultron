@@ -355,15 +355,11 @@ export function TechJarvisPushToTalk({
         </div>
       )}
 
-      <div className="w-full rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
-        <p className="text-sm font-semibold text-foreground">Tell JARVIS what you found.</p>
-        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-          Talk through the diagnosis, repair choices, equipment options, and anything the customer asked.
-          {enableProposalActions
-            ? " JARVIS should turn that into estimate line items the technician can review before sending for customer approval."
-            : " JARVIS should turn that into clean field notes and a practical next step."}
-        </p>
-      </div>
+      {!bare && (
+        <div className="w-full rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+          <p className="text-sm font-semibold text-foreground">Field notes</p>
+        </div>
+      )}
 
       <button
         type="button"
@@ -390,21 +386,21 @@ export function TechJarvisPushToTalk({
 
       <p className="text-sm font-medium text-muted-foreground h-5">
         {active
-          ? "Listening... release to send"
+          ? "Listening"
           : thinking
-            ? "JARVIS is thinking..."
+            ? "Thinking"
             : loading
-              ? "Transcribing..."
-              : "Press and hold the mic"}
+              ? "Transcribing"
+              : "Hold to talk"}
       </p>
 
       <div className={cn("grid gap-2 w-full", enableProposalActions ? "grid-cols-2" : "grid-cols-1")}>
         <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenPhotos}>
-          <Camera className="h-4 w-4" /> Add photos
+          <Camera className="h-4 w-4" /> Photos
         </Button>
         {enableProposalActions && (
           <Button type="button" variant="outline" className="h-12 gap-2" onClick={onOpenCart}>
-            <ShoppingCart className="h-4 w-4" /> Open proposal
+            <ShoppingCart className="h-4 w-4" /> Quote
           </Button>
         )}
       </div>

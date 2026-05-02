@@ -268,7 +268,7 @@ export function TechStatusCard({
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Pause job</DialogTitle>
-            <DialogDescription>What's holding you up? This shows on the dispatch board.</DialogDescription>
+            <DialogDescription>Reason</DialogDescription>
           </DialogHeader>
           <Input
             value={pauseReason}
@@ -325,9 +325,11 @@ function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading,
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-bold leading-tight text-foreground">{label}</span>
-        <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
-          {loading ? "Working..." : time || (disabled ? "Not yet" : "Tap when ready")}
-        </span>
+        {loading || time ? (
+          <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
+            {loading ? "..." : time}
+          </span>
+        ) : null}
       </span>
     </button>
   );
