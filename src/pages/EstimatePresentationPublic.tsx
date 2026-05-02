@@ -25,7 +25,7 @@ export default function EstimatePresentationPublic() {
           <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
           <h1 className="text-xl font-semibold">Estimate link unavailable</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            This estimate link could not be loaded. Please call Carnes and Sons Air Conditioning and we will resend it.
+            This estimate link could not be loaded. Please contact the office and we will resend it.
           </p>
         </div>
       </div>

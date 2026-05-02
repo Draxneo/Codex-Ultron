@@ -48,7 +48,7 @@ function normalizeLegacyPresentationSnapshot(snapshot: any) {
     systemOptions[key] = {
       ...option,
       label: option?.label || `${option?.brand || "System"} ${option?.tonnage ? `${option.tonnage} Ton ` : ""}${option?.tier || ""}`.replace(/\s+/g, " ").trim(),
-      description: option?.description || option?.notes || "Comfort system option prepared by Carnes and Sons.",
+      description: option?.description || option?.notes || "Option prepared by our team.",
       price: Number(option?.price || option?.total_price || 0),
       features_benefits: Array.isArray(option?.features_benefits) ? option.features_benefits : [],
     };
@@ -93,6 +93,8 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
   }, [presentation?.id, presentation?.token, isPaid]);
 
   const customerName = estimate?.customer_name?.split(" ")[0] || "";
+  const company = presentation?.company || {};
+  const companyName = company.company_name || company.company_display_name || "Our team";
   const addonTotal = Array.isArray(snapshot?.addons)
     ? snapshot.addons.reduce((sum: number, addon: any) => sum + Number(addon.price || 0), 0)
     : 0;
@@ -172,7 +174,7 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-primary text-primary-foreground p-6 text-center">
-          <h1 className="text-xl font-bold">Carnes & Sons Air Conditioning</h1>
+          <h1 className="text-xl font-bold">{companyName}</h1>
           <p className="text-primary-foreground/80 text-sm mt-1">
             {customerName ? `Hi ${customerName} — here are your repair options` : "Your Repair Options"}
           </p>
@@ -262,7 +264,7 @@ export function QuickCheckoutPresentation({ presentation, estimate }: Props) {
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-primary text-primary-foreground p-6 text-center">
-          <h1 className="text-xl font-bold">Carnes & Sons Air Conditioning</h1>
+          <h1 className="text-xl font-bold">{companyName}</h1>
           <p className="text-primary-foreground/80 text-sm mt-1">
             {customerName ? `Hi ${customerName} — here are your system options` : "Your System Options"}
           </p>
@@ -438,7 +440,7 @@ function PaymentSection({ paymentMethod, setPaymentMethod, onConfirm, submitting
       <CardContent className="p-5 space-y-4">
         <div>
           <h3 className="font-bold text-lg">Choose how to proceed</h3>
-          <p className="text-xs text-muted-foreground mt-1">Your selection creates a saved Carnes and Sons cart so the office and tech can track the approved scope.</p>
+          <p className="text-xs text-muted-foreground mt-1">Your selection creates a saved estimate so the office and crew can track the approved scope.</p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
