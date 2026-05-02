@@ -358,7 +358,7 @@ Deno.serve(async (req) => {
         const dispRes = await fetch(`https://api.housecallpro.com/jobs/${hcpId}/dispatch`, {
           method: "PUT",
           headers: { "Authorization": `Token ${HCP_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ employee_ids: [hcpEmployeeId] }),
+          body: JSON.stringify({ dispatched_employees: [{ employee_id: hcpEmployeeId }] }),
         });
         if (dispRes.ok) results.dispatched = true;
         else console.error("HCP dispatch failed:", await dispRes.text());
