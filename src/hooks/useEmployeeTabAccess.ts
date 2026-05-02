@@ -33,7 +33,8 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
     pathname.startsWith("/estimates") ||
     pathname.startsWith("/form/")
   ) return "jobs";
-  if (pathname.startsWith("/tech/customers")) return "jobs";
+  if (pathname.startsWith("/tech/sms")) return "sms";
+  if (pathname.startsWith("/tech/customers")) return "customers";
   // Legacy /inbox links redirect into the split Phone/SMS pages.
   if (pathname.startsWith("/inbox")) {
     if (search?.includes("sms")) return "sms";
@@ -51,7 +52,7 @@ export function routeToTabKey(pathname: string, search?: string): string | undef
   if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "jobs";
   if (pathname.startsWith("/copilot")) return "copilot";
   if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
-  if (pathname.startsWith("/payments")) return "pay";
+  if (pathname.startsWith("/payments")) return "admin";
   if (pathname.startsWith("/reports")) return "admin";
   if (pathname.startsWith("/pay")) return "pay";
   if (pathname.startsWith("/admin") && search?.includes("section=employees") && search?.includes("employeeTab=pay")) return "pay";
@@ -79,7 +80,7 @@ const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = 
   chat: "/team",
   customers: "/customers",
   copilot: "/copilot",
-  pay: "/admin?section=employees&employeeTab=pay",
+  pay: "/pay",
   admin: "/admin",
 };
 
@@ -93,6 +94,7 @@ export function getFirstAllowedRoute(allowedTabs: Set<string> | null, role?: str
   for (const key of ALL_ACCESS_KEYS) {
     if (!allowedTabs.has(key)) continue;
     if (key === "jobs" && isFieldRole) return "/tech";
+    if (key === "sms" && isFieldRole) return "/tech/sms";
     return ACCESS_FALLBACK_ROUTE[key];
   }
 

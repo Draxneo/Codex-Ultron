@@ -49,9 +49,12 @@ import { AdminViewAsBar } from "./components/AdminViewAsBar";
 import { PHONE_CONSOLE_OPEN_EVENT, type PhoneConsoleOpenDetail } from "@/lib/phoneConsoleBridge";
 
 const TechMySchedule = lazy(() => import("./pages/TechMySchedule"));
+const TechSms = lazy(() => import("./pages/TechSms"));
 const TechJobDetail = lazy(() => import("./pages/TechJobDetail"));
 const TechJobCart = lazy(() => import("./pages/TechJobCart"));
+const TechCustomers = lazy(() => import("./pages/TechCustomers"));
 const TechCustomerDetail = lazy(() => import("./pages/TechCustomerDetail"));
+const TechPay = lazy(() => import("./pages/TechPay"));
 const ScheduleV2 = lazy(() => import("./pages/ScheduleV2"));
 const DispatchCalendar = lazy(() => import("./pages/DispatchCalendar"));
 const NowHQ = lazy(() => import("./pages/NowHQ"));
@@ -415,9 +418,11 @@ function AppRouter() {
         <Route path="/dispatch-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/schedule-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/tech" element={<ProtectedRoute><TechMySchedule /></ProtectedRoute>} />
+        <Route path="/tech/sms" element={<ProtectedRoute><TechSms /></ProtectedRoute>} />
         
         <Route path="/tech/jobs/:id" element={<ProtectedRoute><TechJobDetail /></ProtectedRoute>} />
         <Route path="/tech/jobs/:id/cart" element={<ProtectedRoute><TechJobCart /></ProtectedRoute>} />
+        <Route path="/tech/customers" element={<ProtectedRoute><TechCustomers /></ProtectedRoute>} />
         <Route path="/tech/customers/:id" element={<ProtectedRoute><TechCustomerDetail /></ProtectedRoute>} />
         <Route path="/copilot" element={<ProtectedRoute><CopilotPage /></ProtectedRoute>} />
         <Route path="/inbox" element={<ProtectedRoute><InboxRedirectComponent /></ProtectedRoute>} />
@@ -470,7 +475,7 @@ function AppRouter() {
         <Route path="/catalog" element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
         <Route path="/quick-quote" element={<ProtectedRoute><QuoteRoute /></ProtectedRoute>} />
         <Route path="/quote-builder" element={<ProtectedRoute><QuickQuote /></ProtectedRoute>} />
-        <Route path="/pay" element={<Navigate to="/admin?section=employees&employeeTab=pay" replace />} />
+        <Route path="/pay" element={<ProtectedRoute><TechPay /></ProtectedRoute>} />
 
         {/* Redirects */}
         

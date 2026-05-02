@@ -88,11 +88,12 @@ export function JobScheduleCard({
     <div
       onClick={onClick}
       className={cn(
-        "h-full rounded-md cursor-pointer overflow-hidden flex flex-col transition-shadow hover:shadow-lg hover:brightness-110 border border-white/40 ring-1 ring-black/10 shadow-md",
+        "relative isolation-isolate h-full rounded-md cursor-pointer overflow-hidden flex flex-col transition-shadow hover:shadow-lg hover:brightness-110 border border-white/40 ring-1 ring-black/10 shadow-md",
         className
       )}
       style={{ backgroundColor: techColor, ...style }}
     >
+      <div className="absolute inset-0 -z-10 bg-black/28" aria-hidden="true" />
       <div className="flex-1 min-w-0 px-2 py-1.5 flex flex-col gap-0.5 overflow-hidden">
         {/* Row 1: route# · emoji · name · travel pill */}
         <div className="flex items-center gap-1 min-w-0">

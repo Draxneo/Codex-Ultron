@@ -36,15 +36,17 @@ interface Props {
   techName: string | null;
   saved: SavedSnapshot;
   bare?: boolean;
+  allowSave?: boolean;
 }
 
-export function TechWeatherCard({ jobId, scheduledDate, techName, saved, bare }: Props) {
+export function TechWeatherCard({ jobId, scheduledDate, techName, saved, bare, allowSave = false }: Props) {
   const qc = useQueryClient();
   const { data: forecastMap, isLoading } = useWeatherForecast();
 
   const today = useMemo(() => new Date().toISOString().substring(0, 10), []);
   const targetDate = scheduledDate || today;
   const forecast = forecastMap?.get(targetDate) || forecastMap?.get(today);
+  const hasSaved = !!saved.weather_captured_at;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -85,7 +87,7 @@ export function TechWeatherCard({ jobId, scheduledDate, techName, saved, bare }:
     );
   }
 
-  if (!forecast) {
+  if (!forecast && !hasSaved) {
     return (
       <Wrapper className={wrapperClass}>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -95,7 +97,6 @@ export function TechWeatherCard({ jobId, scheduledDate, techName, saved, bare }:
     );
   }
 
-  const hasSaved = !!saved.weather_captured_at;
   const savedDateLabel = saved.weather_captured_at
     ? format(parseISO(saved.weather_captured_at), "MMM d, h:mm a")
     : null;
@@ -110,28 +111,37 @@ export function TechWeatherCard({ jobId, scheduledDate, techName, saved, bare }:
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
             {dayLabel}
           </div>
-          <WeatherBadge forecast={forecast} className="!px-0 !py-0" />
-          {forecast.summary && (
+          {forecast ? (
+            <WeatherBadge forecast={forecast} className="!px-0 !py-0" />
+          ) : (
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <CloudSun className="h-4 w-4 text-primary" />
+              Saved visit weather
+            </div>
+          )}
+          {forecast?.summary && (
             <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{forecast.summary}</p>
           )}
         </div>
-        <Button
-          size="sm"
-          variant={hasSaved ? "outline" : "default"}
-          className="h-8 shrink-0 text-xs"
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-        >
-          {saveMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : hasSaved ? (
-            <>
-              <Check className="h-3.5 w-3.5 mr-1" /> Update
-            </>
-          ) : (
-            "Save to job"
-          )}
-        </Button>
+        {allowSave ? (
+          <Button
+            size="sm"
+            variant={hasSaved ? "outline" : "default"}
+            className="h-8 shrink-0 text-xs"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || !forecast}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : hasSaved ? (
+              <>
+                <Check className="h-3.5 w-3.5 mr-1" /> Update
+              </>
+            ) : (
+              "Save to job"
+            )}
+          </Button>
+        ) : null}
       </div>
 
       {hasSaved && (

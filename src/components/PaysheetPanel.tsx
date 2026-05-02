@@ -68,7 +68,12 @@ function getWeekBounds(offset: number) {
   };
 }
 
-export function PaysheetPanel() {
+type PaysheetPanelProps = {
+  technicianOnly?: boolean;
+  lockToCurrentWeek?: boolean;
+};
+
+export function PaysheetPanel({ technicianOnly = false, lockToCurrentWeek = false }: PaysheetPanelProps = {}) {
   const { role, employeeId } = useEffectiveAuth();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<PayEntry[]>([]);
@@ -82,10 +87,19 @@ export function PaysheetPanel() {
   const isAdmin = role === "admin";
 
   const { start, end } = getWeekBounds(weekOffset);
-  const showGrouped = role === "admin" || role === "office";
+  const showGrouped = !technicianOnly && (role === "admin" || role === "office");
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
+    if (technicianOnly && !employeeId) {
+      setEntries([]);
+      setAllEmployees([]);
+      setWeekJobs([]);
+      setWeekEstimates([]);
+      setLoading(false);
+      return;
+    }
+
     if (showGrouped) {
       const { data: emps } = await supabase
         .from("employees")
@@ -103,7 +117,7 @@ export function PaysheetPanel() {
       .eq("pay_week_end", end)
       .order("created_at", { ascending: false });
 
-    if ((role === "tech" || role === "supervisor") && employeeId) {
+    if ((technicianOnly || role === "tech" || role === "supervisor") && employeeId) {
       query = query.eq("employee_id", employeeId);
     }
 
@@ -141,7 +155,7 @@ export function PaysheetPanel() {
     setWeekEstimates((estimates || []) as WeekEstimate[]);
 
     setLoading(false);
-  }, [showGrouped, start, end, role, employeeId]);
+  }, [showGrouped, start, end, role, employeeId, technicianOnly]);
 
   useEffect(() => {
     fetchEntries();
@@ -215,16 +229,24 @@ export function PaysheetPanel() {
     <div className="space-y-4 max-w-2xl mx-auto">
       {/* Week nav */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w - 1)}>
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
+        {lockToCurrentWeek ? (
+          <div className="h-10 w-10" />
+        ) : (
+          <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w - 1)}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
         <div className="text-center">
           <p className="text-sm text-muted-foreground">Pay Week</p>
           <p className="font-semibold">{format(new Date(start), "M/d/yyyy")} — {format(new Date(end), "M/d/yyyy")}</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w + 1)} disabled={weekOffset >= 0}>
-          <ChevronRight className="h-5 w-5" />
-        </Button>
+        {lockToCurrentWeek ? (
+          <div className="h-10 w-10" />
+        ) : (
+          <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w + 1)} disabled={weekOffset >= 0}>
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
       {/* Grand Total */}
@@ -449,7 +471,7 @@ export function PaysheetPanel() {
       ) : (
         <div className="space-y-2">
            {entries.map(entry => (
-            <Card key={entry.id} className={cn(entry.status === "held" && "opacity-60")}>
+            <Card key={entry.id} className={cn(entry.status === "held" && "border-destructive/30 bg-destructive/5")}>
               <CardContent className="py-3">
                 <div className="flex items-center justify-between">
                   <div>

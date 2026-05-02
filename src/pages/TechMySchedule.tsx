@@ -5,10 +5,10 @@
  * and dispatch see identical info. Reuses useTechDashboardData RPC.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, eachDayOfInterval } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, MessageSquare, Navigation, Phone, Play } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,9 +21,14 @@ import { JobScheduleCard } from "@/components/job/JobScheduleCard";
 // Travel times come from useTechDashboardData's RPC (route_travel_cache, populated
 // by Navigate/OMW). Avoid useTechDayTravelTimes — that hook is disabled by cost guard.
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { CLOSED_ESTIMATE_STATUS_FILTER, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLifecycle";
+import { useToast } from "@/hooks/use-toast";
+import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
+import { launchNavigation } from "@/lib/launchNavigation";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { openSmsComposer } from "@/lib/smsComposerBridge";
 
 // Tech lane colors mirror DayCalendarBoard
 const TECH_HEX_PALETTE = [
@@ -110,7 +115,9 @@ export default function TechMySchedule() {
   // Pre-cached drive legs come from the same RPC (route_travel_cache rows).
   const travelMap = data?.travelMap ?? new Map();
 
-  // Per-day job counts for the visible week — one lightweight query
+  // Per-day open-work counts for the visible week — one lightweight query.
+  // This mirrors the day-list RPC so the top strip never looks like an alert
+  // for work that has already been closed out.
   const weekStartStr = format(startOfWeek(currentDay, { weekStartsOn: 0 }), "yyyy-MM-dd");
   const weekEndStr = format(addDays(startOfWeek(currentDay, { weekStartsOn: 0 }), 6), "yyyy-MM-dd");
   const { data: weekCounts } = useQuery({
@@ -199,9 +206,12 @@ export default function TechMySchedule() {
                   <span
                     className={cn(
                       "absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center shadow-sm ring-2 ring-card",
-                      "bg-destructive text-destructive-foreground",
+                      selected
+                        ? "bg-background text-foreground"
+                        : "bg-primary text-primary-foreground",
                     )}
-                    aria-label={`${count} job${count === 1 ? "" : "s"} scheduled`}
+                    aria-label={`${count} open work item${count === 1 ? "" : "s"}`}
+                    title={`${count} open work item${count === 1 ? "" : "s"}`}
                   >
                     {count}
                   </span>
@@ -282,12 +292,22 @@ export default function TechMySchedule() {
                 key={`${job._itemType}-${job.id}`}
                 className="min-h-[132px] rounded-xl transition-transform active:scale-[0.99]"
               >
-                <JobScheduleCard
-                  item={{ ...job, customer_phone: phone, item_type: job._itemType }}
-                  techColor={techColor}
-                  routeInfo={leg}
-                  onClick={() => navigate(linkTo)}
-                />
+                <div className="overflow-hidden rounded-xl shadow-sm">
+                  <JobScheduleCard
+                    item={{ ...job, customer_phone: phone, item_type: job._itemType }}
+                    techColor={techColor}
+                    routeInfo={leg}
+                    onClick={() => navigate(linkTo)}
+                    className="rounded-b-none"
+                  />
+                  <TechJobQuickActions
+                    job={job}
+                    phone={phone}
+                    employeeId={employeeId || null}
+                    employeeName={employeeName}
+                    onOpen={() => navigate(linkTo)}
+                  />
+                </div>
               </div>
             );
           })
@@ -305,5 +325,142 @@ export default function TechMySchedule() {
         </button>
       )}
     </div>
+  );
+}
+
+function TechJobQuickActions({
+  job,
+  phone,
+  employeeId,
+  employeeName,
+  onOpen,
+}: {
+  job: any;
+  phone: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  onOpen: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { send: sendOMW, sending: sendingOMW } = useSendOnMyWay();
+  const [arriving, setArriving] = useState(false);
+  const isJob = job._itemType === "job";
+  const address = job.address || null;
+  const startedAt = job.started_at || null;
+  const status = String(job.status || "").toLowerCase();
+  const arrived = Boolean(startedAt) || ["in_progress", "on_hold", "done", "invoiced"].includes(status);
+  const onMyWaySentAt = job.on_my_way_sent_at || null;
+
+  const openNavigation = () => {
+    if (!address) return;
+    launchNavigation(address);
+  };
+
+  const callCustomer = () => {
+    if (!phone) return;
+    openPhoneConsole(phone, {
+      contactName: job.customer_name || undefined,
+      jobId: isJob ? job.id : undefined,
+      customerId: job.customer_id || undefined,
+    });
+  };
+
+  const textCustomer = () => {
+    if (!phone) return;
+    openSmsComposer(phone, {
+      contactName: job.customer_name || undefined,
+      jobId: isJob ? job.id : undefined,
+      customerId: job.customer_id || undefined,
+    });
+  };
+
+  const sendOnMyWay = async () => {
+    if (!isJob) return;
+    await sendOMW({
+      jobId: job.id,
+      customerPhone: phone,
+      customerName: job.customer_name || null,
+      jobAddress: address,
+      employeeName,
+      employeeId,
+    });
+  };
+
+  const markArrived = async () => {
+    if (!isJob || arrived) return;
+    setArriving(true);
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("jobs")
+      .update({ started_at: now, status: "in_progress" } as any)
+      .eq("id", job.id);
+
+    if (error) {
+      toast({ title: "Could not mark arrived", description: error.message, variant: "destructive" });
+    } else {
+      await supabase.from("activity_log").insert({
+        job_id: job.id,
+        action: "job_started",
+        details: "Tech marked arrived from My Jobs",
+        performed_by: employeeName,
+      });
+      qc.invalidateQueries({ queryKey: ["jobs", job.id] });
+      qc.invalidateQueries({ queryKey: ["tech_dashboard_data"] });
+      toast({ title: "Arrived" });
+    }
+    setArriving(false);
+  };
+
+  return (
+    <div className="grid grid-cols-4 gap-1.5 border border-t-0 bg-card p-2">
+      <QuickActionButton icon={Navigation} label="Nav" onClick={openNavigation} disabled={!address} />
+      <QuickActionButton icon={Phone} label="Call" onClick={callCustomer} disabled={!phone} />
+      <QuickActionButton icon={MessageSquare} label="Text" onClick={textCustomer} disabled={!phone} />
+      {isJob ? (
+        <QuickActionButton
+          icon={Play}
+          label={onMyWaySentAt || arrived ? "Arrive" : "OMW"}
+          onClick={onMyWaySentAt || arrived ? markArrived : sendOnMyWay}
+          disabled={arrived || arriving || sendingOMW}
+          loading={arriving || sendingOMW}
+          done={arrived}
+        />
+      ) : (
+        <QuickActionButton icon={Play} label="Open" onClick={onOpen} />
+      )}
+    </div>
+  );
+}
+
+function QuickActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  loading,
+  done,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  done?: boolean;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={done ? "secondary" : "outline"}
+      className="h-12 min-w-0 flex-col gap-0.5 px-1 text-[10px] font-semibold"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      disabled={disabled}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="truncate">{loading ? "..." : label}</span>
+    </Button>
   );
 }

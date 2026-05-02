@@ -243,7 +243,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   return (
     <div className="flex flex-col h-screen bg-background overflow-x-hidden max-w-screen">
       {/* ── Top bar ──────────────────────────── */}
-      <header className="shrink-0 bg-[hsl(var(--navy))] text-primary-foreground safe-area-top">
+      <header className="shrink-0 bg-[hsl(var(--navy))] text-[hsl(var(--navy-foreground))] safe-area-top">
         <div className="h-14 px-4 flex items-center justify-between">
           <span className="text-sm font-semibold tracking-wide truncate max-w-[50%]">
             {companyName}
@@ -253,7 +253,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
             {role === "admin" && viewAs.active && (
               <button
                 onClick={viewAs.stopViewAs}
-                className="h-8 rounded-lg px-2 text-[11px] font-medium text-primary-foreground/85 hover:text-primary-foreground hover:bg-white/10 transition-colors"
+                className="h-8 rounded-lg px-2 text-[11px] font-medium text-[hsl(var(--navy-foreground)/0.85)] hover:text-[hsl(var(--navy-foreground))] hover:bg-white/10 transition-colors"
                 aria-label="Exit impersonation mode"
               >
                 Exit View
@@ -261,7 +261,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
             )}
             <button
               onClick={signOut}
-              className="h-11 w-11 rounded-xl flex items-center justify-center text-primary-foreground/70 hover:text-primary-foreground hover:bg-white/10 transition-colors"
+              className="h-11 w-11 rounded-xl flex items-center justify-center text-[hsl(var(--navy-foreground)/0.7)] hover:text-[hsl(var(--navy-foreground))] hover:bg-white/10 transition-colors"
               aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />

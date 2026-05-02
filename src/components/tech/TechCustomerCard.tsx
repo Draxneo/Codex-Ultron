@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { StreetViewThumbnail } from "./StreetViewThumbnail";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCapacitor } from "@/hooks/useCapacitor";
+import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 
@@ -47,6 +48,8 @@ export function TechCustomerCard({
 }: TechCustomerCardProps) {
   const softphone = useSoftphoneContext();
   const { isNative } = useCapacitor();
+  const allowedTabs = useEmployeeTabAccess();
+  const canOpenCustomerHistory = !allowedTabs || allowedTabs.has("customers");
 
   const handleSms = () => {
     if (!customerPhone) return;
@@ -116,7 +119,7 @@ export function TechCustomerCard({
         </div>
 
         {/* Customer History link */}
-        {customerId && (
+        {customerId && canOpenCustomerHistory && (
           <Link
             to={`/tech/customers/${customerId}`}
             className="flex items-center gap-2 -mx-2 px-2 h-10 border-t border-border pt-2 mt-2 active:bg-muted/50 rounded"

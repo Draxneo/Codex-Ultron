@@ -261,13 +261,13 @@ export function JobCartPicker({ jobId, open, onOpenChange, onOpenCart }: Props) 
           <TabsTrigger value="equipment" className="flex-1 gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Zap className="h-4 w-4" /> Equipment
           </TabsTrigger>
-          <TabsTrigger value="repairs" className="flex-1 gap-1.5 data-[state=active]:bg-rose-500 data-[state=active]:text-white">
+          <TabsTrigger value="repairs" className="flex-1 gap-1.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white">
             <Wrench className="h-4 w-4" /> Repairs
           </TabsTrigger>
-          <TabsTrigger value="parts" className="flex-1 gap-1.5 data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+          <TabsTrigger value="parts" className="flex-1 gap-1.5 data-[state=active]:bg-amber-300 data-[state=active]:text-amber-950">
             <Package className="h-4 w-4" /> Parts
           </TabsTrigger>
-          <TabsTrigger value="custom" className="flex-1 gap-1.5 data-[state=active]:bg-violet-500 data-[state=active]:text-white">
+          <TabsTrigger value="custom" className="flex-1 gap-1.5 data-[state=active]:bg-violet-600 data-[state=active]:text-white">
             <Plus className="h-4 w-4" /> Custom
           </TabsTrigger>
         </TabsList>

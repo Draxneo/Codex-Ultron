@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TechCartCard } from "@/components/tech/TechCartCard";
+import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useJob } from "@/hooks/useJobs";
 import { errorMessage } from "@/lib/errorMessage";
@@ -92,10 +93,10 @@ export default function TechJobCart() {
         <section className="rounded-lg border bg-background p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Badge variant="outline" className="mb-2">Customer approval flow</Badge>
+              <Badge variant="outline" className="mb-2">Talk, then approve</Badge>
               <h1 className="text-xl font-bold leading-tight text-foreground">{customerName}</h1>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Build repair or replacement options, preview the customer story, then send the approval link.
+                Say the repair or replacement in field language. JARVIS will match it to the catalog or ask one follow-up.
               </p>
             </div>
             <Presentation className="h-6 w-6 shrink-0 text-primary" />
@@ -108,13 +109,24 @@ export default function TechJobCart() {
           </div>
         </section>
 
-        <TechCartCard
+        <TechJarvisPushToTalk
           jobId={id!}
-          customerId={job.customer_id || null}
-          customerPhone={customerPhone}
+          jobNumber={jobNumber}
           customerName={customerName}
-          focused
+          onOpenCart={() => document.getElementById("tech-cart-review")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onOpenPhotos={() => navigate(`/tech/jobs/${id}`)}
+          enableProposalActions
         />
+
+        <div id="tech-cart-review" className="scroll-mt-14">
+          <TechCartCard
+            jobId={id!}
+            customerId={job.customer_id || null}
+            customerPhone={customerPhone}
+            customerName={customerName}
+            focused
+          />
+        </div>
       </main>
     </div>
   );

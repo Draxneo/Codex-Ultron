@@ -40,19 +40,19 @@ function formatDuration(seconds: number) {
 function statusCopy(status: SoftphoneStatus) {
   switch (status) {
     case "ready":
-      return { label: "Ready", icon: Wifi, className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+      return { label: "Ready", icon: Wifi, className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
     case "registering":
-      return { label: "Connecting", icon: RefreshCw, className: "border-blue-200 bg-blue-50 text-blue-700" };
+      return { label: "Connecting", icon: RefreshCw, className: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300" };
     case "connecting":
-      return { label: "Calling", icon: PhoneCall, className: "border-blue-200 bg-blue-50 text-blue-700" };
+      return { label: "Calling", icon: PhoneCall, className: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300" };
     case "ringing":
-      return { label: "Ringing", icon: PhoneCall, className: "border-amber-200 bg-amber-50 text-amber-700" };
+      return { label: "Ringing", icon: PhoneCall, className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300" };
     case "on-call":
-      return { label: "On call", icon: PhoneCall, className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+      return { label: "On call", icon: PhoneCall, className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
     case "error":
-      return { label: "Needs attention", icon: WifiOff, className: "border-red-200 bg-red-50 text-red-700" };
+      return { label: "Needs attention", icon: WifiOff, className: "border-destructive/30 bg-destructive/10 text-destructive" };
     default:
-      return { label: "Offline", icon: WifiOff, className: "border-slate-200 bg-slate-50 text-slate-700" };
+      return { label: "Offline", icon: WifiOff, className: "border-border bg-muted text-muted-foreground" };
   }
 }
 
@@ -111,17 +111,17 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
   }, [canDial, contactName, customerId, dial, jobId, normalizedNumber]);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f6f8fb] text-slate-950">
+    <div className="h-screen overflow-hidden bg-background text-foreground">
       <div className="mx-auto flex h-full w-full max-w-[420px] flex-col px-5 py-4">
         <header className="mb-4 flex items-start justify-between gap-3 pr-7">
           <div>
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-950 text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <Phone className="h-4 w-4" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold leading-tight">Softphone</h1>
-                <p className="text-sm text-slate-500">{contactName || "Outbound phone"}</p>
+                <p className="text-sm text-muted-foreground">{contactName || "Outbound phone"}</p>
               </div>
             </div>
           </div>
@@ -131,13 +131,13 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
           </Badge>
         </header>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {activeCall ? "Current call" : "Dial number"}
             </span>
             {status === "on-call" && (
-              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+              <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                 {formatDuration(callDuration)}
               </span>
             )}
@@ -152,11 +152,11 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
             disabled={activeCall}
             placeholder="Enter phone number"
             inputMode="tel"
-            className="h-14 rounded-md border-slate-200 bg-slate-50 text-center text-2xl font-semibold tracking-normal text-slate-950 placeholder:text-slate-300"
+            className="h-14 rounded-md border-border bg-muted/45 text-center text-2xl font-semibold tracking-normal text-foreground placeholder:text-muted-foreground/45"
           />
 
           {callerInfo?.name && activeCall && (
-            <p className="mt-2 text-center text-sm font-medium text-slate-600">{callerInfo.name}</p>
+            <p className="mt-2 text-center text-sm font-medium text-muted-foreground">{callerInfo.name}</p>
           )}
         </section>
 
@@ -166,10 +166,10 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
               key={key.digit}
               type="button"
               onClick={() => appendDigit(key.digit)}
-              className="flex h-[52px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white text-slate-950 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+              className="flex h-[52px] flex-col items-center justify-center rounded-md border border-border bg-card text-foreground shadow-sm transition hover:border-primary/40 hover:bg-muted/40 active:scale-[0.99]"
             >
               <span className="text-xl font-semibold leading-none">{key.digit}</span>
-              <span className="mt-1 h-3 text-[10px] font-semibold uppercase leading-none tracking-wide text-slate-400">
+              <span className="mt-1 h-3 text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
                 {key.letters}
               </span>
             </button>
@@ -191,7 +191,7 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
               type="button"
               onClick={handleCall}
               disabled={!canDial}
-              className="h-12 rounded-md bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+              className="h-12 rounded-md bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground"
             >
               <PhoneCall className="mr-2 h-4 w-4" />
               Call
@@ -202,7 +202,7 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
             variant="outline"
             onClick={removeDigit}
             disabled={activeCall || !number}
-            className="h-12 rounded-md border-slate-200 bg-white"
+            className="h-12 rounded-md border-border bg-card"
             aria-label="Backspace"
           >
             <Delete className="h-5 w-5" />
@@ -210,7 +210,7 @@ export function PhoneOnlySoftphone({ initialNumber, contactName, jobId, customer
         </div>
 
         {error && (
-          <div className="mt-3 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         )}

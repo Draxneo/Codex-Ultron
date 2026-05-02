@@ -101,9 +101,9 @@ export function TechStatusCard({
   const statusColor = finishDone
     ? "bg-[hsl(var(--complete))] text-white"
     : isPaused
-      ? "bg-amber-600 text-white"
+      ? "bg-amber-300 text-amber-950"
       : startDone
-        ? "bg-amber-500 text-white"
+        ? "bg-amber-300 text-amber-950"
         : "bg-primary text-primary-foreground";
 
   const handleStart = async () => {
@@ -385,7 +385,7 @@ function StatusActionButton({ icon: Icon, label, done, paused, onClick, loading,
         large ? "min-h-[72px]" : "min-h-[58px]",
         done && "border-[hsl(var(--complete))]/50 bg-[hsl(var(--complete))]/10 text-[hsl(var(--complete))]",
         paused && "border-amber-500/60 bg-amber-500/10 text-amber-600 animate-pulse",
-        !done && !paused && disabled && "border-border bg-muted/40 text-muted-foreground/50",
+        !done && !paused && disabled && "border-border bg-muted/40 text-muted-foreground",
         !done && !paused && !disabled && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
       )}
     >
@@ -417,18 +417,32 @@ function PauseDialog({
   onChange: (value: string) => void;
   onConfirm: () => void;
 }) {
+  const quickReasons = ["Waiting on parts", "Need dispatch", "Customer unavailable", "Weather delay"];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Pause job</DialogTitle>
-          <DialogDescription>Reason</DialogDescription>
+          <DialogDescription>Pick a reason. Type only if none of these fit.</DialogDescription>
         </DialogHeader>
+        <div className="grid grid-cols-2 gap-2">
+          {quickReasons.map((reason) => (
+            <Button
+              key={reason}
+              type="button"
+              variant={value === reason ? "default" : "outline"}
+              className="h-12 justify-start text-left text-sm"
+              onClick={() => onChange(reason)}
+            >
+              {reason}
+            </Button>
+          ))}
+        </div>
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Waiting on parts"
-          autoFocus
+          placeholder="Other reason"
           onKeyDown={(e) => {
             if (e.key === "Enter") onConfirm();
           }}

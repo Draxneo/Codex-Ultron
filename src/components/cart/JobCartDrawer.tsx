@@ -30,9 +30,9 @@ const KIND_ICON: Record<JobCartItem["kind"], React.ComponentType<{ className?: s
 
 const KIND_COLOR: Record<JobCartItem["kind"], string> = {
   equipment: "bg-primary text-primary-foreground",
-  repair: "bg-rose-500 text-white",
-  part: "bg-amber-500 text-white",
-  custom: "bg-violet-500 text-white",
+  repair: "bg-rose-600 text-white",
+  part: "bg-amber-300 text-amber-950",
+  custom: "bg-violet-600 text-white",
 };
 
 export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerName, customerPhone }: Props) {

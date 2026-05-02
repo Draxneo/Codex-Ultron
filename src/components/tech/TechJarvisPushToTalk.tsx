@@ -6,7 +6,8 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { Camera, Check, Loader2, Mic, ShoppingCart, Sparkles, Trash2, Volume2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Camera, Check, HelpCircle, Loader2, Mic, ShoppingCart, Sparkles, Trash2, Volume2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,11 @@ import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { buildDefaultDecisionMetadata } from "@/lib/customerDecisionStory";
+import {
+  interpretTechCartSpeech,
+  mergeFollowUpAnswer,
+  type TechCartFollowUpQuestion,
+} from "@/lib/techCartInterpreter";
 import { toast } from "sonner";
 
 interface Props {
@@ -38,6 +44,10 @@ type ProposedCartAction = {
   quantity: number;
   kind: NewCartItem["kind"];
   tier: JobCartItem["tier"];
+  sourceId?: string | null;
+  confidence?: "high" | "medium" | "low";
+  missingSpecs?: string[];
+  metadata?: Record<string, unknown>;
   sourceLine: string;
 };
 
@@ -55,6 +65,14 @@ function inferTier(text: string): JobCartItem["tier"] {
   if (/\b(better|recommended|option b)\b/.test(lower)) return "better";
   if (/\b(best|premium|option c)\b/.test(lower)) return "best";
   if (/\b(critical|urgent)\b/.test(lower)) return "critical";
+  return "recommended";
+}
+
+function inferEquipmentTier(tier: string | null | undefined): JobCartItem["tier"] {
+  const lower = String(tier || "").toLowerCase();
+  if (lower.includes("ultimate") || lower.includes("infinity") || lower.includes("best")) return "best";
+  if (lower.includes("better") || lower.includes("performance")) return "better";
+  if (lower.includes("good") || lower.includes("comfort") || lower.includes("value")) return "good";
   return "recommended";
 }
 
@@ -117,6 +135,9 @@ function parseJarvisCartSuggestions(reply: string): ProposedCartAction[] {
       quantity: 1,
       kind: inferKind(line),
       tier: inferTier(line),
+      sourceId: null,
+      confidence: "low",
+      missingSpecs: ["catalog match"],
       sourceLine: line,
     });
 
@@ -124,6 +145,45 @@ function parseJarvisCartSuggestions(reply: string): ProposedCartAction[] {
   }
 
   return suggestions;
+}
+
+function mergeCartSuggestions(primary: ProposedCartAction[], secondary: ProposedCartAction[]) {
+  const seen = new Set<string>();
+  const merged: ProposedCartAction[] = [];
+  for (const item of [...primary, ...secondary]) {
+    const key = `${item.sourceId || item.name.toLowerCase()}-${Math.round(item.unitPrice)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged.slice(0, 8);
+}
+
+async function suggestCatalogTrainingPhrase(action: ProposedCartAction, phrase: string | null) {
+  const cleanPhrase = phrase?.trim().replace(/\s+/g, " ");
+  if (!cleanPhrase || cleanPhrase.length < 4 || cleanPhrase.length > 180) return;
+  if (!action.sourceId || action.confidence === "high") return;
+  const targetType = action.kind === "equipment" ? "equipment" : action.kind === "repair" ? "repair" : null;
+  if (!targetType) return;
+
+  const { data: existing, error: existingError } = await supabase
+    .from("jarvis_catalog_terms" as any)
+    .select("id")
+    .eq("target_type", targetType)
+    .eq("target_id", action.sourceId)
+    .ilike("phrase", cleanPhrase)
+    .maybeSingle();
+  if (existingError || existing?.id) return;
+
+  await supabase.from("jarvis_catalog_terms" as any).insert({
+    target_type: targetType,
+    target_id: action.sourceId,
+    phrase: cleanPhrase,
+    status: "suggested",
+    source: "tech_correction",
+    confidence: 0.65,
+    notes: "A technician accepted this JARVIS cart match. Review before approving as a reusable phrase.",
+  });
 }
 
 export function TechJarvisPushToTalk({
@@ -139,12 +199,51 @@ export function TechJarvisPushToTalk({
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [proposedCartActions, setProposedCartActions] = useState<ProposedCartAction[]>([]);
+  const [followUpQuestions, setFollowUpQuestions] = useState<TechCartFollowUpQuestion[]>([]);
   const [addingSuggestionId, setAddingSuggestionId] = useState<string | null>(null);
   const transcriptRef = useRef<string>("");
   const sendTranscriptWhenReadyRef = useRef(false);
   const { announce } = useAnnouncer();
   const { addItem } = useJobCart(jobId);
   const { employeeId } = useEffectiveAuth();
+  const { data: repairCatalog = [] } = useQuery({
+    queryKey: ["repair-catalog-tech-jarvis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("repair_catalog")
+        .select("id, name, category, tech_description, customer_description, keywords, default_severity, base_price, member_price, is_active")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: equipmentMatchups = [] } = useQuery({
+    queryKey: ["equipment-matchups-tech-jarvis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("equipment_matchups" as any)
+        .select("id, brand, system_type, tier, application, condenser_model, furnace_model, coil_model, tonnage, seer2, eer2, hspf2, cooling_cap, afue, ahri_number, ahri_certificate_path, heat_kit, total_price, factory_rebate_price, monthly_payment, monthly_payment_120, cps_tonnage, early_rebate, burnout_rebate, notes, low_margin_price, cps_rebate_tier, features_benefits, image_url")
+        .order("brand")
+        .order("tonnage")
+        .order("tier");
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: jarvisCatalogTerms = [] } = useQuery({
+    queryKey: ["jarvis-catalog-terms-tech-jarvis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("jarvis_catalog_terms" as any)
+        .select("id, target_type, target_id, phrase, status, source, confidence")
+        .eq("status", "approved");
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const askJarvis = useCallback(
     async (text: string) => {
@@ -152,9 +251,35 @@ export function TechJarvisPushToTalk({
       if (!question) return;
       setLastQuestion(question);
       setProposedCartActions([]);
+      setFollowUpQuestions([]);
       setThinking(true);
       let transcriptId: string | null = null;
       try {
+        const interpreted = enableProposalActions
+          ? interpretTechCartSpeech(question, repairCatalog as any, equipmentMatchups as any, jarvisCatalogTerms as any)
+          : { matches: [], questions: [] };
+        const fieldLanguageItems: ProposedCartAction[] = interpreted.matches.map((match) => ({
+          id: `field-${match.id}`,
+          name: match.name,
+          description: match.description,
+          unitPrice: match.unitPrice,
+          quantity: 1,
+          kind: match.sourceType === "equipment" ? "equipment" : "repair",
+          tier:
+            match.sourceType === "equipment"
+              ? inferEquipmentTier((match.metadata?.tier as string | null) || match.equipmentMatchup?.tier || null)
+              : match.catalogItem?.default_severity === "necessary" ? "critical" : "recommended",
+          sourceId: match.sourceId,
+          confidence: match.confidence,
+          missingSpecs: match.missingSpecs,
+          metadata: match.metadata,
+          sourceLine: match.sourcePhrase,
+        }));
+        if (fieldLanguageItems.length > 0) {
+          setProposedCartActions(fieldLanguageItems);
+          setFollowUpQuestions(interpreted.questions);
+        }
+
         const { data: transcriptRow, error: transcriptError } = await (supabase as any)
           .from("job_transcripts")
           .insert({
@@ -185,6 +310,8 @@ export function TechJarvisPushToTalk({
             ? "Tech workflow: photos plus voice notes should become repair/replacement recommendations, priced proposal options, and a customer-ready approval/payment link."
             : "Tech workflow: photos plus voice notes should become clear field notes, diagnosis summaries, repair/replacement recommendations, and next-step guidance.",
           "When discussing replacement equipment, think like the field team: brand, tonnage, system type, tier, then orientation/install location. Example: Carrier 3 ton Performance gas heat system in the attic.",
+          "When discussing repairs, think like the field team: contactor, dual run capacitor, condenser fan motor, blower motor, drain flush, thermostat, control board, TXV, coil cleaning. Match field slang to the pricebook/catalog when possible.",
+          "If the tech is trying to add a cart item but an important detail is missing, ask one simple follow-up question instead of guessing. Examples: capacitor MFD, motor horsepower, motor voltage.",
           enableProposalActions
             ? "If the tech describes options, respond with clear proposal item names, prices to confirm, and what should be sent to the customer. Keep customer-facing sends human-approved."
             : "Do not create cart actions in this view. Focus on what the technician found, what still needs proof, and the clean next step.",
@@ -202,9 +329,11 @@ export function TechJarvisPushToTalk({
         });
         if (error) throw error;
         const reply: string = data?.reply || "No response.";
-        const suggestedItems = enableProposalActions ? parseJarvisCartSuggestions(reply) : [];
+        const aiItems = enableProposalActions ? parseJarvisCartSuggestions(reply) : [];
+        const suggestedItems = mergeCartSuggestions(fieldLanguageItems, aiItems);
         setLastReply(reply);
         setProposedCartActions(suggestedItems);
+        setFollowUpQuestions(interpreted.questions);
         if (transcriptId) {
           const { error: transcriptUpdateError } = await (supabase as any)
             .from("job_transcripts")
@@ -219,7 +348,17 @@ export function TechJarvisPushToTalk({
                 kind: item.kind,
                 tier: item.tier,
                 source_line: item.sourceLine,
+                source_id: item.sourceId || null,
+                confidence: item.confidence || null,
+                missing_specs: item.missingSpecs || [],
+                metadata: item.metadata || null,
               })),
+              metadata: {
+                job_number: jobNumber || null,
+                customer_name: customerName || null,
+                workflow: enableProposalActions ? "tech_jarvis_proposal" : "tech_jarvis_field_notes",
+                jarvis_follow_up_questions: interpreted.questions,
+              },
             })
             .eq("id", transcriptId);
           if (transcriptUpdateError) {
@@ -249,7 +388,12 @@ export function TechJarvisPushToTalk({
                   unit_price: item.unitPrice,
                   kind: item.kind,
                   tier: item.tier,
+                  source_id: item.sourceId || null,
+                  confidence: item.confidence || null,
+                  missing_specs: item.missingSpecs || [],
+                  metadata: item.metadata || null,
                 })),
+                follow_up_questions: interpreted.questions,
               },
             });
           if (actionError) {
@@ -264,7 +408,7 @@ export function TechJarvisPushToTalk({
         setThinking(false);
       }
     },
-    [jobId, jobNumber, customerName, employeeId, announce, enableProposalActions],
+    [jobId, jobNumber, customerName, employeeId, announce, enableProposalActions, repairCatalog, equipmentMatchups, jarvisCatalogTerms],
   );
 
   const addProposedAction = useCallback(
@@ -273,6 +417,7 @@ export function TechJarvisPushToTalk({
       try {
         await addItem.mutateAsync({
           kind: action.kind,
+          source_id: action.sourceId || null,
           name: action.name,
           description: action.description,
           quantity: action.quantity,
@@ -285,8 +430,12 @@ export function TechJarvisPushToTalk({
             customer_name: customerName,
             tech_question: lastQuestion,
             jarvis_source_line: action.sourceLine,
+            jarvis_confidence: action.confidence || null,
+            jarvis_missing_specs: action.missingSpecs || [],
+            ...(action.metadata || {}),
           },
         });
+        void suggestCatalogTrainingPhrase(action, lastQuestion);
         setProposedCartActions((items) => items.filter((item) => item.id !== action.id));
         onOpenCart?.();
       } catch (e: any) {
@@ -301,6 +450,15 @@ export function TechJarvisPushToTalk({
   const dismissProposedAction = useCallback((id: string) => {
     setProposedCartActions((items) => items.filter((item) => item.id !== id));
   }, []);
+
+  const answerFollowUp = useCallback(
+    (question: TechCartFollowUpQuestion, answer: string) => {
+      if (!lastQuestion) return;
+      setFollowUpQuestions((items) => items.filter((item) => item.id !== question.id));
+      void askJarvis(mergeFollowUpAnswer(lastQuestion, answer));
+    },
+    [askJarvis, lastQuestion],
+  );
 
   const { isRecording, loading, start, stop } = useVoiceToText({
     context: "tech_jarvis",
@@ -416,13 +574,46 @@ export function TechJarvisPushToTalk({
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">JARVIS</p>
               </div>
               <p className="text-xs text-foreground whitespace-pre-wrap">{lastReply}</p>
+              {enableProposalActions && followUpQuestions.length > 0 && (
+                <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">JARVIS needs one detail</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Tap the answer instead of typing. JARVIS will tighten the cart suggestion.
+                      </p>
+                    </div>
+                  </div>
+                  {followUpQuestions.map((question) => (
+                    <div key={question.id} className="space-y-2">
+                      <p className="text-sm font-semibold leading-tight text-foreground">{question.question}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {question.options.map((option) => (
+                          <Button
+                            key={option}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-9 rounded-full px-3 text-xs"
+                            disabled={thinking || loading}
+                            onClick={() => answerFollowUp(question, option)}
+                          >
+                            {option}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {enableProposalActions && proposedCartActions.length > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">Proposed proposal actions</p>
+                      <p className="text-sm font-semibold text-foreground">JARVIS cart suggestions</p>
                       <p className="text-[11px] text-muted-foreground">
-                        JARVIS found priced options. Review before adding anything.
+                        Field language matched to the catalog. Review before adding anything.
                       </p>
                     </div>
                     <Badge variant="outline" className="bg-background">
@@ -441,16 +632,31 @@ export function TechJarvisPushToTalk({
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               <Badge variant="secondary" className="capitalize">{action.kind}</Badge>
                               {action.tier && <Badge variant="outline" className="capitalize">{action.tier}</Badge>}
+                              {action.confidence && (
+                                <Badge variant="outline" className="capitalize">{action.confidence} confidence</Badge>
+                              )}
+                              {action.missingSpecs && action.missingSpecs.length > 0 && (
+                                <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                                  needs {action.missingSpecs.join(" + ")}
+                                </Badge>
+                              )}
                             </div>
                           </div>
-                          <p className="text-sm font-bold tabular-nums">${action.unitPrice.toFixed(2)}</p>
+                          <p className="text-sm font-bold tabular-nums">
+                            {action.unitPrice > 0 ? `$${action.unitPrice.toFixed(2)}` : "No price"}
+                          </p>
                         </div>
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                           <Button
                             type="button"
                             size="sm"
                             className="h-10 gap-1.5"
-                            disabled={addingSuggestionId === action.id || addItem.isPending}
+                            disabled={
+                              addingSuggestionId === action.id ||
+                              addItem.isPending ||
+                              action.unitPrice <= 0 ||
+                              Boolean(action.missingSpecs?.length)
+                            }
                             onClick={() => addProposedAction(action)}
                           >
                             {addingSuggestionId === action.id ? (
@@ -458,7 +664,11 @@ export function TechJarvisPushToTalk({
                             ) : (
                               <Check className="h-3.5 w-3.5" />
                             )}
-                            Add to proposal
+                            {action.unitPrice <= 0
+                              ? "Needs price"
+                              : action.missingSpecs?.length
+                                ? "Answer first"
+                                : "Add to proposal"}
                           </Button>
                           <Button
                             type="button"

@@ -101,6 +101,7 @@ export function TechAttachmentsCard({
     let skippedCount = 0;
     let failedCount = 0;
     let supplyInvoiceDetected = false;
+    const uploadedIds: string[] = [];
 
     try {
       for (const file of Array.from(files)) {
@@ -152,17 +153,20 @@ export function TechAttachmentsCard({
         }
 
         const category = getFileCategory(file.name, fileType);
+        let hiddenFromCustomerShare = false;
         if (category === "image" || category === "gif") {
           const { data: publicUrl } = supabase.storage.from("job-photos").getPublicUrl(path);
           try {
             const { data: classifyResult } = await supabase.functions.invoke("classify-attachment", {
               body: { attachment_id: row.id, image_url: publicUrl.publicUrl },
             });
-            if ((classifyResult as any)?.hidden) supplyInvoiceDetected = true;
+            hiddenFromCustomerShare = Boolean((classifyResult as any)?.hidden);
+            if (hiddenFromCustomerShare) supplyInvoiceDetected = true;
           } catch (error) {
             console.warn("classify-attachment failed (non-fatal)", error);
           }
         }
+        if (!hiddenFromCustomerShare) uploadedIds.push(row.id);
 
         uploadedCount += 1;
       }
@@ -175,6 +179,9 @@ export function TechAttachmentsCard({
         });
       } else if (uploadedCount > 0) {
         toast.success(`${uploadedCount} attachment${uploadedCount === 1 ? "" : "s"} uploaded`);
+      }
+      if (uploadedIds.length > 0) {
+        setSelected(new Set(uploadedIds));
       }
 
       if (failedCount > 0 || skippedCount > 0) {
@@ -298,20 +305,20 @@ export function TechAttachmentsCard({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-[1fr_auto] gap-2">
         <Button
           size="lg"
-          className="h-14 gap-2"
+          className="h-16 gap-2 text-base font-bold"
           onClick={() => cameraRef.current?.click()}
           disabled={uploading}
         >
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-          Camera
+          Take Photo
         </Button>
         <Button
           variant="outline"
           size="lg"
-          className="h-14 gap-2"
+          className="h-16 w-20 flex-col gap-1 px-2 text-[11px]"
           onClick={() => uploadRef.current?.click()}
           disabled={uploading}
         >

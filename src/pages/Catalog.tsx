@@ -12,6 +12,7 @@ import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
 import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
 import { PartsCatalogBrowser } from "@/components/PartsCatalogBrowser";
 import { CartAddonsManager } from "@/components/catalog/CartAddonsManager";
+import { JarvisCatalogTrainingPanel } from "@/components/catalog/JarvisCatalogTrainingPanel";
 import AhriLookups from "@/components/AhriLookups";
 import { SeedRepairCatalogButton } from "@/components/admin/SeedRepairCatalogButton";
 
@@ -136,6 +137,9 @@ export default function Catalog() {
             <TabsTrigger value="addons" className="flex-1 gap-1.5 data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Sparkles className="h-4 w-4" /> Discounts
             </TabsTrigger>
+            <TabsTrigger value="jarvis" className="flex-1 gap-1.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+              <Sparkles className="h-4 w-4" /> Jarvis Training
+            </TabsTrigger>
             <TabsTrigger value="ahri" className="flex-1 gap-1.5 data-[state=active]:bg-[hsl(var(--warning))] data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Search className="h-4 w-4" /> AHRI
             </TabsTrigger>
@@ -157,6 +161,9 @@ export default function Catalog() {
           </TabsContent>
           <TabsContent value="addons" className="mt-4">
             <CartAddonsManager />
+          </TabsContent>
+          <TabsContent value="jarvis" className="mt-4">
+            <JarvisCatalogTrainingPanel />
           </TabsContent>
         </Tabs>
       </div>

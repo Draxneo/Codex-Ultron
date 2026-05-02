@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
+  CloudSun,
   FileText,
   ImagePlus,
   MapPin,
@@ -29,6 +30,7 @@ import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechJarvisPushToTalk } from "@/components/tech/TechJarvisPushToTalk";
 import { TechScheduleCard } from "@/components/tech/TechScheduleCard";
 import { TechStatusCard } from "@/components/tech/TechStatusCard";
+import { TechWeatherCard } from "@/components/tech/TechWeatherCard";
 import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
 import { useTechWorkSummary } from "@/hooks/useCanonicalOperations";
 import { useCustomer } from "@/hooks/useCustomers";
@@ -47,29 +49,6 @@ function cleanLabel(value?: string | null) {
 
 function statusLabel(job: any) {
   return cleanLabel(job?.status || "new").toUpperCase();
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "Not scheduled";
-  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
-  if (Number.isNaN(date.getTime())) return "Not scheduled";
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTime(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-function formatSchedule(scheduledDate?: string | null, arrivalStart?: string | null, arrivalEnd?: string | null) {
-  const date = formatDate(scheduledDate);
-  const start = formatTime(arrivalStart);
-  const end = formatTime(arrivalEnd);
-  if (start && end) return `${date}, ${start} - ${end}`;
-  if (start) return `${date}, ${start}`;
-  return date;
 }
 
 function jobProblem(job: any) {
@@ -131,7 +110,6 @@ export default function TechJobDetail() {
   const employeeName = job.assigned_to || null;
   const arrivalStart = (job as any).arrival_start || null;
   const arrivalEnd = (job as any).arrival_end || null;
-  const schedule = formatSchedule(job.scheduled_date || null, arrivalStart, arrivalEnd);
   const problemSummary = jobProblem(job);
   const onMyWaySentAt = (job as any).on_my_way_sent_at || null;
   const startedAt = (job as any).started_at || null;
@@ -146,7 +124,6 @@ export default function TechJobDetail() {
     if (!startedAt) return "arrive";
     if (!hasPhotos) return "photos";
     if (!hasFindings) return "jarvis";
-    if (!hasEstimate) return "quote";
     return "wrap";
   })();
   const activeStage = manualStage || techStage;
@@ -189,6 +166,19 @@ export default function TechJobDetail() {
     employeeName,
     employeeId: employeeId || null,
   };
+  const weatherSnapshot = {
+    weather_captured_at: (job as any).weather_captured_at || null,
+    weather_captured_by: (job as any).weather_captured_by || null,
+    weather_condition: (job as any).weather_condition || null,
+    weather_temp_high: (job as any).weather_temp_high ?? null,
+    weather_temp_low: (job as any).weather_temp_low ?? null,
+    weather_feels_like_high: (job as any).weather_feels_like_high ?? null,
+    weather_humidity_max: (job as any).weather_humidity_max ?? null,
+    weather_precip_chance: (job as any).weather_precip_chance ?? null,
+    weather_wind_max_mph: (job as any).weather_wind_max_mph ?? null,
+    weather_summary: (job as any).weather_summary || null,
+    weather_source_date: (job as any).weather_source_date || null,
+  };
 
   return (
     <div className="min-h-screen bg-muted/20 pb-6">
@@ -216,10 +206,8 @@ export default function TechJobDetail() {
           customerPhone={customerPhone}
           customerEmail={customerEmail}
           customerAddress={customerAddress}
-          schedule={schedule}
-          assignedTo={employeeName}
           status={statusLabel(job)}
-          showNavigate={activeStage === "destination" || activeStage === "arrive"}
+          showNavigate={Boolean(customerAddress)}
           onNavigate={openNavigation}
           onCall={callCustomer}
           onSms={openSms}
@@ -336,6 +324,19 @@ export default function TechJobDetail() {
           />
         </TechCollapsibleCard>
 
+        <TechCollapsibleCard icon={CloudSun} title="Weather" iconBg="bg-sky-500/10" iconColor="text-sky-500" defaultOpen={false}>
+          <div className="p-4">
+            <TechWeatherCard
+              jobId={id!}
+              scheduledDate={job.scheduled_date || null}
+              techName={job.assigned_to || employeeName}
+              saved={weatherSnapshot}
+              allowSave={false}
+              bare
+            />
+          </div>
+        </TechCollapsibleCard>
+
         <TechCollapsibleCard icon={FileText} title="Notes" iconBg="bg-amber-500/10" iconColor="text-amber-600" defaultOpen={false}>
           <div className="space-y-3 p-4">
             <InfoBlock label="Customer" value={problemSummary} />
@@ -372,8 +373,6 @@ function CustomerStrip({
   customerPhone,
   customerEmail,
   customerAddress,
-  schedule,
-  assignedTo,
   status,
   showNavigate,
   onNavigate,
@@ -384,8 +383,6 @@ function CustomerStrip({
   customerPhone: string | null;
   customerEmail: string | null;
   customerAddress: string | null;
-  schedule: string;
-  assignedTo: string | null;
   status: string;
   showNavigate: boolean;
   onNavigate: () => void;
@@ -404,10 +401,6 @@ function CustomerStrip({
             <p className="flex gap-1.5">
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="line-clamp-1">{customerAddress || "No address"}</span>
-            </p>
-            <p className="flex gap-1.5">
-              <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span className="line-clamp-1">{schedule}{assignedTo ? ` - ${assignedTo}` : ""}</span>
             </p>
             {customerPhone && <p>{customerPhone}</p>}
             {customerEmail && <p className="truncate">{customerEmail}</p>}
@@ -485,14 +478,14 @@ function StageShortcutButtons({
   active?: "jarvis" | "photos" | "quote";
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
       <button
         type="button"
         onClick={onJarvis}
         className={cn("rounded-lg border bg-card p-3 text-left transition active:scale-[0.98]", active === "jarvis" && "border-primary/50 bg-primary/10")}
       >
         <Mic className="h-5 w-5 text-primary" />
-        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Jarvis</p>
+        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Talk</p>
       </button>
       <button
         type="button"
@@ -505,10 +498,11 @@ function StageShortcutButtons({
       <button
         type="button"
         onClick={onQuote}
-        className={cn("rounded-lg border bg-card p-3 text-left transition active:scale-[0.98]", active === "quote" && "border-primary/50 bg-primary/10")}
+        className={cn("flex w-16 flex-col items-center justify-center rounded-lg border bg-card p-2 text-center transition active:scale-[0.98]", active === "quote" && "border-primary/50 bg-primary/10")}
+        aria-label="Open quote"
       >
         <Wrench className="h-5 w-5 text-primary" />
-        <p className="mt-2 text-sm font-semibold leading-tight text-foreground">Quote</p>
+        <p className="mt-1 text-[11px] font-semibold leading-tight text-foreground">Quote</p>
       </button>
     </div>
   );
