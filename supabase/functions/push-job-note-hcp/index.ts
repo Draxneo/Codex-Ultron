@@ -3,7 +3,13 @@
  * Pushes a note to a Housecall Pro job (or estimate) AND mirrors it
  * into our local jobs.hcp_note column for the in-app timeline.
  *
- * Body: { job_id?: string, customer_id?: string, note: string, source?: string }
+ * Body: {
+ *   job_id?: string,
+ *   customer_id?: string,
+ *   note: string,
+ *   source?: string,
+ *   hcp_line_items?: Array<{ name: string, description?: string, unit_price?: number, quantity?: number, kind?: string }>
+ * }
  *
  * Resolution order:
  *  1) If job_id given → use that job
@@ -21,6 +27,47 @@ import { corsHeaders } from "../_shared/cors.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+function toHcpLineItem(item: any) {
+  const quantity = Number(item.quantity || 1);
+  const unitPrice = Number(item.unit_price || item.unitPrice || 0);
+  const unitPriceCents = unitPrice > 0 && unitPrice < 10000 ? Math.round(unitPrice * 100) : Math.round(unitPrice);
+  return {
+    name: String(item.name || "Custom line item").slice(0, 160),
+    description: String(item.description || "").slice(0, 1000),
+    unit_price: unitPriceCents,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+    kind: item.kind || "labor",
+    taxable: item.taxable === true,
+  };
+}
+
+async function pushLineItemsToHcpJob(hcpJobId: string, hcpApiKey: string, items: any[]) {
+  const results: any[] = [];
+  for (const rawItem of items) {
+    const lineItem = toHcpLineItem(rawItem);
+    try {
+      const res = await fetch(`https://api.housecallpro.com/jobs/${hcpJobId}/line_items`, {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${hcpApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(lineItem),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        results.push({ ok: true, id: data.id ?? null, name: lineItem.name });
+      } else {
+        const text = await res.text();
+        results.push({ ok: false, name: lineItem.name, error: `HCP ${res.status}: ${text.slice(0, 500)}` });
+      }
+    } catch (e) {
+      results.push({ ok: false, name: lineItem.name, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -36,6 +83,7 @@ serve(async (req) => {
     const estimate_id: string | null = body.estimate_id ?? null;
     const customer_id: string | null = body.customer_id ?? null;
     const source: string = body.source || "JARVIS";
+    const hcpLineItems: any[] = Array.isArray(body.hcp_line_items) ? body.hcp_line_items : [];
 
     if (!note) {
       return new Response(JSON.stringify({ error: "Missing note" }), {
@@ -157,6 +205,7 @@ serve(async (req) => {
     // 1) Push to HCP if possible
     let hcpPushed = false;
     let hcpError: string | null = null;
+    let hcpLineItemResults: any[] = [];
     if (job.hcp_id && hcpApiKey) {
       try {
         const res = await fetch(
@@ -180,6 +229,10 @@ serve(async (req) => {
         hcpError = e instanceof Error ? e.message : String(e);
         console.error("HCP note push exception:", hcpError);
       }
+
+      if (hcpLineItems.length > 0) {
+        hcpLineItemResults = await pushLineItemsToHcpJob(job.hcp_id, hcpApiKey, hcpLineItems);
+      }
     }
 
     // 2) Mirror into local jobs.hcp_note (always)
@@ -193,7 +246,7 @@ serve(async (req) => {
     // 3) Activity log → fires auto_close_todos_on_activity_note
     await supabase.from("activity_log").insert({
       job_id: job.id,
-      action: "note_added",
+      action: hcpLineItems.length > 0 ? "hcp_backup_pushed" : "note_added",
       details: stampedNote.slice(0, 500),
       performed_by: source,
     });
@@ -205,6 +258,7 @@ serve(async (req) => {
         job_id: job.id,
         hcp_pushed: hcpPushed,
         hcp_error: hcpError,
+        hcp_line_items: hcpLineItemResults,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

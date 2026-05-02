@@ -293,6 +293,14 @@ export function useJobCart(jobId: string | undefined) {
           job_id: jobId,
           note,
           source: "UltraOffice cart backup",
+          hcp_line_items: items.map((item) => ({
+            name: item.name,
+            description: item.description,
+            quantity: Number(item.quantity || 1),
+            unit_price: Number(item.unit_price || 0),
+            kind: "labor",
+            taxable: false,
+          })),
         },
       });
       if (error) throw error;
@@ -301,7 +309,16 @@ export function useJobCart(jobId: string | undefined) {
       }
       return data;
     },
-    onSuccess: () => toast.success("Emergency backup copied to the job"),
+    onSuccess: (data: any) => {
+      const pushed = Array.isArray(data?.hcp_line_items)
+        ? data.hcp_line_items.filter((item: any) => item?.ok).length
+        : 0;
+      toast.success(
+        pushed > 0
+          ? `Emergency backup copied to HCP with ${pushed} line item${pushed === 1 ? "" : "s"}`
+          : "Emergency backup copied to the job",
+      );
+    },
     onError: (e: any) => toast.error(e.message || "Backup could not be created"),
   });
 
