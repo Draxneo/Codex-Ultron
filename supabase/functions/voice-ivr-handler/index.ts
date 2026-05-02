@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
       ? `<Start><Stream url="wss://${supabaseUrl.replace("https://", "")}/functions/v1/live-transcribe" track="both_tracks" /></Start>`
       : "";
 
-    const voicemailUrl = `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}`;
+    const voicemailUrl = `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}&IvrConfigId=${encodeURIComponent((config as any).id || "")}&To=${encodeURIComponent(calledNumber)}`;
     const statusCallbackUrl = `${supabaseUrl}/functions/v1/voice-status-callback`;
     const queueRedirectUrl = `${supabaseUrl}/functions/v1/voice-ivr-handler?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}&IvrConfigId=${encodeURIComponent((config as any).id || "")}&To=${encodeURIComponent(calledNumber)}&QueueRetry=1`;
 
@@ -390,6 +390,8 @@ Deno.serve(async (req) => {
                   skipEmployeeFilter: true,
                   sourceFunction: "voice-ivr-handler",
                   templateKey: resolvedSms.templateKey,
+                  businessUnitId: businessUnit?.id || null,
+                  fromNumber: businessCallerId,
                 });
               }
             } catch (bgErr) {
@@ -442,6 +444,8 @@ Deno.serve(async (req) => {
             skipEmployeeFilter: true,
             sourceFunction: "voice-ivr-handler",
             templateKey: resolvedSms.templateKey,
+            businessUnitId: businessUnit?.id || null,
+            fromNumber: businessCallerId,
           });
         } else {
           console.log(`After-hours SMS disabled for dept "${option.label}" — skipping`);

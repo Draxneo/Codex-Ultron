@@ -49,6 +49,13 @@ type SubcontractorJobPayload = {
   required_photo_slots: string[];
   completed_at: string | null;
   expires_at: string;
+  company?: {
+    company_name?: string | null;
+    company_display_name?: string | null;
+    company_phone?: string | null;
+    company_logo_url?: string | null;
+    business_unit_tag?: string | null;
+  } | null;
   photos: SubcontractorPhoto[];
   inspection_photos: InspectionPhoto[];
 };
@@ -239,6 +246,8 @@ export default function SubcontractorJobPublic() {
   const slots = job.required_photo_slots?.length ? job.required_photo_slots : ["before", "after"];
   const completed = Boolean(job.completed_at);
   const formattedPhone = formatPhone(job.customer_phone) || job.customer_phone || "";
+  const companyName = job.company?.company_display_name || job.company?.company_name || "Ultra Office";
+  const companyLogoUrl = job.company?.company_logo_url || "";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -248,7 +257,12 @@ export default function SubcontractorJobPublic() {
           <div className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Carnes and Sons</p>
+              <div className="flex items-center gap-2">
+                {companyLogoUrl ? (
+                  <img src={companyLogoUrl} alt={companyName} className="h-8 w-8 rounded-md object-contain bg-white" />
+                ) : null}
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">{companyName}</p>
+              </div>
               <h1 className="mt-1 text-2xl font-bold leading-tight">{job.customer_name || "Install Job"}</h1>
               <p className="mt-1 text-sm text-slate-300">Job {job.job_number || job.job_id.slice(0, 8)}</p>
             </div>

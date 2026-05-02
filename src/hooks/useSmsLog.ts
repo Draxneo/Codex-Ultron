@@ -10,7 +10,6 @@ import {
   toE164Key,
   type ContactLookupMap,
 } from "@/lib/communications";
-import { appendSmsSignature } from "@/lib/smsSignature";
 
 export type SmsMediaItem = {
   url: string;
@@ -845,7 +844,6 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     options: { fromNumber?: string | null; businessUnitId?: string | null; threadKey?: string | null } = {}
   ) => {
     setSending(true);
-    const signedBody = appendSmsSignature(body);
 
     // Optimistic placeholder — shows instantly in the thread.
     // We tag it with a client_id (UUID) so the server-inserted row can
@@ -858,7 +856,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       id: optimisticId,
       direction: "outbound",
       phone_number: to,
-      body: signedBody,
+      body,
       twilio_sid: null,
       related_job_id: jobId || null,
       is_read: true,
@@ -880,7 +878,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const { sendSmsImpl } = await import("@/hooks/useSendSms");
       const result = await sendSmsImpl({
         to,
-        body: signedBody,
+        body,
         jobId,
         mediaUrls,
         contactName,

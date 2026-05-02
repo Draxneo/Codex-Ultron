@@ -327,8 +327,14 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
 export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpdateDept, onDeleteDept, testMode }: IvrCanvasProps & { testMode?: boolean }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const canvasKey = useMemo(() => `ivr_${config.business_unit_id || config.id}`, [config.business_unit_id, config.id]);
-  const legacyPositionKeys = useMemo(() => (config.is_default ? ["ivr"] : []), [config.is_default]);
+  const canvasKey = useMemo(() => `ivr_${config.id}`, [config.id]);
+  const legacyPositionKeys = useMemo(
+    () => [
+      config.business_unit_id ? `ivr_${config.business_unit_id}` : null,
+      config.is_default ? "ivr" : null,
+    ].filter(Boolean) as string[],
+    [config.business_unit_id, config.is_default],
+  );
   const { applyPositions, savePositions, positionsReady } = useCanvasPositions(canvasKey, legacyPositionKeys);
 
   const onSelect = useCallback((id: string) => {

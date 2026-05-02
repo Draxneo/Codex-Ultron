@@ -81,10 +81,9 @@ export async function sendIvrSms(opts: {
 
     const companyName = (companyNameRow as any)?.value?.trim() || "";
     const footer = companyName ? `—${companyName}` : "";
+    void footer;
     const trimmedBody = (body || "").trim();
-    const finalBody = footer && !trimmedBody.endsWith(footer)
-      ? `${trimmedBody}\n${footer}`
-      : trimmedBody;
+    const finalBody = trimmedBody;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

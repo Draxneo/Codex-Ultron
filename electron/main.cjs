@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerSaveBlocker, powerMonitor, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerSaveBlocker, powerMonitor, shell, session } = require('electron');
 const path = require('path');
 
 let mainWindow = null;
@@ -604,6 +604,10 @@ function dismissToast(entry) {
 }
 
 app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(['media', 'microphone'].includes(permission));
+  });
+
   // Power management is enabled only when the logged-in user has desk calls on.
   // That keeps the phone reachable without forcing the monitor to stay awake.
   syncAppSuspensionBlocker();

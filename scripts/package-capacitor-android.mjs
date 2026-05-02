@@ -78,7 +78,7 @@ if (!existsSync(join(root, "android"))) {
 
 removeWindowsUnsafeTwilioVoiceHook();
 
-const syncStatus = run("npx", ["cap", "sync", "android"], { allowFailure: false });
+const syncStatus = run("npx", ["cap", "sync", "android"], { allowFailure: true });
 if (syncStatus !== 0) {
   const copiedIndex = join(root, "android", "app", "src", "main", "assets", "public", "index.html");
   if (!existsSync(copiedIndex)) {

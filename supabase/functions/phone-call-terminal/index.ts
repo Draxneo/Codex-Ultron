@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { recentOutboundExists, sendIvrSms } from "../_shared/smsHelper.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 const MISSED_STATUSES = new Set(["canceled", "no-answer", "failed", "busy"]);
 
@@ -15,7 +16,7 @@ async function findBestCallRow(supabase: any, sids: string[], phone: string) {
   if (cleanSids.length) {
     const { data: directRows } = await supabase
       .from("call_log")
-      .select("id, twilio_sid, direction, phone_number, contact_name, contact_type, status, extracted_data")
+      .select("id, twilio_sid, direction, phone_number, called_number, business_unit_id, contact_name, contact_type, status, extracted_data")
       .in("twilio_sid", cleanSids)
       .order("created_at", { ascending: true });
 
@@ -31,7 +32,7 @@ async function findBestCallRow(supabase: any, sids: string[], phone: string) {
   const since = new Date(Date.now() - 20 * 60 * 1000).toISOString();
   const { data: recentRows } = await supabase
     .from("call_log")
-    .select("id, twilio_sid, direction, phone_number, contact_name, contact_type, status, extracted_data, created_at")
+    .select("id, twilio_sid, direction, phone_number, called_number, business_unit_id, contact_name, contact_type, status, extracted_data, created_at")
     .eq("direction", "inbound")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
@@ -62,7 +63,14 @@ async function maybeSendCanvasMissedSms({
   const phoneNumber = callRow.phone_number || "";
   if (!phoneNumber) return;
 
-  const recent = await recentOutboundExists(supabase, phoneNumber, 30);
+  const businessUnit = callRow.business_unit_id
+    ? { id: callRow.business_unit_id, primary_phone_number: callRow.called_number }
+    : ((await resolveBusinessUnitByPhone(supabase, callRow.called_number)) || (await getDefaultBusinessUnit(supabase)));
+  const fromNumber = normalizeE164Phone(businessUnit?.primary_phone_number || callRow.called_number || null);
+  const recent = await recentOutboundExists(supabase, phoneNumber, 30, {
+    businessUnitId: businessUnit?.id || null,
+    fromNumber,
+  });
   if (recent) {
     await logSystemTrace({
       sourceType: "voice",
@@ -81,12 +89,23 @@ async function maybeSendCanvasMissedSms({
   }
 
   const chosenDigit = extracted.ivr_digit ? String(extracted.ivr_digit) : "1";
-  const { data: deptOption } = await supabase
+  let ivrConfigId = "";
+  if (businessUnit?.id) {
+    const { data: ivrConfig } = await supabase
+      .from("ivr_config")
+      .select("id")
+      .eq("business_unit_id", businessUnit.id)
+      .maybeSingle();
+    ivrConfigId = ivrConfig?.id || "";
+  }
+
+  let deptQuery = supabase
     .from("ivr_menu_options")
     .select("label, dept_no_vm_missed_call_sms, dept_no_vm_missed_call_sms_enabled, dept_missed_call_sms, dept_missed_call_sms_template_key")
     .eq("digit", chosenDigit)
-    .eq("is_active", true)
-    .maybeSingle();
+    .eq("is_active", true);
+  if (ivrConfigId) deptQuery = deptQuery.eq("ivr_config_id", ivrConfigId);
+  const { data: deptOption } = await deptQuery.maybeSingle();
 
   const enabled = deptOption?.dept_no_vm_missed_call_sms_enabled !== false;
   const fallbackBody = (deptOption?.dept_no_vm_missed_call_sms || deptOption?.dept_missed_call_sms || "").trim();
@@ -123,6 +142,8 @@ async function maybeSendCanvasMissedSms({
     skipEmployeeFilter: true,
     sourceFunction: "phone-call-terminal",
     templateKey: resolvedTemplate.templateKey,
+    businessUnitId: businessUnit?.id || null,
+    fromNumber,
   });
 
   await logSystemTrace({

@@ -8,6 +8,7 @@ import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 const NEGATIVE_TERMINAL_STATUSES = new Set([
   "no-answer",
@@ -41,6 +42,8 @@ type CallRow = {
   twilio_sid: string;
   direction?: string;
   phone_number?: string;
+  called_number?: string | null;
+  business_unit_id?: string | null;
   contact_name?: string;
   contact_type?: string;
   extracted_data?: Record<string, unknown> | null;
@@ -159,7 +162,7 @@ async function findCallRow(
     const { data, error } = await supabase
       .from("call_log")
       .select(
-        "id, status, answered_by, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, contact_name, contact_type, extracted_data",
+        "id, status, answered_by, duration_seconds, recording_url, transcription, started_at, ended_at, twilio_sid, direction, phone_number, called_number, business_unit_id, contact_name, contact_type, extracted_data",
       )
       .eq("twilio_sid", sid)
       .maybeSingle();
@@ -173,6 +176,37 @@ async function findCallRow(
   }
 
   return null;
+}
+
+async function resolveCallBusinessContext(supabase: any, callRow: any) {
+  let businessUnit: any = null;
+  if (callRow?.business_unit_id) {
+    const { data } = await supabase
+      .from("business_units")
+      .select("id, primary_phone_number")
+      .eq("id", callRow.business_unit_id)
+      .maybeSingle();
+    businessUnit = data;
+  }
+  if (!businessUnit) {
+    businessUnit = (await resolveBusinessUnitByPhone(supabase, callRow?.called_number)) ||
+      (await getDefaultBusinessUnit(supabase));
+  }
+  const fromNumber = normalizeE164Phone(businessUnit?.primary_phone_number || callRow?.called_number || null);
+  let ivrConfigId = "";
+  if (businessUnit?.id) {
+    const { data: ivrConfig } = await supabase
+      .from("ivr_config")
+      .select("id")
+      .eq("business_unit_id", businessUnit.id)
+      .maybeSingle();
+    ivrConfigId = ivrConfig?.id || "";
+  }
+  return {
+    businessUnitId: businessUnit?.id || null,
+    fromNumber,
+    ivrConfigId,
+  };
 }
 
 function normalizeClientIdentity(value: string | null | undefined): string | null {
@@ -706,7 +740,7 @@ Deno.serve(async (req) => {
         const { data: freshCall } = await supabase
           .from("call_log")
           .select(
-            "status, phone_number, contact_name, contact_type, extracted_data",
+            "status, phone_number, called_number, business_unit_id, contact_name, contact_type, extracted_data",
           )
           .eq("id", existingRow.id)
           .maybeSingle();
@@ -759,15 +793,17 @@ Deno.serve(async (req) => {
           // (first dept) if the call was a direct dial that never hit IVR.
           const extracted = (freshCall?.extracted_data as any) || {};
           const chosenDigit = extracted.ivr_digit ? String(extracted.ivr_digit) : "1";
+          const smsContext = await resolveCallBusinessContext(supabase, freshCall || existingRow);
 
-          const { data: deptOption } = await supabase
+          let deptQuery = supabase
             .from("ivr_menu_options")
             .select(
               "label, dept_no_vm_missed_call_sms, dept_no_vm_missed_call_sms_enabled, dept_missed_call_sms, dept_missed_call_sms_enabled, dept_missed_call_sms_template_key",
             )
             .eq("digit", chosenDigit)
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+          if (smsContext.ivrConfigId) deptQuery = deptQuery.eq("ivr_config_id", smsContext.ivrConfigId);
+          const { data: deptOption } = await deptQuery.maybeSingle();
 
           const { data: testModeRow } = await supabase
             .from("company_settings")
@@ -784,7 +820,10 @@ Deno.serve(async (req) => {
           } else if (!fallbackBody) {
             console.log(`[Missed-call SMS] No body configured for dept "${deptOption?.label || chosenDigit}" — skipping`);
           } else {
-            const recent = await recentOutboundExists(supabase, phoneNumber, 30);
+            const recent = await recentOutboundExists(supabase, phoneNumber, 30, {
+              businessUnitId: smsContext.businessUnitId,
+              fromNumber: smsContext.fromNumber,
+            });
             if (recent) {
               console.log(
                 `[Missed-call SMS] Skipped — outbound SMS already sent to ${phoneNumber} in last 30min`,
@@ -806,6 +845,8 @@ Deno.serve(async (req) => {
                 skipEmployeeFilter: allowEmployeeTestSms,
                 sourceFunction: "voice-status-missed-call",
                 templateKey: resolvedTemplate.templateKey,
+                businessUnitId: smsContext.businessUnitId,
+                fromNumber: smsContext.fromNumber,
               });
               console.log(
                 `[Missed-call SMS] Sent IVR-canvas body for dept "${deptOption?.label || chosenDigit}" to ${phoneNumber}`,
@@ -854,7 +895,7 @@ Deno.serve(async (req) => {
         // Re-fetch the full call_log row to get direction, phone, contact info, ivr selection
         const { data: callRow } = await supabase
           .from("call_log")
-          .select("direction, phone_number, contact_type, contact_name, extracted_data")
+          .select("direction, phone_number, called_number, business_unit_id, contact_type, contact_name, extracted_data")
           .eq("id", existingRow.id)
           .single();
 
@@ -867,13 +908,15 @@ Deno.serve(async (req) => {
           // fall back to digit "1" (first dept).
           const extracted = (callRow.extracted_data as any) || {};
           const chosenDigit = extracted.ivr_digit ? String(extracted.ivr_digit) : "1";
+          const smsContext = await resolveCallBusinessContext(supabase, callRow);
 
-          const { data: deptOption } = await supabase
+          let deptQuery = supabase
             .from("ivr_menu_options")
             .select("label, dept_post_call_sms, dept_post_call_sms_enabled")
             .eq("digit", chosenDigit)
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+          if (smsContext.ivrConfigId) deptQuery = deptQuery.eq("ivr_config_id", smsContext.ivrConfigId);
+          const { data: deptOption } = await deptQuery.maybeSingle();
 
           const { data: testModeRow } = await supabase
             .from("company_settings")
@@ -901,13 +944,15 @@ Deno.serve(async (req) => {
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
 
-            const { count } = await supabase
+            let sentTodayQuery = supabase
               .from("sms_log")
               .select("id", { count: "exact", head: true })
               .eq("direction", "outbound")
               .eq("phone_number", callRow.phone_number)
               .gte("created_at", todayStart.toISOString())
               .eq("source_function", "voice-status-post-call");
+            if (smsContext.businessUnitId) sentTodayQuery = sentTodayQuery.eq("business_unit_id", smsContext.businessUnitId);
+            const { count } = await sentTodayQuery;
 
             // For unknown callers, also check if ANY outbound SMS was sent in the last 60 min
             // (e.g. CSR already sent an intake link during the call)
@@ -915,12 +960,14 @@ Deno.serve(async (req) => {
             let skipIntake = false;
             if (!isCustomer && !smsTestNumberBypass) {
               const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-              const { count: recentCount } = await supabase
+              let recentSmsQuery = supabase
                 .from("sms_log")
                 .select("id", { count: "exact", head: true })
                 .eq("direction", "outbound")
                 .eq("phone_number", callRow.phone_number)
                 .gte("created_at", oneHourAgo);
+              if (smsContext.businessUnitId) recentSmsQuery = recentSmsQuery.eq("business_unit_id", smsContext.businessUnitId);
+              const { count: recentCount } = await recentSmsQuery;
 
               if ((recentCount || 0) > 0) {
                 skipIntake = true;
@@ -940,6 +987,8 @@ Deno.serve(async (req) => {
                 skipEmployeeFilter: allowEmployeeTestSms || smsTestNumberBypass,
                 sourceFunction: "voice-status-post-call",
                 templateKey: resolvedTemplate.templateKey,
+                businessUnitId: smsContext.businessUnitId,
+                fromNumber: smsContext.fromNumber,
               });
               console.log(
                 `Post-call SMS sent IVR-canvas body for dept "${deptOption?.label || chosenDigit}" to ${callRow.phone_number}`,

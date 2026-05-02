@@ -6,6 +6,12 @@ export type SmsComposerOpenDetail = {
   contactName?: string;
   jobId?: string;
   customerId?: string;
+  /** Exact conversation identity for multi-company SMS threads. */
+  threadKey?: string | null;
+  /** Explicit sending company line, e.g. Carnes or FIX. */
+  fromNumber?: string | null;
+  /** Explicit company/business unit for the thread. */
+  businessUnitId?: string | null;
 };
 
 export function buildSmsPageUrl(phone?: string | null, draft?: string | null) {
@@ -23,6 +29,9 @@ export function openSmsComposer(phone?: string | null, context?: Omit<SmsCompose
     contactName: context?.contactName,
     jobId: context?.jobId,
     customerId: context?.customerId,
+    threadKey: context?.threadKey,
+    fromNumber: context?.fromNumber,
+    businessUnitId: context?.businessUnitId,
   };
 
   const openEvent = new CustomEvent<SmsComposerOpenDetail>(SMS_COMPOSER_OPEN_EVENT, {

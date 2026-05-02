@@ -490,7 +490,9 @@ Deno.serve(async (req) => {
       encodeURIComponent(callSid)
     }&From=${encodeURIComponent(from)}&ContactName=${
       encodeURIComponent(contactName || "")
-    }&ContactType=${encodeURIComponent(contactType)}`;
+    }&ContactType=${encodeURIComponent(contactType)}&IvrConfigId=${
+      encodeURIComponent((config as any).id || "")
+    }&To=${encodeURIComponent(to)}`;
     const statusCallbackUrl =
       `${supabaseUrl}/functions/v1/voice-status-callback`;
     const queueRedirectUrl =
@@ -570,6 +572,8 @@ Deno.serve(async (req) => {
         contactType,
         supabase,
         skipEmployeeFilter: smsTestModeRow?.value === "true",
+        businessUnitId: businessUnit?.id || null,
+        fromNumber: businessCallerId,
       });
 
       const holidayGreeting = getHolidayGreeting(holiday, cn);

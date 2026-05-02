@@ -18,6 +18,7 @@ export function SmsComposerPopup() {
       setDetail({
         ...customEvent.detail,
         phone: customEvent.detail.phone ? toE164(customEvent.detail.phone) || customEvent.detail.phone : undefined,
+        fromNumber: customEvent.detail.fromNumber ? toE164(customEvent.detail.fromNumber) || customEvent.detail.fromNumber : customEvent.detail.fromNumber,
       });
     };
 

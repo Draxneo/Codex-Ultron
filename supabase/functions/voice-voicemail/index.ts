@@ -8,6 +8,7 @@ import { logApiUsage } from "../_shared/apiUsageLog.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone as normalizeBusinessPhone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 function escapeXml(str: string): string {
   return str
@@ -119,6 +120,8 @@ Deno.serve(async (req) => {
     const contactName = url.searchParams.get("ContactName") || "";
     const contactType = url.searchParams.get("ContactType") || "unknown";
     const digit = url.searchParams.get("Digit") || "";
+    const ivrConfigId = url.searchParams.get("IvrConfigId") || "";
+    const calledNumber = url.searchParams.get("To") || "";
     const queueRetry = url.searchParams.get("QueueRetry") === "1";
 
     const formData = await req.text();
@@ -150,6 +153,11 @@ Deno.serve(async (req) => {
     const allowEmployeeTestSms = smsTestModeRow?.value === "true";
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const businessUnit = (await resolveBusinessUnitByPhone(supabase, calledNumber)) ||
+      (await getDefaultBusinessUnit(supabase));
+    const businessCallerId = normalizeBusinessPhone(businessUnit?.primary_phone_number) ||
+      getTwilioCallerId() ||
+      from;
 
     // ── PHASE 1: Dial action callback (no recording yet) ──
     // Twilio hits this URL when the <Dial> ends.
@@ -234,8 +242,20 @@ Deno.serve(async (req) => {
       // If overflow is enabled and the call wasn't answered, route to live answering service
       // BEFORE going to voicemail.
       const digit = url.searchParams.get("Digit") || "";
-      const { data: ivrCfg } = await supabase.from("ivr_config").select("*")
-        .limit(1).maybeSingle();
+      let ivrCfg: any = null;
+      if (ivrConfigId) {
+        const { data } = await supabase.from("ivr_config").select("*").eq("id", ivrConfigId).maybeSingle();
+        ivrCfg = data;
+      }
+      if (!ivrCfg && businessUnit?.id) {
+        const { data } = await supabase.from("ivr_config").select("*").eq("business_unit_id", businessUnit.id).maybeSingle();
+        ivrCfg = data;
+      }
+      if (!ivrCfg) {
+        const { data } = await supabase.from("ivr_config").select("*")
+          .order("is_default", { ascending: false }).order("created_at").limit(1).maybeSingle();
+        ivrCfg = data;
+      }
       const overflowEnabled = ivrCfg?.answering_service_enabled === true;
       const overflowNumber = ivrCfg?.answering_service_number || "";
       const overflowOnBusy = ivrCfg?.overflow_on_busy !== false;
@@ -258,10 +278,14 @@ Deno.serve(async (req) => {
           encodeURIComponent(contactName)
         }&ContactType=${encodeURIComponent(contactType)}&Digit=${
           encodeURIComponent(digit)
+        }&IvrConfigId=${encodeURIComponent(ivrCfg?.id || "")}&To=${
+          encodeURIComponent(calledNumber)
         }&QueueRetry=1`
         : `${supabaseUrl}/functions/v1/voice-webhook?CallSid=${
           encodeURIComponent(callSid)
-        }&From=${encodeURIComponent(from)}&QueueRetry=1`;
+        }&From=${encodeURIComponent(from)}&To=${encodeURIComponent(calledNumber)}&IvrConfigId=${
+          encodeURIComponent(ivrCfg?.id || "")
+        }&QueueRetry=1`;
 
       const isBusy = dialCallStatus === "busy";
       // FAIL-SAFE: treat ANYTHING that isn't a clean "completed" answer as a missed call.
@@ -317,6 +341,8 @@ Deno.serve(async (req) => {
           encodeURIComponent(contactName)
         }&ContactType=${encodeURIComponent(contactType)}&Digit=${
           encodeURIComponent(digit)
+        }&IvrConfigId=${encodeURIComponent(ivrCfg?.id || "")}&To=${
+          encodeURIComponent(calledNumber)
         }&OverflowChoice=menu`;
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?>
@@ -376,7 +402,7 @@ Deno.serve(async (req) => {
           console.error("Failed to tag overflow on call_log:", e);
         }
 
-        const twilioNumber = getTwilioCallerId() || from;
+        const twilioNumber = businessCallerId;
         const overflowStatusCallback =
           `${supabaseUrl}/functions/v1/voice-status-callback`;
         console.log(
@@ -427,6 +453,7 @@ Deno.serve(async (req) => {
           .select(
             "dept_no_vm_missed_call_sms, dept_no_vm_missed_call_sms_enabled, dept_missed_call_sms, dept_missed_call_sms_enabled, dept_missed_call_sms_template_key",
           )
+          .eq("ivr_config_id", ivrCfg?.id)
           .eq("digit", digit)
           .maybeSingle();
         // Send the dept-specific message immediately so caller gets it during the VM prompt
@@ -452,6 +479,8 @@ Deno.serve(async (req) => {
             skipEmployeeFilter: allowEmployeeTestSms,
             sourceFunction: "voice-voicemail",
             templateKey: resolvedSms.templateKey,
+            businessUnitId: businessUnit?.id || null,
+            fromNumber: businessCallerId,
           });
           console.log(
             `Per-dept missed-call SMS sent for digit ${digit} to ${from}`,
@@ -479,6 +508,7 @@ Deno.serve(async (req) => {
         const { data: vmOption } = await supabase
           .from("ivr_menu_options")
           .select("dept_vm_greeting, dept_vm_audio_url")
+          .eq("ivr_config_id", ivrCfg?.id)
           .eq("digit", digit)
           .maybeSingle();
         if (vmOption?.dept_vm_audio_url) {

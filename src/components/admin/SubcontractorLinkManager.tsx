@@ -693,7 +693,7 @@ function DraftSubcontractorPreview({
       <div className="border-b border-white/10 bg-slate-900 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-orange-300">Carnes and Sons</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-300">Company follows selected job</p>
             <h3 className="mt-1 truncate text-2xl font-bold">{job.customer_name || "Selected Job"}</h3>
             <p className="mt-1 text-sm text-slate-300">Job {job.job_number || job.id.slice(0, 8)}</p>
           </div>
