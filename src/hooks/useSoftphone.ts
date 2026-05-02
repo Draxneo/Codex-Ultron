@@ -253,6 +253,8 @@ export function useSoftphone(enabled: boolean = true) {
   // user instead of overflowing to the answering service. We now fall back
   // through profile.full_name → email-prefix so the ref is ALWAYS populated.
   useEffect(() => {
+    if (isElectronMainWindow || !enabled) return;
+
     const buildEmployeeMap = async () => {
       const map: ContactLookupMap = {};
       const { data: employees } = await supabase
@@ -309,7 +311,7 @@ export function useSoftphone(enabled: boolean = true) {
     };
 
     buildEmployeeMap();
-  }, []);
+  }, [enabled, isElectronMainWindow]);
 
   // On-demand caller ID: check employee map first, then DB lookup for customers
   const resolveCallerName = useCallback(async (phone: string): Promise<string | undefined> => {

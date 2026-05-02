@@ -153,6 +153,8 @@ export function useNativeSoftphone(enabled: boolean = true) {
   // Build employee-only contact map AND resolve current user's employee name
   // for answered_by attribution (see useSoftphone.ts for the same logic).
   useEffect(() => {
+    if (!enabled) return;
+
     const buildEmployeeMap = async () => {
       const map: ContactLookupMap = {};
       const { data: employees } = await supabase
@@ -204,7 +206,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       contactMapRef.current = map;
     };
     buildEmployeeMap();
-  }, []);
+  }, [enabled]);
 
   // On-demand caller ID: check employee map first, then DB lookup for customers
   const resolveCallerName = useCallback(async (phone: string): Promise<string | undefined> => {
