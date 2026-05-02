@@ -1,7 +1,7 @@
 /**
  * Edge-function helper for building the unified 5W facts payload.
  *
- * Used by every edge function that creates a JARVIS card (todos, action_items,
+ * Used by every edge function that creates a JARVIS card (action_items,
  * outbound_drafts) so the dispatcher UI can render them through one component.
  *
  * See src/types/jarvisFacts.ts for the canonical TypeScript shape.

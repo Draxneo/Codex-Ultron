@@ -80,8 +80,6 @@ export const CANONICAL_JARVIS_TOOLS = [
 ] as const;
 
 export const RETIRED_JARVIS_TOOLS = [
-  "create_todo",
-  "complete_todo",
   "send_brochure_email",
   "read_email_thread",
   "search_emails",

@@ -623,7 +623,7 @@ Deno.serve(async (req) => {
 
       // SMS already sent in Phase 1 (no-answer handler) — no duplicate needed here.
 
-      // ── Invoke summarize-call for AI summary + todo extraction ──
+      // ── Invoke summarize-call for AI summary + action-card extraction ──
       if (callEntry?.id && transcription) {
         try {
           const sumResp = await fetch(

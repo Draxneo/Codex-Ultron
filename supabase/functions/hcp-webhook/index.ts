@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
         await supabase.from("call_log").update({ related_job_id: null }).eq("related_job_id", jobsMatch.id);
         await supabase.from("chat_channels").update({ job_id: null }).eq("job_id", jobsMatch.id);
         await supabase.from("activity_log").update({ job_id: null }).eq("job_id", jobsMatch.id);
-        // (todos table removed)
+        // (legacy reminder table removed)
         await supabase.from("tech_location_events").delete().eq("job_id", jobsMatch.id);
         await supabase.from("workflow_alerts").delete().eq("job_id", jobsMatch.id);
         await supabase.from("job_line_items").delete().eq("job_id", jobsMatch.id);
@@ -520,7 +520,7 @@ Deno.serve(async (req) => {
           await supabase.from("call_log").update({ related_job_id: null }).eq("related_job_id", delJob.id);
           await supabase.from("chat_channels").update({ job_id: null }).eq("job_id", delJob.id);
           await supabase.from("activity_log").update({ job_id: null }).eq("job_id", delJob.id);
-          // (todos table removed)
+          // (legacy reminder table removed)
           await supabase.from("tech_location_events").delete().eq("job_id", delJob.id);
           await supabase.from("workflow_alerts").delete().eq("job_id", delJob.id);
           await supabase.from("job_line_items").delete().eq("job_id", delJob.id);

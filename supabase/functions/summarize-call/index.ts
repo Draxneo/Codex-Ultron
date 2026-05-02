@@ -843,7 +843,7 @@ INTENT EXTRACTION:
       }
     }
 
-    // Resolve customer name early — used by the booking action card AND todo extraction below.
+    // Resolve customer name early — used by the booking action card and follow-up extraction below.
     // Prefer the resolved DB contact name (truth) over AI-extracted names which can
     // be polluted by carrier voicemail greetings on outbound calls.
     const extractedFullName = extracted.first_name
@@ -855,7 +855,7 @@ INTENT EXTRACTION:
 
     // ── CRITICAL: create the booking action_item FIRST, before any slow AI work ──
     // This guarantees the "Book It Now" card appears in the Now tab even if the
-    // todo-extraction AI call below times out or hangs.
+    // follow-up extraction AI call below times out or hangs.
     let shouldInjectBookingCard = true;
     const hasActionableCallIntent =
       (extracted.service_type && extracted.service_type !== "other") ||
@@ -1196,7 +1196,7 @@ INTENT EXTRACTION:
         }
 
         // NOTE: action_items insert was moved earlier in the function (before the slow
-        // todo-extraction AI call) to guarantee the "Book It Now" card always appears in
+        // follow-up extraction AI call) to guarantee the "Book It Now" card always appears in
         // the Now tab even if downstream operations time out. Do not duplicate here.
       } catch (cardErr) {
         console.error(`Call ${call_id}: failed to inject booking card:`, cardErr);

@@ -18,7 +18,7 @@
  *
  * If the resolved job has hcp_id → POST to HCP /jobs/{hcp_id}/notes.
  * Always appends to local jobs.hcp_note. Logs an activity_log entry so the
- * auto_close_todos_on_activity_note trigger can clear matching todos.
+ * workflow cleanup can clear matching action cards.
  */
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -243,7 +243,7 @@ serve(async (req) => {
       .update({ hcp_note: `${existing}${sep}${stampedNote}` })
       .eq("id", job.id);
 
-    // 3) Activity log → fires auto_close_todos_on_activity_note
+    // 3) Activity log → supports workflow cleanup
     await supabase.from("activity_log").insert({
       job_id: job.id,
       action: hcpLineItems.length > 0 ? "hcp_backup_pushed" : "note_added",

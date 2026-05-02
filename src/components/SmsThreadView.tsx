@@ -87,7 +87,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sendInFlightRef = useRef(false);
 
-  // Re-apply draft if it changes (e.g., user navigates from another todo)
+  // Re-apply draft if it changes (e.g., user navigates from another action card)
   useEffect(() => {
     if (prefillBody) setBody(prefillBody);
   }, [prefillBody]);

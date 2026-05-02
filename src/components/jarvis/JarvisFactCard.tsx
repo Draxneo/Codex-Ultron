@@ -4,7 +4,7 @@
  * Compact horizontal icon row: 👤 WHO · 🛠️ WHAT · 🕐 WHEN · 📍 WHERE · 💡 WHY
  * Icons whose facts are missing are silently skipped.
  *
- * Every JARVIS-created card (todos, action_items, outbox approvals, attention items)
+ * Every JARVIS-created card (action_items, outbox approvals, attention items)
  * delegates its 5W body to this component. Card-specific buttons / status badges
  * remain in their own wrapper components.
  */

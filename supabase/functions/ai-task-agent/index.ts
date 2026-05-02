@@ -922,9 +922,6 @@ async function getOutboundDraftsContext(sb: any) {
   return `\n\nOUTBOUND DRAFTS PENDING APPROVAL (${lines.length}):\n${lines.join("\n")}`;
 }
 
-// (Todos context removed — JARVIS no longer manages a To-Do list.)
-async function getTodosContext(_sb: any) { return ""; }
-
 // ==================== AHRI Lookups Context ====================
 
 async function getAhriLookupsContext(sb: any) {
@@ -1063,10 +1060,6 @@ const suggestActionsTool = {
 
 // Photo management tools
 const movePhotosToJobTool = { type: "function", function: { name: "move_photos_to_job", description: "Copy MMS photo attachments from SMS messages to a job or estimate record. Use when a tech sends photos via text that need to be attached to a specific job.", parameters: { type: "object", properties: { sms_ids: { type: "array", items: { type: "string" }, description: "UUIDs of sms_log rows containing the photos" }, target_job_id: { type: "string", description: "UUID of the job to attach photos to" }, target_estimate_id: { type: "string", description: "UUID of the estimate to attach photos to (will look up linked job)" }, customer_name: { type: "string", description: "Customer name for logging context" } }, required: ["sms_ids"], additionalProperties: false } } };
-
-// To-Do tools
-const createTodoTool = { type: "function", function: { name: "create_todo", description: "[DEPRECATED — no-op]", parameters: { type: "object", properties: {}, additionalProperties: false } } };
-const completeTodoTool = { type: "function", function: { name: "complete_todo", description: "[DEPRECATED — no-op]", parameters: { type: "object", properties: {}, additionalProperties: false } } };
 
 const webSearchTool = {
   type: "function",
@@ -2349,9 +2342,6 @@ async function executeToolCall(
       }));
       result = { status: "success", _suggested_actions: actions, message: `Presenting ${actions.length} action button(s) to the dispatcher.` };
 
-    // ═══════ To-Do List (removed) ═══════
-    } else if (toolName === "create_todo" || toolName === "complete_todo") {
-      result = { status: "removed", message: "The To-Do system has been removed." };
     } else if (toolName === "move_photos_to_job") {
       const smsIds = args.sms_ids as string[];
       let jobId = args.target_job_id as string | undefined;
@@ -2827,8 +2817,6 @@ serve(async (req) => {
     // Always load lightweight context
     addLoader("smsTemplates", Promise.resolve((() => "")())); // templates loaded separately below
     addLoader("activityLog", getActivityLogContext(sb));
-    // Always load todos — lightweight, always useful
-    addLoader("todos", getTodosContext(sb));
     // Tech live locations + recent geofence events (lightweight, always useful for dispatch)
     addLoader("techLocations", (async () => {
       const [locsRes, eventsRes] = await Promise.all([
@@ -3070,7 +3058,7 @@ Use the actual UUIDs from the data above. This makes entities clickable in the U
 `;
 
     const runtimeData = `${companySettingsCtx}${brandProfilesCtx}${presentationSectionsCtx}${scheduleSummaryCtx}${trainingContext}
-${employeeList}${agentToolsSection}${smsTemplates}${ctx("activityLog")}${ctx("todos")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
+${employeeList}${agentToolsSection}${smsTemplates}${ctx("activityLog")}${ctx("techLocations")}${ctx("taskTemplates")}${ctx("parts")}${ctx("invoices")}${ctx("smsHistory")}${ctx("callLog")}${ctx("equipment")}${ctx("jobEquipment")}${ctx("estimateReviews")}${ctx("techForms")}${ctx("maintenancePlans")}${ctx("customerEquipment")}${ctx("estimates")}${ctx("customers")}${ctx("customerJobHistory")}${ctx("customerPhotos")}${ctx("customerInvoices")}${ctx("chat")}${ctx("voicemails")}${ctx("warranty")}${ctx("quotes")}${ctx("referrals")}${ctx("propertyData")}${ctx("preinstallSurveys")}${ctx("ahri")}${ctx("actionItems")}${ctx("outboundDrafts")}${ctx("jobReminders")}
 ${customerLookupCtx}${ragContext}
 ${navigationLinksInstruction}
 CURRENT TASK DATA:
@@ -3172,9 +3160,6 @@ TOOL ROUTING RULES (follow strictly)
       suggest_actions: suggestActionsTool,
       // Photo management
       move_photos_to_job: movePhotosToJobTool,
-      // To-Do list
-      create_todo: createTodoTool,
-      complete_todo: completeTodoTool,
     };
 
     // ==================== PHASE C: ROUTE-AWARE TOOL FILTERING ====================
@@ -3183,7 +3168,7 @@ TOOL ROUTING RULES (follow strictly)
     // call any DB-enabled tool by name — but the model only "sees" the relevant ones.
     //
     // Tools always available (every page): lookup, suggestion, learning, and verification tools.
-    // Deprecated todo tools are intentionally not exposed.
+    // Retired tools are intentionally not exposed.
     const ALWAYS_ON_TOOLS = new Set([
       "search_customer", "suggest_actions",
       "web_search", "lookup_equipment", "verify_address",

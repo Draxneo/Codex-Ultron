@@ -24,7 +24,7 @@ interface ClickToCallProps {
  *
  * IMPORTANT — Deterministic context:
  * When called from a job, estimate, or customer page, ALWAYS pass jobId or customerId.
- * This guarantees the call_log row, AI summary, HCP note, and to-do extraction all
+ * This guarantees the call_log row, AI summary, HCP note, and action-card extraction all
  * land on the right record — no phone-based guessing, no AI hallucination of names
  * from voicemail greetings.
  */

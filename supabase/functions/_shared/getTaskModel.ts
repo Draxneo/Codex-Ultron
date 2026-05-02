@@ -12,7 +12,6 @@ const DEFAULTS: Record<string, string> = {
   tech_form: "gpt-5-mini",
   portal_chat: "gpt-5-mini",
   follow_up: "gpt-5-mini",
-  call_todo_extraction: "gpt-5-mini",
 };
 
 const FALLBACK_OPENAI_MODEL = "gpt-5-mini";

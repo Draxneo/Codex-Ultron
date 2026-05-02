@@ -2,7 +2,7 @@
  * JarvisFacts — universal 5W (Who/What/When/Where/Why) shape for every JARVIS-emitted card.
  *
  * Populated by JARVIS at card-creation time and rendered identically by <JarvisFactCard />
- * across todos, action_items, outbox approvals, and attention items.
+ * across action_items, outbox approvals, and attention items.
  *
  * All five Ws are optional: cards with missing data simply skip the icon for that field.
  * Adapters in src/lib/jarvisFacts.ts derive this shape from existing rows when the
