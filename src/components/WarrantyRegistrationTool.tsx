@@ -286,7 +286,7 @@ export default function WarrantyRegistrationTool({ jobId, customerName, customer
                   setSendingEmailSms(true);
                   try {
                     const firstName = customerName?.split(" ")[0] || "there";
-                    const msg = `Hi ${firstName}, this is ${companySettings.company_name || "the Carnes family"}. We just wrapped up your install and want to make sure your warranty is registered the right way. Could you send us your email address so we can take care of that for you?`;
+                    const msg = `Hi ${firstName}, this is ${companySettings.company_name || "our team"}. We just wrapped up your install and want to make sure your warranty is registered the right way. Could you send us your email address so we can take care of that for you?`;
                     const { sendSmsImpl } = await import("@/hooks/useSendSms");
                     const result = await sendSmsImpl({
                       to: phone, body: msg, jobId, contactName: customerName || null,

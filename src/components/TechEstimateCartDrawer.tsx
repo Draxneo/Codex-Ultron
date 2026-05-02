@@ -13,6 +13,7 @@ import { EquipmentCatalogBrowser } from "@/components/EquipmentCatalogBrowser";
 import { RepairCatalogBrowser } from "@/components/RepairCatalogBrowser";
 import type { RepairCatalogItem } from "@/components/RepairProductCard";
 import { useQuery } from "@tanstack/react-query";
+import { getJobCompanyName } from "@/lib/jobCompany";
 
 interface CartItem {
   id: string;
@@ -272,7 +273,8 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
 
       if (customerPhone) {
         const firstName = customerName?.split(" ")[0] || "there";
-        const body = `Hi ${firstName}, ${techName || "your technician"} from the Carnes family put together options for today's visit.\n\nYou can review them here and text us back with any questions: ${link}`;
+        const companyName = await getJobCompanyName(jobId);
+        const body = `Hi ${firstName}, ${techName || "your technician"} with ${companyName} put together options for today's visit.\n\nYou can review them here and text us back with any questions: ${link}`;
 
         const { sendSmsImpl } = await import("@/hooks/useSendSms");
         await sendSmsImpl({

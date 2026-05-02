@@ -5,6 +5,7 @@ import { Clock, CheckCircle2, Eye, Send, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { getJobCompanyName } from "@/lib/jobCompany";
 
 interface Props {
   estimateId: string;
@@ -48,10 +49,11 @@ export function EstimateCartStatus({ estimateId, customerPhone, customerName }: 
     if (!customerPhone) return;
     const link = `${window.location.origin}/presentation/${latest.token}`;
     const firstName = customerName?.split(" ")[0] || "there";
+    const companyName = await getJobCompanyName(estimateId);
     const { sendSmsImpl } = await import("@/hooks/useSendSms");
     await sendSmsImpl({
       to: customerPhone,
-      body: `Hi ${firstName}, the Carnes family has your estimate ready when you have a minute. You can review it here and text us back with any questions: ${link}`,
+      body: `Hi ${firstName}, ${companyName} has your estimate ready when you have a minute. You can review it here and text us back with any questions: ${link}`,
       contactName: customerName || null,
       contactType: "customer",
       source: "estimate_cart_resend",

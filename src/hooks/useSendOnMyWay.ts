@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { buildOnMyWaySms } from "@/lib/smsCopy";
 import { logClientSystemError } from "@/lib/systemErrorLog";
+import { getJobCompanyName } from "@/lib/jobCompany";
 
 interface SendOnMyWayParams {
   jobId: string;
@@ -69,11 +70,12 @@ export function useSendOnMyWay() {
         }
       }
 
+      const companyName = await getJobCompanyName(jobId);
       const body = buildOnMyWaySms({
         customerName,
         techName: employeeName,
         etaMinutes,
-        companyName: "Carnes and Sons",
+        companyName,
       });
 
       const { sendSmsImpl } = await import("@/hooks/useSendSms");

@@ -6,6 +6,7 @@ import { getCompanySettings } from "@/lib/companySettings";
 import { sendSmsImpl } from "@/hooks/useSendSms";
 import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
 import { buildJobCompleteSms, buildReviewRequestSms } from "@/lib/smsCopy";
+import { getJobCompanyName } from "@/lib/jobCompany";
 
 type JobActionKey = "reminder" | "omw" | "start" | "finish" | "review" | "manual";
 
@@ -62,9 +63,10 @@ export function useJobActions(jobId: string, job?: JobLike | null) {
         "Job marked finished",
       );
       if (job?.customer_phone) {
+        const companyName = await getJobCompanyName(jobId);
         const body = buildJobCompleteSms({
           customerName: job.customer_name,
-          companyName: "Carnes and Sons",
+          companyName,
         });
         const sms = await sendSmsImpl({
           to: job.customer_phone,
@@ -137,7 +139,7 @@ export function useJobActions(jobId: string, job?: JobLike | null) {
     setBusy("review");
     try {
       const settings = await getCompanySettings(["company_name", "google_review_url", "review_url", "review_link"]);
-      const companyName = settings.company_name || "Carnes and Sons Air Conditioning";
+      const companyName = await getJobCompanyName(jobId, settings.company_name || "our team");
       const reviewLink = settings.google_review_url || settings.review_url || settings.review_link || "";
       const body = buildReviewRequestSms({ customerName: job.customer_name, companyName, reviewLink });
 

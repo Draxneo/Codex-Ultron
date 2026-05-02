@@ -29,6 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSendOnMyWay } from "@/hooks/useSendOnMyWay";
 import { sendSmsImpl } from "@/hooks/useSendSms";
 import { buildJobCompleteSms } from "@/lib/smsCopy";
+import { getJobCompanyName } from "@/lib/jobCompany";
 import { cn } from "@/lib/utils";
 
 interface TechStatusCardProps {
@@ -172,9 +173,10 @@ export function TechStatusCard({
     } else {
       await supabase.from("activity_log").insert({ job_id: jobId, action: "job_finished", details: "Tech finished job", performed_by: employeeName });
       if (customerPhone) {
+        const companyName = await getJobCompanyName(jobId);
         const sms = await sendSmsImpl({
           to: customerPhone,
-          body: buildJobCompleteSms({ customerName, companyName: "Carnes and Sons" }),
+          body: buildJobCompleteSms({ customerName, companyName }),
           jobId,
           contactName: customerName || null,
           contactType: "customer",

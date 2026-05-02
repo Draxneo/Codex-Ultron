@@ -14,7 +14,7 @@ export function buildOnMyWaySms({
   customerName,
   techName,
   etaMinutes,
-  companyName = "Carnes and Sons",
+  companyName = "our team",
 }: JobSmsCopyInput) {
   const first = customerFirstName(customerName);
   const tech = techName || "Your technician";
@@ -24,7 +24,7 @@ export function buildOnMyWaySms({
 
 export function buildJobCompleteSms({
   customerName,
-  companyName = "Carnes and Sons",
+  companyName = "our team",
 }: JobSmsCopyInput) {
   const first = customerFirstName(customerName);
   return `Hi ${first}, thank you for letting our family serve yours today. Your visit is marked complete. We appreciate you choosing ${companyName}, and we are always just a text away if you need us again.`;
@@ -32,7 +32,7 @@ export function buildJobCompleteSms({
 
 export function buildReviewRequestSms({
   customerName,
-  companyName = "Carnes and Sons",
+  companyName = "our team",
   reviewLink,
 }: JobSmsCopyInput) {
   const first = customerFirstName(customerName);
