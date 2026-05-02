@@ -80,6 +80,13 @@ export default function InvoicePublic() {
       <div className="bg-primary text-primary-foreground">
         <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
+            {cs.company_logo_url && (
+              <img
+                src={cs.company_logo_url}
+                alt={cs.company_name || DEFAULT_COMPANY_NAME}
+                className="mb-3 h-14 max-w-[180px] rounded bg-white object-contain p-1"
+              />
+            )}
             <h1 className="text-2xl font-bold tracking-tight">
               {cs.company_name || DEFAULT_COMPANY_NAME}
             </h1>

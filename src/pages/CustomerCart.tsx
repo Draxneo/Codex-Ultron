@@ -46,7 +46,7 @@ interface CartView {
   cart: JobCart;
   items: JobCartItem[];
   job: { customer_name?: string | null; address?: string | null; assigned_to?: string | null; job_number?: string | null } | null;
-  company: { name: string; phone: string; tagline?: string; financingDisclaimer?: string };
+  company: { name: string; phone: string; tagline?: string; financingDisclaimer?: string; logoUrl?: string };
   pricing: Record<string, any>;
   memberInfo?: ComfortClubPublicInfo | null;
 }
@@ -76,6 +76,7 @@ export default function CustomerCart() {
             phone: settingsMap.company_phone || "",
             tagline: settingsMap.company_tagline || "",
             financingDisclaimer: settingsMap.cart_financing_disclaimer || "",
+            logoUrl: settingsMap.company_logo_url || "",
           },
           pricing: (publicCart.pricing || publicCart.cart?.pricing_summary || {}) as Record<string, any>,
           memberInfo: (publicCart.memberInfo as ComfortClubPublicInfo | null) || null,
@@ -195,12 +196,21 @@ export default function CustomerCart() {
       <header className="bg-primary text-primary-foreground border-b border-primary/20">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-bold text-lg leading-tight truncate">{company.name}</p>
-              {company.tagline && (
-                <p className="text-[11px] text-primary-foreground/75 leading-tight truncate">{company.tagline}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              {company.logoUrl && (
+                <img
+                  src={company.logoUrl}
+                  alt={company.name}
+                  className="h-11 w-11 shrink-0 rounded bg-white object-contain p-1"
+                />
               )}
-              {job?.job_number && <p className="text-xs text-primary-foreground/75 mt-0.5">Order #{job.job_number}</p>}
+              <div className="min-w-0">
+                <p className="font-bold text-lg leading-tight truncate">{company.name}</p>
+                {company.tagline && (
+                  <p className="text-[11px] text-primary-foreground/75 leading-tight truncate">{company.tagline}</p>
+                )}
+                {job?.job_number && <p className="text-xs text-primary-foreground/75 mt-0.5">Order #{job.job_number}</p>}
+              </div>
             </div>
             {company.phone && (
               <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground shrink-0">

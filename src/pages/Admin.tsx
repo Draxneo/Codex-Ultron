@@ -33,6 +33,7 @@ import { IntakeSimulator } from "@/components/IntakeSimulator";
 import { CopilotPermissionsCard } from "@/components/CopilotPermissionsCard";
 
 import { CompanyDocumentsCard } from "@/components/CompanyDocumentsCard";
+import { BusinessUnitDocumentsCard } from "@/components/admin/BusinessUnitDocumentsCard";
 import { RingtoneSettingsCard } from "@/components/RingtoneSettingsCard";
 import { AnnouncerSettingsCard } from "@/components/voice/AnnouncerSettingsCard";
 import { RegisteredDevicesCard } from "@/components/admin/RegisteredDevicesCard";
@@ -606,7 +607,7 @@ function resolveAdminSection(section: string | null, legacyTab: string | null) {
 function AdminSectionContent({ section }: { section: string }) {
   switch (section) {
     case "company":
-      return <div className="space-y-4"><VisualOperationsSettingsCard /><CompanySettingsCard /><NavOrderEditor /></div>;
+      return <div className="space-y-4"><VisualOperationsSettingsCard /><CompanySettingsCard /><BusinessUnitDocumentsCard /><NavOrderEditor /></div>;
     case "employees":
       return <EmployeeHub />;
     case "voice":

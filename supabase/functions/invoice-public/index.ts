@@ -17,7 +17,7 @@ async function applyBusinessUnitHeading(supabase: any, settingsMap: Record<strin
 
   let query = supabase
     .from("business_units")
-    .select("id, slug, display_name, legal_name, primary_phone_number, customer_tag, is_default")
+    .select("id, slug, display_name, legal_name, primary_phone_number, customer_tag, is_default, document_logo_url, billing_name, billing_address, billing_city, billing_state, billing_zip, billing_email, billing_phone")
     .eq("is_active", true);
 
   if (explicitBusinessUnitId) {
@@ -29,12 +29,25 @@ async function applyBusinessUnitHeading(supabase: any, settingsMap: Record<strin
   const { data: unit } = await query;
   if (!unit) return settingsMap;
 
-  const companyName = unit.legal_name || unit.display_name || settingsMap.company_name;
+  const companyName = unit.billing_name || unit.legal_name || unit.display_name || settingsMap.company_name;
   return {
     ...settingsMap,
     company_name: companyName,
     company_display_name: unit.display_name || companyName,
-    company_phone: formatUsPhone(unit.primary_phone_number) || settingsMap.company_phone,
+    company_phone: formatUsPhone(unit.billing_phone || unit.primary_phone_number) || settingsMap.company_phone,
+    company_email: unit.billing_email || settingsMap.company_email,
+    company_address: unit.billing_address || settingsMap.company_address,
+    company_city: unit.billing_city || settingsMap.company_city,
+    company_state: unit.billing_state || settingsMap.company_state,
+    company_zip: unit.billing_zip || settingsMap.company_zip,
+    company_logo_url: unit.document_logo_url || settingsMap.company_logo_url || "",
+    billing_name: unit.billing_name || "",
+    billing_address: unit.billing_address || "",
+    billing_city: unit.billing_city || "",
+    billing_state: unit.billing_state || "",
+    billing_zip: unit.billing_zip || "",
+    billing_email: unit.billing_email || "",
+    billing_phone: unit.billing_phone || "",
     business_unit_id: unit.id,
     business_unit_slug: unit.slug,
     business_unit_tag: unit.customer_tag || unit.display_name || companyName,
