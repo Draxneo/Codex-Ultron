@@ -14,14 +14,14 @@
 import { Card } from "@/components/ui/card";
 import { Phone, MessageSquare, Radio, ChevronRight, Building2, Navigation } from "lucide-react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { StreetViewThumbnail } from "./StreetViewThumbnail";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
-
-const DISPATCH_LINE = "+12106005091";
+import { getJobCompanyPhone } from "@/lib/jobCompany";
 
 interface TechCustomerCardProps {
   customerId: string | null;
@@ -56,14 +56,19 @@ export function TechCustomerCard({
     openSmsComposer(customerPhone, { contactName: customerName || undefined, customerId: customerId || undefined, jobId });
   };
 
-  const handleDispatch = () => {
+  const handleDispatch = async () => {
     const draft = [
       "Tech update",
       customerName || null,
       address || null,
       jobId ? `job ${jobId.slice(0, 8)}` : null,
     ].filter(Boolean).join(" - ");
-    openSmsComposer(DISPATCH_LINE, { contactName: "Dispatch", draft: `${draft}: `, jobId });
+    const dispatchLine = await getJobCompanyPhone(jobId);
+    if (!dispatchLine) {
+      toast.error("No dispatch phone line found for this job.");
+      return;
+    }
+    openSmsComposer(dispatchLine, { contactName: "Dispatch", draft: `${draft}: `, jobId });
   };
 
   const handleCall = () => {

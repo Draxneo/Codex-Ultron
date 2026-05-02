@@ -25,9 +25,9 @@ import { Card } from "@/components/ui/card";
 import { MediaThumbnail, formatBytes, getFileCategory } from "@/components/media";
 import { supabase } from "@/integrations/supabase/client";
 import { useJobAttachments } from "@/hooks/useJobAttachments";
+import { getJobCompanyPhone } from "@/lib/jobCompany";
 import { cn } from "@/lib/utils";
 
-const DISPATCH_LINE = "+12106005091";
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const CAMERA_ACCEPT = "image/*";
 const UPLOAD_ACCEPT = "image/*,video/*,application/pdf";
@@ -263,7 +263,9 @@ export function TechAttachmentsCard({
       const urls = await buildShareLinks();
       if (urls.length === 0) throw new Error("Select at least one attachment first");
       const prefix = `From ${techName || "tech"} on Job #${jobNumber || jobId.slice(0, 8)}:`;
-      await sendMms(DISPATCH_LINE, prefix, urls);
+      const dispatchLine = await getJobCompanyPhone(jobId);
+      if (!dispatchLine) throw new Error("No dispatch phone line found for this job.");
+      await sendMms(dispatchLine, prefix, urls);
       toast.success(`Sent ${urls.length} attachment${urls.length === 1 ? "" : "s"} to dispatch`);
       clearSelection();
     } catch (error: any) {
