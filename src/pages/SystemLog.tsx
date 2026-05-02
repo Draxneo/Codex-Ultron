@@ -39,6 +39,8 @@ const statusTone: Record<string, string> = {
   success: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
   error: "bg-rose-500/10 text-rose-700 border-rose-500/30",
   timeout: "bg-orange-500/10 text-orange-700 border-orange-500/30",
+  waiting_first_run: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+  never_run: "bg-slate-500/10 text-slate-700 border-slate-500/30",
 };
 
 function SevBadge({ s }: { s: string }) {
@@ -201,7 +203,7 @@ function CronPanel() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Cron Health</CardTitle>
-          <CardDescription>Status of every scheduled job. Stale = no successful run in &gt;2h.</CardDescription>
+          <CardDescription>Status of every scheduled job. Daily jobs are judged by their daily window; minute jobs should stay current.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {loadingHealth ? <div className="p-6 text-sm text-muted-foreground">Loading…</div>
@@ -215,7 +217,7 @@ function CronPanel() {
                     {h.is_stale && <Badge variant="outline" className="text-[10px] bg-rose-600 text-white border-rose-700">STALE</Badge>}
                     {h.consecutive_failures > 0 && (
                       <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-500/30">
-                        {h.consecutive_failures} failures (24h)
+                        {h.last_status === "success" ? `${h.consecutive_failures} earlier failure${h.consecutive_failures === 1 ? "" : "s"} today` : `${h.consecutive_failures} failure${h.consecutive_failures === 1 ? "" : "s"} today`}
                       </Badge>
                     )}
                     <span className="ml-auto text-xs text-muted-foreground text-right">
