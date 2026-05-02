@@ -43,19 +43,37 @@ async function persistPositions(canvasKey: string, positions: PositionMap) {
   }
 }
 
-export function useCanvasPositions(canvasKey: string) {
+export function useCanvasPositions(canvasKey: string, fallbackCanvasKeys: string[] = []) {
   const loaded = useRef(false);
   const positionsRef = useRef<PositionMap | null>(null);
   const [ready, setReady] = useState(false);
 
   // Load saved positions on mount
   useEffect(() => {
-    loadPositions(canvasKey).then((saved) => {
+    let cancelled = false;
+    setReady(false);
+    loaded.current = false;
+    positionsRef.current = null;
+
+    const loadScopedPositions = async () => {
+      let saved = await loadPositions(canvasKey);
+      if (!saved) {
+        for (const fallbackKey of fallbackCanvasKeys) {
+          saved = await loadPositions(fallbackKey);
+          if (saved) break;
+        }
+      }
+      if (cancelled) return;
       positionsRef.current = saved;
       loaded.current = true;
       setReady(true);
-    });
-  }, [canvasKey]);
+    };
+
+    void loadScopedPositions();
+    return () => {
+      cancelled = true;
+    };
+  }, [canvasKey, fallbackCanvasKeys.join("|")]);
 
   /** Apply saved positions to a set of nodes (call during node init or sync) */
   const applyPositions = useCallback(<T extends Node>(nodes: T[]): T[] => {

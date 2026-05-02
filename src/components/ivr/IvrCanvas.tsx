@@ -327,7 +327,9 @@ function buildGraph(config: IvrConfig, menuOptions: IvrMenuOption[], onSelect: (
 export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpdateDept, onDeleteDept, testMode }: IvrCanvasProps & { testMode?: boolean }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const { applyPositions, savePositions, positionsReady } = useCanvasPositions("ivr");
+  const canvasKey = useMemo(() => `ivr_${config.business_unit_id || config.id}`, [config.business_unit_id, config.id]);
+  const legacyPositionKeys = useMemo(() => (config.is_default ? ["ivr"] : []), [config.is_default]);
+  const { applyPositions, savePositions, positionsReady } = useCanvasPositions(canvasKey, legacyPositionKeys);
 
   const onSelect = useCallback((id: string) => {
     setSelectedNodeId(id);
@@ -341,6 +343,10 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
 
+  useEffect(() => {
+    setSelectedNodeId(null);
+  }, [config.id]);
+
   // Apply saved positions once loaded
   useEffect(() => {
     if (positionsReady) {
@@ -353,13 +359,14 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
     const { nodes: newNodes, edges: newEdges } = buildGraph(config, menuOptions, onSelect);
     setNodes((prev) => {
       const posMap = new Map(prev.map((n) => [n.id, n.position]));
-      return newNodes.map((n) => ({
+      const nextNodes = newNodes.map((n) => ({
         ...n,
         position: posMap.get(n.id) ?? n.position,
       }));
+      return positionsReady ? applyPositions(nextNodes) : nextNodes;
     });
     setEdges(newEdges);
-  }, [config, menuOptions, onSelect, setNodes, setEdges]);
+  }, [config, menuOptions, onSelect, setNodes, setEdges, positionsReady, applyPositions]);
 
   const handleSaveAll = useCallback(async () => {
     await savePositions(nodes);
