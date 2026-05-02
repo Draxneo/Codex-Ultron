@@ -51,8 +51,21 @@ export async function sendIvrSms(opts: {
   jobId?: string;
   sourceFunction?: string;
   templateKey?: string | null;
+  businessUnitId?: string | null;
+  fromNumber?: string | null;
 }): Promise<void> {
-  const { to, body, contactType, supabase, skipEmployeeFilter, jobId, sourceFunction, templateKey } = opts;
+  const {
+    to,
+    body,
+    contactType,
+    supabase,
+    skipEmployeeFilter,
+    jobId,
+    sourceFunction,
+    templateKey,
+    businessUnitId,
+    fromNumber,
+  } = opts;
 
   // Skip employee numbers unless explicitly overridden
   if (!to) return;
@@ -90,6 +103,8 @@ export async function sendIvrSms(opts: {
         job_id: jobId || null,
         source: sourceFunction || "ivr-auto-reply",
         template_key: templateKey || null,
+        business_unit_id: businessUnitId || null,
+        from_number: fromNumber || null,
       }),
     });
 
@@ -113,26 +128,35 @@ export async function sendIvrSms(opts: {
 export async function recentOutboundExists(
   supabase: ReturnType<typeof createClient>,
   phoneNumber: string,
-  windowMinutes: number = 30
+  windowMinutes: number = 30,
+  opts: { businessUnitId?: string | null; fromNumber?: string | null } = {},
 ): Promise<boolean> {
   if (!phoneNumber) return false;
   const since = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
   // Match against last 10 digits to handle +1XXXXXXXXXX vs XXXXXXXXXX variations
-  const last10 = phoneNumber.replace(/\D/g, "").slice(-10);
-  if (last10.length !== 10) return false;
+  const targetLast10 = phoneNumber.replace(/\D/g, "").slice(-10);
+  if (targetLast10.length !== 10) return false;
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("sms_log")
-      .select("id, phone_number")
+      .select("id, phone_number, to_number, business_unit_id")
       .eq("direction", "outbound")
       .gte("created_at", since)
       .limit(50);
+
+    if (opts.businessUnitId) {
+      query = query.eq("business_unit_id", opts.businessUnitId);
+    }
+
+    const { data, error } = await query;
     if (error) {
       console.warn("recentOutboundExists query failed:", error);
       return false;
     }
+    const fromLast10 = opts.fromNumber ? last10(opts.fromNumber) : "";
     return (data || []).some((r: any) =>
-      (r.phone_number || "").replace(/\D/g, "").slice(-10) === last10
+      (r.phone_number || "").replace(/\D/g, "").slice(-10) === targetLast10 &&
+      (!fromLast10 || last10(r.to_number) === fromLast10)
     );
   } catch (e) {
     console.warn("recentOutboundExists error:", e);

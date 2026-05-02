@@ -33,6 +33,8 @@ export type CallRow = {
   id: string;
   direction: "inbound" | "outbound";
   phone_number: string;
+  called_number?: string | null;
+  business_unit_id?: string | null;
   answered_by: string | null;
   duration_seconds: number | null;
   status: string;
@@ -54,7 +56,10 @@ export type CallRow = {
 };
 
 export type CallConversation = {
+  threadKey: string;
   phoneNumber: string;
+  calledNumber?: string | null;
+  businessUnitId?: string | null;
   contactName: string | null;
   contactType: string;
   calls: CallRow[];
@@ -88,11 +93,20 @@ export function useCallLog() {
     queryFn: async () => {
       // Read from the CT-aware view so `day_ct` / `time_ct` are DB-validated
       // (no client-side timezone drift).
-      const { data, error } = await (supabase as any)
+      let { data, error } = await (supabase as any)
         .from("v_call_log_with_day")
-        .select("id, direction, phone_number, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
+        .select("id, direction, phone_number, called_number, business_unit_id, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
         .order("created_at", { ascending: false })
         .limit(500);
+      if (error) {
+        const legacy = await (supabase as any)
+          .from("v_call_log_with_day")
+          .select("id, direction, phone_number, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
+          .order("created_at", { ascending: false })
+          .limit(500);
+        data = legacy.data;
+        error = legacy.error;
+      }
       if (error) throw error;
       return (data || []) as CallRow[];
     },
@@ -106,21 +120,27 @@ export function useCallLog() {
   const conversations = useMemo<CallConversation[]>(() => {
     const map = new Map<string, CallRow[]>();
     for (const call of calls) {
-      const key = normalizeLast10(call.phone_number);
-      if (!key) continue;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(call);
+      const customerKey = normalizeLast10(call.phone_number);
+      if (!customerKey) continue;
+      const companyKey = normalizeLast10(call.called_number || "") || (call.business_unit_id ? `bu:${call.business_unit_id}` : "legacy");
+      const threadKey = `${customerKey}|line:${companyKey}`;
+      if (!map.has(threadKey)) map.set(threadKey, []);
+      map.get(threadKey)!.push(call);
     }
 
     return Array.from(map.entries())
-      .map(([key, groupCalls]) => {
+      .map(([threadKey, groupCalls]) => {
         const last = groupCalls[0];
+        const contactKey = normalizeLast10(last.phone_number);
         const dbName = groupCalls.find((c) => c.contact_name)?.contact_name || null;
         const dbType = groupCalls.find((c) => c.contact_type && c.contact_type !== "unknown")?.contact_type || last.contact_type;
-        const mapMatch = contactMap[key];
+        const mapMatch = contactKey ? contactMap[contactKey] : null;
         const resolved = resolveContactFromLookup(contactMap, last.phone_number, dbName, dbType);
         return {
+          threadKey,
           phoneNumber: last.phone_number,
+          calledNumber: last.called_number || null,
+          businessUnitId: last.business_unit_id || null,
           contactName: resolved.name || mapMatch?.name || null,
           contactType: resolved.type || mapMatch?.type || last.contact_type,
           calls: groupCalls,
@@ -136,10 +156,17 @@ export function useCallLog() {
     return contactMap[key]?.name || null;
   }, [contactMap]);
 
-  const markAsRead = async (phoneNumber: string) => {
-    const normalized = normalizeLast10(phoneNumber);
+  const markAsRead = async (phoneNumberOrThreadKey: string) => {
+    const [phonePart, linePart] = phoneNumberOrThreadKey.split("|");
+    const normalized = normalizeLast10(phonePart);
+    const companyLine = linePart?.startsWith("line:") ? linePart.slice(5) : null;
     const ids = calls
-      .filter((c) => normalizeLast10(c.phone_number) === normalized && !c.is_read)
+      .filter((c) => {
+        if (normalizeLast10(c.phone_number) !== normalized || c.is_read) return false;
+        if (!companyLine) return true;
+        const callCompanyLine = normalizeLast10(c.called_number || "") || (c.business_unit_id ? `bu:${c.business_unit_id}` : "legacy");
+        return callCompanyLine === companyLine;
+      })
       .map((c) => c.id);
     if (!ids.length) return;
     await supabase.from("call_log").update({ is_read: true }).in("id", ids);

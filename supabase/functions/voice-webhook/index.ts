@@ -13,6 +13,7 @@ import {
 } from "../_shared/callRouting.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone as normalizeBusinessPhone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 function escapeXml(str: string): string {
   return str
@@ -204,6 +205,11 @@ Deno.serve(async (req) => {
 
     const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const businessUnit = (await resolveBusinessUnitByPhone(supabase, to)) ||
+      (await getDefaultBusinessUnit(supabase));
+    const businessCallerId = normalizeBusinessPhone(businessUnit?.primary_phone_number) ||
+      getTwilioCallerId() ||
+      to;
 
     // ── STIR/SHAKEN spam filter ──
     // Classify the attestation level for logging
@@ -232,6 +238,8 @@ Deno.serve(async (req) => {
         twilio_sid: callSid,
         contact_name: null,
         contact_type: "unknown",
+        called_number: to || null,
+        business_unit_id: businessUnit?.id || null,
         stir_status: stirStatus,
       } as any);
       return new Response(
@@ -352,6 +360,8 @@ Deno.serve(async (req) => {
         contact_name: contactName,
         contact_type: contactType,
         ...(relatedVendorId ? { related_vendor_id: relatedVendorId } : {}),
+        called_number: to || null,
+        business_unit_id: businessUnit?.id || null,
         ...(isInbound && stirStatus ? { stir_status: stirStatus } : {}),
       } as any);
     }
@@ -383,6 +393,8 @@ Deno.serve(async (req) => {
         stir_status: stirStatus,
         contact_name: contactName,
         contact_type: contactType,
+        business_unit: businessUnit?.slug || null,
+        business_unit_id: businessUnit?.id || null,
         signature_accepted_by: signatureAcceptedBy,
       },
     });
@@ -426,8 +438,21 @@ Deno.serve(async (req) => {
       : "";
 
     // Load IVR config
-    const { data: ivrConfig } = await supabase.from("ivr_config").select("*")
-      .limit(1).maybeSingle();
+    let ivrConfig: any = null;
+    if (businessUnit?.id) {
+      const { data } = await supabase.from("ivr_config").select("*")
+        .eq("business_unit_id", businessUnit.id)
+        .maybeSingle();
+      ivrConfig = data;
+    }
+    if (!ivrConfig) {
+      const { data } = await supabase.from("ivr_config").select("*")
+        .order("is_default", { ascending: false })
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      ivrConfig = data;
+    }
     const config = ivrConfig || {
       greeting_text: "Thank you for calling. Please hold while we connect you.",
       greeting_audio_url: null,
@@ -476,7 +501,7 @@ Deno.serve(async (req) => {
         encodeURIComponent(to)
       }&CallStatus=${encodeURIComponent(callStatus)}&Direction=${
         encodeURIComponent(direction)
-      }&QueueRetry=1`;
+      }&IvrConfigId=${encodeURIComponent((config as any).id || "")}&QueueRetry=1`;
 
     // TEST MODE: bypass greeting/holiday/menu — ring directly from this app's IVR layer to every registered client
     if (ivrTestMode) {
@@ -509,7 +534,7 @@ Deno.serve(async (req) => {
   <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
-          escapeXml(getTwilioCallerId() || to)
+          escapeXml(businessCallerId)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
         }" recordingStatusCallbackEvent="completed" statusCallback="${
@@ -588,6 +613,7 @@ Deno.serve(async (req) => {
     const { data: menuOptions } = await supabase
       .from("ivr_menu_options")
       .select("*")
+      .eq("ivr_config_id", (config as any).id)
       .eq("is_active", true)
       .order("digit");
 
@@ -639,7 +665,7 @@ Deno.serve(async (req) => {
   <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
             escapeXml(voicemailUrl)
           }" callerId="${
-            escapeXml(getTwilioCallerId() || to)
+            escapeXml(businessCallerId)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(statusCallbackUrl)
           }" recordingStatusCallbackEvent="completed" statusCallback="${
@@ -685,7 +711,7 @@ Deno.serve(async (req) => {
             },
           });
           return new Response(
-            overflowDialTwiml("all_busy", getTwilioCallerId() || to),
+            overflowDialTwiml("all_busy", businessCallerId),
             {
               headers: { ...corsHeaders, "Content-Type": "text/xml" },
               status: 200,
@@ -793,7 +819,7 @@ Deno.serve(async (req) => {
             },
           });
           return new Response(
-            overflowDialTwiml(finalReason, getTwilioCallerId() || to),
+            overflowDialTwiml(finalReason, businessCallerId),
             {
               headers: { ...corsHeaders, "Content-Type": "text/xml" },
               status: 200,
@@ -880,7 +906,7 @@ Deno.serve(async (req) => {
   <Dial timeout="${dialTimeout}" answerOnBridge="true" action="${
           escapeXml(voicemailUrl)
         }" callerId="${
-          escapeXml(getTwilioCallerId() || to)
+          escapeXml(businessCallerId)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
         }" recordingStatusCallbackEvent="completed" statusCallback="${
@@ -928,7 +954,7 @@ Deno.serve(async (req) => {
         encodeURIComponent(contactName || "")
       }&amp;ContactType=${
         encodeURIComponent(contactType)
-      }&amp;Attempt=1" timeout="8" input="dtmf">
+      }&amp;IvrConfigId=${encodeURIComponent((config as any).id || "")}&amp;To=${encodeURIComponent(to)}&amp;Attempt=1" timeout="8" input="dtmf">
     ${menuGreetingTwiml(config.greeting_audio_url, config.greeting_text, menuText)}
   </Gather>
   <Gather numDigits="1" action="${escapeXml(ivrHandlerUrl)}?CallSid=${
@@ -937,7 +963,7 @@ Deno.serve(async (req) => {
         encodeURIComponent(contactName || "")
       }&amp;ContactType=${
         encodeURIComponent(contactType)
-      }&amp;Attempt=2" timeout="8" input="dtmf">
+      }&amp;IvrConfigId=${encodeURIComponent((config as any).id || "")}&amp;To=${encodeURIComponent(to)}&amp;Attempt=2" timeout="8" input="dtmf">
     ${menuRetryTwiml(config.greeting_audio_url, menuText)}
   </Gather>
   <Redirect>${escapeXml(ivrHandlerUrl)}?CallSid=${
@@ -946,7 +972,7 @@ Deno.serve(async (req) => {
         encodeURIComponent(contactName || "")
       }&amp;ContactType=${
         encodeURIComponent(contactType)
-      }&amp;Attempt=3</Redirect>
+      }&amp;IvrConfigId=${encodeURIComponent((config as any).id || "")}&amp;To=${encodeURIComponent(to)}&amp;Attempt=3</Redirect>
 </Response>`,
       { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 },
     );

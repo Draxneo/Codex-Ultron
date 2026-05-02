@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { withRetry, isRetryable, logSystemError, enqueueRetry, pageOnCall } from "../_shared/resilience.ts";
 import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
 import { appendSmsSignature } from "../_shared/smsSignature.ts";
+import { resolveSmsBusinessUnitForRecipient } from "../_shared/businessUnits.ts";
 
 type MediaInput = string | { url: string; content_type?: string };
 
@@ -45,6 +46,47 @@ const retiredSmsSources = new Set([
   "rain_day_blast",
 ]);
 
+async function inferBusinessUnitIdFromContext(
+  supabase: any,
+  relatedCustomerId?: string | null,
+  jobId?: string | null,
+): Promise<string | null> {
+  let customerId = relatedCustomerId || null;
+
+  if (!customerId && jobId) {
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("customer_id")
+      .eq("id", jobId)
+      .maybeSingle();
+    customerId = (job as any)?.customer_id || null;
+  }
+
+  if (!customerId) return null;
+
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("primary_business_unit_id, tags")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if ((customer as any)?.primary_business_unit_id) {
+    return (customer as any).primary_business_unit_id;
+  }
+
+  const tags = ((customer as any)?.tags || []) as string[];
+  if (tags.length === 0) return null;
+
+  const { data: units } = await supabase
+    .from("business_units")
+    .select("id, customer_tag")
+    .eq("is_active", true);
+
+  const matched = ((units || []) as Array<{ id: string; customer_tag: string }>)
+    .find((unit) => tags.includes(unit.customer_tag));
+  return matched?.id || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -75,6 +117,8 @@ Deno.serve(async (req) => {
       source: bodySource,
       template_key,
       internal,
+      business_unit_id,
+      from_number,
     } = reqBody;
     // Some callers (legacy) pass `message` instead of `body`. Accept both.
     const messageBody: string = body ?? reqBody.message ?? "";
@@ -89,9 +133,8 @@ Deno.serve(async (req) => {
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!accountSid || !authToken) {
       return new Response(
         JSON.stringify({ error: "Twilio credentials not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -150,6 +193,57 @@ Deno.serve(async (req) => {
       );
     }
 
+    const requestedBusinessUnitId = typeof business_unit_id === "string"
+      ? business_unit_id.trim()
+      : business_unit_id || null;
+    const requestedFromNumber = typeof from_number === "string"
+      ? from_number.trim()
+      : from_number || null;
+    const inferredBusinessUnitId = !requestedBusinessUnitId && !requestedFromNumber
+      ? await inferBusinessUnitIdFromContext(supabase, relatedCustomerId, job_id)
+      : null;
+    const senderResolution = await resolveSmsBusinessUnitForRecipient(
+      supabase,
+      normalizedTo,
+      requestedBusinessUnitId || inferredBusinessUnitId,
+      requestedFromNumber,
+    );
+
+    if (senderResolution.error) {
+      return new Response(
+        JSON.stringify({
+          error: senderResolution.error,
+          code: senderResolution.code || "invalid_sms_sender",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (senderResolution.ambiguous || !senderResolution.fromNumber) {
+      return new Response(
+        JSON.stringify({
+          error: "Choose a sending company before texting this customer.",
+          code: "ambiguous_sms_sender",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const fromNumber = senderResolution.fromNumber;
+    const senderCompany = senderResolution.businessUnit
+      ? {
+          business_unit_id: senderResolution.businessUnit.id,
+          business_unit_slug: senderResolution.businessUnit.slug,
+          business_unit_name: senderResolution.businessUnit.display_name,
+          from_number: fromNumber,
+        }
+      : {
+          business_unit_id: null,
+          business_unit_slug: null,
+          business_unit_name: null,
+          from_number: fromNumber,
+        };
+
     // ── Normalize outbound media (preserve real content types) ──
     const outboundMedia: NormalizedMedia[] = normalizeMedia(media_urls);
 
@@ -164,6 +258,7 @@ Deno.serve(async (req) => {
       related_job_id: job_id || null,
       delivery_status: "sending",
       to_number: fromNumber,
+      business_unit_id: senderResolution.businessUnit?.id || null,
       client_id: client_id || null,
     };
     if (outboundMedia.length > 0) {
@@ -289,7 +384,15 @@ Deno.serve(async (req) => {
         operation_type: "send_sms",
         source_function: "send-sms",
         related_id: smsLogId,
-        payload: { to: normalizedTo, body: finalBody, media_urls: outboundMedia, job_id, client_id, sms_log_id: smsLogId },
+        payload: {
+          to: normalizedTo,
+          body: finalBody,
+          media_urls: outboundMedia,
+          job_id,
+          client_id,
+          sms_log_id: smsLogId,
+          ...senderCompany,
+        },
       });
       await supabase.from("sms_log").update({ delivery_status: "queued_retry", body: finalBody }).eq("id", smsLogId);
       await pageOnCall(supabase, {

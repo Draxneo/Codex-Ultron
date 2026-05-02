@@ -5,6 +5,10 @@ import { logClientSystemError } from "@/lib/systemErrorLog";
 
 export type IvrConfig = {
   id: string;
+  business_unit_id?: string | null;
+  label?: string | null;
+  inbound_phone_number?: string | null;
+  is_default?: boolean;
   greeting_text: string;
   hold_music_audio_url: string | null;
   after_hours_greeting: string;
@@ -34,6 +38,7 @@ export type IvrConfig = {
 
 export type IvrMenuOption = {
   id: string;
+  ivr_config_id?: string | null;
   digit: string;
   label: string;
   action_type: string;
@@ -65,16 +70,25 @@ export type IvrMenuOption = {
   ring_timeout_seconds?: number | null;
 };
 
-export function useIvrConfig() {
+export function useIvrConfig(businessUnitId?: string | null) {
   const [config, setConfig] = useState<IvrConfig | null>(null);
   const [menuOptions, setMenuOptions] = useState<IvrMenuOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
-    const [configRes, menuRes] = await Promise.all([
-      supabase.from("ivr_config").select("*").order("created_at").limit(1).single(),
-      supabase.from("ivr_menu_options").select("*").order("digit"),
-    ]);
+    const configQuery = supabase.from("ivr_config").select("*");
+    const scopedConfigQuery = businessUnitId
+      ? configQuery.eq("business_unit_id", businessUnitId).maybeSingle()
+      : configQuery.order("is_default", { ascending: false }).order("created_at").limit(1).maybeSingle();
+
+    const configRes = await scopedConfigQuery;
+    const selectedConfigId = (configRes.data as any)?.id || null;
+    const menuQuery = supabase.from("ivr_menu_options").select("*").order("digit");
+    const scopedMenuQuery = selectedConfigId
+      ? menuQuery.eq("ivr_config_id", selectedConfigId)
+      : menuQuery;
+
+    const menuRes = await scopedMenuQuery;
 
     if (configRes.error) {
       console.error("IVR config fetch error:", configRes.error);
@@ -98,7 +112,7 @@ export function useIvrConfig() {
     if (configRes.data) setConfig(configRes.data as any);
     if (menuRes.data) setMenuOptions(menuRes.data as any[]);
     setLoading(false);
-  }, []);
+  }, [businessUnitId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -124,6 +138,7 @@ export function useIvrConfig() {
   };
 
   const upsertMenuOption = async (option: Partial<IvrMenuOption> & { digit: string }, silent?: boolean) => {
+    if (!config) return;
     const existing = menuOptions.find((o) => o.digit === option.digit);
     if (existing) {
       const { digit, ...updateFields } = option;
@@ -151,6 +166,7 @@ export function useIvrConfig() {
       const { data, error } = await supabase
         .from("ivr_menu_options")
         .insert({
+          ivr_config_id: config.id,
           digit: option.digit,
           label: option.label || "",
           action_type: option.action_type || "forward_client",

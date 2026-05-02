@@ -34,6 +34,10 @@ export interface SendSmsArgs {
   relatedVendorId?: string | null;
   /** Persisted to sms_log.related_customer_id */
   relatedCustomerId?: string | null;
+  /** Explicit sending company line for multi-company SMS threads. */
+  fromNumber?: string | null;
+  /** Explicit business unit for multi-company SMS threads. */
+  businessUnitId?: string | null;
   /** Logical source label (also written to x-source-function header). */
   source?: string;
   /**
@@ -73,6 +77,8 @@ function logSmsSendFailure(args: SendSmsArgs, message: string, blocked = false) 
       to_last4: digits.slice(-4) || null,
       job_id: args.jobId ?? null,
       related_customer_id: args.relatedCustomerId ?? null,
+      from_last4: args.fromNumber ? String(args.fromNumber).replace(/\D/g, "").slice(-4) || null : null,
+      business_unit_id: args.businessUnitId ?? null,
       related_vendor_id: args.relatedVendorId ?? null,
       media_count: args.mediaUrls?.length || 0,
       hitl_approved: !!args.hitlApproved,
@@ -88,7 +94,7 @@ export async function sendSmsImpl(args: SendSmsArgs): Promise<SendSmsResult> {
   const {
     to, body, jobId, mediaUrls,
     contactName, contactType, relatedVendorId, relatedCustomerId,
-    source, hitlApproved, clientId,
+    source, hitlApproved, clientId, fromNumber, businessUnitId,
   } = args;
   const signedBody = appendSmsSignature(body);
 
@@ -103,6 +109,8 @@ export async function sendSmsImpl(args: SendSmsArgs): Promise<SendSmsResult> {
   if (contactType) payload.contactType = contactType;
   if (relatedVendorId) payload.relatedVendorId = relatedVendorId;
   if (relatedCustomerId) payload.relatedCustomerId = relatedCustomerId;
+  if (fromNumber) payload.from_number = fromNumber;
+  if (businessUnitId) payload.business_unit_id = businessUnitId;
   if (source) payload.source = source;
 
   const headers: Record<string, string> = {};

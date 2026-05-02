@@ -10,10 +10,17 @@ interface Props {
   onSelect: () => void;
 }
 
+function companyLineLabel(phone?: string | null) {
+  const last4 = String(phone || "").replace(/\D/g, "").slice(-4);
+  if (last4 === "5091") return "Carnes";
+  if (last4 === "5671") return "FIX";
+  return last4 ? `line ...${last4}` : null;
+}
+
 export function SmsConversationListItem({ conversation, isSelected, onSelect }: Props) {
   const { phoneNumber, contactName, contactType, status, lastMessage, unreadCount, toNumber, jobContext } = conversation;
   const Icon = contactType === "employee" ? Wrench : contactType === "marketing" ? Megaphone : contactType === "customer" ? User : contactType === "vendor" ? Building2 : HelpCircle;
-  const viaLabel = toNumber ? `via ...${toNumber.replace(/\D/g, "").slice(-4)}` : null;
+  const viaLabel = companyLineLabel(toNumber);
 
   return (
     <button

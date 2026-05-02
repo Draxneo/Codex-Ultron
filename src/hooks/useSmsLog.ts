@@ -39,6 +39,7 @@ export type SmsMessage = {
   delivery_status?: string | null;
   media_urls?: SmsMediaItem[] | null;
   to_number?: string | null;
+  business_unit_id?: string | null;
   client_id?: string | null;
   /** CT day key (YYYY-MM-DD) — server-computed. */
   day_ct?: string | null;
@@ -47,6 +48,7 @@ export type SmsMessage = {
 };
 
 export type SmsConversation = {
+  threadKey: string;
   phoneNumber: string;
   contactName: string | null;
   contactType: string;
@@ -58,16 +60,25 @@ export type SmsConversation = {
   jobContext: SmsJobContext | null;
   estimateContext: SmsEstimateContext | null;
   toNumber?: string | null;
+  businessUnitId?: string | null;
 };
 
 type SmsThreadSetting = {
   phone_last10: string;
+  business_unit_id?: string | null;
+  company_phone_number?: string | null;
+  company_phone_last10?: string | null;
+  thread_key?: string | null;
   conversation_status: SmsConversationStatus | null;
   updated_at: string | null;
 };
 
 type IntakeThreadStatus = {
   phone_last10: string;
+  business_unit_id?: string | null;
+  company_phone_number?: string | null;
+  company_phone_last10?: string | null;
+  thread_key?: string | null;
   status: "open" | "handled" | string | null;
   handled_at: string | null;
   updated_at: string | null;
@@ -105,6 +116,66 @@ function mergeMessagesChrono(existing: SmsMessage[], incoming: SmsMessage[]): Sm
   for (const m of existing) byId.set(m.id, m);
   for (const m of incoming) byId.set(m.id, m);
   return sortMessagesChrono(Array.from(byId.values()));
+}
+
+const UNKNOWN_LINE_KEY = "unknown-line";
+
+function companyLineKeyFromParts(toNumber?: string | null, businessUnitId?: string | null): string {
+  const toLast10 = normalizeLast10(toNumber || "");
+  if (toLast10) return `line:${toLast10}`;
+  if (businessUnitId) return `bu:${businessUnitId}`;
+  return UNKNOWN_LINE_KEY;
+}
+
+export function getSmsThreadKey(phoneNumber: string, toNumber?: string | null, businessUnitId?: string | null): string {
+  const phoneLast10 = normalizeLast10(phoneNumber) || toE164Key(phoneNumber) || phoneNumber;
+  return `${phoneLast10}|${companyLineKeyFromParts(toNumber, businessUnitId)}`;
+}
+
+function getSmsMessageThreadKey(message: SmsMessage): string {
+  return getSmsThreadKey(message.phone_number, message.to_number, message.business_unit_id);
+}
+
+function parseSmsThreadKey(threadKeyOrPhone: string): { phoneLast10: string; lineKey: string } {
+  const [phonePart, linePart] = threadKeyOrPhone.split("|");
+  return {
+    phoneLast10: normalizeLast10(phonePart) || phonePart,
+    lineKey: linePart || UNKNOWN_LINE_KEY,
+  };
+}
+
+function legacySmsThreadKey(phoneLast10: string): string {
+  return `${phoneLast10}|${UNKNOWN_LINE_KEY}`;
+}
+
+function e164FromLast10(last10: string): string | null {
+  const digits = normalizeLast10(last10);
+  return digits ? `+1${digits}` : null;
+}
+
+function smsThreadIdentityPayload(threadKey: string): {
+  business_unit_id?: string | null;
+  company_phone_number?: string | null;
+  company_phone_last10?: string | null;
+  thread_key: string;
+} {
+  const { lineKey } = parseSmsThreadKey(threadKey);
+  if (lineKey.startsWith("bu:")) {
+    return { business_unit_id: lineKey.slice(3), thread_key: threadKey };
+  }
+  if (lineKey.startsWith("line:")) {
+    const companyPhoneLast10 = normalizeLast10(lineKey.slice(5));
+    return {
+      company_phone_number: e164FromLast10(companyPhoneLast10),
+      company_phone_last10: companyPhoneLast10 || null,
+      thread_key: threadKey,
+    };
+  }
+  return { thread_key: threadKey };
+}
+
+function smsThreadKeyFromRow(row: { phone_last10: string; thread_key?: string | null; company_phone_number?: string | null; business_unit_id?: string | null }) {
+  return getSmsThreadKey(row.phone_last10, row.company_phone_number, row.business_unit_id);
 }
 
 const PAGE_SIZE = 150;
@@ -252,10 +323,19 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     if (disabled || !userId) return;
 
     const fetchThreadSettings = async () => {
-      const { data, error } = await (supabase as any)
+      let { data, error } = await (supabase as any)
         .from("sms_thread_settings")
-        .select("phone_last10, conversation_status, updated_at")
+        .select("phone_last10, conversation_status, updated_at, business_unit_id, company_phone_number, company_phone_last10, thread_key")
         .eq("user_id", userId);
+
+      if (error) {
+        const legacy = await (supabase as any)
+          .from("sms_thread_settings")
+          .select("phone_last10, conversation_status, updated_at")
+          .eq("user_id", userId);
+        data = legacy.data;
+        error = legacy.error;
+      }
 
       if (error) {
         console.warn("Failed to fetch SMS thread settings:", error);
@@ -264,7 +344,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
       const next: Record<string, SmsThreadSetting> = {};
       for (const row of (data || []) as SmsThreadSetting[]) {
-        next[row.phone_last10] = row;
+        next[smsThreadKeyFromRow(row)] = row;
       }
       setThreadSettings(next);
     };
@@ -276,10 +356,19 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     if (disabled) return;
 
     const fetchSharedStatuses = async () => {
-      const { data, error } = await (supabase as any)
+      let { data, error } = await (supabase as any)
         .from("intake_thread_status")
-        .select("phone_last10, status, handled_at, updated_at")
+        .select("phone_last10, status, handled_at, updated_at, business_unit_id, company_phone_number, company_phone_last10, thread_key")
         .eq("channel", "sms");
+
+      if (error) {
+        const legacy = await (supabase as any)
+          .from("intake_thread_status")
+          .select("phone_last10, status, handled_at, updated_at")
+          .eq("channel", "sms");
+        data = legacy.data;
+        error = legacy.error;
+      }
 
       if (error) {
         console.warn("Failed to fetch shared SMS thread statuses:", error);
@@ -288,7 +377,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
       const next: Record<string, IntakeThreadStatus> = {};
       for (const row of (data || []) as IntakeThreadStatus[]) {
-        next[row.phone_last10] = row;
+        next[smsThreadKeyFromRow(row)] = row;
       }
       setSharedThreadStatuses(next);
     };
@@ -304,8 +393,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         (payload: any) => {
           const row = payload.new as IntakeThreadStatus | undefined;
           const oldRow = payload.old as IntakeThreadStatus | undefined;
-          const key = row?.phone_last10 || oldRow?.phone_last10;
-          if (!key) return;
+          const phoneKey = row?.phone_last10 || oldRow?.phone_last10;
+          if (!phoneKey) return;
+          const key = row ? smsThreadKeyFromRow(row) : oldRow ? smsThreadKeyFromRow(oldRow) : legacySmsThreadKey(phoneKey);
           setSharedThreadStatuses((prev) => {
             const next = { ...prev };
             if (payload.eventType === "DELETE") delete next[key];
@@ -326,16 +416,18 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     };
   }, [disabled]);
 
-  const setThreadStatus = useCallback(async (phoneNumber: string, status: SmsConversationStatus) => {
-    const phoneLast10 = normalizeLast10(phoneNumber);
+  const setThreadStatus = useCallback(async (threadKeyOrPhone: string, status: SmsConversationStatus) => {
+    const { phoneLast10, lineKey } = parseSmsThreadKey(threadKeyOrPhone);
+    const threadKey = `${phoneLast10}|${lineKey}`;
     if (!phoneLast10) throw new Error("Missing phone number for SMS thread status.");
     if (!userId) throw new Error("Sign in before marking an SMS thread handled.");
 
     const updatedAt = new Date().toISOString();
     setThreadSettings((prev) => ({
       ...prev,
-      [phoneLast10]: {
+      [threadKey]: {
         phone_last10: phoneLast10,
+        ...smsThreadIdentityPayload(threadKey),
         conversation_status: status,
         updated_at: updatedAt,
       },
@@ -346,9 +438,10 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       .upsert({
         user_id: userId,
         phone_last10: phoneLast10,
+        ...smsThreadIdentityPayload(threadKey),
         conversation_status: status,
         updated_at: updatedAt,
-      }, { onConflict: "user_id,phone_last10" });
+      }, { onConflict: "user_id,thread_key" });
 
     if (error) {
       console.error("Failed to update SMS thread status:", error);
@@ -357,22 +450,24 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
     const sharedStatus: IntakeThreadStatus = {
       phone_last10: phoneLast10,
+      ...smsThreadIdentityPayload(threadKey),
       status: status === "done" ? "handled" : "open",
       handled_at: status === "done" ? updatedAt : null,
       updated_at: updatedAt,
     };
-    setSharedThreadStatuses((prev) => ({ ...prev, [phoneLast10]: sharedStatus }));
+    setSharedThreadStatuses((prev) => ({ ...prev, [threadKey]: sharedStatus }));
 
     const { error: sharedError } = await (supabase as any)
       .from("intake_thread_status")
       .upsert({
         channel: "sms",
         phone_last10: phoneLast10,
+        ...smsThreadIdentityPayload(threadKey),
         status: sharedStatus.status,
         handled_by_user_id: status === "done" ? userId : null,
         handled_at: sharedStatus.handled_at,
         updated_at: updatedAt,
-      }, { onConflict: "channel,phone_last10" });
+      }, { onConflict: "thread_key" });
 
     if (sharedError) {
       console.error("Failed to update shared SMS thread status:", sharedError);
@@ -566,13 +661,17 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
             const withoutOptimistic = prev.filter((m) => {
               if (!m.id.startsWith("optimistic-")) return true;
               if (msg.client_id && (m as any).client_id === msg.client_id) return false;
-              if (m.direction === "outbound" && toE164Key(m.phone_number) === toE164Key(msg.phone_number)) return false;
+              if (
+                m.direction === "outbound" &&
+                toE164Key(m.phone_number) === toE164Key(msg.phone_number) &&
+                companyLineKeyFromParts(m.to_number, m.business_unit_id) === companyLineKeyFromParts(msg.to_number, msg.business_unit_id)
+              ) return false;
               return true;
             });
             return mergeMessagesChrono(withoutOptimistic, [msg]);
           });
           if (msg.direction === "inbound" && userId) {
-            void setThreadStatus(msg.phone_number, "needs_reply").catch((error) => {
+            void setThreadStatus(getSmsMessageThreadKey(msg), "needs_reply").catch((error) => {
               console.error("Failed to mark inbound SMS thread as needing reply:", error);
             });
           }
@@ -624,14 +723,20 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
   const conversations = useMemo(() => {
     const grouped: Record<string, SmsMessage[]> = {};
     for (const msg of sortMessagesChrono(messages)) {
-      const key = toE164Key(msg.phone_number);
+      const key = getSmsMessageThreadKey(msg);
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(msg);
     }
+    const threadCountByPhone = Object.keys(grouped).reduce<Record<string, number>>((acc, threadKey) => {
+      const { phoneLast10 } = parseSmsThreadKey(threadKey);
+      acc[phoneLast10] = (acc[phoneLast10] || 0) + 1;
+      return acc;
+    }, {});
 
-    const convos: SmsConversation[] = Object.entries(grouped).map(([phone, msgs]) => {
+    const convos: SmsConversation[] = Object.entries(grouped).map(([threadKey, msgs]) => {
       const convoMsgs = sortMessagesChrono(msgs);
       const lastMsg = convoMsgs[convoMsgs.length - 1];
+      const phone = toE164Key(lastMsg.phone_number) || lastMsg.phone_number;
       const unread = convoMsgs.filter((m) => m.direction === "inbound" && !m.is_read).length;
       const latestJob = [...convoMsgs].reverse().find((m) => m.related_job_id)?.related_job_id || null;
       const latestInbound = [...convoMsgs].reverse().find((m) => m.direction === "inbound") || null;
@@ -649,9 +754,12 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
       // Get the most recent to_number for this conversation
       const latestToNumber = [...convoMsgs].reverse().find((m) => m.to_number)?.to_number || null;
+      const latestBusinessUnitId = [...convoMsgs].reverse().find((m) => m.business_unit_id)?.business_unit_id || null;
       const phoneLast10 = normalizeLast10(phone);
-      const setting = phoneLast10 ? threadSettings[phoneLast10] : undefined;
-      const sharedStatus = phoneLast10 ? sharedThreadStatuses[phoneLast10] : undefined;
+      const legacyKey = phoneLast10 ? legacySmsThreadKey(phoneLast10) : "";
+      const canUseLegacyStatus = !!phoneLast10 && threadCountByPhone[phoneLast10] === 1;
+      const setting = threadSettings[threadKey] || (canUseLegacyStatus ? threadSettings[legacyKey] : undefined);
+      const sharedStatus = sharedThreadStatuses[threadKey] || (canUseLegacyStatus ? sharedThreadStatuses[legacyKey] : undefined);
       const sharedHandledAt = sharedStatus?.handled_at || sharedStatus?.updated_at || null;
       const sharedDoneIsFresh = !!(
         sharedStatus?.status === "handled" &&
@@ -669,6 +777,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const matchedEstimate = phoneLast10 ? estimateContextMap[phoneLast10] || null : null;
 
       return {
+        threadKey,
         phoneNumber: phone,
         contactName: resolved.name,
         contactType: resolved.type,
@@ -680,6 +789,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         jobContext: matchedJob,
         estimateContext: matchedEstimate,
         toNumber: latestToNumber,
+        businessUnitId: latestBusinessUnitId,
       };
     });
 
@@ -697,10 +807,14 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
   const queryClient = useQueryClient();
 
-  const markAsRead = useCallback(async (phoneNumber: string) => {
-    const normalized = normalizeLast10(phoneNumber);
+  const markAsRead = useCallback(async (threadKeyOrPhone: string) => {
+    const { phoneLast10, lineKey } = parseSmsThreadKey(threadKeyOrPhone);
     const unreadIds = messages
-      .filter((m) => normalizeLast10(m.phone_number) === normalized && m.direction === "inbound" && !m.is_read)
+      .filter((m) => {
+        if (normalizeLast10(m.phone_number) !== phoneLast10 || m.direction !== "inbound" || m.is_read) return false;
+        if (!threadKeyOrPhone.includes("|")) return true;
+        return companyLineKeyFromParts(m.to_number, m.business_unit_id) === lineKey;
+      })
       .map((m) => m.id);
 
     if (unreadIds.length === 0) return;
@@ -722,7 +836,14 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     queryClient.invalidateQueries({ queryKey: ["unread_sms_count"] });
   }, [messages, queryClient]);
 
-  const sendSms = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
+  const sendSms = async (
+    to: string,
+    body: string,
+    jobId?: string,
+    contactName?: string,
+    mediaUrls?: string[],
+    options: { fromNumber?: string | null; businessUnitId?: string | null; threadKey?: string | null } = {}
+  ) => {
     setSending(true);
     const signedBody = appendSmsSignature(body);
 
@@ -746,7 +867,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       created_at: new Date().toISOString(),
       delivery_status: "sending",
       media_urls: null,
-      to_number: null,
+      to_number: options.fromNumber || null,
+      business_unit_id: options.businessUnitId || null,
       client_id: clientId,
     };
     setMessages((prev) => mergeMessagesChrono(prev, [optimisticMsg]));
@@ -763,6 +885,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         mediaUrls,
         contactName,
         clientId,
+        fromNumber: options.fromNumber,
+        businessUnitId: options.businessUnitId,
         silent: true,
       });
       if (!result.success) {
@@ -790,7 +914,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       );
       toast({ title: "SMS Sent", description: `Message sent to ${contactName || to}` });
       if (userId) {
-        void setThreadStatus(to, "waiting").catch((error) => {
+        void setThreadStatus(options.threadKey || getSmsThreadKey(to, options.fromNumber, options.businessUnitId), "waiting").catch((error) => {
           console.error("Failed to mark outbound SMS thread as waiting:", error);
         });
       }

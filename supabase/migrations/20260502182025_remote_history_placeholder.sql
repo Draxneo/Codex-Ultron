@@ -1,0 +1,6 @@
+-- Remote migration placeholder.
+--
+-- The live Supabase migration history includes version 20260502182025, but
+-- the original SQL file was not present in this checkout. Keep this no-op file
+-- so local migration history matches the remote ledger before applying newer
+-- migrations.

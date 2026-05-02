@@ -11,6 +11,7 @@ import {
 } from "../_shared/jarvisContactIntent.ts";
 import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
+import { getDefaultBusinessUnit, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
 
@@ -337,6 +338,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const businessUnit = (await resolveBusinessUnitByPhone(supabase, toNumber)) ||
+      (await getDefaultBusinessUnit(supabase));
 
     const normalizedFrom = from.replace(/\D/g, "").slice(-10);
 
@@ -441,6 +444,7 @@ Deno.serve(async (req) => {
           related_job_id: matchedReminder.job_id, contact_name: contactName, contact_type: contactType,
           from_city: fromCity, from_state: fromState, from_zip: fromZip, num_segments: numSegments,
           to_number: toNumber,
+          business_unit_id: businessUnit?.id || null,
         } as any);
 
         // Surface to dispatcher instead of auto-replying
@@ -511,6 +515,7 @@ Deno.serve(async (req) => {
       from_zip: fromZip,
       num_segments: numSegments,
       to_number: toNumber,
+      business_unit_id: businessUnit?.id || null,
       ...(relatedVendorId ? { related_vendor_id: relatedVendorId } : {}),
       ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
     } as any).select("id").single();
@@ -1013,14 +1018,18 @@ IMPORTANT RULES:
               resolvedCustomerId = existingCust.id;
               // Update empty fields only (safety rails — never overwrite)
               const { data: custFull } = await supabase.from("customers")
-                .select("first_name, last_name, email, address, city, state, zip, notes")
+                .select("first_name, last_name, email, address, city, state, zip, notes, tags, primary_business_unit_id")
                 .eq("id", existingCust.id).single();
 
               if (custFull) {
-                const updates: Record<string, string> = {};
+                const updates: Record<string, unknown> = {};
                 if (!custFull.first_name && extracted.first_name) updates.first_name = extracted.first_name;
                 if (!custFull.last_name && extracted.last_name) updates.last_name = extracted.last_name;
                 if (!custFull.email && extracted.email) updates.email = extracted.email;
+                if (businessUnit?.id && !custFull.primary_business_unit_id) updates.primary_business_unit_id = businessUnit.id;
+                if (businessUnit?.customer_tag && !((custFull.tags || []) as string[]).includes(businessUnit.customer_tag)) {
+                  updates.tags = Array.from(new Set([...(custFull.tags || []), businessUnit.customer_tag]));
+                }
 
                 // Verify address via Google if provided
                 let verifiedAddr: string | null = null;
@@ -1065,6 +1074,8 @@ IMPORTANT RULES:
                 city: extracted.city || null,
                 state: extracted.state || "TX",
                 zip: extracted.zip || null,
+                primary_business_unit_id: businessUnit?.id || null,
+                tags: businessUnit?.customer_tag ? [businessUnit.customer_tag] : [],
                 notes: noteParts.length > 0 ? noteParts.join("\n") : `Auto-created from SMS intake`,
               }).select("id").single();
 
@@ -1074,12 +1085,12 @@ IMPORTANT RULES:
 
                 // Backfill call_log and sms_log with customer link
                 await supabase.from("call_log")
-                  .update({ related_customer_id: newCust.id, contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer" })
+                  .update({ related_customer_id: newCust.id, contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
                   .eq("phone_number", from)
                   .is("related_customer_id", null);
 
                 await supabase.from("sms_log")
-                  .update({ contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer" })
+                  .update({ contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
                   .eq("phone_number", from)
                   .in("contact_type", ["unknown", "lead"]);
               }

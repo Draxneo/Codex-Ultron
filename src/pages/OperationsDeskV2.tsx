@@ -95,6 +95,9 @@ type DeskConversation = {
 type IntakeThreadStatusRow = {
   channel: "sms" | "call";
   phone_last10: string;
+  company_phone_number?: string | null;
+  company_phone_last10?: string | null;
+  thread_key?: string | null;
   status: "open" | "handled";
   handled_by_user_id: string | null;
   handled_by_name: string | null;
@@ -577,6 +580,21 @@ function unifiedKeyForDeskItem(item: DeskConversation) {
 
   const message = (item.raw as SmsConversation).lastMessage;
   return unifiedSourceKey("sms_log", message.id);
+}
+
+function intakeThreadKeyForParts(channel: "sms" | "call", phone: string, companyPhone?: string | null) {
+  const phoneLast10 = normalizeLast10(phone);
+  if (!phoneLast10) return `${channel}:legacy:unknown`;
+  return `${channel}:${normalizeLast10(companyPhone || "") || "legacy"}:${phoneLast10}`;
+}
+
+function intakeThreadKeyForDeskItem(item: DeskConversation) {
+  if (item.kind === "sms") {
+    const conversation = item.raw as SmsConversation;
+    return intakeThreadKeyForParts("sms", item.phone, conversation.toNumber);
+  }
+  const conversation = item.raw as CallConversation;
+  return intakeThreadKeyForParts("call", item.phone, conversation.calledNumber);
 }
 
 function applyUnifiedCommunication(
@@ -1975,10 +1993,11 @@ function CustomerWorkspace({
 
     try {
       if (selected.kind === "sms") {
-        await onMarkSmsRead(selected.phone);
-        await onSetSmsThreadStatus(selected.phone, "done");
+        const threadKey = smsConversation?.threadKey || selected.phone;
+        await onMarkSmsRead(threadKey);
+        await onSetSmsThreadStatus(threadKey, "done");
       } else {
-        await onMarkCallRead(selected.phone);
+        await onMarkCallRead((selected.raw as CallConversation).threadKey || selected.phone);
       }
       if (phoneLast10) {
         const { data: handledResult, error: sharedStatusError } = await (supabase as any)
@@ -3393,8 +3412,14 @@ export default function OperationsDeskV2() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("intake_thread_status")
-        .select("channel, phone_last10, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
-      if (error) throw error;
+        .select("channel, phone_last10, company_phone_number, company_phone_last10, thread_key, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
+      if (error) {
+        const legacy = await (supabase as any)
+          .from("intake_thread_status")
+          .select("channel, phone_last10, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
+        if (legacy.error) throw legacy.error;
+        return (legacy.data || []) as IntakeThreadStatusRow[];
+      }
       return (data || []) as IntakeThreadStatusRow[];
     },
     staleTime: 15_000,
@@ -3406,7 +3431,7 @@ export default function OperationsDeskV2() {
   const sharedStatusByThread = useMemo(() => {
     const map = new Map<string, IntakeThreadStatusRow>();
     for (const row of intakeThreadStatuses) {
-      map.set(`${row.channel}:${row.phone_last10}`, row);
+      map.set(row.thread_key || `${row.channel}:legacy:${row.phone_last10}`, row);
     }
     return map;
   }, [intakeThreadStatuses]);
@@ -3431,8 +3456,7 @@ export default function OperationsDeskV2() {
     ]
       .map((item) => applyUnifiedCommunication(item, canonicalBySource))
       .map((item) => {
-        const phoneLast10 = normalizeLast10(item.phone);
-        const sharedStatus = sharedStatusByThread.get(`${item.kind}:${phoneLast10}`);
+        const sharedStatus = sharedStatusByThread.get(intakeThreadKeyForDeskItem(item));
         if (!sharedStatus || sharedStatus.status !== "handled") return item;
         const handledAt = sharedStatus.handled_at || sharedStatus.updated_at;
         const handledAfterSignal = handledAt && new Date(handledAt).getTime() >= new Date(item.createdAt).getTime();
@@ -3487,10 +3511,11 @@ export default function OperationsDeskV2() {
 
     try {
       if (item.kind === "sms") {
-        await markSmsAsRead(item.phone);
-        await setSmsThreadStatus(item.phone, "done");
+        const threadKey = smsConversation?.threadKey || item.phone;
+        await markSmsAsRead(threadKey);
+        await setSmsThreadStatus(threadKey, "done");
       } else {
-        await markCallsAsRead(item.phone);
+        await markCallsAsRead((item.raw as CallConversation).threadKey || item.phone);
       }
 
       const { data, error } = await (supabase as any)

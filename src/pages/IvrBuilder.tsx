@@ -23,7 +23,9 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 const IvrBuilder = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { config, menuOptions, loading, updateConfig, upsertMenuOption, deleteMenuOption } = useIvrConfig();
+  const [businessUnits, setBusinessUnits] = useState<Array<{ id: string; slug: string; display_name: string; primary_phone_number: string; is_default: boolean }>>([]);
+  const [selectedBusinessUnitId, setSelectedBusinessUnitId] = useState<string | null>(null);
+  const { config, menuOptions, loading, updateConfig, upsertMenuOption, deleteMenuOption } = useIvrConfig(selectedBusinessUnitId);
   const { settings, updateSettings } = useCompanySettings();
   const testMode = settings.ivr_test_mode === "true";
   const [profiles, setProfiles] = useState<{ id: string; full_name: string }[]>([]);
@@ -38,6 +40,19 @@ const IvrBuilder = () => {
     supabase.from("profiles").select("id, full_name").then(({ data }) => {
       if (data) setProfiles(data as any[]);
     });
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from("business_units" as any)
+      .select("id, slug, display_name, primary_phone_number, is_default")
+      .eq("is_active", true)
+      .order("is_default", { ascending: false })
+      .then(({ data }) => {
+        const rows = (data || []) as Array<{ id: string; slug: string; display_name: string; primary_phone_number: string; is_default: boolean }>;
+        setBusinessUnits(rows);
+        setSelectedBusinessUnitId((current) => current || rows[0]?.id || null);
+      });
   }, []);
 
   const handleAddDept = () => {
@@ -58,12 +73,27 @@ const IvrBuilder = () => {
             <div>
               <h1 className="text-xl font-bold">IVR Builder</h1>
               <p className="text-sm text-muted-foreground">
-                Canonical call flow editor • Drag to reposition • Click a node to configure
+                {config?.label || businessUnits.find((unit) => unit.id === selectedBusinessUnitId)?.display_name || "Company"} call flow editor
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {businessUnits.length > 1 && (
+              <Select value={selectedBusinessUnitId || ""} onValueChange={setSelectedBusinessUnitId}>
+                <SelectTrigger className="w-[240px]">
+                  <SelectValue placeholder="Choose company" />
+                </SelectTrigger>
+                <SelectContent>
+                  {businessUnits.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {unit.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <div className="flex items-center gap-2">
               <FlaskConical className={`h-4 w-4 ${testMode ? "text-amber-500" : "text-muted-foreground"}`} />
               <Switch

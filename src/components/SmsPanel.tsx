@@ -11,6 +11,7 @@ import { SmsThreadView } from "@/components/SmsThreadView";
 import { SmsConversationListItem } from "@/components/SmsConversationListItem";
 import { cn } from "@/lib/utils";
 import { normalizeLast10, toE164 } from "@/lib/formatters";
+import { getSmsThreadKey } from "@/hooks/useSmsLog";
 
 interface SmsPanelProps {
   compact?: boolean;
@@ -33,7 +34,7 @@ const SMS_FILTERS: { key: SmsFilter; label: string }[] = [
 export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelProps = {}) {
   const isMobile = useIsMobile();
   const { conversations, sending, sendSms, markAsRead, setThreadStatus, hasMore, loadMore, loadingMore } = useSmsLogScoped();
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const [newMessageMode, setNewMessageMode] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<SmsFilter>("all");
@@ -44,12 +45,12 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
     const last10 = normalizeLast10(raw);
     if (!last10) return raw;
     const match = conversations.find((c) => normalizeLast10(c.phoneNumber) === last10);
-    return match ? match.phoneNumber : (toE164(raw) ?? raw);
+    return match ? match.threadKey : getSmsThreadKey(toE164(raw) ?? raw);
   };
 
   useEffect(() => {
     if (!initialPhone) return;
-    setSelectedPhone(resolveConversationKey(initialPhone));
+    setSelectedThreadKey(resolveConversationKey(initialPhone));
     setNewMessageMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPhone, conversations.length]);
@@ -80,30 +81,44 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
     unread: searched.filter((c) => c.unreadCount > 0).length,
   };
 
-  const selectConversation = (phone: string) => {
-    setSelectedPhone(phone);
+  const selectConversation = (threadKey: string) => {
+    const convo = conversations.find((c) => c.threadKey === threadKey);
+    setSelectedThreadKey(threadKey);
     setNewMessageMode(false);
-    const convo = conversations.find((c) => c.phoneNumber === phone);
-    startSmsSession(phone, convo?.contactName || undefined);
+    startSmsSession(convo?.phoneNumber || threadKey, convo?.contactName || undefined);
   };
 
   const handleNewMessage = () => {
-    setSelectedPhone(null);
+    setSelectedThreadKey(null);
     setNewMessageMode(true);
   };
 
   const handleSend = async (to: string, body: string, jobId?: string, contactName?: string, mediaUrls?: string[]) => {
-    const convo = conversations.find((c) => c.phoneNumber === to);
+    const convo = selectedThreadKey
+      ? conversations.find((c) => c.threadKey === selectedThreadKey)
+      : conversations.find((c) => c.phoneNumber === to);
     const name = contactName || convo?.contactName || undefined;
-    const success = await sendSms(to, body, jobId, name, mediaUrls);
+    const success = await sendSms(to, body, jobId, name, mediaUrls, {
+      fromNumber: convo?.toNumber || null,
+      businessUnitId: convo?.businessUnitId || null,
+      threadKey: convo?.threadKey || null,
+    });
     if (success && newMessageMode) {
       setNewMessageMode(false);
-      setSelectedPhone(to);
+      setSelectedThreadKey(convo?.threadKey || getSmsThreadKey(to, convo?.toNumber, convo?.businessUnitId));
     }
     return success;
   };
 
-  const selectedConvo = selectedPhone ? conversations.find((c) => c.phoneNumber === selectedPhone) || null : null;
+  const selectedConvo = selectedThreadKey ? conversations.find((c) => c.threadKey === selectedThreadKey) || null : null;
+  const selectedPhone = selectedConvo?.phoneNumber || (selectedThreadKey ? selectedThreadKey.split("|")[0] : null);
+  const selectedReadTarget = selectedConvo?.threadKey || selectedThreadKey || "";
+  const markSelectedRead = () => {
+    if (selectedReadTarget) markAsRead(selectedReadTarget);
+  };
+  const setSelectedStatus = (_phone: string, status: Parameters<typeof setThreadStatus>[1]) => {
+    if (selectedReadTarget) setThreadStatus(selectedReadTarget, status);
+  };
 
   if (isMobile) {
     if (selectedPhone) {
@@ -112,9 +127,9 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
           conversation={selectedConvo}
           sending={sending}
           onSend={handleSend}
-          onMarkRead={markAsRead}
-          onStatusChange={setThreadStatus}
-          onBack={() => setSelectedPhone(null)}
+          onMarkRead={markSelectedRead}
+          onStatusChange={setSelectedStatus}
+          onBack={() => setSelectedThreadKey(null)}
           newMessageMode={!selectedConvo}
           prefillPhone={!selectedConvo ? selectedPhone : undefined}
           prefillBody={initialDraft}
@@ -149,7 +164,7 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
             onFilterChange={setActiveFilter}
             conversations={filtered}
             counts={filterCounts}
-            selectedPhone={selectedPhone}
+            selectedThreadKey={selectedThreadKey}
             onSelect={selectConversation}
             empty={searched.length === 0}
             density="comfortable"
@@ -170,7 +185,7 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
           onFilterChange={setActiveFilter}
           conversations={filtered}
           counts={filterCounts}
-          selectedPhone={selectedPhone}
+          selectedThreadKey={selectedThreadKey}
           onSelect={selectConversation}
           empty={searched.length === 0}
           density="compact"
@@ -196,8 +211,8 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
             conversation={selectedConvo}
             sending={sending}
             onSend={handleSend}
-            onMarkRead={markAsRead}
-            onStatusChange={setThreadStatus}
+            onMarkRead={markSelectedRead}
+            onStatusChange={setSelectedStatus}
             prefillBody={initialDraft}
             hasMore={hasMore}
             loadingMore={loadingMore}
@@ -210,7 +225,7 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
             onSend={handleSend}
             onMarkRead={markAsRead}
             onStatusChange={setThreadStatus}
-            onBack={() => setSelectedPhone(null)}
+            onBack={() => setSelectedThreadKey(null)}
             newMessageMode={true}
             prefillPhone={selectedPhone}
             prefillBody={initialDraft}
@@ -255,8 +270,8 @@ interface SmsFilteredListProps {
   onFilterChange: (t: SmsFilter) => void;
   conversations: SmsConvo[];
   counts: Record<SmsFilter, number>;
-  selectedPhone: string | null;
-  onSelect: (phone: string) => void;
+  selectedThreadKey: string | null;
+  onSelect: (threadKey: string) => void;
   empty: boolean;
   density: "comfortable" | "compact";
 }
@@ -266,7 +281,7 @@ function SmsFilteredList({
   onFilterChange,
   conversations,
   counts,
-  selectedPhone,
+  selectedThreadKey,
   onSelect,
   empty,
   density,
@@ -301,10 +316,10 @@ function SmsFilteredList({
           ) : (
             conversations.map((c) => (
               <SmsConversationListItem
-                key={c.phoneNumber}
+                key={c.threadKey}
                 conversation={c}
-                isSelected={selectedPhone === c.phoneNumber}
-                onSelect={() => onSelect(c.phoneNumber)}
+                isSelected={selectedThreadKey === c.threadKey}
+                onSelect={() => onSelect(c.threadKey)}
               />
             ))
           )}

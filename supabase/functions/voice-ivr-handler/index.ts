@@ -15,6 +15,7 @@ import {
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone as normalizeBusinessPhone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
 
 type IvrRoutingOption = {
   label?: string | null;
@@ -125,6 +126,8 @@ Deno.serve(async (req) => {
     const from = url.searchParams.get("From") || "";
     const contactName = url.searchParams.get("ContactName") || "";
     const contactType = url.searchParams.get("ContactType") || "unknown";
+    const ivrConfigId = url.searchParams.get("IvrConfigId") || "";
+    const calledNumber = url.searchParams.get("To") || "";
     const queueRetry = url.searchParams.get("QueueRetry") === "1";
 
     const formData = await req.text();
@@ -148,6 +151,11 @@ Deno.serve(async (req) => {
 
             const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const businessUnit = (await resolveBusinessUnitByPhone(supabase, calledNumber)) ||
+      (await getDefaultBusinessUnit(supabase));
+    const businessCallerId = normalizeBusinessPhone(businessUnit?.primary_phone_number) ||
+      getTwilioCallerId() ||
+      from;
 
     await logSystemTrace({
       sourceType: "voice",
@@ -198,7 +206,19 @@ Deno.serve(async (req) => {
     }
 
     // Load config + menu option for this digit
-    const { data: ivrConfig } = await supabase.from("ivr_config").select("*").limit(1).maybeSingle();
+    let ivrConfig: any = null;
+    if (ivrConfigId) {
+      const { data } = await supabase.from("ivr_config").select("*").eq("id", ivrConfigId).maybeSingle();
+      ivrConfig = data;
+    }
+    if (!ivrConfig && businessUnit?.id) {
+      const { data } = await supabase.from("ivr_config").select("*").eq("business_unit_id", businessUnit.id).maybeSingle();
+      ivrConfig = data;
+    }
+    if (!ivrConfig) {
+      const { data } = await supabase.from("ivr_config").select("*").order("is_default", { ascending: false }).order("created_at").limit(1).maybeSingle();
+      ivrConfig = data;
+    }
     const config = ivrConfig || {
       voicemail_greeting: "Please leave a message after the tone.",
       voicemail_audio_url: null,
@@ -229,7 +249,7 @@ Deno.serve(async (req) => {
     const queueWaitSeconds = 5;
 
     function overflowDialTwiml(reason: string): string {
-      const callerId = getTwilioCallerId() || from;
+      const callerId = businessCallerId;
       const overflowStatusCallback = `${supabaseUrl}/functions/v1/voice-status-callback`;
       console.log(`🎙️ OVERFLOW TwiML generated: reason=${reason}, callback=${overflowStatusCallback}, recording=record-from-answer-dual`);
       return `<?xml version="1.0" encoding="UTF-8"?>
@@ -243,6 +263,7 @@ Deno.serve(async (req) => {
     const { data: option } = await supabase
       .from("ivr_menu_options")
       .select("*")
+      .eq("ivr_config_id", (config as any).id)
       .eq("digit", digit)
       .eq("is_active", true)
       .maybeSingle();
@@ -260,7 +281,7 @@ Deno.serve(async (req) => {
 
     const voicemailUrl = `${supabaseUrl}/functions/v1/voice-voicemail?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}`;
     const statusCallbackUrl = `${supabaseUrl}/functions/v1/voice-status-callback`;
-    const queueRedirectUrl = `${supabaseUrl}/functions/v1/voice-ivr-handler?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}&QueueRetry=1`;
+    const queueRedirectUrl = `${supabaseUrl}/functions/v1/voice-ivr-handler?CallSid=${encodeURIComponent(callSid)}&From=${encodeURIComponent(from)}&ContactName=${encodeURIComponent(contactName)}&ContactType=${encodeURIComponent(contactType)}&Digit=${encodeURIComponent(digit)}&IvrConfigId=${encodeURIComponent((config as any).id || "")}&To=${encodeURIComponent(calledNumber)}&QueueRetry=1`;
 
     const vmGreeting = config.voicemail_audio_url
       ? `<Play>${escapeXml(config.voicemail_audio_url)}</Play>`
@@ -514,7 +535,7 @@ Deno.serve(async (req) => {
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(getTwilioCallerId() || from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(businessCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(option.forward_to)}</Number>
   </Dial>
 </Response>`,
@@ -523,7 +544,7 @@ Deno.serve(async (req) => {
     }
 
     // forward_client — build list of Client identities to ring
-    const twilioNumber = getTwilioCallerId() || from;
+    const twilioNumber = businessCallerId;
 
     const forwardingNumbers = await fetchDepartmentForwardingNumbers(supabase, deptKey, fallbackDepartmentKeys);
     const inboundRouteMode = ((option as any).inbound_route_mode || "cell_forwarding").toLowerCase();
@@ -881,7 +902,7 @@ Deno.serve(async (req) => {
       `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${streamTwiml}
-  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(getTwilioCallerId() || from)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
+  <Dial timeout="${dialTimeout}" timeLimit="3600" hangupOnStar="true" answerOnBridge="true" action="${escapeXml(voicemailUrl)}" callerId="${escapeXml(businessCallerId)}" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(statusCallbackUrl)}" recordingStatusCallbackEvent="completed" statusCallback="${escapeXml(statusCallbackUrl)}" statusCallbackEvent="initiated ringing answered completed">
     ${clientTags}
   </Dial>
 </Response>`,

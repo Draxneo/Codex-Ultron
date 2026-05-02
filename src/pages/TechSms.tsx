@@ -152,14 +152,18 @@ export default function TechSms() {
 
   useEffect(() => {
     if (selectedConversation?.unreadCount) {
-      markAsRead(selectedConversation.phoneNumber);
+      markAsRead(selectedConversation.threadKey);
     }
   }, [markAsRead, selectedConversation]);
 
   const handleSend = async () => {
     if (!selectedPhone || !body.trim()) return;
     const jobId = selectedWork?.type === "job" ? selectedWork.id : undefined;
-    const ok = await sendSms(selectedPhone, body.trim(), jobId, selectedWork?.customerName);
+    const ok = await sendSms(selectedPhone, body.trim(), jobId, selectedWork?.customerName, undefined, {
+      fromNumber: selectedConversation?.toNumber || null,
+      businessUnitId: selectedConversation?.businessUnitId || null,
+      threadKey: selectedConversation?.threadKey || null,
+    });
     if (ok) setBody("");
   };
 
