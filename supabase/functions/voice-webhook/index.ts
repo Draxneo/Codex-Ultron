@@ -415,14 +415,12 @@ Deno.serve(async (req) => {
       .select("key, value")
       .in("key", [
         "live_transcription_enabled",
-        "ivr_test_mode",
       ]);
     const csMap: Record<string, string> = {};
     for (const r of (fwdRows || []) as any[]) csMap[r.key] = r.value;
 
     const liveTranscribeEnabled =
       csMap["live_transcription_enabled"] === "true";
-    const ivrTestMode = csMap["ivr_test_mode"] === "true";
 
     // Build stream TwiML BEFORE any early returns so all paths can use it.
     // NOTE: At the top-level <Start>, Twilio only supports inbound_track / outbound_track
@@ -462,6 +460,7 @@ Deno.serve(async (req) => {
     };
 
     const overflowEnabled = (config as any).answering_service_enabled === true;
+    const ivrTestMode = (config as any).ivr_test_mode === true;
     const overflowNumber = (config as any).answering_service_number || "";
     const overflowOnBusy = (config as any).overflow_on_busy !== false;
     const dialTimeout = config.ring_timeout_seconds || 25;

@@ -24,6 +24,7 @@ export type IvrConfig = {
   voicemail_audio_url: string | null;
   after_hours_forward_number: string | null;
   after_hours_caller_id_mode: string;
+  ivr_test_mode?: boolean | null;
   // 24/7 Answering Service overflow
   answering_service_enabled: boolean;
   answering_service_number: string | null;

@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { withRetry, isRetryable, logSystemError, enqueueRetry, pageOnCall } from "../_shared/resilience.ts";
 import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
-import { appendSmsSignature } from "../_shared/smsSignature.ts";
+import { appendSmsSignature, smsSignatureForCompany } from "../_shared/smsSignature.ts";
 import { resolveSmsBusinessUnitForRecipient } from "../_shared/businessUnits.ts";
 
 type MediaInput = string | { url: string; content_type?: string };
@@ -334,7 +334,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const finalBody = appendSmsSignature(correctedBody || "", 1600);
+    const finalBody = appendSmsSignature(
+      correctedBody || "",
+      1600,
+      smsSignatureForCompany(senderResolution.businessUnit?.display_name),
+    );
 
     // ── Send SMS via Twilio REST API (with retry on transient failures) ──
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;

@@ -81,6 +81,28 @@ function syncAppSuspensionBlocker() {
   }
 }
 
+function syncCallPowerBlocker(status) {
+  try {
+    const shouldBlock = status === 'ringing' || status === 'connecting' || status === 'on-call';
+
+    if (shouldBlock) {
+      if (powerSaveBlockerId === null || !powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+        powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+        console.log('[Power] prevent-display-sleep started for active call, id=', powerSaveBlockerId);
+      }
+      return;
+    }
+
+    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+      powerSaveBlocker.stop(powerSaveBlockerId);
+      console.log('[Power] prevent-display-sleep stopped after call, id=', powerSaveBlockerId);
+    }
+    powerSaveBlockerId = null;
+  } catch (e) {
+    console.warn('[Power] Failed to sync call power blocker:', e);
+  }
+}
+
 function openPrimaryTelephonySurface() {
   if (telephonyDesktopPolicy.isHandoff) {
     launchUltraphone(telephonyDesktopPolicy.callTargets || getDefaultCallTargets());
@@ -661,6 +683,10 @@ app.whenReady().then(() => {
 
   ipcMain.on('telephony-policy-updated', (_event, payload) => {
     syncTelephonyDesktopPolicy(payload || {});
+  });
+
+  ipcMain.on('call-status-change', (_event, status) => {
+    syncCallPowerBlocker(status);
   });
 
   // Relay a dial request from the main window to the phone window

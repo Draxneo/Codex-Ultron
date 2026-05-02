@@ -30,6 +30,7 @@ const DIAL_KEYS: { key: string; sub?: string }[][] = [
 function MobileDialPad() {
   const softphone = useSoftphoneContext();
   const { consumeDialNumber, pendingDialNumber } = softphone;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dialInput, setDialInput] = useState("");
 
   // Consume pending dial number from ClickToCall
@@ -39,6 +40,21 @@ function MobileDialPad() {
       consumeDialNumber();
     }
   }, [consumeDialNumber, pendingDialNumber]);
+
+  useEffect(() => {
+    const queryPhone = searchParams.get("phone");
+    if (!queryPhone) return;
+    setDialInput(queryPhone);
+    const queryJobId = searchParams.get("jobId");
+    const queryCustomerId = searchParams.get("customerId");
+    if (queryJobId) softphone.setPendingJobId(queryJobId);
+    if (queryCustomerId) softphone.setPendingCustomerId(queryCustomerId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("phone");
+    next.delete("jobId");
+    next.delete("customerId");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, softphone]);
 
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],

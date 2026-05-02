@@ -8,6 +8,7 @@ const allowedSendChannels = new Set([
   'ensure-phone-window',
   'launch-ultraphone',
   'telephony-policy-updated',
+  'call-status-change',
   'dial-number',
   'screen-pop',
   'switch-tab',

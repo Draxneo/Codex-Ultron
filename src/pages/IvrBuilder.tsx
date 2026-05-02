@@ -18,7 +18,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 const IvrBuilder = () => {
   const navigate = useNavigate();
@@ -26,8 +25,7 @@ const IvrBuilder = () => {
   const [businessUnits, setBusinessUnits] = useState<Array<{ id: string; slug: string; display_name: string; primary_phone_number: string; is_default: boolean }>>([]);
   const [selectedBusinessUnitId, setSelectedBusinessUnitId] = useState<string | null>(null);
   const { config, menuOptions, loading, updateConfig, upsertMenuOption, deleteMenuOption } = useIvrConfig(selectedBusinessUnitId);
-  const { settings, updateSettings } = useCompanySettings();
-  const testMode = settings.ivr_test_mode === "true";
+  const testMode = Boolean(config?.ivr_test_mode);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string }[]>([]);
 
   // Add department popover state
@@ -98,7 +96,7 @@ const IvrBuilder = () => {
               <FlaskConical className={`h-4 w-4 ${testMode ? "text-amber-500" : "text-muted-foreground"}`} />
               <Switch
                 checked={testMode}
-                onCheckedChange={(v) => updateSettings.mutate({ ivr_test_mode: v ? "true" : "false" } as any)}
+                onCheckedChange={(v) => updateConfig({ ivr_test_mode: v })}
               />
               {testMode && <Badge variant="outline" className="border-amber-500 text-amber-600 text-xs">Test Mode</Badge>}
             </div>

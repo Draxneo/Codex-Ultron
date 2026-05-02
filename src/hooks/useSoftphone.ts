@@ -109,6 +109,7 @@ export function useSoftphone(enabled: boolean = true) {
   const telephony = useTelephonyMode();
 
   const [pendingDialNumber, setPendingDialNumber] = useState<string | null>(null);
+  const [pendingContactName, setPendingContactName] = useState<string | null>(null);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [pendingCustomerId, setPendingCustomerId] = useState<string | null>(null);
 
@@ -1209,7 +1210,7 @@ export function useSoftphone(enabled: boolean = true) {
       // failed dial can be retried with the same context.
       const resolvedJobId = jobId || pendingJobId;
 
-      const resolvedName = contactName || await resolveCallerName(number);
+      const resolvedName = contactName || pendingContactName || await resolveCallerName(number);
       const normalizedDialNumber = normalizeOutboundDialNumber(number);
       if (!normalizedDialNumber) {
         callDebug("outgoing.connect.request", {
@@ -1282,6 +1283,7 @@ export function useSoftphone(enabled: boolean = true) {
         });
 
         // Dial succeeded — NOW it's safe to clear pending context.
+        if (pendingContactName) setPendingContactName(null);
         if (pendingJobId) setPendingJobId(null);
         if (pendingCustomerId) setPendingCustomerId(null);
 
@@ -1344,7 +1346,7 @@ export function useSoftphone(enabled: boolean = true) {
         setState((s) => ({ ...s, status: "ready", error: err?.message || "Dial failed" }));
       }
     },
-    [initialize, startTimer, resolveCallerName, startSafetyTimer, clearSafetyTimer, wireCallEndHandlers, isElectronMainWindow, pendingJobId, pendingCustomerId, recoverIfNeeded, dispatchLifecycle]
+    [initialize, startTimer, resolveCallerName, startSafetyTimer, clearSafetyTimer, wireCallEndHandlers, isElectronMainWindow, pendingContactName, pendingJobId, pendingCustomerId, recoverIfNeeded, dispatchLifecycle]
   );
 
   // Keep dialRef in sync so IPC listener can call it without stale closure
@@ -1362,6 +1364,9 @@ export function useSoftphone(enabled: boolean = true) {
       if (number) {
         // Populate the dialer input instead of auto-dialing
         setPendingDialNumber(number);
+        setPendingContactName(typeof payload === "string" ? null : payload?.contactName || null);
+        setPendingJobId(typeof payload === "string" ? null : payload?.jobId || null);
+        setPendingCustomerId(typeof payload === "string" ? null : payload?.customerId || null);
         clearStoredDialRequest();
       }
     };
@@ -1370,6 +1375,9 @@ export function useSoftphone(enabled: boolean = true) {
       const stored = getStoredDialRequest();
       if (stored?.number) {
         setPendingDialNumber(stored.number);
+        setPendingContactName(stored.contactName || null);
+        setPendingJobId(stored.jobId || null);
+        setPendingCustomerId(stored.customerId || null);
         clearStoredDialRequest();
       }
     };
@@ -1405,12 +1413,31 @@ export function useSoftphone(enabled: boolean = true) {
       const transition = dispatchLifecycle({ type: "LOCAL_ACCEPT" });
       if (transition.effects.includes("ignore_accept_without_incoming")) return;
       setState((s) => ({ ...s, status: "connecting" }));
-      state.incomingCall.accept();
-      clearSafetyTimer();
+      sendToMain('call-status-change', 'connecting');
+      startSafetyTimer();
+      try {
+        state.incomingCall.accept();
+      } catch (err: any) {
+        callDebug("call.error", {
+          phase: "incoming_accept",
+          message: err?.message || "Could not answer call",
+          code: err?.code,
+          name: err?.name,
+        });
+        dispatchLifecycle({ type: "CALL_FAILED", error: err?.message || "Could not answer call" });
+        clearSafetyTimer();
+        sendToMain('call-status-change', 'ready');
+        setState((s) => ({
+          ...s,
+          incomingCall: null,
+          status: deviceRef.current ? "ready" : "offline",
+          error: err?.message || "Could not answer call",
+        }));
+      }
       // State transition (activeCall, status: "on-call") is handled by the
       // call.on("accept") listener wired in the incoming handler above.
     }
-  }, [state.incomingCall, clearSafetyTimer, dispatchLifecycle]);
+  }, [state.incomingCall, startSafetyTimer, clearSafetyTimer, dispatchLifecycle]);
 
   // Reject incoming call
   const rejectCall = useCallback(() => {

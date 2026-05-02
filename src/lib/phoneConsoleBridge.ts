@@ -2,6 +2,7 @@ import { isElectronMain, sendDialToPopout, sendToMain } from "@/lib/electron";
 
 const PHONE_CHANNEL_NAME = "ultraoffice-phone-console";
 export const PHONE_CONSOLE_OPEN_EVENT = "ultraoffice:open-phone-console";
+export const NATIVE_PHONE_DIAL_EVENT = "ultraoffice:native-phone-dial";
 
 export type PhoneConsoleOpenDetail = {
   url: string;
@@ -26,6 +27,15 @@ export function createPhoneConsoleChannel(): BroadcastChannel | null {
   return new BroadcastChannel(PHONE_CHANNEL_NAME);
 }
 
+function isNativeCapacitorShell(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean((window as any).Capacitor?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+}
+
 export function openPhoneConsole(
   number?: string,
   context?: { contactName?: string; jobId?: string; customerId?: string; autoDial?: boolean }
@@ -37,6 +47,23 @@ export function openPhoneConsole(
     }
 
     sendToMain("ensure-phone-window");
+    return;
+  }
+
+  if (isNativeCapacitorShell()) {
+    if (number) {
+      window.dispatchEvent(new CustomEvent(NATIVE_PHONE_DIAL_EVENT, {
+        detail: { number, context },
+      }));
+      const params = new URLSearchParams();
+      params.set("phone", number);
+      if (context?.jobId) params.set("jobId", context.jobId);
+      if (context?.customerId) params.set("customerId", context.customerId);
+      window.location.assign(`/phone?${params.toString()}`);
+      return;
+    }
+
+    window.location.assign("/phone");
     return;
   }
 

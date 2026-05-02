@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { getTwilioCallerId, maskPhone, normalizeNorthAmericaOutbound } from "../_shared/phoneSafety.ts";
+import { getDefaultBusinessUnit, normalizeE164Phone, resolveBusinessUnitById, type BusinessUnit } from "../_shared/businessUnits.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -28,7 +29,6 @@ Deno.serve(async (req) => {
     const jobId = params.get("jobId") || null;
     const explicitCustomerId = params.get("customerId") || null;
     const explicitContactName = params.get("contactName") || null;
-    const callerId = getTwilioCallerId();
     const callSid = params.get("CallSid") || "";
     const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -78,6 +78,28 @@ Deno.serve(async (req) => {
     const contactName = explicitContactName || resolved.contactName;
     const contactType = explicitCustomerId ? "customer" : resolved.contactType;
 
+    let businessUnit: BusinessUnit | null = null;
+    let customerIdForBusinessUnit = explicitCustomerId;
+    if (!customerIdForBusinessUnit && jobId) {
+      const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("customer_id")
+        .eq("id", jobId)
+        .maybeSingle();
+      customerIdForBusinessUnit = (jobRow as any)?.customer_id || null;
+    }
+    if (customerIdForBusinessUnit) {
+      const { data: customerRow } = await supabase
+        .from("customers")
+        .select("primary_business_unit_id")
+        .eq("id", customerIdForBusinessUnit)
+        .maybeSingle();
+      businessUnit = await resolveBusinessUnitById(supabase, (customerRow as any)?.primary_business_unit_id || null);
+    }
+    if (!businessUnit) businessUnit = await getDefaultBusinessUnit(supabase);
+
+    const callerId = normalizeE164Phone(businessUnit?.primary_phone_number) || getTwilioCallerId();
+
     if (callSid) {
       const { error: upsertErr } = await supabase
         .from("call_log")
@@ -89,6 +111,8 @@ Deno.serve(async (req) => {
             twilio_sid: callSid,
             contact_name: contactName,
             contact_type: contactType,
+            called_number: callerId,
+            business_unit_id: businessUnit?.id || null,
             ...(jobId ? { related_job_id: jobId } : {}),
             ...(explicitCustomerId ? { related_customer_id: explicitCustomerId } : {}),
           },

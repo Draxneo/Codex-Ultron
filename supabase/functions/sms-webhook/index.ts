@@ -11,7 +11,7 @@ import {
 } from "../_shared/jarvisContactIntent.ts";
 import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
-import { getDefaultBusinessUnit, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
+import { getDefaultBusinessUnit, resolveBusinessUnitByPhone, type BusinessUnit } from "../_shared/businessUnits.ts";
 
 import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
 
@@ -57,16 +57,18 @@ async function sendGoogleRelayCaptureSms(
   to: string,
   jobId: string | null,
   settings: Record<string, string>,
+  businessUnit: BusinessUnit | null,
 ) {
-  const companyPhone = settings["company_phone"] || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+  const companyPhone = businessUnit?.primary_phone_number || settings["company_phone"] || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+  const companyName = businessUnit?.display_name || settings["company_name"] || "our company";
   const fallbackBody =
-    `Thanks for reaching Carnes and Sons Air Conditioning. We are a local family company, and we want to make sure we can reach you directly. Google may hide your phone number in this thread, so please reply with your best callback number or text/call us at ${companyPhone}.`;
+    `Thanks for reaching ${companyName}. We want to make sure we can reach you directly. Google may hide your phone number in this thread, so please reply with your best callback number or text/call us at ${companyPhone}.`;
   const resolved = await resolveSmsTemplateBody({
     supabase,
     templateKey: "google_lsa_relay_capture",
     fallbackBody,
     job: {},
-    extraVars: { company_phone: companyPhone },
+    extraVars: { company_phone: companyPhone, company_name: companyName },
   });
   const result = await supabase.functions.invoke("send-sms", {
     body: {
@@ -75,6 +77,7 @@ async function sendGoogleRelayCaptureSms(
       job_id: jobId,
       source: "google_lsa_relay_capture",
       template_key: resolved.templateKey,
+      business_unit_id: businessUnit?.id || null,
     },
     headers: { "x-source-function": "google_lsa_relay_capture", "x-hitl-approved": "true" },
   });
@@ -380,13 +383,18 @@ Deno.serve(async (req) => {
     const isGoogleRelay = isGoogleRelayInbound(normalizedFrom, body, jarvisSettingsMap);
 
     // Find recent outbound SMS to link reply to a job
-    const { data: recentOutbound } = await supabase.from("sms_log")
+    let recentOutboundQuery = supabase.from("sms_log")
       .select("related_job_id")
       .eq("direction", "outbound")
       .eq("phone_number", from)
+      .eq("to_number", toNumber)
       .not("related_job_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(1);
+    if (businessUnit?.id) {
+      recentOutboundQuery = recentOutboundQuery.eq("business_unit_id", businessUnit.id);
+    }
+    const { data: recentOutbound } = await recentOutboundQuery;
 
     const threadedJobId = recentOutbound?.[0]?.related_job_id || null;
 
@@ -789,7 +797,7 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (!recentCapture) {
-          await sendGoogleRelayCaptureSms(supabase, from, linkedJobId, jarvisSettingsMap);
+          await sendGoogleRelayCaptureSms(supabase, from, linkedJobId, jarvisSettingsMap, businessUnit);
         }
 
         await upsertLiveActionItem(supabase, {
@@ -1084,15 +1092,19 @@ IMPORTANT RULES:
                 console.log(`SMS: auto-created customer ${newCust.id} for ${from}`);
 
                 // Backfill call_log and sms_log with customer link
-                await supabase.from("call_log")
+                let callBackfill = supabase.from("call_log")
                   .update({ related_customer_id: newCust.id, contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
                   .eq("phone_number", from)
                   .is("related_customer_id", null);
+                if (businessUnit?.id) callBackfill = callBackfill.eq("business_unit_id", businessUnit.id);
+                await callBackfill;
 
-                await supabase.from("sms_log")
+                let smsBackfill = supabase.from("sms_log")
                   .update({ contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
                   .eq("phone_number", from)
                   .in("contact_type", ["unknown", "lead"]);
+                if (businessUnit?.id) smsBackfill = smsBackfill.eq("business_unit_id", businessUnit.id);
+                await smsBackfill;
               }
             }
           }

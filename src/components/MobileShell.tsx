@@ -48,7 +48,7 @@ import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
 import { useStatusBar } from "@/hooks/useStatusBar";
 import { useIncomingCallNotification } from "@/hooks/useIncomingCallNotification";
 import { useGeofenceTracking } from "@/hooks/useGeofenceTracking";
-import { createPhoneConsoleChannel, openPhoneConsole, type PhoneConsoleMessage } from "@/lib/phoneConsoleBridge";
+import { NATIVE_PHONE_DIAL_EVENT, createPhoneConsoleChannel, openPhoneConsole, type PhoneConsoleMessage } from "@/lib/phoneConsoleBridge";
 import type { LucideIcon } from "lucide-react";
 
 export interface MobileTab {
@@ -180,6 +180,19 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
       phoneChannelRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const handleNativeDial = (event: Event) => {
+      const detail = (event as CustomEvent<{ number?: string; context?: { jobId?: string; customerId?: string } }>).detail;
+      if (!detail?.number) return;
+      softphone.setDialNumber(detail.number);
+      if (detail.context?.jobId) softphone.setPendingJobId(detail.context.jobId);
+      if (detail.context?.customerId) softphone.setPendingCustomerId(detail.context.customerId);
+    };
+
+    window.addEventListener(NATIVE_PHONE_DIAL_EVENT, handleNativeDial);
+    return () => window.removeEventListener(NATIVE_PHONE_DIAL_EVENT, handleNativeDial);
+  }, [softphone]);
 
   const sendPhoneCommand = useCallback((command: Extract<PhoneConsoleMessage, { type: "command" }>["command"], digit?: string) => {
     phoneChannelRef.current?.postMessage({ type: "command", command, digit } satisfies PhoneConsoleMessage);
