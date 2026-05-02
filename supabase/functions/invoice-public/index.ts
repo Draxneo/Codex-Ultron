@@ -1,6 +1,46 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
+function formatUsPhone(phone?: string | null): string {
+  const digits = String(phone || "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return phone || "";
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+async function applyBusinessUnitHeading(supabase: any, settingsMap: Record<string, string>, invoice: any, job: any) {
+  const customer = job?.customers || {};
+  const explicitBusinessUnitId =
+    invoice?.business_unit_id ||
+    job?.business_unit_id ||
+    customer?.primary_business_unit_id ||
+    null;
+
+  let query = supabase
+    .from("business_units")
+    .select("id, slug, display_name, legal_name, primary_phone_number, customer_tag, is_default")
+    .eq("is_active", true);
+
+  if (explicitBusinessUnitId) {
+    query = query.eq("id", explicitBusinessUnitId).maybeSingle();
+  } else {
+    query = query.eq("is_default", true).maybeSingle();
+  }
+
+  const { data: unit } = await query;
+  if (!unit) return settingsMap;
+
+  const companyName = unit.legal_name || unit.display_name || settingsMap.company_name;
+  return {
+    ...settingsMap,
+    company_name: companyName,
+    company_display_name: unit.display_name || companyName,
+    company_phone: formatUsPhone(unit.primary_phone_number) || settingsMap.company_phone,
+    business_unit_id: unit.id,
+    business_unit_slug: unit.slug,
+    business_unit_tag: unit.customer_tag || unit.display_name || companyName,
+  };
+}
+
 
 
 Deno.serve(async (req) => {
@@ -36,7 +76,7 @@ Deno.serve(async (req) => {
     // Fetch job info for customer details
     const { data: job } = await supabase
       .from("jobs")
-      .select("*, customers(first_name, last_name, address, city, state, zip, email, phone)")
+      .select("*, customers(first_name, last_name, address, city, state, zip, email, phone, primary_business_unit_id)")
       .eq("id", invoice.job_id)
       .single();
 
@@ -49,6 +89,7 @@ Deno.serve(async (req) => {
     for (const row of settings || []) {
       companySettings[row.key] = row.value;
     }
+    const brandedCompanySettings = await applyBusinessUnitHeading(supabase, companySettings, invoice, job);
 
     // Fetch approved estimate data linked to this job
     let approvedEstimate = null;
@@ -222,7 +263,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ invoice, job, companySettings, approvedEstimate, equipmentDocs, cpsRebate }),
+      JSON.stringify({ invoice, job, companySettings: brandedCompanySettings, approvedEstimate, equipmentDocs, cpsRebate }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
