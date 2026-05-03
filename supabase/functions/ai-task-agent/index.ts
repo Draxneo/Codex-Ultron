@@ -2390,8 +2390,28 @@ async function executeToolCall(
         return result;
       }
 
-      // Insert into job_attachments
-      const inserts = attachments.map(a => ({ job_id: jobId, file_name: a.file_name, file_path: a.file_path, file_type: a.file_type }));
+      // Resolve full link context so each attachment row is visible from job,
+      // estimate, AND customer detail views — not just the job. Mirrors the columns
+      // added in migration job_attachments_add_estimate_and_customer_links.
+      // Customer_id always preferred from the job record (most reliable). Estimate_id
+      // takes the explicit arg first, falls back to the job's linked estimate.
+      const { data: jobLinks } = await sb
+        .from("jobs")
+        .select("customer_id, estimate_id")
+        .eq("id", jobId)
+        .maybeSingle();
+      const linkedCustomerId = (jobLinks as any)?.customer_id || null;
+      const linkedEstimateId = args.target_estimate_id || (jobLinks as any)?.estimate_id || null;
+
+      // Insert into job_attachments with all three FKs populated where known.
+      const inserts = attachments.map(a => ({
+        job_id: jobId,
+        customer_id: linkedCustomerId,
+        estimate_id: linkedEstimateId,
+        file_name: a.file_name,
+        file_path: a.file_path,
+        file_type: a.file_type,
+      }));
       const { error: insertErr } = await sb.from("job_attachments").insert(inserts);
       if (insertErr) throw insertErr;
 

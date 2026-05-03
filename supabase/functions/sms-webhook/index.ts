@@ -447,6 +447,32 @@ Deno.serve(async (req) => {
     const body = params.get("Body") || "";
     const messageSid = params.get("MessageSid") || "";
 
+    // ── Idempotency guard ─────────────────────────────────────────
+    // Twilio retries failed webhook deliveries. Without this guard, a single
+    // inbound SMS could create the same sms_log row twice (caught by unique
+    // constraint, but only AFTER the media download AND a downstream
+    // action_items insert/upsert). That used to leak duplicate cards. Now
+    // we early-out on duplicate MessageSid so retries cost ~one query.
+    if (messageSid) {
+      const earlyClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const { data: existing } = await earlyClient
+        .from("sms_log")
+        .select("id")
+        .eq("twilio_sid", messageSid)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        console.log(`[idempotency] Duplicate inbound SMS skipped: messageSid=${messageSid}`);
+        return new Response(
+          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+          { headers: { ...corsHeaders, "Content-Type": "text/xml" }, status: 200 }
+        );
+      }
+    }
+
     // ── Capture Twilio metadata ──
     const fromCity = params.get("FromCity") || null;
     const fromState = params.get("FromState") || null;
@@ -1129,17 +1155,19 @@ Deno.serve(async (req) => {
       if (recentOutbound) {
         console.log(`Observer: SKIPPED new_lead for ${from} — recent outbound reply (<10 min)`);
       } else {
-        await supabase.from("action_items").insert({
+        // Route through the canonical dedup helper so a second new_lead text from the same
+        // phone within the merge window collapses into one card instead of stacking duplicates.
+        // Prior behavior was a raw .insert() — that's the bug that produced David Mora's 3 cards.
+        await upsertLiveActionItem(supabase, {
           title: `New SMS from ${contactName || from}`,
           description: `New lead or returning customer texted: "${body.slice(0, 200)}". No active job found — review and respond.`,
           category: "new_lead",
           priority: "high",
           source: "jarvis",
-          status: "pending",
           customer_phone: from,
           metadata: { ...messageCompanyMetadata, customer_name: contactName, message_preview: body.slice(0, 300) },
         });
-        console.log(`Observer: created new_lead action_item for ${from}`);
+        console.log(`Observer: upserted new_lead action_item for ${from}`);
       }
     } else if (isKnownNonLead) {
       console.log(`Observer: SKIPPED new_lead for ${from} — known ${contactType} (${contactName})`);
@@ -1934,15 +1962,18 @@ IMPORTANT RULES:
               const ctxLine = ctxParts.length > 0 ? `${ctxParts.join("  •  ")}\n` : "";
               const richDescription = `${ctxLine}${extracted.suggested_action || `Review and respond`}`;
 
-              await supabase.from("action_items").insert({
+              // Route through the canonical dedup helper so multiple inbound SMS about the
+              // same job nest into ONE living card. linkedJobId is the strongest match key —
+              // helper will find any existing non-terminal card on this job and merge into it.
+              await upsertLiveActionItem(supabase, {
                 title: richTitle,
                 description: richDescription,
                 category: "thread_attention",
                 priority: extracted.urgency === "high" ? "high" : "medium",
                 source: "jarvis",
-                status: "pending",
                 customer_phone: from,
                 job_id: linkedJobId,
+                suggested_action: extracted.suggested_action || null,
                 metadata: {
                   ...messageCompanyMetadata,
                   sms_extraction: extracted,
@@ -1956,27 +1987,30 @@ IMPORTANT RULES:
                   job_type: customerJob.job_type,
                   job_address: jobAddr,
                   job_scheduled: jobWhen,
+                  jarvis_intent: extracted.intent || null,
                 },
               });
-              console.log(`Observer: created action_item for ${from} — intent: ${extracted.intent}`);
+              console.log(`Observer: upserted action_item for ${from} — intent: ${extracted.intent}`);
             }
           }
         } catch (obsErr) {
           console.error("Observer analysis error:", obsErr);
-          // FIX #3: Fallback action_item on AI failure — never silently drop
+          // FIX #3: Fallback action_item on AI failure — never silently drop.
+          // Route through the dedup helper so an AI-failure fallback collapses into the
+          // existing card if one already exists for this phone/job (which is normal —
+          // a thread that's been getting cards will already have a live one).
           try {
-            await supabase.from("action_items").insert({
+            await upsertLiveActionItem(supabase, {
               title: `📱 Review SMS from ${contactName || from}`,
               description: `AI extraction failed. Message: "${body.slice(0, 200)}". Please review and respond manually.`,
               category: "thread_attention",
               priority: "high",
               source: "sms",
-              status: "pending",
               customer_phone: from,
               job_id: linkedJobId,
               metadata: { ...messageCompanyMetadata, fallback: true, error: String(obsErr), message_preview: body.slice(0, 300), media_urls: mediaUrls.length > 0 ? mediaUrls : undefined },
             });
-            console.log(`Observer: created FALLBACK action_item for ${from} after AI failure`);
+            console.log(`Observer: upserted FALLBACK action_item for ${from} after AI failure`);
           } catch (fallbackErr) {
             console.error("Fallback action_item insert also failed:", fallbackErr);
           }

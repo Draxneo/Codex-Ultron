@@ -1256,8 +1256,13 @@ export default function ScheduleV2() {
     phone: item.customer_phone,
   }));
   const loading = jobsLoading || estimatesLoading;
+  // Include BOTH job and estimate ids so the live context (especially photo counts)
+  // populates for estimate items in the schedule modal too. Most live fields
+  // (transcripts, alerts, etc.) only apply to jobs and will simply remain zero for
+  // estimate ids — but attachment_count is now correctly populated via the OR query
+  // in useDispatchLiveCards.
   const dispatchLiveJobIds = useMemo(
-    () => filteredItems.filter((item) => item.item_type === "job").map((item) => item.id).slice(0, 200),
+    () => filteredItems.map((item) => item.id).slice(0, 200),
     [filteredItems]
   );
   const {
@@ -1271,7 +1276,10 @@ export default function ScheduleV2() {
     dispatchLiveError ? `field updates (${errorMessage(dispatchLiveQueryError)})` : null,
   ].filter(Boolean);
 
-  const getLiveContext = (item: ScheduleItem) => item.item_type === "job" ? dispatchLiveCards.get(item.id) : undefined;
+  // Return live context for both jobs AND estimates. For estimates, only the
+  // attachment-related fields will be meaningful (the rest are job-only concepts
+  // and will be zero/null), but at least photo counts now show for estimates.
+  const getLiveContext = (item: ScheduleItem) => dispatchLiveCards.get(item.id);
   const getTechStatus = (item: ScheduleItem) => {
     const employeeId = getEmployeeId(employees, item.assigned_to);
     return employeeId ? techStatusMap.get(employeeId) || null : null;

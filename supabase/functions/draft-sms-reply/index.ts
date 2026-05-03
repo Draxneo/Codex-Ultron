@@ -1,10 +1,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTaskModel } from "../_shared/getTaskModel.ts";
+import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
 
 /**
  * draft-sms-reply
+ *
  * Generates a short, friendly SMS reply for a thread_attention action_item on demand.
+ * The draft is cached into the action_item's metadata.suggested_reply so the dispatcher
+ * sees it on the existing card. NO SMS is sent here — the actual send goes through
+ * send-sms with its own auth + opt-out gate.
+ *
+ * SYSTEM CONNECTIONS: writes to public.action_items (metadata only).
+ * SITS ON: dispatcher UI buttons that call this function via supabase.functions.invoke.
+ *
+ * Auth contract: must be invoked by an authenticated staff user OR a service-role
+ * caller. Without this gate the function would let anyone spam OpenAI calls by guessing
+ * action_item_ids — costly and noisy. We do NOT route through the jarvis-action-gateway
+ * approval loop because this isn't an autonomous mutation: it's a dispatcher-initiated
+ * draft that lands on an EXISTING card the dispatcher will already review before sending.
+ *
  * Input: { action_item_id }
  * Returns: { reply: string }
  */
@@ -12,17 +27,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { action_item_id } = await req.json();
-    if (!action_item_id) {
-      return new Response(JSON.stringify({ error: "action_item_id required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
     const { data: item, error: itemErr } = await supabase

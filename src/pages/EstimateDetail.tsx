@@ -67,7 +67,9 @@ import { TechCollapsibleCard } from "@/components/tech/TechCollapsibleCard";
 import { TechCustomerCard } from "@/components/tech/TechCustomerCard";
 import { EstimateCartStatus } from "@/components/EstimateCartStatus";
 import { EstimateEditDialog } from "@/components/estimate/EstimateEditDialog";
+import { EstimatePhotosCard } from "@/components/estimate/EstimatePhotosCard";
 import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
+import { Image as ImageIcon } from "lucide-react";
 
 interface EstimateReview {
   id: string;
@@ -913,6 +915,13 @@ export default function EstimateDetail() {
 
           <EstimateCartStatus estimateId={id} customerPhone={customerPhone || undefined} customerName={customerName} />
 
+          {/* Photos: shows every job_attachments row linked to this estimate via estimate_id.
+              Surfaces customer-sent MMS images (e.g. carport photos) directly on the estimate
+              page so the rep doesn't have to dig through SMS history. */}
+          <TechCollapsibleCard icon={ImageIcon} title="Photos" iconBg="bg-rose-500/10" iconColor="text-rose-500" defaultOpen={true}>
+            <EstimatePhotosCard estimateId={id!} />
+          </TechCollapsibleCard>
+
           <TechCollapsibleCard icon={FileText} title="Summary" iconBg="bg-slate-500/10" iconColor="text-slate-500" defaultOpen={false}>
             <WorkSummaryCard description={estimate.description} />
           </TechCollapsibleCard>
@@ -1097,6 +1106,20 @@ export default function EstimateDetail() {
             <WorkSummaryCard description={estimate.description} />
 
             <ApprovalCustodyCard estimate={estimate} linkedJobId={linkedJobId} events={approvalEvents} />
+
+            {/* Customer-sent photos (e.g. MMS images) tied to this estimate via job_attachments.estimate_id.
+                Mirrors the Photos card in the mobile/tech view. Wrapped in a Card so it matches the
+                desktop layout's visual rhythm. */}
+            <Card>
+              <CardHeader className="border-b py-3">
+                <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+                  <ImageIcon className="h-4 w-4" /> Photos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <EstimatePhotosCard estimateId={id!} />
+              </CardContent>
+            </Card>
 
             <EstimateOptionsWorkbench
               estimateId={id}

@@ -42,6 +42,42 @@ export function useSendOnMyWay() {
       return false;
     }
 
+    // ── Status gate ────────────────────────────────────────────────────
+    // Only allow OMW from job states where work is still pending or in-flight.
+    // Refuse from terminal/inappropriate states so we never text a customer
+    // claiming we're on the way for a job that's canceled, done, or invoiced.
+    // Also catch double-fires within 2 minutes so a tech tapping twice doesn't
+    // double-text the customer.
+    const { data: jobRow } = await supabase
+      .from("jobs")
+      .select("status, on_my_way_sent_at")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    const jobStatus = (jobRow as any)?.status as string | undefined;
+    const blockedStatuses = new Set(["canceled", "done", "invoiced", "completed"]);
+    if (jobStatus && blockedStatuses.has(jobStatus)) {
+      toast({
+        title: "Can't send On My Way",
+        description: `This job is ${jobStatus}. Reopen or use a current job before texting the customer.`,
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const lastOmwAt = (jobRow as any)?.on_my_way_sent_at
+      ? new Date((jobRow as any).on_my_way_sent_at as string).getTime()
+      : 0;
+    const twoMinAgo = Date.now() - 2 * 60 * 1000;
+    if (lastOmwAt > twoMinAgo) {
+      toast({
+        title: "On My Way already sent",
+        description: "An OMW text just went out within the last 2 minutes. Wait before re-sending.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
     setSending(true);
 
     try {

@@ -130,21 +130,45 @@ export function useCustomerPhotos(customerId: string | undefined) {
       const typedEstimates = (estimates || []) as HistoryEstimate[];
       const estimateMap = Object.fromEntries(typedEstimates.map((e) => [e.id, e]));
 
-      // Fetch legacy attachments
-      const attachments = jobIds.length
-        ? await supabase
-            .from("job_attachments")
-            .select("id, file_name, file_path, file_type, job_id, created_at")
-            .in("job_id", jobIds)
-            .order("created_at", { ascending: false })
-        : { data: [], error: null };
-      if (attachments.error) throw attachments.error;
+      // Fetch attachments via TWO paths and merge:
+      //   (a) photos linked to any of this customer's jobs (legacy + still-correct for
+      //       most service flows that always create a job).
+      //   (b) photos linked DIRECTLY to the customer via job_attachments.customer_id —
+      //       handles brand-new leads who texted photos before any job exists, and
+      //       photos retroactively re-pointed to the customer when a job is canceled.
+      // De-duplicate by id since a single photo may match both queries.
+      const [byJob, byCustomer] = await Promise.all([
+        jobIds.length
+          ? supabase
+              .from("job_attachments")
+              .select("id, file_name, file_path, file_type, job_id, estimate_id, customer_id, storage_bucket, created_at")
+              .in("job_id", jobIds)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null } as any),
+        supabase
+          .from("job_attachments")
+          .select("id, file_name, file_path, file_type, job_id, estimate_id, customer_id, storage_bucket, created_at")
+          .eq("customer_id", customerId!)
+          .order("created_at", { ascending: false }),
+      ]);
+      if ((byJob as any).error) throw (byJob as any).error;
+      if ((byCustomer as any).error) throw (byCustomer as any).error;
 
-      const attachmentPhotos = (attachments.data || []).map((p) => {
-        const j = jobMap[p.job_id];
+      const attachmentRowsById = new Map<string, any>();
+      for (const row of ((byJob as any).data || [])) attachmentRowsById.set(row.id, row);
+      for (const row of ((byCustomer as any).data || [])) attachmentRowsById.set(row.id, row);
+      const mergedAttachments = Array.from(attachmentRowsById.values());
+
+      const attachmentPhotos = mergedAttachments.map((p: any) => {
+        const j = p.job_id ? jobMap[p.job_id] : null;
+        // file_path may already be a full https URL (MMS download path stored CDN URLs);
+        // resolveStorageMediaUrl handles both — bucket is "job-photos" by default unless
+        // the row explicitly stored a different storage_bucket.
         return {
           ...p,
-          url: resolveStorageMediaUrl(p.file_path, "job-photos"),
+          url: p.file_path?.startsWith?.("http")
+            ? p.file_path
+            : resolveStorageMediaUrl(p.file_path, p.storage_bucket || "job-photos"),
           source: "attachment" as const,
           photo_type: null as string | null,
           job_number: j?.job_number || j?.hcp_job_number || null,

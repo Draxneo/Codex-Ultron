@@ -326,6 +326,59 @@ Deno.serve(async (req) => {
       console.warn("estimate approval custody event failed:", approvalEventError.message);
     }
 
+    // ── Auto-trigger downstream job creation handoff ────────────────────────
+    // When a customer approves digitally (this path), the frontend hook that
+    // normally auto-creates an install job from a "won" estimate doesn't fire —
+    // because the dispatcher never clicked "Won". Without this, approved estimates
+    // sit in limbo until office staff notices and manually converts.
+    //
+    // Per "JARVIS prepares, humans approve" principle: we create an action card so
+    // dispatch sees the approval immediately and can convert with one click. This
+    // is INTENTIONALLY not auto-creating the job here — install-job creation has
+    // side effects (scheduling, equipment ordering, permit lookup) that benefit
+    // from a dispatcher reviewing details first.
+    try {
+      const { data: estDetails } = await supabase
+        .from("estimates")
+        .select("id, customer_id, customer_phone, customer_name, address, total_amount, estimate_number, work_status")
+        .eq("id", pres.estimate_id)
+        .maybeSingle();
+      const ed = estDetails as any;
+      if (ed && ed.work_status !== "won") {
+        const customerLabel = ed.customer_name || "customer";
+        const totalLabel = ed.total_amount ? ` ($${Number(ed.total_amount).toFixed(2)})` : "";
+        const refLabel = ed.estimate_number ? ` ${ed.estimate_number}` : "";
+        await supabase.from("action_items").insert({
+          title: `Approved estimate${refLabel} — convert to install job`,
+          description: `${customerLabel} just approved their estimate digitally${totalLabel}. Review and convert to an install job so it gets scheduled.`,
+          category: "estimate_approved_convert",
+          priority: "high",
+          source: "estimate-checkout",
+          status: "pending",
+          customer_phone: ed.customer_phone || null,
+          suggested_action: "Open the estimate, mark Won to auto-create the install job, and confirm it appears on Dispatch HQ.",
+          metadata: {
+            living_card: true,
+            owner_type: "office_queue",
+            owner_queue: "dispatch",
+            owner_label: "Dispatch queue",
+            owner_required: true,
+            estimate_id: ed.id,
+            customer_id: ed.customer_id || null,
+            payment_method: payment_method || "stripe",
+            selected_option_key,
+            total: checkoutTotal,
+            address: ed.address || null,
+            triggered_by: "customer_digital_approval",
+          },
+        });
+      }
+    } catch (handoffErr: any) {
+      // Non-fatal: failing to create the handoff card shouldn't break checkout.
+      // The approval event is still recorded; dispatcher can find approved estimates manually.
+      console.warn("estimate-checkout: convert-to-job handoff card failed:", handoffErr?.message);
+    }
+
     await logQuoteCartEvent(supabase, {
       event_type: "customer_approved",
       actor_type: "customer",

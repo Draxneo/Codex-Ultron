@@ -143,10 +143,17 @@ export function useDispatchLiveCards(jobIds: string[]) {
           .in("job_id", stableJobIds)
           .order("created_at", { ascending: false })
           .limit(250),
+        // Pull attachments matching by EITHER job_id or estimate_id. The schedule
+        // includes estimates as items too, and a row's estimate_id is populated when
+        // the attachment was tied to an estimate (e.g. customer-sent MMS photos
+        // visible from the estimate context). Without this OR, estimate-anchored
+        // photos look invisible from the schedule modal.
         supabase
           .from("job_attachments")
-          .select("id, job_id, file_name, file_path, file_type, created_at")
-          .in("job_id", stableJobIds)
+          .select("id, job_id, estimate_id, customer_id, file_name, file_path, file_type, storage_bucket, created_at")
+          .or(
+            `job_id.in.(${stableJobIds.join(",")}),estimate_id.in.(${stableJobIds.join(",")})`
+          )
           .order("created_at", { ascending: false })
           .limit(400),
         supabase
@@ -266,20 +273,38 @@ export function useDispatchLiveCards(jobIds: string[]) {
         activityByJob.set(activity.job_id, list);
       }
 
+      // Bucket attachments under EVERY relevant key (job_id and estimate_id) so a
+      // single row that's tied to both a job and an estimate appears in both contexts.
+      // This keeps the count and the gallery accurate for items that originated as
+      // an estimate but later got tied to a job, or vice versa.
       const attachmentsByJob = new Map<string, DispatchLiveAttachment[]>();
       for (const attachment of (attachmentsRes.data || []) as any[]) {
-        const list = attachmentsByJob.get(attachment.job_id) || [];
-        list.push({
+        const url = typeof attachment.file_path === "string" && attachment.file_path.startsWith("http")
+          ? attachment.file_path
+          : resolveStorageMediaUrl(attachment.file_path, attachment.storage_bucket || "job-photos");
+        const dispatchAttachment: DispatchLiveAttachment = {
           id: attachment.id,
           jobId: attachment.job_id,
           fileName: attachment.file_name || "Attachment",
-          url: resolveStorageMediaUrl(attachment.file_path, "job-photos"),
+          url,
           fileType: attachment.file_type,
           createdAt: attachment.created_at,
           source: "job_attachment",
           badge: "Attachment",
-        });
-        attachmentsByJob.set(attachment.job_id, list);
+        };
+        // Add to the job_id bucket if present and that key is one we're tracking.
+        if (attachment.job_id && contexts.has(attachment.job_id)) {
+          const list = attachmentsByJob.get(attachment.job_id) || [];
+          list.push(dispatchAttachment);
+          attachmentsByJob.set(attachment.job_id, list);
+        }
+        // Add to the estimate_id bucket too — a single attachment is visible from
+        // both the job AND the estimate when both columns are populated.
+        if (attachment.estimate_id && contexts.has(attachment.estimate_id)) {
+          const list = attachmentsByJob.get(attachment.estimate_id) || [];
+          list.push(dispatchAttachment);
+          attachmentsByJob.set(attachment.estimate_id, list);
+        }
       }
 
       for (const photo of (techPhotosRes.data || []) as any[]) {

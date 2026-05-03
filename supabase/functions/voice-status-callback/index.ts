@@ -388,6 +388,63 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
     const existingRow = await findCallRow(supabase, callSid, parentCallSid);
+
+    // ── Idempotency guard ─────────────────────────────────────────
+    // Twilio retries failed webhook deliveries, which means the same callback
+    // (same CallSid + CallStatus + Duration + RecordingUrl) can land twice.
+    // Without this guard, summarize-call could fire twice and the missed-call
+    // SMS could send twice. We track processed callback hashes in
+    // call_log.extracted_data.processed_callback_hashes (a small array kept on
+    // the row itself — no extra table, no extra read on the hot path).
+    if (existingRow) {
+      // Compose a stable hash of the values that define a unique callback delivery.
+      const callbackKeyParts = [
+        callSid,
+        callStatus || "",
+        callDuration || "",
+        recordingUrl || "",
+        recordingStatus || "",
+      ];
+      const callbackKey = callbackKeyParts.join("|");
+      // Use SubtleCrypto (Deno-supported) to derive a short stable digest.
+      const encoder = new TextEncoder();
+      const digestBuf = await crypto.subtle.digest("SHA-1", encoder.encode(callbackKey));
+      const callbackHash = Array.from(new Uint8Array(digestBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .slice(0, 16); // 8 bytes is plenty to dedup within one call's lifetime
+
+      const seenHashes = Array.isArray(
+        ((existingRow as any).extracted_data || {}).processed_callback_hashes
+      )
+        ? ((existingRow as any).extracted_data.processed_callback_hashes as string[])
+        : [];
+
+      if (seenHashes.includes(callbackHash)) {
+        console.log(
+          `[idempotency] Duplicate callback skipped: callSid=${callSid} status=${callStatus} hash=${callbackHash}`
+        );
+        return new Response(JSON.stringify({ ok: true, idempotent_skip: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Record this hash NOW (before processing) so a concurrent retry hitting at the
+      // same moment can't double-process. Cap the array at 20 entries to bound growth.
+      const nextHashes = [...seenHashes, callbackHash].slice(-20);
+      await supabase
+        .from("call_log")
+        .update({
+          extracted_data: {
+            ...((existingRow as any).extracted_data || {}),
+            processed_callback_hashes: nextHashes,
+            last_callback_hash_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", (existingRow as any).id);
+    }
+
     if (!existingRow) {
       console.warn(
         `No call_log row found for callback CallSid=${callSid} ParentCallSid=${parentCallSid}`,
@@ -459,7 +516,40 @@ Deno.serve(async (req) => {
       };
     }
 
-    if (effectiveStatus && effectiveStatus !== existingRow.status) {
+    // Terminal-state guard: once a call has reached a terminal status (completed,
+    // voicemail, no-answer, busy, failed, canceled, missed, etc.), reject any late
+    // callback that would flip it back to a non-terminal status like "in-progress".
+    // Twilio sometimes delivers callbacks out of order — without this guard, a slow
+    // "answered" event arriving after "completed" could resurrect a closed call and
+    // cause downstream weirdness (UI shows ghost active call, summarize-call refires).
+    // Terminal-to-terminal transitions (e.g. completed -> voicemail) are still allowed.
+    const existingIsTerminal = Boolean(existingRow.status) && TERMINAL_STATUSES.has(existingRow.status as string);
+    const newIsTerminal = Boolean(effectiveStatus) && TERMINAL_STATUSES.has(effectiveStatus as string);
+
+    if (existingIsTerminal && !newIsTerminal) {
+      console.log(
+        `[terminal-guard] Ignoring ${callStatus} (effective=${effectiveStatus}) ` +
+        `for already-terminal call ${callSid} (existing status=${existingRow.status})`
+      );
+      await logSystemTrace({
+        sourceType: "voice",
+        sourceName: "voice-status-callback",
+        eventKind: "terminal_callback_rejected",
+        summary: `Late callback rejected: ${callStatus} arrived after terminal status ${existingRow.status}`,
+        reason: "terminal_state_guard",
+        severity: "info",
+        traceGroup: parentCallSid || callSid,
+        entityType: "call",
+        entityId: existingRow.id,
+        callSid,
+        parentCallSid: parentCallSid || null,
+        metadata: {
+          existing_status: existingRow.status,
+          incoming_status: callStatus,
+          effective_status: effectiveStatus,
+        },
+      });
+    } else if (effectiveStatus && effectiveStatus !== existingRow.status) {
       updates.status = effectiveStatus;
     }
 
@@ -662,7 +752,33 @@ Deno.serve(async (req) => {
           existingRow.phone_number || "Unknown";
         const callerType = existingRow.contact_type || resolvedCaller?.contactType || "unknown";
 
-        if (callerType === "employee") {
+        // Re-read the row in case ivr-handler or voice-amd-callback already tagged this as
+        // suspected-bot. Without this, a robocall that drops to voicemail can still produce
+        // a "Missed call from Unknown" action card that the dispatcher has to dismiss daily.
+        const { data: freshForBotCheck } = await supabase
+          .from("call_log")
+          .select("status")
+          .eq("id", existingRow.id)
+          .maybeSingle();
+        const isBotCall = (freshForBotCheck as any)?.status === "suspected-bot"
+          || effectiveStatus === "suspected-bot";
+
+        if (isBotCall) {
+          console.log(`Missed call appears to be a bot (${callerDisplay}); skipping action card`);
+          await logSystemTrace({
+            sourceType: "voice",
+            sourceName: "voice-status-callback",
+            eventKind: "action_card_skipped",
+            summary: "Missed-call action card skipped for suspected bot",
+            reason: "suspected_bot",
+            severity: "info",
+            traceGroup: existingRow.twilio_sid,
+            entityType: "call",
+            entityId: existingRow.id,
+            callSid: existingRow.twilio_sid,
+            metadata: { phone_number: phone, caller_display: callerDisplay },
+          });
+        } else if (callerType === "employee") {
           console.log(`Missed call was from employee ${callerDisplay}; skipping customer action card`);
           await logSystemTrace({
             sourceType: "voice",

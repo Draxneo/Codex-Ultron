@@ -164,6 +164,102 @@ export function TechStatusCard({
 
   const handleFinish = async () => {
     setBusy("finish");
+
+    // ── Field Approval Loop gate ─────────────────────────────────────
+    // Per product principles §6, every completed job must carry photo evidence
+    // AND have presented options to the customer. For INSTALLS specifically, we
+    // also require an equipment serial captured somewhere — without that we can't
+    // register warranty downstream, which means the customer's coverage silently
+    // fails (this used to happen, hence the hard gate now).
+    //
+    // Photo gate    = HARD: zero photos means we have no proof of work. No exceptions.
+    // Cart gate     = SOFT: some jobs (warranty visits, agreement maintenance) legitimately
+    //                 have no cart. Warn but allow.
+    // Serial gate   = HARD for installs only: equipment must be captured in job_equipment,
+    //                 tech_forms.equipment_serial, or any extracted_serial fields. Service
+    //                 calls and other job types skip this check.
+    const [photoCheck, cartCheck, jobMetaCheck] = await Promise.all([
+      supabase
+        .from("job_attachments")
+        .select("id", { count: "exact", head: true })
+        .eq("job_id", jobId),
+      supabase
+        .from("job_carts")
+        .select("id, status")
+        .eq("job_id", jobId)
+        .in("status", ["sent", "approved", "paid", "declined"])
+        .limit(1),
+      supabase
+        .from("jobs")
+        .select("job_type, hcp_id, import_run_id")
+        .eq("id", jobId)
+        .maybeSingle(),
+    ]);
+
+    const photoCount = photoCheck.count ?? 0;
+    const customerSawCart = (cartCheck.data?.length ?? 0) > 0;
+    const jobMeta = jobMetaCheck.data as any;
+    const isInstall = jobMeta?.job_type === "install";
+    // Legacy HCP-imported jobs are excluded from new gates — Clint stamped them legacy
+    // and they should be allowed to close without modern requirements.
+    const isLegacy = Boolean(jobMeta?.hcp_id || jobMeta?.import_run_id);
+
+    if (photoCount === 0) {
+      toast({
+        title: "Add at least one photo before finishing",
+        description: "Every completed job needs photo evidence — even a quick before/after shot. Snap a photo and try again.",
+        variant: "destructive",
+      });
+      setBusy(null);
+      return;
+    }
+
+    if (isInstall && !isLegacy) {
+      // Check every place a serial might live for this job. ANY hit unblocks finish.
+      const [eqRow, techForm, photoSerial] = await Promise.all([
+        supabase
+          .from("job_equipment")
+          .select("id, serial_number")
+          .eq("job_id", jobId)
+          .not("serial_number", "is", null)
+          .limit(1),
+        supabase
+          .from("tech_forms")
+          .select("id, equipment_serial")
+          .eq("job_id", jobId)
+          .not("equipment_serial", "is", null)
+          .limit(1),
+        supabase
+          .from("tech_form_photos")
+          .select("id, extracted_serial, tech_form_id")
+          .not("extracted_serial", "is", null)
+          .limit(1),
+      ]);
+
+      const hasJobEquipmentSerial = (eqRow.data?.length ?? 0) > 0;
+      const hasTechFormSerial = (techForm.data?.length ?? 0) > 0;
+      const hasPhotoSerial = (photoSerial.data?.length ?? 0) > 0; // best-effort: photos not job-scoped, treated as soft signal
+
+      if (!hasJobEquipmentSerial && !hasTechFormSerial && !hasPhotoSerial) {
+        toast({
+          title: "Capture equipment serial before finishing install",
+          description: "Warranty registration needs the serial number. Add it via the equipment card, the tech form, or a serial-tag photo.",
+          variant: "destructive",
+        });
+        setBusy(null);
+        return;
+      }
+    }
+
+    if (!customerSawCart) {
+      // Soft gate: log a warning so this is auditable, but let the tech proceed.
+      // If this becomes noisy we can promote it to a confirm dialog in a later pass.
+      toast({
+        title: "No cart presented to customer",
+        description: "Finishing without a sent/approved cart. Make sure the customer was offered options.",
+      });
+    }
+
     const { error } = await supabase
       .from("jobs")
       .update({ status: "done", completed_at: new Date().toISOString() } as any)

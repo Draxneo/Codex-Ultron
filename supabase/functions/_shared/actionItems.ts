@@ -62,6 +62,12 @@ function mergeMediaList(previous: unknown, incoming: unknown) {
   });
 }
 
+// Statuses where a card is still "alive" and should accept new context updates.
+// Anything outside this set (resolved, completed, cancelled, dismissed) is treated as
+// terminal — new evidence about the same job creates a fresh card instead of nesting
+// onto a closed one.
+const NON_TERMINAL_STATUSES = ["pending", "accepted", "in_progress"];
+
 export async function upsertLiveActionItem(supabase: any, input: UpsertActionItemInput) {
   const metadata = withActionOwnership({
     category: input.category,
@@ -72,21 +78,59 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
   });
   const phone = input.customer_phone || (metadata as any).phone || (metadata as any).customer_phone || null;
   const digits = phoneDigits(phone);
-  const since = new Date(Date.now() - (input.merge_window_hours || 24) * 60 * 60 * 1000).toISOString();
-  const categories = input.category === "create_customer"
-    ? ["create_customer", "new_lead", "thread_attention"]
-    : Array.from(new Set([input.category, "new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead", "create_customer"]));
+
+  // Two windows: a wide one for cards already linked to a job/estimate (the work
+  // can stay open for days), and the original 24h window for unlinked phone-only matches.
+  const phoneWindowHours = input.merge_window_hours || 24;
+  const jobBoundWindowHours = Math.max(input.merge_window_hours || 0, 24 * 30); // 30 days default
+  const phoneSince = new Date(Date.now() - phoneWindowHours * 60 * 60 * 1000).toISOString();
+  const jobBoundSince = new Date(Date.now() - jobBoundWindowHours * 60 * 60 * 1000).toISOString();
+
+  const incomingBusinessKey = businessContextKey(metadata);
+  const incomingEstimateId = (metadata as any).active_estimate_id || null;
 
   let existing: any = null;
-  if (digits.length === 10) {
-    const incomingBusinessKey = businessContextKey(metadata);
+
+  // PRIMARY: job_id is the strongest dedup key. Any non-terminal card on the same job
+  // is the right home for new evidence — regardless of category, regardless of who set
+  // the original status. Pick the OLDEST so we always merge back into the original card.
+  if (input.job_id) {
     const { data } = await supabase
       .from("action_items")
       .select("*")
-      .eq("status", "pending")
-      .in("category", categories)
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
+      .eq("job_id", input.job_id)
+      .in("status", NON_TERMINAL_STATUSES)
+      .gte("created_at", jobBoundSince)
+      .order("created_at", { ascending: true })
+      .limit(5);
+    existing = (data || [])[0] || null;
+  }
+
+  // SECONDARY: estimate id match — useful when a customer texts about a quote before
+  // the estimate has been promoted to a real job.
+  if (!existing && incomingEstimateId) {
+    const { data } = await supabase
+      .from("action_items")
+      .select("*")
+      .in("status", NON_TERMINAL_STATUSES)
+      .gte("created_at", jobBoundSince)
+      .contains("metadata", { active_estimate_id: incomingEstimateId })
+      .order("created_at", { ascending: true })
+      .limit(5);
+    existing = (data || [])[0] || null;
+  }
+
+  // FALLBACK: phone + business match. Used when the incoming event has no job_id /
+  // estimate_id yet (intake stage). We still skip rows whose job_id conflicts with the
+  // incoming job_id — that protects against merging two genuinely-different jobs that
+  // share a customer phone.
+  if (!existing && digits.length === 10) {
+    const { data } = await supabase
+      .from("action_items")
+      .select("*")
+      .in("status", NON_TERMINAL_STATUSES)
+      .gte("created_at", phoneSince)
+      .order("created_at", { ascending: true })
       .limit(20);
 
     existing = (data || []).find((row: any) => {
@@ -94,10 +138,10 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
       const rowDigits = phoneDigits(row.customer_phone || rowMeta.phone || rowMeta.customer_phone || rowMeta.callback_phone);
       const rowBusinessKey = businessContextKey(rowMeta);
       const samePhone = rowDigits === digits;
-      const sameJob = input.job_id && row.job_id === input.job_id;
-      const sameEstimate = (metadata as any).active_estimate_id && rowMeta.active_estimate_id === (metadata as any).active_estimate_id;
       const sameBusiness = !incomingBusinessKey || !rowBusinessKey || incomingBusinessKey === rowBusinessKey;
-      return samePhone && sameBusiness && (sameJob || sameEstimate || !input.job_id);
+      // Don't merge a known-job event into a card tagged for a different job.
+      const jobConflict = input.job_id && row.job_id && row.job_id !== input.job_id;
+      return samePhone && sameBusiness && !jobConflict;
     }) || null;
   }
 
@@ -155,19 +199,29 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
     ].slice(0, 12),
   };
 
+  // If a human already accepted/started the card, the title/description/category
+  // describe the OWNED work — don't overwrite them with the latest event's framing.
+  // Just nest new context, refresh metadata, and bump priority if the new event is hotter.
+  // For still-pending cards (no human has touched yet), keep the original behavior of
+  // showing the most recent framing so dispatch sees the freshest summary.
+  const isPending = existing.status === "pending";
+  const updatePayload: Record<string, unknown> = {
+    priority: higherPriority(input.priority, existing.priority),
+    source: input.source || existing.source,
+    customer_phone: phone || existing.customer_phone,
+    job_id: input.job_id || existing.job_id || null,
+    metadata: nextMeta,
+  };
+  if (isPending) {
+    updatePayload.title = input.title || existing.title;
+    updatePayload.description = input.description || existing.description;
+    updatePayload.category = input.category || existing.category;
+    updatePayload.suggested_action = input.suggested_action || existing.suggested_action;
+  }
+
   const result = await supabase
     .from("action_items")
-    .update({
-      title: input.title || existing.title,
-      description: input.description || existing.description,
-      category: input.category || existing.category,
-      priority: higherPriority(input.priority, existing.priority),
-      source: input.source || existing.source,
-      customer_phone: phone || existing.customer_phone,
-      job_id: input.job_id || existing.job_id || null,
-      suggested_action: input.suggested_action || existing.suggested_action,
-      metadata: nextMeta,
-    })
+    .update(updatePayload)
     .eq("id", existing.id);
   if (result.error) throw result.error;
   return result;

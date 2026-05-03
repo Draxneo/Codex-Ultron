@@ -16,17 +16,25 @@ type PhotoItem = MediaGalleryItem & {
 export function JobPhotosGrid({ jobId }: { jobId: string }) {
   const queryClient = useQueryClient();
 
+  // The id passed in here is the URL param :id, which is a JOB id on /jobs/:id but
+  // an ESTIMATE id on /estimates/:id (parent component reuses this surface for both).
+  // Match by either column so attachments tied to an estimate (via the new estimate_id
+  // column) surface here too. UUID space doesn't collide, so this is safe.
   const { data: localPhotos, isLoading: loadingAttachments } = useQuery({
     queryKey: ["job_attachments", jobId],
     queryFn: async () => {
       const { data } = await supabase
         .from("job_attachments")
-        .select("id, file_name, file_path, file_type, created_at")
-        .eq("job_id", jobId);
-      return (data || []).map<PhotoItem>((p) => ({
+        .select("id, file_name, file_path, file_type, storage_bucket, created_at")
+        .or(`job_id.eq.${jobId},estimate_id.eq.${jobId}`);
+      return (data || []).map<PhotoItem>((p: any) => ({
         id: p.id,
         fileName: p.file_name,
-        url: resolveStorageMediaUrl(p.file_path, "job-photos"),
+        // file_path may already be a full https URL (MMS download); only resolve
+        // through storage when it's a relative path.
+        url: typeof p.file_path === "string" && p.file_path.startsWith("http")
+          ? p.file_path
+          : resolveStorageMediaUrl(p.file_path, p.storage_bucket || "job-photos"),
         fileType: p.file_type || "image/jpeg",
         source: "attachment" as const,
         photo_type: null,
@@ -118,7 +126,7 @@ export function JobPhotosGrid({ jobId }: { jobId: string }) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
         <Camera className="h-5 w-5 mx-auto mb-2" />
-        No photos found for this job
+        No photos found yet
       </div>
     );
   }

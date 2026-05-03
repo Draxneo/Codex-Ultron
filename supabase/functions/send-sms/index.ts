@@ -198,6 +198,50 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── TCPA / consent gate ─────────────────────────────────────────────
+    // Block outbound SMS to any customer who has explicitly opted out.
+    // Lookup precedence: relatedCustomerId (most reliable) → phone match.
+    // Internal alerts (employee notifications) bypass — they're staff, not customers.
+    // Vocabulary mirrors src/components/job/MorningRouteOptimizerDialog.tsx:
+    //   "opted_out" → blocked
+    //   "opted_in"  → allowed
+    //   null/anything-else → allowed (treated as unknown rather than denied)
+    if (!isInternalAlert) {
+      let consentRow: { id: string; text_consent: string | null } | null = null;
+      if (relatedCustomerId) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id, text_consent")
+          .eq("id", relatedCustomerId)
+          .maybeSingle();
+        consentRow = data as any;
+      }
+      if (!consentRow) {
+        const last10 = phoneLast10(normalizedTo);
+        if (last10.length === 10) {
+          const { data } = await supabase
+            .from("customers")
+            .select("id, text_consent")
+            .or(`phone.ilike.%${last10},mobile_phone.ilike.%${last10}`)
+            .limit(1)
+            .maybeSingle();
+          consentRow = data as any;
+        }
+      }
+      if (consentRow?.text_consent === "opted_out") {
+        console.log(`Consent gate: BLOCKED outbound to ${normalizedTo} (customer ${consentRow.id} opted_out)`);
+        return new Response(
+          JSON.stringify({
+            blocked: true,
+            reason: "customer_opted_out",
+            customer_id: consentRow.id,
+            message: "Customer has opted out of SMS. Re-consent required before texting.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const requestedBusinessUnitId = typeof business_unit_id === "string"
       ? business_unit_id.trim()
       : business_unit_id || null;
