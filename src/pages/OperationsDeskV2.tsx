@@ -1518,128 +1518,82 @@ function MiniConversationRail({
 function ConversationEvidence({ selected }: { selected: DeskConversation }) {
   const navigate = useNavigate();
 
-  if (selected.kind === "call") {
-    const conversation = selected.raw as CallConversation;
-    const latestCall = conversation.lastCall;
-    const transcript = latestCall.transcription?.trim();
-    const summary = latestCall.ai_summary?.trim();
-    const previousCalls = conversation.calls.filter((call) => call.id !== latestCall.id).slice(0, 2);
+  if (selected.kind !== "call") return null;
 
-    return (
-      <Section title="Call Notes" detail="Recording notes and summary from this call.">
-        <div className="space-y-3">
-          {summary && (
-            <div className="rounded-md border bg-primary/5 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Jarvis summary</p>
-              <p className="mt-1 line-clamp-4 text-sm leading-6">{summary}</p>
-            </div>
-          )}
-          <div className="rounded-md border bg-background p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recording</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {latestCall.duration_seconds ? `${latestCall.duration_seconds}s call` : "Call audio"}
-                </p>
-              </div>
-              <Badge variant={latestCall.recording_url ? "secondary" : "outline"}>
-                {latestCall.recording_url ? "Available" : "No audio yet"}
-              </Badge>
-            </div>
-            {latestCall.recording_url ? (
-              <UniversalMediaPlayer
-                src={getRecordingProxyUrl(latestCall.recording_url)}
-                kind="audio"
-                title="Call recording"
-                subtitle={latestCall.time_ct || formatDateTime(latestCall.created_at)}
-                className="mt-3"
-              />
-            ) : (
-              <p className="mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                No recording is attached to this call yet. If Twilio is still attaching audio, it will appear here when the call log refreshes.
-              </p>
-            )}
-          </div>
-          <div className="rounded-md border bg-background p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Transcript</p>
-              <Badge variant={transcript ? "secondary" : "outline"}>{transcript ? "Deepgram" : latestCall.status || "pending"}</Badge>
-            </div>
-            {transcript ? (
-              <p className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">
-                {transcript}
-              </p>
-            ) : (
-              <p className="mt-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                No transcript is attached to this call yet. If Deepgram is still processing, this will fill in when the call log updates.
-              </p>
-            )}
-          </div>
-          {previousCalls.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent calls with this number</p>
-              {previousCalls.map((call) => (
-                <div key={call.id} className="rounded-md border bg-muted/30 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold">{call.direction === "inbound" ? "Inbound" : "Outbound"} call</span>
-                    <span className="text-[10px] text-muted-foreground">{call.time_ct || formatDateTime(call.created_at)}</span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{call.ai_summary || call.transcription || call.status || "No note"}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <Button variant="outline" className="w-full gap-2" onClick={() => navigate("/phone")}>
-            <ExternalLink className="h-4 w-4" />
-            Open call inbox
-          </Button>
-        </div>
-      </Section>
-    );
-  }
-
-  const conversation = selected.raw as SmsConversation;
-  const messages = conversation.messages.slice(-8);
+  const conversation = selected.raw as CallConversation;
+  const latestCall = conversation.lastCall;
+  const transcript = latestCall.transcription?.trim();
+  const summary = latestCall.ai_summary?.trim();
+  const previousCalls = conversation.calls.filter((call) => call.id !== latestCall.id).slice(0, 2);
 
   return (
-    <Section title="Text Conversation" detail="Keep the customer thread where you can see it.">
+    <Section title="Call Notes" detail="Recording notes and summary from this call.">
       <div className="space-y-3">
-        <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border bg-background p-3">
-          {messages.length === 0 ? (
-            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">No messages loaded for this thread yet.</p>
+        {summary && (
+          <div className="rounded-md border bg-primary/5 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Jarvis summary</p>
+            <p className="mt-1 line-clamp-4 text-sm leading-6">{summary}</p>
+          </div>
+        )}
+        <div className="rounded-md border bg-background p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recording</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {latestCall.duration_seconds ? `${latestCall.duration_seconds}s call` : "Call audio"}
+              </p>
+            </div>
+            <Badge variant={latestCall.recording_url ? "secondary" : "outline"}>
+              {latestCall.recording_url ? "Available" : "No audio yet"}
+            </Badge>
+          </div>
+          {latestCall.recording_url ? (
+            <UniversalMediaPlayer
+              src={getRecordingProxyUrl(latestCall.recording_url)}
+              kind="audio"
+              title="Call recording"
+              subtitle={latestCall.time_ct || formatDateTime(latestCall.created_at)}
+              className="mt-3"
+            />
           ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "max-w-[92%] rounded-lg border px-3 py-2",
-                  message.direction === "outbound" ? "ml-auto bg-primary/5" : "mr-auto bg-muted/40"
-                )}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {message.direction === "outbound" ? "Office" : "Customer"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{message.time_ct || formatDateTime(message.created_at)}</span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-5">{message.body || "Attachment"}</p>
-                {normalizeMediaAttachments(message.media_urls).length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {normalizeMediaAttachments(message.media_urls).map((media, index) => (
-                      <MmsMediaRenderer
-                        key={`${media.url}-${index}`}
-                        url={media.url}
-                        contentType={media.fileType || undefined}
-                        fileName={media.fileName}
-                        compact
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))
+            <p className="mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No recording is attached to this call yet. If Twilio is still attaching audio, it will appear here when the call log refreshes.
+            </p>
           )}
         </div>
+        <div className="rounded-md border bg-background p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Transcript</p>
+            <Badge variant={transcript ? "secondary" : "outline"}>{transcript ? "Deepgram" : latestCall.status || "pending"}</Badge>
+          </div>
+          {transcript ? (
+            <p className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">
+              {transcript}
+            </p>
+          ) : (
+            <p className="mt-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              No transcript is attached to this call yet. If Deepgram is still processing, this will fill in when the call log updates.
+            </p>
+          )}
+        </div>
+        {previousCalls.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent calls with this number</p>
+            {previousCalls.map((call) => (
+              <div key={call.id} className="rounded-md border bg-muted/30 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold">{call.direction === "inbound" ? "Inbound" : "Outbound"} call</span>
+                  <span className="text-[10px] text-muted-foreground">{call.time_ct || formatDateTime(call.created_at)}</span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{call.ai_summary || call.transcription || call.status || "No note"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button variant="outline" className="w-full gap-2" onClick={() => navigate("/phone")}>
+          <ExternalLink className="h-4 w-4" />
+          Open call inbox
+        </Button>
       </div>
     </Section>
   );
@@ -1661,11 +1615,20 @@ function InlineSmsReplyComposer({
   const [pendingFiles, setPendingFiles] = useState<{ file: File; preview?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const sendInFlightRef = useRef(false);
-  const latestInbound = useMemo(
-    () => [...conversation.messages].reverse().find((message) => message.direction === "inbound"),
+  const visibleMessages = useMemo(
+    () => conversation.messages.slice(-20),
     [conversation.messages]
   );
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      if (threadRef.current) {
+        threadRef.current.scrollTop = threadRef.current.scrollHeight;
+      }
+    });
+  }, [selected.id, visibleMessages.length]);
 
   useEffect(() => {
     setBody("");
@@ -1803,32 +1766,48 @@ function InlineSmsReplyComposer({
 
   return (
     <section id="intake-inline-sms-reply">
-      <Section title="Reply to Latest Message" detail="Answer here while the customer details stay handy.">
-      <div className="space-y-3">
-        {latestInbound && (
-          <div className="rounded-md border bg-muted/30 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Latest customer text</p>
-              <span className="text-[10px] text-muted-foreground">{latestInbound.time_ct || formatDateTime(latestInbound.created_at)}</span>
-            </div>
-            <p className="mt-1 line-clamp-3 text-sm leading-6">{latestInbound.body || "Attachment"}</p>
-            {normalizeMediaAttachments(latestInbound.media_urls).length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {normalizeMediaAttachments(latestInbound.media_urls).map((media, index) => (
-                  <MmsMediaRenderer
-                    key={`${media.url}-${index}`}
-                    url={media.url}
-                    contentType={media.fileType || undefined}
-                    fileName={media.fileName}
-                    compact
-                  />
-                ))}
+      <Section title="Text Conversation" detail="Newest messages stay at the bottom, just like texting.">
+      <div className="overflow-hidden rounded-lg border bg-background">
+        <div ref={threadRef} className="max-h-[420px] space-y-2 overflow-y-auto p-3">
+          {visibleMessages.length === 0 ? (
+            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">No messages loaded for this thread yet.</p>
+          ) : (
+            visibleMessages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  "max-w-[88%] rounded-2xl px-3 py-2 shadow-sm",
+                  message.direction === "outbound"
+                    ? "ml-auto rounded-br-md bg-primary text-primary-foreground"
+                    : "mr-auto rounded-bl-md border bg-muted/70 text-foreground"
+                )}
+              >
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                    {message.direction === "outbound" ? "You" : "Customer"}
+                  </span>
+                  <span className="text-[10px] opacity-70">{message.time_ct || formatDateTime(message.created_at)}</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-5">{message.body || "Attachment"}</p>
+                {normalizeMediaAttachments(message.media_urls).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {normalizeMediaAttachments(message.media_urls).map((media, index) => (
+                      <MmsMediaRenderer
+                        key={`${media.url}-${index}`}
+                        url={media.url}
+                        contentType={media.fileType || undefined}
+                        fileName={media.fileName}
+                        compact
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
-
+            ))
+          )}
+        </div>
         {preview && (
+          <div className="border-t p-3">
           <GrammarPreview
             original={preview.original}
             polished={preview.polished}
@@ -1836,10 +1815,11 @@ function InlineSmsReplyComposer({
             onReject={rejectPolish}
             onCancel={cancelPolish}
           />
+          </div>
         )}
 
         {pendingFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 border-t p-3">
             {pendingFiles.map((item, index) => (
               <div key={`${item.file.name}-${index}`} className="relative flex items-center gap-2 rounded-md border bg-background p-2 pr-8 text-xs">
                 {item.preview ? (
@@ -1863,7 +1843,7 @@ function InlineSmsReplyComposer({
           </div>
         )}
 
-        <div className="rounded-md border bg-background p-2">
+        <div className="border-t bg-card p-2">
           <Textarea
             ref={inputRef}
             value={body}
@@ -2275,14 +2255,12 @@ function CustomerWorkspace({
       </div>
 
       <div className="mb-4">
-        <ConversationEvidence selected={selected} />
-      </div>
-
-      {selected.kind === "sms" && (
-        <div className="mb-4">
+        {selected.kind === "sms" ? (
           <InlineSmsReplyComposer selected={selected} sending={smsSending} onSend={onSendSms} />
-        </div>
-      )}
+        ) : (
+          <ConversationEvidence selected={selected} />
+        )}
+      </div>
 
       <div className="mb-4 grid gap-2 md:grid-cols-5">
         <div className="rounded-lg border bg-card p-3">
