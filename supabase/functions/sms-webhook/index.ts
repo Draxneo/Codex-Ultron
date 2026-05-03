@@ -1622,6 +1622,28 @@ IMPORTANT RULES:
                 performed_by: "JARVIS",
                 details: noteContent,
               });
+
+              const durableAccessNote = [
+                extracted.access_notes ? `Access / navigation note: ${extracted.access_notes}` : "",
+                extracted.pet_warning ? `Pet warning: ${extracted.pet_warning}` : "",
+                extracted.access_code || extracted.lockbox_code ? `Access code: ${extracted.access_code || extracted.lockbox_code}` : "",
+              ].filter(Boolean).join("\n");
+
+              if (durableAccessNote) {
+                const { data: currentJob } = await supabase
+                  .from("jobs")
+                  .select("pickup_notes")
+                  .eq("id", activeWorkContext.activeJob.id)
+                  .maybeSingle();
+                const existingPickupNotes = String((currentJob as any)?.pickup_notes || "").trim();
+                if (!existingPickupNotes.includes(durableAccessNote)) {
+                  const nextPickupNotes = [existingPickupNotes, durableAccessNote].filter(Boolean).join("\n\n");
+                  await supabase
+                    .from("jobs")
+                    .update({ pickup_notes: nextPickupNotes })
+                    .eq("id", activeWorkContext.activeJob.id);
+                }
+              }
             }
 
             // Keep one live follow_up card for dispatcher visibility.

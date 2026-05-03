@@ -251,12 +251,13 @@ function isPastDue(dueAt?: string | null) {
   return isBefore(due, new Date());
 }
 
-function groupFor(title: string, status: string, dueAt?: string | null): WorkflowGroup {
-  const lower = title.toLowerCase();
+function groupFor(title?: string | null, status?: string | null, dueAt?: string | null): WorkflowGroup {
+  const lower = String(title || "").toLowerCase();
+  const normalizedStatus = String(status || "").toLowerCase();
   if (isPastDue(dueAt) && status !== "waiting") return "past_due";
   if (/(warranty|inspection|rebate|quality)/.test(lower)) return "closeout";
   if (/(follow|won|lost|brochure|decision|drip|quote)/.test(lower)) return "follow_up";
-  if (status === "waiting" || /waiting|customer/.test(status)) return "waiting";
+  if (normalizedStatus === "waiting" || /waiting|customer/.test(normalizedStatus)) return "waiting";
   return "ready";
 }
 

@@ -646,6 +646,20 @@ describe("jarvisContactIntent", () => {
       shouldCreateNewWork: false,
     },
     {
+      text: "If you use The Reserve address it will show. Our address doesn't pop up yet.",
+      activeWork: activeServiceJob,
+      intent: "access_instructions",
+      actionCategory: "access_note",
+      shouldCreateNewWork: false,
+    },
+    {
+      text: "GPS won't find our house yet. Look up the neighborhood entrance and come through there.",
+      activeWork: activeServiceJob,
+      intent: "access_instructions",
+      actionCategory: "access_note",
+      shouldCreateNewWork: false,
+    },
+    {
       text: "Please tell the tech to call my husband Jose at 210-555-4100.",
       activeWork: activeServiceJob,
       intent: "callback_number_update",

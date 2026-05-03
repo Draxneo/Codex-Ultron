@@ -67,6 +67,22 @@ async function maybeSendCanvasMissedSms({
     ? { id: callRow.business_unit_id, primary_phone_number: callRow.called_number }
     : ((await resolveBusinessUnitByPhone(supabase, callRow.called_number)) || (await getDefaultBusinessUnit(supabase)));
   const fromNumber = normalizeE164Phone(businessUnit?.primary_phone_number || callRow.called_number || null);
+  if (last10(phoneNumber) && last10(phoneNumber) === last10(fromNumber)) {
+    await logSystemTrace({
+      sourceType: "voice",
+      sourceName: "phone-call-terminal",
+      eventKind: "sms_skipped",
+      summary: "Softphone missed-call SMS skipped",
+      reason: "customer_number_matched_company_line",
+      severity: "warning",
+      traceGroup: callRow.twilio_sid,
+      entityType: "call",
+      entityId: callRow.id,
+      callSid: callRow.twilio_sid,
+      metadata: { phone_last4: last10(phoneNumber).slice(-4), company_last4: last10(fromNumber).slice(-4) },
+    });
+    return;
+  }
   const recent = await recentOutboundExists(supabase, phoneNumber, 30, {
     businessUnitId: businessUnit?.id || null,
     fromNumber,

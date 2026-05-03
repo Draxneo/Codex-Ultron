@@ -117,12 +117,21 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\bdifferent\b.*\b(property|address|house|unit|system)\b/,
   ]);
 
-  const hasAccess = !!extracted.lockbox_code || includesAny(text, [
+  const hasAccessCode = !!extracted.lockbox_code || !!extracted.access_code || includesAny(text, [
     /\b(gate|door|lockbox|garage|entry|access)\s*(code|instructions?)\b/,
     /\b(lockbox|keypad)\b.*\b\d{3,}\b/,
-    /\b(side door|front door|garage entry|drive around back|come through)\b/,
     /\bcode\s*(is|:)?\s*[a-z0-9#*-]{3,}\b/,
     /\bkey\s+(is\s+)?(under|inside|with)\b/,
+  ]);
+  const hasNavigationAccess = !!extracted.access_notes || includesAny(text, [
+    /\b(address|house|home|place)\b.*\b(doesn'?t|does not|won'?t|will not|can'?t|cannot)\s+(pop up|show up|show|come up)\b/,
+    /\b(use|look up|search)\b.*\b(reserve|entrance|neighborhood|subdivision|community)\s+address\b/,
+    /\b(not listed|isn'?t listed|not on (google|maps|gps)|doesn'?t show on (google|maps|gps))\b/,
+    /\b(get|gets|getting)\s+(in|into|through)\s+(the\s+)?(neighborhood|subdivision|gate|community)\b/,
+    /\b(map|maps|gps|navigation)\b.*\b(address|find|show|listed)\b/,
+  ]);
+  const hasAccess = hasAccessCode || hasNavigationAccess || includesAny(text, [
+    /\b(side door|front door|garage entry|drive around back|come through)\b/,
   ]);
   const hasPetWarning = !!extracted.pet_warning || includesAny(text, [
     /\b(dog|dogs|cat|cats|pet|pets|puppy|shepherd|goat|goats|livestock)\b/,
@@ -299,10 +308,12 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   if (hasComplaint) return specific("complaint", "thread_attention", `Review ${workRef} and escalate if needed`, "Customer appears unhappy or the issue may still be unresolved.");
   if (hasReschedule) return specific("reschedule_existing_work", "schedule_change", `Review ${workRef} and offer a new arrival window`, "Customer is trying to move an existing appointment.");
   if (hasCancel) return specific("cancel_existing_work", "schedule_change", `Review ${workRef} before canceling anything`, "Customer may be canceling existing work.");
+  if (hasNavigationAccess) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
   if (hasCallbackUpdate) return specific("callback_number_update", "contact_update", `Save the callback preference and tell the tech which number to use`, "Customer provided a different callback or text number.");
   if (hasEtaRequest) return specific("eta_request", "eta_request", `Check dispatch board and send an ETA update for ${workRef}`, "Customer is asking when someone will arrive.");
-  if (hasAccess) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
+  if (hasAccessCode) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
   if (hasPetWarning) return specific("pet_warning", "pet_warning", `Add pet/access warning to ${workRef}`, "Customer warned us about pets or site access.");
+  if (hasAccess) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
   if (isInfoReply && /\b(address|email|phone|name)\b/.test(text) && !(hasBooking || hasEstimateRequest || hasMaintenance)) return specific("customer_info_update", "thread_attention", "Update the customer record or existing pending card", "Customer provided contact details.");
   if (hasWarranty) return specific("warranty_or_membership_question", "thread_attention", "Review warranty or Comfort Club status and reply", "Customer is asking about warranty or membership.");
   if (hasBilling) return specific("billing_question", "thread_attention", "Review billing/payment context and reply", "Customer is asking about billing or payment.");
@@ -358,7 +369,7 @@ export async function lookupActiveWorkContext(supabase: any, args: LookupArgs): 
   if (args.customerId) {
     const { data: openJob } = await supabase
       .from("jobs")
-      .select("id, hcp_job_number, customer_id, customer_name, customer_phone, job_type, status, scheduled_date, scheduled_time, address")
+      .select("id, hcp_job_number, customer_id, customer_name, customer_phone, job_type, status, scheduled_date, arrival_start, arrival_end, arrival_time, address")
       .eq("customer_id", args.customerId)
       .not("status", "in", postgrestIn(ACTIVE_JOB_DONE_STATUSES))
       .order("scheduled_date", { ascending: true, nullsFirst: false })
