@@ -43,6 +43,9 @@ export type WorkflowNowCard = {
   status?: string | null;
   source?: string | null;
   description?: string | null;
+  mediaUrls?: unknown;
+  addressNeedsVerification?: boolean;
+  addressVerificationReason?: string | null;
   title: string;
   subtitle: string;
   owner: WorkflowOwner;
@@ -616,6 +619,13 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
   const customer = metadata.customer_name || metadata.name || item.title || "Customer";
   const phone = item.customer_phone || metadata.phone || metadata.customer_phone || metadata.callback_phone || null;
   const description = item.description || metadata.description || metadata.thread_snippet || metadata.inbound_message || "";
+  const mediaUrls =
+    metadata.media_urls ||
+    metadata.attachments ||
+    metadata.sms_media_urls ||
+    metadata.source_sms_media_urls ||
+    metadata.sms_extraction?.media_urls ||
+    null;
   const lastEvidence =
     metadata.call_id ? `Call ${String(metadata.call_id).slice(0, 8)}` :
     metadata.sms_extraction || metadata.inbound_message ? "Latest SMS" :
@@ -647,6 +657,19 @@ export function buildActionItemWorkflowCard(item: any, templateOverrides?: Workf
     status: item.status,
     source: item.category,
     description,
+    mediaUrls,
+    addressNeedsVerification: Boolean(
+      metadata.address_needs_verification ||
+      metadata.requires_address_verification ||
+      metadata.address_verification_required ||
+      metadata.address_confidence === "low" ||
+      metadata.address_confidence === "unknown",
+    ),
+    addressVerificationReason:
+      metadata.address_verification_reason ||
+      metadata.address_review_reason ||
+      metadata.property_review_reason ||
+      null,
     title: actionItemTitle(item, step.title),
     subtitle: item.title || `Jarvis updated this ${workflowType} workflow card from ${lastEvidence}.`,
     owner: step.owner,

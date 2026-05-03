@@ -13,6 +13,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
+  Phone,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -50,6 +51,9 @@ import {
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { APP_ACTION_GO_LIVE_ISO, CLOSED_CART_STATUS_FILTER, CLOSED_LEAD_STATUS_FILTER } from "@/lib/appLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { MediaGallery } from "@/components/media";
 import { cn } from "@/lib/utils";
 
 type UIMode = "ai" | "human";
@@ -225,6 +229,7 @@ function WorkflowCard({
   const secondaryUrl = workflowUrl(card);
   const secondaryLabel = card.recordType === "action" ? "Open source" : card.recordType === "alert" ? "Open record" : "Build quote";
   const isBusy = busyId === card.id;
+  const media = normalizeMediaAttachments(card.mediaUrls);
   const contextItems = [
     { label: "Record", value: recordLabel(card), href: card.route },
     { label: "Customer", value: card.customerName },
@@ -284,6 +289,38 @@ function WorkflowCard({
               </div>
             )}
 
+            {card.addressNeedsVerification && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-semibold">Verify the service address</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {card.addressVerificationReason || "The address is incomplete or low confidence. Confirm city and ZIP before scheduling."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {media.length > 0 && (
+              <div className="rounded-md border bg-card/70 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Photos from the text thread</p>
+                <MediaGallery
+                  items={media.map((item, index) => ({
+                    id: `${card.id}-media-${index}`,
+                    url: item.url,
+                    fileName: item.fileName,
+                    fileType: item.fileType || undefined,
+                    category: item.category,
+                    badge: "SMS",
+                  }))}
+                  gridClassName="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4"
+                  thumbClassName="h-20"
+                />
+              </div>
+            )}
+
             {card.actionLinks?.length ? (
               <div className="rounded-md border bg-card/70 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Related links</p>
@@ -336,6 +373,21 @@ function WorkflowCard({
                 <Link to={secondaryUrl}>
                   {secondaryLabel} <Zap className="h-4 w-4" />
                 </Link>
+              </Button>
+            )}
+            {card.customerPhone && (
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-between"
+                onClick={() => openPhoneConsole(card.customerPhone || undefined, {
+                  contactName: card.customerName,
+                  jobId: card.recordType === "job" ? card.recordId : undefined,
+                  customerId: undefined,
+                  autoDial: false,
+                })}
+              >
+                Call customer <Phone className="h-4 w-4" />
               </Button>
             )}
             {card.customerPhone && (

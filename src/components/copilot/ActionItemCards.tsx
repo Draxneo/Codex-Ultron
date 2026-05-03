@@ -9,7 +9,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useBookingAction } from "@/hooks/useBookingAction";
 import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -34,6 +33,9 @@ import {
   type ActionItemResolutionStatus,
 } from "@/lib/actionItemLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { MediaGallery } from "@/components/media";
 import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 import { getActionOwnership } from "@/lib/actionOwnership";
 
@@ -53,6 +55,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; co
   access_note:      { label: "Access",    icon: MapPin,        color: "text-orange-500" },
   pet_warning:      { label: "Pet",       icon: AlertTriangle, color: "text-red-500" },
   contact_update:   { label: "Contact",   icon: Phone,         color: "text-sky-500" },
+  owner_instruction: { label: "Owner",     icon: MessageCircle, color: "text-orange-500" },
   permit_needed:    { label: "Permit",    icon: AlertTriangle, color: "text-red-500" },
   general:          { label: "General",   icon: Bot,           color: "text-muted-foreground" },
 };
@@ -157,12 +160,44 @@ function getActionItemSmsContext(item: any) {
   };
 }
 
+function getActionItemMedia(item: any) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  return normalizeMediaAttachments(
+    meta.media_urls ||
+    meta.attachments ||
+    meta.sms_media_urls ||
+    meta.source_sms_media_urls ||
+    meta.sms_extraction?.media_urls ||
+    null,
+  );
+}
+
+function actionItemNeedsAddressVerification(item: any) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  return Boolean(
+    meta.address_needs_verification ||
+    meta.requires_address_verification ||
+    meta.address_verification_required ||
+    meta.address_confidence === "low" ||
+    meta.address_confidence === "unknown",
+  );
+}
+
+function actionItemAddressReason(item: any) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  return (
+    meta.address_verification_reason ||
+    meta.address_review_reason ||
+    meta.property_review_reason ||
+    "The address is incomplete or low confidence. Confirm city and ZIP before scheduling."
+  );
+}
+
 export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const softphone = useSoftphoneContext();
   const { book, getState } = useBookingAction();
   const sharedTasks = useSharedActionItemTasks();
   const { data: employees = [] } = useEmployees();
@@ -465,6 +500,8 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           const selectedProperty = propertySelections[item.id];
           const claimState = sharedTasks.getClaimState(item);
           const isClaimedByOther = claimState.isClaimedByOther;
+          const media = getActionItemMedia(item);
+          const needsAddressVerification = actionItemNeedsAddressVerification(item);
 
           return (
             <div key={item.id} className={`rounded-lg border p-3 space-y-2 ${priorityClass}`}>
@@ -513,6 +550,36 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 <div className="rounded bg-muted/50 px-2 py-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground mb-0.5">Suggested</p>
                   <p className="text-xs">{item.suggested_action}</p>
+                </div>
+              )}
+
+              {needsAddressVerification && (
+                <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5">
+                  <div className="flex items-start gap-1.5">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <div>
+                      <p className="text-[10px] font-medium text-amber-700">Verify service address</p>
+                      <p className="text-xs text-muted-foreground">{actionItemAddressReason(item)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {media.length > 0 && (
+                <div className="rounded border border-border/60 bg-background/50 p-2">
+                  <p className="mb-1.5 text-[10px] font-medium text-muted-foreground">Photos from the text thread</p>
+                  <MediaGallery
+                    items={media.map((attachment, index) => ({
+                      id: `${item.id}-media-${index}`,
+                      url: attachment.url,
+                      fileName: attachment.fileName,
+                      fileType: attachment.fileType || undefined,
+                      category: attachment.category,
+                      badge: "SMS",
+                    }))}
+                    gridClassName="grid grid-cols-3 gap-1.5 sm:grid-cols-4"
+                    thumbClassName="h-16"
+                  />
                 </div>
               )}
 
@@ -653,7 +720,15 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 const closeAsAccepted = () => handleAction(item, ACTION_ITEM_STATUS.accepted);
                 const closeAsDismissed = () => handleAction(item, ACTION_ITEM_STATUS.dismissed);
                 const callPhone = () => {
-                  if (phone) softphone.setDialNumber(phone);
+                  if (phone) {
+                    const callContext = getActionItemSmsContext(item);
+                    openPhoneConsole(phone, {
+                      contactName: callContext.contactName,
+                      jobId: callContext.jobId,
+                      customerId: callContext.customerId,
+                      autoDial: false,
+                    });
+                  }
                   closeAsAccepted();
                 };
                 const textPhone = () => {
@@ -731,6 +806,14 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         disabled={isBusy || !phone}
                       >
                         <MessageSquare className="h-3 w-3" /> Text
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={callPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <Phone className="h-3 w-3" />
                       </Button>
                       {isTrainable && (
                         <Button
@@ -884,6 +967,26 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                       >
                         <Brain className="h-3 w-3" />
                       </Button>
+                    )}
+                    {phone && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={textPhone}
+                          disabled={isBusy}
+                        >
+                          <MessageSquare className="h-3 w-3" /> Text
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={callPhone}
+                          disabled={isBusy}
+                        >
+                          <Phone className="h-3 w-3" />
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="sm"

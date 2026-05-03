@@ -53,6 +53,31 @@ function isGoogleRelayInbound(fromDigits: string, body: string, settings: Record
   return hasGoogleSource && hasRelayLanguage;
 }
 
+function addressReviewMetadata(extracted: any, geo: any | null) {
+  const address = String(extracted?.address || "").trim();
+  if (!address) return {};
+  const missingCityOrZip = !String(extracted?.city || geo?.city || "").trim() || !String(extracted?.zip || geo?.zip || "").trim();
+  const lowConfidence = !geo || typeof geo.confidence !== "number" || geo.confidence < 0.8;
+  if (!missingCityOrZip && !lowConfidence) {
+    return {
+      address_verified: true,
+      address_confidence: "high",
+      address_verification_confidence: geo?.confidence ?? null,
+      verified_address: geo?.standardized || null,
+    };
+  }
+  return {
+    address_needs_verification: true,
+    address_confidence: lowConfidence ? "low" : "unknown",
+    address_verification_confidence: geo?.confidence ?? null,
+    address_verification_candidate: geo?.standardized || address,
+    verified_address: geo?.standardized || null,
+    address_verification_reason: missingCityOrZip
+      ? "Customer did not give enough city/ZIP detail. Verify with Google before scheduling."
+      : "Google address confidence is low. Confirm before scheduling.",
+  };
+}
+
 type CustomerIdentityCandidate = {
   name: string | null;
   phone: string | null;
@@ -523,6 +548,7 @@ Deno.serve(async (req) => {
       company_name: businessUnit?.display_name || null,
       company_customer_tag: businessUnit?.customer_tag || null,
       company_phone_number: toNumber,
+      ...(mediaUrls.length > 0 ? { media_urls: mediaUrls, source_sms_media_urls: mediaUrls } : {}),
     };
 
     const normalizedFrom = from.replace(/\D/g, "").slice(-10);
@@ -1333,6 +1359,9 @@ IMPORTANT RULES:
                   (updates.zip as string | undefined) || custFull.zip || extracted.zip,
                 );
                 const enrichedEmail = (updates.email as string | undefined) || custFull.email || extracted.email || null;
+                const enrichedAddressGeo = extracted.address
+                  ? await verifyAddress(extracted.address, extracted.city, extracted.state, extracted.zip)
+                  : null;
 
                 await backfillCommunicationIdentity(supabase, {
                   phone: from,
@@ -1367,6 +1396,7 @@ IMPORTANT RULES:
                     city: (updates.city as string | undefined) || custFull.city || extracted.city || null,
                     state: (updates.state as string | undefined) || custFull.state || extracted.state || "TX",
                     zip: (updates.zip as string | undefined) || custFull.zip || extracted.zip || null,
+                    ...addressReviewMetadata(extracted, enrichedAddressGeo),
                     contact_fields_captured: {
                       name: !!enrichedName,
                       phone: true,
@@ -1386,9 +1416,10 @@ IMPORTANT RULES:
             } else if (extracted.first_name || extracted.last_name) {
               // Auto-create new customer
               let verifiedAddr: string | null = null;
+              let createdCustomerAddressGeo: any | null = null;
               if (extracted.address) {
-                const geo = await verifyAddress(extracted.address, extracted.city, extracted.state, extracted.zip);
-                verifiedAddr = geo?.confidence && geo.confidence >= 0.8 ? geo.standardized : null;
+                createdCustomerAddressGeo = await verifyAddress(extracted.address, extracted.city, extracted.state, extracted.zip);
+                verifiedAddr = createdCustomerAddressGeo?.confidence && createdCustomerAddressGeo.confidence >= 0.8 ? createdCustomerAddressGeo.standardized : null;
               }
 
               const noteParts: string[] = [];
@@ -1438,6 +1469,7 @@ IMPORTANT RULES:
                     city: extracted.city || null,
                     state: extracted.state || "TX",
                     zip: extracted.zip || null,
+                    ...addressReviewMetadata(extracted, createdCustomerAddressGeo),
                     sms_extraction: extracted,
                     inbound_sms_log_id: logEntry.id,
                     source_event_id: messageSid,
@@ -1654,6 +1686,9 @@ IMPORTANT RULES:
                 .gte("created_at", new Date(Date.now() - 60_000).toISOString());
             }
 
+            const bookingAddressGeo = extracted.address
+              ? await verifyAddress(extracted.address, extracted.city, extracted.state, extracted.zip)
+              : null;
             const bookingMetadata = {
               ...messageCompanyMetadata,
               customer_name: customerName,
@@ -1683,6 +1718,7 @@ IMPORTANT RULES:
               jarvis_intent: intentDecision.intent,
               jarvis_intent_confidence: intentDecision.confidence,
               jarvis_intent_reason: intentDecision.reason,
+              ...addressReviewMetadata(extracted, bookingAddressGeo),
               // FIX #4: Include MMS media URLs in metadata
               ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
             };

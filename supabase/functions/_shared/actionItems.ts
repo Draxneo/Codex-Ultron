@@ -48,6 +48,20 @@ function compactEvidence(value: unknown) {
   return text ? text.slice(0, 500) : null;
 }
 
+function mergeMediaList(previous: unknown, incoming: unknown) {
+  const list = [
+    ...(Array.isArray(previous) ? previous : previous ? [previous] : []),
+    ...(Array.isArray(incoming) ? incoming : incoming ? [incoming] : []),
+  ].filter(Boolean);
+  const seen = new Set<string>();
+  return list.filter((item) => {
+    const key = typeof item === "string" ? item : JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export async function upsertLiveActionItem(supabase: any, input: UpsertActionItemInput) {
   const metadata = withActionOwnership({
     category: input.category,
@@ -119,6 +133,8 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
   const nextMeta = {
     ...previousMeta,
     ...metadata,
+    media_urls: mergeMediaList(previousMeta.media_urls || previousMeta.source_sms_media_urls, (metadata as any).media_urls || (metadata as any).source_sms_media_urls),
+    source_sms_media_urls: mergeMediaList(previousMeta.source_sms_media_urls || previousMeta.media_urls, (metadata as any).source_sms_media_urls || (metadata as any).media_urls),
     owner_type: (metadata as any).owner_type || previousMeta.owner_type,
     owner_queue: (metadata as any).owner_queue || previousMeta.owner_queue,
     owner_label: (metadata as any).owner_label || previousMeta.owner_label,
