@@ -11,6 +11,7 @@ export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "
 
 
 let _loadPromise: Promise<void> | null = null;
+let _geocoderPromise: Promise<google.maps.Geocoder> | null = null;
 
 /** Load Google Maps API via script tag (cached after first load) */
 export async function loadGoogleMaps(): Promise<void> {
@@ -41,6 +42,27 @@ export async function loadGoogleMaps(): Promise<void> {
   });
 
   return _loadPromise;
+}
+
+async function getGeocoder(): Promise<google.maps.Geocoder> {
+  if (_geocoderPromise) return _geocoderPromise;
+
+  _geocoderPromise = (async () => {
+    await loadGoogleMaps();
+
+    if (typeof google.maps.Geocoder === "function") {
+      return new google.maps.Geocoder();
+    }
+
+    if (typeof google.maps.importLibrary === "function") {
+      const geocoding = await google.maps.importLibrary("geocoding") as google.maps.GeocodingLibrary;
+      return new geocoding.Geocoder();
+    }
+
+    throw new Error("Google Maps Geocoder is not available");
+  })();
+
+  return _geocoderPromise;
 }
 
 // ── In-memory + DB geocode cache ──
@@ -81,9 +103,8 @@ export async function geocodeAddress(
   }
 
   // 3. Google API
-  await loadGoogleMaps();
-  const geocoder = new google.maps.Geocoder();
   try {
+    const geocoder = await getGeocoder();
     const result = await geocoder.geocode({ address });
     const loc = result.results?.[0]?.geometry?.location;
     if (!loc) return null;
@@ -124,10 +145,8 @@ export type GoogleAddressVerification = {
 export async function verifyAddressWithGoogle(address: string): Promise<GoogleAddressVerification | null> {
   if (!address || address.trim().length < 5) return null;
 
-  await loadGoogleMaps();
-  const geocoder = new google.maps.Geocoder();
-
   try {
+    const geocoder = await getGeocoder();
     const result = await geocoder.geocode({
       address,
       bounds: {
