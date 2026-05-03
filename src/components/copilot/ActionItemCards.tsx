@@ -35,6 +35,7 @@ import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   new_appointment:  { label: "New Job",  icon: CalendarPlus,  color: "text-green-500" },
+  create_customer:  { label: "Customer", icon: UserCheck,     color: "text-violet-500" },
   new_lead:         { label: "New Lead", icon: UserCheck,     color: "text-emerald-500" },
   follow_up:        { label: "Follow",   icon: MessageSquare, color: "text-sky-500" },
   missed_call:      { label: "Missed",   icon: PhoneMissed,   color: "text-red-500" },
@@ -489,7 +490,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                 const trainablePhone = getActionItemPhone(item);
                 const isTrainable =
                   !!trainablePhone &&
-                  ["new_lead", "missed_call", "thread_attention"].includes(item.category);
+                  ["create_customer", "new_lead", "missed_call", "thread_attention"].includes(item.category);
                 const bs = getState(item.id);
                 const isWorking = bs.phase === "resolving" || bs.phase === "booking" || bs.phase === "syncing";
                 const isBookingItem = item.category === "new_appointment";
@@ -521,6 +522,57 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         size="sm"
                         variant="secondary"
                         className="flex-1"
+                        onClick={textPhone}
+                        disabled={isBusy || !phone}
+                      >
+                        <MessageSquare className="h-3 w-3" /> Text
+                      </Button>
+                      {isTrainable && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Train JARVIS who this is"
+                          onClick={() => setTrainPhone({ phone: trainablePhone, name: (item.metadata as any)?.customer_name })}
+                          disabled={isBusy}
+                        >
+                          <Brain className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={closeAsDismissed}
+                        disabled={isBusy}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                }
+
+                if (item.category === "create_customer") {
+                  const customerId = itemMetadata.customer_id || itemMetadata.created_customer_id;
+                  const reviewPath = customerId
+                    ? `/customers/${customerId}`
+                    : phone
+                      ? `/intake?phone=${encodeURIComponent(phone)}`
+                      : "/intake";
+                  return (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          navigate(reviewPath);
+                          closeAsAccepted();
+                        }}
+                        disabled={isBusy}
+                      >
+                        <Eye className="h-3 w-3" /> {customerId ? "Review Customer" : "Create / Link"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         onClick={textPhone}
                         disabled={isBusy || !phone}
                       >

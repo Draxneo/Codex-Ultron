@@ -52,6 +52,86 @@ function isGoogleRelayInbound(fromDigits: string, body: string, settings: Record
   return hasGoogleSource && hasRelayLanguage;
 }
 
+type CustomerIdentityCandidate = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  confidence: "low" | "medium" | "high";
+};
+
+function titleCaseName(value: string | null): string | null {
+  const cleaned = String(value || "")
+    .replace(/[^\p{L}\s.'-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return null;
+  return cleaned
+    .split(" ")
+    .slice(0, 4)
+    .map((part) => part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part)
+    .join(" ");
+}
+
+function extractCustomerIdentityCandidate(text: string, senderPhone: string): CustomerIdentityCandidate | null {
+  const bodyText = String(text || "").trim();
+  if (!bodyText) return null;
+
+  const email = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || null;
+  const phoneMatch = bodyText.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+  const phone = phoneMatch?.[0] || senderPhone || null;
+  const zip = bodyText.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || null;
+
+  const namePatterns = [
+    /\b(?:my name is|this is|name is|i am|i'm)\s+([a-z][a-z.'-]+(?:\s+[a-z][a-z.'-]+){0,3})\b/i,
+    /\b(?:caller|customer|name)\s*:\s*([a-z][a-z.'-]+(?:\s+[a-z][a-z.'-]+){0,3})\b/i,
+  ];
+  let name: string | null = null;
+  for (const pattern of namePatterns) {
+    const match = bodyText.match(pattern);
+    if (match?.[1]) {
+      name = titleCaseName(match[1]);
+      break;
+    }
+  }
+
+  const addressPattern = /\b\d{2,6}\s+[a-z0-9.'# -]{2,80}\s+(?:st|street|rd|road|dr|drive|ave|avenue|blvd|boulevard|ln|lane|ct|court|cir|circle|trl|trail|trce|trace|way|pkwy|parkway|pl|place|cv|cove|loop|hwy|highway)\b(?:[^\n\r.]{0,80})?/i;
+  const address = bodyText.match(addressPattern)?.[0]?.replace(/\s+/g, " ").trim() || null;
+  const cityMatch = bodyText.match(/\b(?:in|city\s*:?)\s+([a-z][a-z .'-]{2,40})(?:,?\s+(?:tx|texas|\d{5})\b|$)/i);
+  const city = titleCaseName(cityMatch?.[1] || null);
+  const state = /\b(?:tx|texas)\b/i.test(bodyText) ? "TX" : null;
+
+  const score =
+    (name ? 2 : 0) +
+    (address ? 3 : 0) +
+    (email ? 1 : 0) +
+    (phoneMatch ? 1 : 0) +
+    (zip ? 1 : 0);
+
+  if (score < 3) return null;
+  return {
+    name,
+    phone,
+    email,
+    address,
+    city,
+    state,
+    zip,
+    confidence: score >= 6 ? "high" : score >= 4 ? "medium" : "low",
+  };
+}
+
+function customerNameParts(name: string | null) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    first_name: parts[0] || null,
+    last_name: parts.length > 1 ? parts.slice(1).join(" ") : null,
+  };
+}
+
 async function sendGoogleRelayCaptureSms(
   supabase: any,
   to: string,
@@ -346,6 +426,8 @@ Deno.serve(async (req) => {
     const messageCompanyMetadata = {
       business_unit_id: businessUnit?.id || null,
       business_unit_slug: businessUnit?.slug || null,
+      company_name: businessUnit?.display_name || null,
+      company_customer_tag: businessUnit?.customer_tag || null,
       company_phone_number: toNumber,
     };
 
@@ -843,8 +925,75 @@ Deno.serve(async (req) => {
     // Skip "new_lead" action items for known non-customer contacts (vendors, marketing, spam, etc.)
     const NON_LEAD_TYPES = ["vendor", "marketing", "answering_service", "spam", "tech_partner"];
     const isKnownNonLead = NON_LEAD_TYPES.includes(contactType);
+    let surfacedCreateCustomerAction = false;
 
-    if (!isEmployee && !customerJob && !testModeOn && !isKnownNonLead) {
+    // First step for an unknown texting contact: make a customer/link card.
+    // This is deterministic and internal-only, so it still works when SMS safety mode
+    // blocks AI side effects. The live action helper merges it into any existing
+    // card for the same phone + company line instead of stacking duplicates.
+    if (!isEmployee && !customerJob && !isKnownNonLead && contactType !== "customer") {
+      const candidate = extractCustomerIdentityCandidate(enrichedBody || body, from);
+      if (candidate) {
+        const nameParts = customerNameParts(candidate.name);
+        const companyLabel = businessUnit?.display_name || "the selected company";
+        const displayName = candidate.name || contactName || candidate.phone || from;
+        const detailLines = [
+          candidate.name ? `Name: ${candidate.name}` : null,
+          candidate.phone ? `Phone: ${candidate.phone}` : null,
+          candidate.address ? `Address: ${candidate.address}` : null,
+          candidate.email ? `Email: ${candidate.email}` : null,
+          businessUnit?.customer_tag ? `Company tag: ${businessUnit.customer_tag}` : null,
+        ].filter(Boolean).join("\n");
+
+        await upsertLiveActionItem(supabase, {
+          title: `Create customer: ${displayName}`,
+          description: `Customer texted enough information to start a customer record for ${companyLabel}.\n\n${detailLines}`,
+          category: "create_customer",
+          priority: candidate.confidence === "high" ? "high" : "medium",
+          source: "sms",
+          status: "pending",
+          customer_phone: from,
+          job_id: linkedJobId,
+          suggested_action: `Review and create/link this customer for ${companyLabel} before booking work.`,
+          metadata: {
+            ...messageCompanyMetadata,
+            workflow_type: "intake",
+            jarvis_intent: "create_customer",
+            action_type: "create_customer",
+            customer_name: candidate.name || contactName,
+            phone: from,
+            customer_phone: from,
+            alternate_phone: candidate.phone && normalize10(candidate.phone) !== normalize10(from) ? candidate.phone : null,
+            email: candidate.email,
+            address: candidate.address,
+            city: candidate.city,
+            state: candidate.state || "TX",
+            zip: candidate.zip,
+            proposed_customer: {
+              first_name: nameParts.first_name,
+              last_name: nameParts.last_name,
+              mobile_number: candidate.phone || from,
+              email: candidate.email || "",
+              street: candidate.address || "",
+              city: candidate.city || "",
+              state: candidate.state || "TX",
+              zip: candidate.zip || "",
+              notes: `Created from inbound SMS to ${companyLabel}.`,
+            },
+            identity_confidence: candidate.confidence,
+            inbound_sms_log_id: logEntry.id,
+            source_event_id: messageSid,
+            inbound_message: body,
+            thread_snippet: body.slice(0, 200),
+          },
+          merge_window_hours: 72,
+        });
+        surfacedCreateCustomerAction = true;
+        console.log(`Observer: surfaced create_customer action_item for ${from} (${companyLabel})`);
+      }
+    }
+
+    if (!isEmployee && !customerJob && !testModeOn && !isKnownNonLead && !surfacedCreateCustomerAction) {
       // Suppression window: if we sent an outbound SMS to this number in the last 10 min,
       // a human (or AI) is already actively replying — skip the new card.
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -1099,7 +1248,41 @@ IMPORTANT RULES:
 
               if (newCust) {
                 resolvedCustomerId = newCust.id;
+                const createdCustomerName = `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim() || contactName || from;
                 console.log(`SMS: auto-created customer ${newCust.id} for ${from}`);
+
+                await upsertLiveActionItem(supabase, {
+                  title: `Customer created: ${createdCustomerName}`,
+                  description: `Jarvis created this customer from the SMS details and tagged it for ${businessUnit?.display_name || "the selected company"}. Review the record, then book or follow up if needed.`,
+                  category: "create_customer",
+                  priority: "high",
+                  source: "sms",
+                  status: "pending",
+                  customer_phone: from,
+                  job_id: linkedJobId,
+                  suggested_action: `Review ${createdCustomerName}'s customer record, then decide whether to book work.`,
+                  metadata: {
+                    ...messageCompanyMetadata,
+                    workflow_type: "intake",
+                    jarvis_intent: "create_customer",
+                    action_type: "create_customer",
+                    customer_name: createdCustomerName,
+                    customer_id: newCust.id,
+                    created_customer_id: newCust.id,
+                    phone: from,
+                    email: extracted.email || null,
+                    address: verifiedAddr ? verifiedAddr.split(",")[0] : (extracted.address || null),
+                    city: extracted.city || null,
+                    state: extracted.state || "TX",
+                    zip: extracted.zip || null,
+                    sms_extraction: extracted,
+                    inbound_sms_log_id: logEntry.id,
+                    source_event_id: messageSid,
+                    inbound_message: body,
+                    thread_snippet: body.slice(0, 200),
+                  },
+                  merge_window_hours: 72,
+                });
 
                 // Backfill call_log and sms_log with customer link
                 let callBackfill = supabase.from("call_log")
@@ -1140,7 +1323,7 @@ IMPORTANT RULES:
           const dedupWindow = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
           const { data: existingBookings } = await supabase.from("action_items")
             .select("id, metadata, title")
-            .in("category", ["new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead"])
+            .in("category", ["new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead", "create_customer"])
             .eq("customer_phone", from)
             .eq("status", "pending")
             .gte("created_at", dedupWindow)

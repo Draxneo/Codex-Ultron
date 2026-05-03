@@ -51,7 +51,7 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
   const phone = input.customer_phone || (metadata as any).phone || (metadata as any).customer_phone || null;
   const digits = phoneDigits(phone);
   const since = new Date(Date.now() - (input.merge_window_hours || 24) * 60 * 60 * 1000).toISOString();
-  const categories = Array.from(new Set([input.category, "new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead"]));
+  const categories = Array.from(new Set([input.category, "new_appointment", "booking_confirm", "follow_up", "thread_attention", "new_lead", "create_customer"]));
 
   let existing: any = null;
   if (digits.length === 10) {

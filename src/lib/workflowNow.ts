@@ -551,7 +551,7 @@ function actionItemStep(item: any) {
 
   if (metadata.requires_property_selection || category === "address_verify") return "review";
   if (["new_appointment", "booking_confirm"].includes(category)) return "convert";
-  if (["new_lead", "thread_attention", "follow_up", "tech_field_update"].includes(category)) return "review";
+  if (["create_customer", "new_lead", "thread_attention", "follow_up", "tech_field_update"].includes(category)) return "review";
   if (["schedule_change", "reschedule", "eta_request", "access_note", "pet_warning", "contact_update", "confirmation"].includes(category)) return "review";
   return "understand";
 }
@@ -562,7 +562,7 @@ function actionItemGroup(item: any): WorkflowGroup {
   const metadata = (item.metadata || {}) as any;
   if (priority === "critical" || priority === "high") return "ready";
   if (metadata.requires_property_selection || category === "address_verify") return "ready";
-  if (["new_appointment", "booking_confirm", "schedule_change", "reschedule", "eta_request", "confirmation", "tech_field_update"].includes(category)) return "ready";
+  if (["create_customer", "new_appointment", "booking_confirm", "schedule_change", "reschedule", "eta_request", "confirmation", "tech_field_update"].includes(category)) return "ready";
   if (["follow_up", "thread_attention", "new_lead"].includes(category)) return "follow_up";
   return "ready";
 }
