@@ -79,6 +79,8 @@ type DeskConversation = {
   kind: "call" | "sms";
   direction: "inbound" | "outbound";
   phone: string;
+  companyPhone?: string | null;
+  businessUnitId?: string | null;
   name: string | null;
   customerType: string;
   status: string;
@@ -172,6 +174,15 @@ type TeamConversationRow = {
 type EmployeeLite = {
   profile_id: string | null;
   name: string;
+};
+
+type BusinessUnitLite = {
+  id: string;
+  slug?: string | null;
+  display_name?: string | null;
+  legal_name?: string | null;
+  billing_name?: string | null;
+  primary_phone_number?: string | null;
 };
 
 function formatDateTime(value?: string | null) {
@@ -534,6 +545,8 @@ function callToDeskItem(conversation: CallConversation): DeskConversation {
     kind: "call",
     direction: call.direction,
     phone: conversation.phoneNumber,
+    companyPhone: conversation.calledNumber || null,
+    businessUnitId: conversation.businessUnitId || null,
     name: conversation.contactName,
     customerType: conversation.contactType,
     status: call.status || "logged",
@@ -554,6 +567,8 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
     kind: "sms",
     direction: message.direction,
     phone: conversation.phoneNumber,
+    companyPhone: conversation.toNumber || null,
+    businessUnitId: conversation.businessUnitId || null,
     name: conversation.contactName,
     customerType: conversation.contactType,
     status: conversation.status,
@@ -678,6 +693,72 @@ function conversationVisual(item: Pick<DeskConversation, "kind" | "direction">) 
     badgeClass: "border-slate-300 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100",
     cardClass: "border-l-slate-500 bg-card hover:bg-muted/30",
     selectedClass: "border-primary bg-card ring-2 ring-primary/25 shadow-md",
+  };
+}
+
+function businessUnitMaps(units: BusinessUnitLite[]) {
+  const byId = new Map<string, BusinessUnitLite>();
+  const byPhone = new Map<string, BusinessUnitLite>();
+
+  for (const unit of units) {
+    if (unit.id) byId.set(unit.id, unit);
+    const phoneKey = normalizeLast10(unit.primary_phone_number || "");
+    if (phoneKey) byPhone.set(phoneKey, unit);
+  }
+
+  return { byId, byPhone };
+}
+
+function fallbackBusinessUnitForPhone(phone?: string | null): BusinessUnitLite | null {
+  const last10 = normalizeLast10(phone || "");
+  if (last10 === "2106005671") {
+    return { id: "fix-fallback", slug: "fix", display_name: "FIX Construction", primary_phone_number: phone };
+  }
+  if (last10 === "2106005091") {
+    return { id: "carnes-fallback", slug: "carnes", display_name: "Carnes & Sons", primary_phone_number: phone };
+  }
+  return null;
+}
+
+function businessUnitForConversation(
+  item: DeskConversation,
+  unitsById: Map<string, BusinessUnitLite>,
+  unitsByPhone: Map<string, BusinessUnitLite>
+) {
+  const byId = item.businessUnitId ? unitsById.get(item.businessUnitId) : null;
+  if (byId) return byId;
+
+  const phoneKey = normalizeLast10(item.companyPhone || "");
+  if (phoneKey && unitsByPhone.has(phoneKey)) return unitsByPhone.get(phoneKey)!;
+
+  return fallbackBusinessUnitForPhone(item.companyPhone);
+}
+
+function companyLineBadge(unit: BusinessUnitLite | null, companyPhone?: string | null) {
+  const rawName = unit?.display_name || unit?.billing_name || unit?.legal_name || "";
+  const rawSlug = unit?.slug || "";
+  const identity = `${rawSlug} ${rawName}`.toLowerCase();
+
+  if (identity.includes("fix") || normalizeLast10(companyPhone || "") === "2106005671") {
+    return {
+      label: "FIX",
+      title: rawName || "FIX Construction",
+      className: "border-cyan-300 bg-cyan-500 text-slate-950 shadow-cyan-500/20 dark:border-cyan-300 dark:bg-cyan-400 dark:text-slate-950",
+    };
+  }
+
+  if (identity.includes("carnes") || normalizeLast10(companyPhone || "") === "2106005091") {
+    return {
+      label: "CARNES",
+      title: rawName || "Carnes & Sons",
+      className: "border-orange-300 bg-orange-500 text-white shadow-orange-500/20 dark:border-orange-300 dark:bg-orange-500 dark:text-white",
+    };
+  }
+
+  return {
+    label: "LINE",
+    title: rawName || "Company line not matched yet",
+    className: "border-slate-300 bg-slate-700 text-white shadow-slate-700/20 dark:border-slate-600 dark:bg-slate-200 dark:text-slate-950",
   };
 }
 
@@ -1077,6 +1158,7 @@ function TeamInboxSignal() {
 function ConversationList({
   items,
   selectedId,
+  businessUnits,
   isAdmin,
   loading,
   readModelError,
@@ -1089,6 +1171,7 @@ function ConversationList({
 }: {
   items: DeskConversation[];
   selectedId?: string;
+  businessUnits: BusinessUnitLite[];
   isAdmin: boolean;
   loading: boolean;
   readModelError?: unknown;
@@ -1100,6 +1183,10 @@ function ConversationList({
   clearingIds: Set<string>;
 }) {
   const PAGE_SIZE = 20;
+  const { byId: businessUnitsById, byPhone: businessUnitsByPhone } = useMemo(
+    () => businessUnitMaps(businessUnits),
+    [businessUnits]
+  );
   const hasSearch = search.trim().length > 0;
   const [inboxView, setInboxView] = useState<InboxView>("now");
   const viewOptions: { key: InboxView; label: string; description: string }[] = [
@@ -1269,6 +1356,8 @@ function ConversationList({
                 const isSelected = selectedId === item.id;
                 const showTestingDelete = isAdmin && group.key === "needs_action";
                 const isClearing = clearingIds.has(item.id);
+                const unit = businessUnitForConversation(item, businessUnitsById, businessUnitsByPhone);
+                const companyBadge = companyLineBadge(unit, item.companyPhone);
                 return (
                   <div
                     key={item.id}
@@ -1305,9 +1394,16 @@ function ConversationList({
                           isClearing && "pointer-events-none opacity-60"
                         )}
                       >
-                        {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                       </button>
                     )}
+                    <div className={cn("mb-2 inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] shadow-sm", companyBadge.className)}>
+                      <span className="truncate">{companyBadge.label}</span>
+                      <span className="h-3 w-px bg-current/40" />
+                      <span className="truncate text-[9px] font-bold tracking-wide opacity-85">
+                        {formatPhone(item.companyPhone || unit?.primary_phone_number || "") || companyBadge.title}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between gap-2">
                       <div className={cn("flex min-w-0 items-center gap-2", showTestingDelete && "pr-8")}>
                         <div
@@ -3407,6 +3503,19 @@ export default function OperationsDeskV2() {
     limit: 250,
     view: "all",
   });
+  const { data: businessUnits = [] } = useQuery({
+    queryKey: ["business-units", "intake-company-badges"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("business_units")
+        .select("id, slug, display_name, legal_name, billing_name, primary_phone_number")
+        .order("is_default", { ascending: false })
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return (data || []) as BusinessUnitLite[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
   const { data: intakeThreadStatuses = [] } = useQuery({
     queryKey: ["intake-thread-statuses"],
     queryFn: async () => {
@@ -3621,6 +3730,7 @@ export default function OperationsDeskV2() {
         <ConversationList
           items={conversations}
           selectedId={selected?.id}
+          businessUnits={businessUnits}
           isAdmin={role === "admin"}
           loading={loading}
           readModelError={unifiedError}
