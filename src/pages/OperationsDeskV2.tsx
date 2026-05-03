@@ -1602,7 +1602,7 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
   const messages = conversation.messages.slice(-8);
 
   return (
-    <Section title="Text Thread" detail="Recent texts from this phone number.">
+    <Section title="Text Conversation" detail="Keep the customer thread where you can see it.">
       <div className="space-y-3">
         <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border bg-background p-3">
           {messages.length === 0 ? (
@@ -1640,14 +1640,6 @@ function ConversationEvidence({ selected }: { selected: DeskConversation }) {
             ))
           )}
         </div>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => openSmsComposer(toE164(selected.phone) || selected.phone, { contactName: selected.name || undefined })}
-        >
-          <ExternalLink className="h-4 w-4" />
-          Open SMS composer
-        </Button>
       </div>
     </Section>
   );
@@ -2282,6 +2274,16 @@ function CustomerWorkspace({
         )}
       </div>
 
+      <div className="mb-4">
+        <ConversationEvidence selected={selected} />
+      </div>
+
+      {selected.kind === "sms" && (
+        <div className="mb-4">
+          <InlineSmsReplyComposer selected={selected} sending={smsSending} onSend={onSendSms} />
+        </div>
+      )}
+
       <div className="mb-4 grid gap-2 md:grid-cols-5">
         <div className="rounded-lg border bg-card p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer</p>
@@ -2300,12 +2302,6 @@ function CustomerWorkspace({
           <p className="mt-1 truncate text-sm font-semibold">{riskLabel}</p>
         </div>
       </div>
-
-      {selected.kind === "sms" && (
-        <div className="mb-4">
-          <InlineSmsReplyComposer selected={selected} sending={smsSending} onSend={onSendSms} />
-        </div>
-      )}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
         <Section title="What happened" detail="The latest call or text and why it needs attention.">
@@ -2375,10 +2371,6 @@ function CustomerWorkspace({
             </div>
           )}
         </Section>
-      </div>
-
-      <div className="mt-4">
-        <ConversationEvidence selected={selected} />
       </div>
 
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
