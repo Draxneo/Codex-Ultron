@@ -1126,11 +1126,13 @@ Deno.serve(async (req) => {
       if (openaiApiKey) {
         try {
           // ── 1. Gather context: SMS thread + recent call_log for this phone ──
+          const conversationWindowStart = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
           const { data: recentThread } = await supabase.from("sms_log")
             .select("direction, body, created_at")
             .eq("phone_number", from)
+            .gte("created_at", conversationWindowStart)
             .order("created_at", { ascending: false })
-            .limit(25);
+            .limit(80);
 
           const threadContext = (recentThread || []).reverse()
             .map((m: any) => `[${m.direction === "outbound" ? "Us" : "Them"}] ${String(m.body || "").slice(0, 500)}`)
@@ -1195,7 +1197,7 @@ Deno.serve(async (req) => {
             ? `\n\nATTACHED MEDIA (${mediaUrls.length} file${mediaUrls.length > 1 ? "s" : ""}):\n${mediaUrls.map((m, i) => `${i + 1}. ${m.content_type} — ${m.url}`).join("\n")}\nNote: Customer sent photo/video attachments. Consider these as evidence of the issue when determining intent and urgency.`
             : "";
 
-          const analysisPrompt = `Analyze this inbound SMS and the recent thread. Extract ALL customer contact information and the current business intent. This is for a home services CRM with multiple companies, including HVAC and construction.
+          const analysisPrompt = `Analyze this inbound SMS and the recent thread from the last 48 hours. Extract ALL customer contact information and the current business intent. This is for a home services CRM with multiple companies, including HVAC and construction.
 
 Customer: ${contactName || from} (${from})
 ${customerContext}

@@ -40,8 +40,8 @@ const extractTool = {
         },
         call_intent: {
           type: "string",
-          enum: ["new_booking", "existing_job_update", "reschedule_existing", "cancel_existing", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "estimate_followup", "billing", "warranty_or_membership", "vendor", "spam", "internal", "unknown"],
-          description: "Primary reason for the call. Prefer existing_job_update/reschedule/cancel/ETA/access/pet/callback when the caller is talking about already scheduled work.",
+          enum: ["new_booking", "existing_job_update", "reschedule_existing", "cancel_existing", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "quote_request", "quote_follow_up", "estimate_followup", "billing", "warranty_or_membership", "vendor", "spam", "internal", "unknown"],
+          description: "Primary reason for the call. Use quote_request/quote_follow_up when the recent conversation is about preparing or sending a quote, bid, estimate, or proposal. Prefer existing_job_update/reschedule/cancel/ETA/access/pet/callback when the caller is talking about already scheduled work.",
         },
         intent_confidence: {
           type: "string",
@@ -72,6 +72,18 @@ const extractTool = {
         scheduling_preference: {
           type: "string",
           description: "Any date/time preference the customer mentioned, e.g. 'Thursday morning', 'ASAP', 'next week'. Empty if none.",
+        },
+        follow_up_due: {
+          type: "string",
+          description: "Natural language follow-up promise, e.g. 'Monday morning' or 'tomorrow afternoon'. Empty if none.",
+        },
+        quote_subject: {
+          type: "string",
+          description: "What the quote/bid/proposal is for, e.g. carport, flat roof option, equipment replacement.",
+        },
+        quote_options_requested: {
+          type: "string",
+          description: "Options or variants the customer asked us to quote.",
         },
         scheduled_date: {
           type: "string",
@@ -207,6 +219,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    const conversationWindowStart = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: recentSmsThread } = call.phone_number
+      ? await supabase
+        .from("sms_log")
+        .select("direction, body, created_at")
+        .eq("phone_number", call.phone_number)
+        .gte("created_at", conversationWindowStart)
+        .order("created_at", { ascending: false })
+        .limit(80)
+      : { data: [] };
+    const recentSmsContext = ((recentSmsThread || []) as any[]).reverse()
+      .map((m: any) => `[SMS ${m.direction === "outbound" ? "Us" : "Them"}] ${String(m.body || "").slice(0, 500)}`)
+      .join("\n");
+    const conversationText = `${recentSmsContext ? `${recentSmsContext}\n\n` : ""}Call transcript:\n${call.transcription}`;
+
     // Get configured model
     const model = await getTaskModel(supabase, "customer_parsing") || "gpt-5-mini";
 
@@ -265,6 +292,9 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
 
 INTENT EXTRACTION:
 - "New booking" means the caller wants a new service call, maintenance visit, or estimate.
+- Judge intent from the call transcript AND the recent SMS context from the last 48 hours.
+- If SMS context says the customer wants a quote, bid, proposal, estimate, price, or options, keep that context even when the call is short or the latest words are just contact information.
+- If our company promised to work up a bid/quote on a specific day, extract follow_up_due and quote_subject/quote_options_requested.
 - If the caller is talking about an appointment already on the schedule, classify as existing_job_update, reschedule_existing, cancel_existing, eta_request, access_instructions, pet_warning, or callback_number_update.
 - Gate/lockbox/door/garage codes are access_instructions.
 - Dogs, pets, backyard warnings, or animal safety notes are pet_warning.
@@ -272,7 +302,7 @@ INTENT EXTRACTION:
 - "Call this number instead" is callback_number_update.
 - Default ambiguous calls with active work language to existing_job_update, not new booking.`,
           },
-          { role: "user", content: call.transcription },
+          { role: "user", content: `RECENT SMS CONTEXT (last 48 hours):\n${recentSmsContext || "None"}\n\nCALL TRANSCRIPT:\n${call.transcription}` },
         ],
         tools: [extractTool],
         tool_choice: { type: "function", function: { name: "extract_call_data" } },
@@ -918,7 +948,7 @@ INTENT EXTRACTION:
           : null;
         const needsPropertySelection = knownProperties.length > 1 && (!extractedAddress || !matchedProperty);
         const intentDecision = classifyCustomerContactIntent({
-          text: call.transcription || "",
+          text: conversationText,
           extracted,
           activeWork: { activeJob, activeEstimate, pendingBooking: null },
           channel: "call",

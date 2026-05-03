@@ -100,6 +100,10 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     extracted.problem_description,
     extracted.suggested_action,
     extracted.scheduling_preference,
+    extracted.call_intent,
+    extracted.follow_up_due,
+    extracted.quote_subject,
+    extracted.quote_options_requested,
   ].filter(Boolean).join(" ");
   const text = rawText.toLowerCase();
   const activeWork = args.activeWork || null;
@@ -135,14 +139,14 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\bwhen\s+(will|is|are|can).*\b(arriv|come|show)\b/,
     /\bwhat\s+time\b.*\b(arriv|come|show)\b/,
   ]);
-  const hasReschedule = extracted.intent === "reschedule" || includesAny(text, [
+  const hasReschedule = extracted.intent === "reschedule" || extracted.call_intent === "reschedule_existing" || includesAny(text, [
     /\breschedul/,
     /\bmove\b.*\b(appointment|visit|job|time|day)\b/,
     /\bchange\b.*\b(appointment|visit|job|time|day)\b/,
     /\b(can'?t|cannot|won'?t)\s+(make|do)\b/,
     /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(instead|work better)\b/,
   ]);
-  const hasCancel = extracted.intent === "cancel" || includesAny(text, [
+  const hasCancel = extracted.intent === "cancel" || extracted.call_intent === "cancel_existing" || includesAny(text, [
     /\bcancel\b/,
     /\bdon'?t\s+(come|send|need)\b/,
     /\bno\s+longer\s+need\b/,
@@ -157,7 +161,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   const hasWarranty = includesAny(text, [
     /\b(warranty|labor warranty|parts warranty|comfort club|membership|maintenance plan|service agreement)\b/,
   ]);
-  const hasQuoteFollowUp = includesAny(text, [
+  const hasQuoteFollowUp = ["estimate_followup", "quote_request", "quote_follow_up"].includes(String(extracted.call_intent || extracted.intent || "")) || includesAny(text, [
     /\b(quote|estimate|bid|proposal|price|pricing|option|financing|approved|approve|decline)\b/,
     /\b(work|write|make|build|send|prepare)\s+(up\s+)?(a\s+)?(quote|estimate|bid|proposal)\b/,
     /\b(carport|flat roof|wood|shingles|metal)\b.*\b(quote|estimate|bid|price)\b/,
@@ -171,7 +175,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   const hasEstimateRequest = extracted.service_type === "estimate" || extracted.service_type === "install" || includesAny(text, [
     /\b(estimate|quote|replace|replacement|new system|new unit|install|installation)\b/,
   ]);
-  const hasBooking = extracted.intent === "booking" || includesAny(text, [
+  const hasBooking = extracted.intent === "booking" || extracted.call_intent === "new_booking" || includesAny(text, [
     /\b(schedule|book|appointment|come out|send someone|need someone|service call)\b/,
     /\b(ac|a\/c|air conditioner|heater|heat pump|furnace)\b.*\b(broken|not working|not cooling|not heating|leaking|making noise)\b/,
   ]);

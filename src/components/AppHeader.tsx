@@ -10,6 +10,7 @@ import { useNavOrder } from "@/hooks/useNavOrder";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
+import { useHeadquartersBadges } from "@/hooks/useHeadquartersBadges";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ export function AppHeader({ searchValue, onSearchChange, searchPlaceholder }: Ap
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const unreadSms = useUnreadSmsCount();
   const { unreadCount: unreadVoicemails } = useVoicemails();
+  const headquartersBadges = useHeadquartersBadges();
 
   const { data: desktopCallsEnabled = false } = useQuery({
     queryKey: ["employee-desktop-calls", employeeId],
@@ -123,6 +125,7 @@ export function AppHeader({ searchValue, onSearchChange, searchPlaceholder }: Ap
   });
 
   const unreadMap: Record<string, number> = {
+    ...headquartersBadges,
     "/phone": unreadVoicemails,
     "/sms": unreadSms,
   };
@@ -182,7 +185,7 @@ export function AppHeader({ searchValue, onSearchChange, searchPlaceholder }: Ap
                 {item.label}
                 {unread > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-0.5">
-                    {unread > 9 ? "9+" : unread}
+                    {unread > 99 ? "99+" : unread}
                   </span>
                 )}
               </Link>
