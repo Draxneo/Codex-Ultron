@@ -336,6 +336,7 @@ serve(async (req) => {
       }
 
       const effectiveJobType = body.job_type || "service";
+      const isEstimate = body.is_estimate === true || effectiveJobType === "estimate";
       // Default tech to Jonathan Carnes for service calls unless explicitly specified
       const defaultTech = (!body.assigned_to && effectiveJobType === "service") ? "Jonathan Carnes" : (body.assigned_to || null);
       const overrideActiveWork = body.override_active_work === true || body.allow_duplicate_work === true;
@@ -358,6 +359,55 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+      }
+
+      if (isEstimate) {
+        const estimateRecord: any = {
+          customer_id: body.customer_id,
+          customer_name: body.customer_name || "Unknown",
+          customer_phone: body.customer_phone || customerPhone,
+          customer_email: body.customer_email || null,
+          description: body.description || "Estimate request",
+          estimate_type: body.estimate_type || body.quote_type || "custom_quote",
+          work_status: body.scheduled_start ? "scheduled" : "new",
+          status: body.scheduled_start ? "scheduled" : "new",
+          address: body.address || null,
+          assigned_to: defaultTech,
+          options: {
+            source: "customer_actions",
+            action_item_id: body.action_item_id || null,
+            job_type: effectiveJobType,
+            scheduled_from_intake: true,
+          },
+        };
+        if (body.scheduled_start) {
+          estimateRecord.scheduled_date = body.scheduled_start.split("T")[0];
+          estimateRecord.arrival_start = body.scheduled_start;
+          estimateRecord.arrival_end = body.scheduled_end || null;
+        }
+
+        const { data: estimateData, error: estimateError } = await sb
+          .from("estimates")
+          .insert(estimateRecord)
+          .select()
+          .single();
+
+        if (estimateError) {
+          console.error("Local estimate create error:", JSON.stringify(estimateError));
+          throw new Error(`Estimate create error: ${estimateError.message}`);
+        }
+
+        try {
+          await sb.functions.invoke("finalize-job", {
+            body: { estimate_id: estimateData.id, created_by: "customer-actions", skip_hcp: true },
+          });
+        } catch (e) {
+          console.error("finalize-job failed after estimate create:", e);
+        }
+
+        return new Response(JSON.stringify({ success: true, estimate: estimateData, job: estimateData }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const jobRecord: any = {

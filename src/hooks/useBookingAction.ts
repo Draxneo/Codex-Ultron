@@ -74,7 +74,8 @@ function buildHandledReceipt(input: {
     ].filter(Boolean).join(" - "),
     handled_work_reason: workReason,
     handled_owner: assignedTo || null,
-    handled_job_id: input.jobId || null,
+    handled_job_id: input.type === "job" ? input.jobId || null : null,
+    handled_estimate_id: input.type === "estimate" ? input.jobId || null : null,
     handled_job_number: input.jobNumber || null,
     handled_type: input.type || "job",
     scheduled_date: date || null,
@@ -265,22 +266,27 @@ export function useBookingAction() {
           },
         });
 
+        const createdRecord = body.is_estimate ? (jobResult?.estimate || jobResult?.job) : jobResult?.job;
+
         debugBooking("booking function returned", {
           action_item_id,
           ok: !jobError && !jobResult?.error,
           job_id: jobResult?.job?.id || null,
+          estimate_id: jobResult?.estimate?.id || null,
           error: jobError?.message || jobResult?.error || null,
         });
 
         if (jobError) throw new Error(jobError.message || "Edge function call failed");
         if (!jobResult) throw new Error("No response from booking function");
         if (jobResult.error) throw new Error(jobResult.error);
-        if (!jobResult.job?.id) throw new Error("UltraOffice did not return a job id");
+        if (!createdRecord?.id) throw new Error(`UltraOffice did not return a ${body.is_estimate ? "estimate" : "job"} id`);
 
         const result: BookingResult = {
           ok: true,
-          job_id: jobResult.job.id,
-          job_number: jobResult.job.job_number ? String(jobResult.job.job_number) : undefined,
+          job_id: createdRecord.id,
+          job_number: body.is_estimate
+            ? (createdRecord.estimate_number ? String(createdRecord.estimate_number) : undefined)
+            : (createdRecord.job_number ? String(createdRecord.job_number) : undefined),
           type: body.is_estimate ? "estimate" : "job",
           scheduled: Boolean(body.scheduled_date),
         };
@@ -294,7 +300,9 @@ export function useBookingAction() {
           type: result.type,
         });
         try {
-          await attachActionMediaToJob(result.job_id, m);
+          if (result.type === "job") {
+            await attachActionMediaToJob(result.job_id, m);
+          }
         } catch (attachmentError) {
           console.warn("[useBookingAction] Job was scheduled, but SMS media did not attach.", attachmentError);
         }
@@ -303,10 +311,11 @@ export function useBookingAction() {
           await supabase
             .from("action_items" as any)
             .update({
-              job_id: result.job_id,
+              job_id: result.type === "job" ? result.job_id : null,
               metadata: {
                 ...m,
                 ...receipt,
+                related_estimate_id: result.type === "estimate" ? result.job_id : (m.related_estimate_id || null),
               },
             })
             .eq("id", action_item_id);
@@ -352,7 +361,7 @@ export function useBookingAction() {
           status: ACTION_ITEM_STATUS.accepted,
           userId: user?.id,
           title: `Booked ${result.type || "job"} ${result.job_number || result.job_id || ""}`.trim(),
-          jobId: result.job_id,
+          jobId: result.type === "job" ? result.job_id : undefined,
         });
 
         const refNum = result.job_number || result.job_id;
@@ -363,6 +372,8 @@ export function useBookingAction() {
         invalidateActionItemQueues(qc);
         qc.invalidateQueries({ queryKey: ["jobs"] });
         qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
+        qc.invalidateQueries({ queryKey: ["estimates"] });
+        qc.invalidateQueries({ queryKey: ["quote-pipeline-read-model"] });
 
         // Mark as booked after a short delay so user sees the success state
         setTimeout(() => setState(action_item_id, { phase: "booked", result }), 1500);
