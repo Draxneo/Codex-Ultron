@@ -52,6 +52,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobPhotosGrid } from "@/components/job/JobPhotosGrid";
+import { JobTeamMembersManager } from "@/components/job/JobTeamMembersManager";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { useDispatchLiveCards, type DispatchLiveCardContext } from "@/hooks/useDispatchLiveCards";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -982,6 +983,10 @@ function JobContextDialog({
                 </div>
               </div>
             </section>
+
+            {item.item_type === "job" && (
+              <JobTeamMembersManager jobId={item.id} primaryName={item.assigned_to} />
+            )}
 
             <section className="rounded-lg border bg-card p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer and work</p>

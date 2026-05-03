@@ -389,6 +389,37 @@ serve(async (req) => {
         throw new Error(`Job create error: ${jobError.message}`);
       }
 
+      const additionalAssignees = Array.isArray(body.additional_assignees)
+        ? body.additional_assignees
+        : Array.isArray(body.team_members)
+          ? body.team_members
+          : [];
+      const cleanAdditionalNames = Array.from(new Set(
+        additionalAssignees
+          .map((item: any) => typeof item === "string" ? item : item?.employee_name || item?.name)
+          .filter((name: any) => typeof name === "string" && name.trim())
+          .map((name: string) => name.trim())
+          .filter((name: string) => name !== defaultTech)
+      ));
+      if (cleanAdditionalNames.length > 0) {
+        const { data: employees } = await sb
+          .from("employees")
+          .select("id, name")
+          .in("name", cleanAdditionalNames);
+        const employeeByName = new Map((employees || []).map((employee: any) => [employee.name, employee.id]));
+        const rows = cleanAdditionalNames.map((name: string) => ({
+          job_id: jobData.id,
+          employee_id: employeeByName.get(name) || null,
+          employee_name: name,
+          role: "helper",
+          is_primary: false,
+        }));
+        const { error: teamError } = await sb
+          .from("job_team_members")
+          .upsert(rows, { onConflict: "job_id,employee_name" });
+        if (teamError) console.error("Job team member insert error:", JSON.stringify(teamError));
+      }
+
       // Centralized post-creation: format, chat, line items, activity log.
       try {
         await sb.functions.invoke("finalize-job", {

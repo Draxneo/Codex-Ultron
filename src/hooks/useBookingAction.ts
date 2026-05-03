@@ -219,6 +219,11 @@ export function useBookingAction() {
           address: m.address || null,
           // Use full employee name so local assignment and tech routing match the roster.
           assigned_to: m.assigned_to || "Jonathan Carnes",
+          additional_assignees: Array.isArray(m.additional_assignees)
+            ? m.additional_assignees
+            : Array.isArray(m.team_members)
+              ? m.team_members
+              : [],
           scheduled_date: m.scheduled_date || null,
           scheduled_time: m.scheduled_time || null,
           scheduled_end: m.scheduled_end || null,
@@ -250,6 +255,7 @@ export function useBookingAction() {
             job_type: body.job_type,
             address: body.address,
             assigned_to: body.assigned_to,
+            additional_assignees: body.additional_assignees,
             scheduled_start: centralDateTime(body.scheduled_date, body.scheduled_time),
             scheduled_end: centralDateTime(body.scheduled_date, body.scheduled_end),
             action_item_id,

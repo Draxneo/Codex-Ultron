@@ -42,6 +42,7 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
   const [season, setSeason] = useState("");
   const [scheduledDate, setScheduledDate] = useState(defaultDate || "");
   const [assignedTo, setAssignedTo] = useState("");
+  const [additionalTeam, setAdditionalTeam] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
@@ -83,6 +84,14 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
       const parts = [c.address, c.city, c.state, c.zip].filter(Boolean);
       setAddress(parts.join(", "));
     }
+  };
+
+  const toggleAdditionalTeam = (employeeName: string) => {
+    setAdditionalTeam((prev) =>
+      prev.includes(employeeName)
+        ? prev.filter((name) => name !== employeeName)
+        : [...prev, employeeName]
+    );
   };
 
   const handleCreate = async () => {
@@ -134,6 +143,27 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
 
     // Centralized post-creation: format, chat, line items, HCP, activity log
     if (newJob) {
+      const extraMembers = additionalTeam
+        .filter((name) => name && name !== assignedTo)
+        .map((name) => {
+          const employee = (employees || []).find((item) => item.name === name);
+          return {
+            job_id: newJob.id,
+            employee_id: employee?.id || null,
+            employee_name: name,
+            role: "helper",
+            is_primary: false,
+          };
+        });
+      if (extraMembers.length > 0) {
+        const { error: teamError } = await supabase.from("job_team_members" as any).upsert(extraMembers, {
+          onConflict: "job_id,employee_name",
+        });
+        if (teamError) {
+          console.warn("Could not add extra job team members:", teamError);
+        }
+      }
+
       try {
         await supabase.functions.invoke("finalize-job", {
           body: { job_id: newJob.id, created_by: "Office" },
@@ -155,6 +185,7 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
     setSeason("");
     setScheduledDate("");
     setAssignedTo("");
+    setAdditionalTeam([]);
     setDescription("");
     setAddress("");
     setArrivalWindow("");
@@ -290,7 +321,7 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
               <Input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label>Assigned Tech</Label>
+              <Label>Primary person</Label>
               <Select value={assignedTo} onValueChange={setAssignedTo}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select..." /></SelectTrigger>
                 <SelectContent>
@@ -301,6 +332,30 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
               </Select>
             </div>
           </div>
+
+          {assignedTo && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <Label>Also add to this job</Label>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(employees || []).filter(e => e.is_active && e.name !== assignedTo).map(emp => {
+                  const id = `job-team-${emp.id}`;
+                  return (
+                    <label key={emp.id} htmlFor={id} className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                      <Checkbox
+                        id={id}
+                        checked={additionalTeam.includes(emp.name)}
+                        onCheckedChange={() => toggleAdditionalTeam(emp.name)}
+                      />
+                      <span>{emp.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                The primary person owns the schedule card. Extra people stay attached for shared FIX quotes, ride-alongs, or helper work.
+              </p>
+            </div>
+          )}
 
           {/* Arrival Window */}
           {scheduledDate && (
