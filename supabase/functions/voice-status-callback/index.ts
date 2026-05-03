@@ -49,6 +49,10 @@ type CallRow = {
   extracted_data?: Record<string, unknown> | null;
 };
 
+function phoneLast10(phone: string | null | undefined): string {
+  return String(phone || "").replace(/\D/g, "").slice(-10);
+}
+
 async function transcribeRecording(
   recordingUrl: string,
 ): Promise<string | null> {
@@ -945,6 +949,35 @@ Deno.serve(async (req) => {
               extraVars: { customer_name: callRow.contact_name || "" },
             });
 
+            // Twilio can send more than one terminal callback for the same
+            // conversation. Test-number bypass should bypass safety locks,
+            // not duplicate protection.
+            const duplicateSince = new Date(Date.now() - 10 * 60 * 1000)
+              .toISOString();
+            let recentPostCallQuery = supabase
+              .from("sms_log")
+              .select("id, phone_number, to_number, body")
+              .eq("direction", "outbound")
+              .eq("source_function", "voice-status-post-call")
+              .gte("created_at", duplicateSince)
+              .limit(25);
+            if (smsContext.businessUnitId) {
+              recentPostCallQuery = recentPostCallQuery.eq(
+                "business_unit_id",
+                smsContext.businessUnitId,
+              );
+            }
+            const { data: recentPostCallRows } = await recentPostCallQuery;
+            const targetLast10 = phoneLast10(callRow.phone_number);
+            const fromLast10 = phoneLast10(smsContext.fromNumber);
+            const duplicatePostCall = (recentPostCallRows || []).some((
+              row: any,
+            ) =>
+              phoneLast10(row.phone_number) === targetLast10 &&
+              (!fromLast10 || phoneLast10(row.to_number) === fromLast10) &&
+              String(row.body || "").trim() === resolvedTemplate.body.trim()
+            );
+
             // ── 1x/day dedup: check if we already sent a post-call SMS to this number today ──
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
@@ -982,7 +1015,13 @@ Deno.serve(async (req) => {
               }
             }
 
-            if (smsTestNumberBypass || ((count || 0) === 0 && !skipIntake)) {
+            if (duplicatePostCall) {
+              console.log(
+                `Post-call SMS skipped — duplicate already sent to ${callRow.phone_number} in last 10 min`,
+              );
+            } else if (
+              smsTestNumberBypass || ((count || 0) === 0 && !skipIntake)
+            ) {
               await sendIvrSms({
                 to: callRow.phone_number,
                 body: resolvedTemplate.body,
