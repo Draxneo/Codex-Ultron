@@ -129,6 +129,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   ]);
   const hasCallbackUpdate = !!extracted.callback_phone || (hasActiveWork && !!extracted.phone) || includesAny(text, [
     /\b(call|text)\s+(me|us|him|her|my wife|my husband|my spouse)\s+(at|on)\b/,
+    /\b(tell|ask)\s+(the\s+)?(tech|technician|installer|jonathan|clint)\s+to\s+(call|text)\b/,
     /\bdifferent\s+(number|phone)\b/,
     /\buse\s+this\s+(number|phone)\b/,
     /\bmy\s+(wife|husband|spouse|son|daughter)\b.*\b(number|phone)\b/,
@@ -138,10 +139,13 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\b(on the way|heads up|30 minute|thirty minute)\b/,
     /\bwhen\s+(will|is|are|can).*\b(arriv|come|show)\b/,
     /\bwhen\b.*\b(will|is|are|can)\b.*\bbe\s+here\b/,
+    /\b(still|already)\s+(coming|headed|on\s+the\s+way)\b/,
+    /\b(is|are)\s+.*\bcoming\s+between\b/,
     /\bwhat\s+time\b.*\b(arriv|come|show)\b/,
   ]);
   const hasReschedule = extracted.intent === "reschedule" || extracted.call_intent === "reschedule_existing" || includesAny(text, [
     /\breschedul/,
+    /\bpush\b.*\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|appointment|visit|job|time|day)\b/,
     /\bmove\b.*\b(appointment|visit|job|time|day)\b/,
     /\bchange\b.*\b(appointment|visit|job|time|day)\b/,
     /\b(can'?t|cannot|won'?t)\s+(make|do)\b/,
@@ -154,7 +158,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\bwe'?re\s+good\b/,
   ]);
   const hasConfirm = extracted.intent === "confirmation" || includesAny(text, [
-    /\b(confirm|confirmed|yes that works|sounds good|see you then)\b/,
+    /\b(confirm|confirmed|yes that works|yes sir.*works|that time works|sounds good|see you then)\b/,
   ]);
   const hasBilling = includesAny(text, [
     /\b(invoice|payment|paid|pay|card|receipt|balance|bill|billing)\b/,
@@ -164,6 +168,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   ]);
   const hasQuoteFollowUp = ["estimate_followup", "quote_request", "quote_follow_up"].includes(String(extracted.call_intent || extracted.intent || "")) || includesAny(text, [
     /\b(quote|estimate|bid|proposal|price|pricing|option|financing|approved|approve|decline)\b/,
+    /\bhow\s+much\b.*\b(system|unit|carrier|day\s*(and|&)\s*night|goodman|install|installed|ton)\b/,
     /\b(work|write|make|build|send|prepare)\s+(up\s+)?(a\s+)?(quote|estimate|bid|proposal)\b/,
     /\b(carport|flat roof|wood|shingles|metal)\b.*\b(quote|estimate|bid|price)\b/,
   ]);
@@ -173,6 +178,8 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   ]);
   const hasComplaint = extracted.intent === "complaint" || includesAny(text, [
     /\b(complaint|upset|angry|not happy|still not working|never fixed|bad service)\b/,
+    /\b(you|y'all|ya'll|yall|the tech|technician)\s+(fixed|worked on|came out).*\bstill\s+(not|isn'?t|ain'?t)\b/,
+    /\bstill\s+(not|isn'?t|ain'?t)\s+(cooling|heating|working|fixed)\b/,
   ]);
   const hasMaintenance = extracted.service_type === "maintenance" || includesAny(text, [
     /\b(maintenance|tune\s*-?\s*up|comfort club|spring check|fall check)\b/,
@@ -183,6 +190,10 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   const hasBooking = extracted.intent === "booking" || extracted.call_intent === "new_booking" || includesAny(text, [
     /\b(schedule|book|appointment|come out|send someone|need someone|service call)\b/,
     /\b(ac|a\/c|air conditioner|heater|heat pump|furnace)\b.*\b(broken|not working|not cooling|not heating|leaking|making noise)\b/,
+    /\b(unit|system|coil|line)\b.*\b(froze|frozen|iced|icing|leaking|dripping)\b/,
+    /\bthermostat\b.*\b(blank|dead|not working|won'?t turn on)\b/,
+    /\b(outside|outdoor|condenser)\s+unit\b.*\b(won'?t|will not|doesn'?t|does not)\s+(kick|come|turn)\s+on\b/,
+    /\bheater\b.*\b(won'?t|will not|doesn'?t|does not)\s+(turn|come|kick)\s+on\b/,
   ]);
   const isInfoReply = extracted.intent === "info_reply" || includesAny(text, [
     /\b(my name is|address is|email is|phone number is)\b/,
