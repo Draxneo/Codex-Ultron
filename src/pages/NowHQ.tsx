@@ -30,6 +30,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Trash2 } from "lucide-react";
 import { useQuotePipelineMap } from "@/hooks/useCanonicalOperations";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
@@ -209,6 +212,9 @@ function parseWorkflowSteps(value: any): WorkflowStepDefinition[] {
 type WorkflowCardActionHandlers = {
   onResolve: (card: WorkflowNowCard) => void;
   onRetry: (card: WorkflowNowCard) => void;
+  /** Optional admin-only handler. When provided AND the card is an action_item,
+   * a Trash button appears at the bottom of the action stack. */
+  onAdminDelete?: (card: WorkflowNowCard) => void;
   busyId?: string | null;
 };
 
@@ -217,6 +223,7 @@ function WorkflowCard({
   featured = false,
   onResolve,
   onRetry,
+  onAdminDelete,
   busyId,
 }: {
   card: WorkflowNowCard;
@@ -418,6 +425,22 @@ function WorkflowCard({
             {card.recordType !== "action" && card.recordType !== "alert" && (
               <Button variant="secondary" className="justify-between" disabled={isBusy} onClick={() => onResolve(card)}>
                 Acknowledge 24h <CheckCircle2 className="h-4 w-4" />
+              </Button>
+            )}
+            {/* Admin-only delete. Only renders when an onAdminDelete handler is passed AND
+                the card is an action_item (not a workflow alert or intrinsic job/estimate
+                record — deleting those would orphan real business data). */}
+            {onAdminDelete && card.recordType === "action" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => onAdminDelete(card)}
+                className="mt-1 justify-between text-destructive hover:bg-destructive/10 hover:text-destructive"
+                title="Admin: delete this card"
+              >
+                Delete card <Trash2 className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -743,6 +766,50 @@ export default function NowHQ() {
     onSettled: () => setBusyId(null),
   });
 
+  // Admin-only soft-delete. Backend RPC verifies role; UI just hides the button
+  // for non-admins so it's not a tease. Only applies to action_items (the cards
+  // the user can delete) — workflow alerts and intrinsic record cards (jobs,
+  // estimates, leads) aren't deletable from here, since deleting them would orphan
+  // real business records.
+  const { role: effectiveRole } = useEffectiveAuth();
+  const isAdmin = effectiveRole === "admin";
+  const { confirmDelete } = useConfirm();
+
+  const deleteCard = useMutation({
+    mutationFn: async (card: WorkflowNowCard) => {
+      setBusyId(card.id);
+      if (card.recordType !== "action") {
+        throw new Error("Only action cards can be deleted from here. Other cards live with their underlying record.");
+      }
+      const { data, error } = await supabase.rpc("delete_action_item_admin" as any, {
+        p_id: card.recordId,
+        p_reason: "now_hq_admin_delete",
+      });
+      if (error) throw error;
+      if (data && !(data as any).ok) throw new Error((data as any).reason || "Delete failed.");
+    },
+    onSuccess: () => {
+      refreshNowFeeds();
+      toast({ title: "Card deleted", description: "Removed from Now HQ. Audit trail is in metadata." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Card could not be deleted.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => setBusyId(null),
+  });
+
+  const handleAdminDelete = async (card: WorkflowNowCard) => {
+    const ok = await confirmDelete(card.title || "this card", {
+      description: "Removes the card from Now HQ. Use for spam, dupes, or cards that shouldn't exist. The original record (job/estimate) is NOT affected.",
+      confirmText: "Delete card",
+    });
+    if (ok) deleteCard.mutate(card);
+  };
+
   const cards = useMemo(() => {
     const jobCartByJobId = new Map<string, any>();
     for (const cart of (jobCarts as any[])) {
@@ -958,6 +1025,7 @@ export default function NowHQ() {
                       featured
                       onResolve={(card) => resolveCard.mutate(card)}
                       onRetry={(card) => retryAlert.mutate(card)}
+                      onAdminDelete={isAdmin ? handleAdminDelete : undefined}
                       busyId={busyId}
                     />
                   ) : (
@@ -981,6 +1049,7 @@ export default function NowHQ() {
                           card={card}
                           onResolve={(selected) => resolveCard.mutate(selected)}
                           onRetry={(selected) => retryAlert.mutate(selected)}
+                          onAdminDelete={isAdmin ? handleAdminDelete : undefined}
                           busyId={busyId}
                         />
                       ))}
