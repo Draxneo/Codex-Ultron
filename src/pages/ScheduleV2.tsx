@@ -947,8 +947,8 @@ function JobContextDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0">
-        <DialogHeader className="border-b px-6 py-5">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-3xl flex-col overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{item.customer_name || "No customer name"}</DialogTitle>
             <Badge variant={item.assigned_to ? "secondary" : "destructive"}>
@@ -960,7 +960,8 @@ function JobContextDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_240px]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
           <div className="space-y-4">
             <section className="rounded-lg border bg-card p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Schedule details</p>
@@ -1088,8 +1089,9 @@ function JobContextDialog({
             </div>
           </aside>
         </div>
+        </div>
 
-        <DialogFooter className="border-t px-6 py-4">
+        <DialogFooter className="shrink-0 border-t px-6 py-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={() => onOpenRecord(item)}>{recordLabel}</Button>
         </DialogFooter>
