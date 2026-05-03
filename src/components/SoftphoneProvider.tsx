@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useKeepAwake } from "@/hooks/useKeepAwake";
 import { useCallForegroundService } from "@/hooks/useCallForegroundService";
 import { setOnCall } from "@/lib/callStateBus";
-import { sendToMain } from "@/lib/electron";
+import { isElectron, sendToMain } from "@/lib/electron";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanySetting } from "@/lib/companySettings";
 import { startRingtone, stopRingtone, isCustomRingtone } from "@/lib/softphoneAudio";
@@ -101,7 +101,7 @@ function SoftphoneRingtoneController({ softphone }: { softphone: SoftphoneContex
   return null;
 }
 
-function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
+function ActiveSoftphoneProvider({ children, employeeId }: { children: ReactNode; employeeId: string | null }) {
   const { isNative, platform } = useCapacitor();
 
   const webSoftphone = useSoftphone(!isNative);
@@ -122,6 +122,43 @@ function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setOnCall(ACTIVE_CALL_STATUSES.has(activeStatus));
   }, [activeStatus]);
+
+  useEffect(() => {
+    if (!employeeId) return;
+
+    const routeReady = ["ready", "ringing", "connecting", "on-call"].includes(activeStatus);
+    const surface = isNative ? `native-${platform}` : isElectron() ? "electron" : "web";
+
+    const writePresence = async (ready: boolean) => {
+      const patch: Record<string, unknown> = {
+        softphone_route_ready: ready,
+        softphone_surface: surface,
+      };
+      if (ready) patch.softphone_last_seen = new Date().toISOString();
+
+      const { error } = await supabase
+        .from("employees")
+        .update(patch as any)
+        .eq("id", employeeId);
+
+      if (error) {
+        console.warn("[SoftphoneProvider] Failed to update softphone route presence:", error.message);
+      }
+    };
+
+    void writePresence(routeReady);
+
+    if (!routeReady) return;
+
+    const timer = window.setInterval(() => {
+      void writePresence(true);
+    }, 20_000);
+
+    return () => {
+      window.clearInterval(timer);
+      void writePresence(false);
+    };
+  }, [activeStatus, employeeId, isNative, platform]);
 
   const value: SoftphoneContextType = isNative
     ? {
@@ -155,7 +192,7 @@ function ActiveSoftphoneProvider({ children }: { children: ReactNode }) {
 
 export function SoftphoneProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, employeeId } = useAuth();
   const { isNative } = useCapacitor();
   const isPhoneConsole = location.pathname === "/phone-console" || new URLSearchParams(location.search).get("view") === "softphone";
 
@@ -192,7 +229,7 @@ export function SoftphoneProvider({ children }: { children: ReactNode }) {
     return <SoftphoneContext.Provider value={disabledSoftphoneValue}>{children}</SoftphoneContext.Provider>;
   }
 
-  return <ActiveSoftphoneProvider>{children}</ActiveSoftphoneProvider>;
+  return <ActiveSoftphoneProvider employeeId={employeeId}>{children}</ActiveSoftphoneProvider>;
 }
 
 export function useSoftphoneContext() {

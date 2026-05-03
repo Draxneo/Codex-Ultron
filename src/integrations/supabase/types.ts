@@ -2384,6 +2384,9 @@ export type Database = {
           phone: string | null
           profile_id: string | null
           role: string | null
+          softphone_last_seen: string | null
+          softphone_route_ready: boolean
+          softphone_surface: string | null
         }
         Insert: {
           email?: string | null
@@ -2398,6 +2401,9 @@ export type Database = {
           phone?: string | null
           profile_id?: string | null
           role?: string | null
+          softphone_last_seen?: string | null
+          softphone_route_ready?: boolean
+          softphone_surface?: string | null
         }
         Update: {
           email?: string | null
@@ -2412,6 +2418,9 @@ export type Database = {
           phone?: string | null
           profile_id?: string | null
           role?: string | null
+          softphone_last_seen?: string | null
+          softphone_route_ready?: boolean
+          softphone_surface?: string | null
         }
         Relationships: [
           {

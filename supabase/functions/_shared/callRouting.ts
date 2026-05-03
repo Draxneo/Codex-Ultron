@@ -356,12 +356,17 @@ export async function buildDepartmentDialList(
   // the normal IVR/cell-forwarding path instead of ringing their browser.
   const { data: emps } = await supabase
     .from("employees")
-    .select("name, desktop_calls_enabled")
+    .select("name, desktop_calls_enabled, softphone_route_ready, softphone_last_seen, softphone_surface")
     .in("name", candidates);
-  const desktopEnabledSet = new Set(
-    ((emps || []) as Array<{ name: string; desktop_calls_enabled: boolean }>)
-      .filter((e) => e.desktop_calls_enabled === true)
-      .map((e) => e.name.toLowerCase()),
+  const employeeRouteState = new Map(
+    ((emps || []) as Array<{
+      name: string;
+      desktop_calls_enabled: boolean;
+      softphone_route_ready?: boolean | null;
+      softphone_last_seen?: string | null;
+      softphone_surface?: string | null;
+    }>)
+      .map((e) => [e.name.toLowerCase(), e]),
   );
   const identities: string[] = [];
   const chosen: string[] = [];
@@ -371,22 +376,43 @@ export async function buildDepartmentDialList(
   const traceDepartment = matchedDepartment || requestedDepartment;
 
   for (const name of candidates) {
-    if (!desktopEnabledSet.has(name.toLowerCase())) {
+    const routeState = employeeRouteState.get(name.toLowerCase());
+    const lastSeenMs = routeState?.softphone_last_seen
+      ? Date.parse(routeState.softphone_last_seen)
+      : 0;
+    const softphoneFresh = Number.isFinite(lastSeenMs) &&
+      Date.now() - lastSeenMs <= 70_000;
+    const desktopRouteReady = routeState?.desktop_calls_enabled === true &&
+      routeState?.softphone_route_ready === true &&
+      softphoneFresh;
+
+    if (!desktopRouteReady) {
       desktopDisabledCount += 1;
-      console.log(`[callRouting] ${name} desktop calls disabled - skipping browser softphone`);
+      const skipReason = routeState?.desktop_calls_enabled !== true
+        ? "desktop_calls_disabled"
+        : routeState?.softphone_route_ready !== true
+          ? "softphone_not_ready"
+          : "softphone_stale";
+      console.log(`[callRouting] ${name} ${skipReason} - skipping desktop/app softphone`);
       await logSystemTrace({
         sourceType: "voice",
         sourceName: trace?.sourceName || "call-routing",
         eventKind: "candidate_skipped",
         summary: `${name} skipped during ${traceDepartment} routing`,
-        reason: "desktop_calls_disabled",
+        reason: skipReason,
         severity: "info",
         traceGroup: trace?.traceGroup ?? trace?.callSid ?? null,
         entityType: "department",
         entityId: traceDepartment,
         callSid: trace?.callSid ?? null,
         parentCallSid: trace?.parentCallSid ?? null,
-        metadata: { employee_name: name, department: traceDepartment, requested_department: requestedDepartment },
+        metadata: {
+          employee_name: name,
+          department: traceDepartment,
+          requested_department: requestedDepartment,
+          softphone_surface: routeState?.softphone_surface || null,
+          softphone_last_seen: routeState?.softphone_last_seen || null,
+        },
       });
       continue;
     }
