@@ -56,6 +56,7 @@ import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 import { MediaGallery } from "@/components/media";
 import { cn } from "@/lib/utils";
+import { formatPhone } from "@/lib/formatters";
 
 type UIMode = "ai" | "human";
 
@@ -234,7 +235,7 @@ function WorkflowCard({
   const contextItems = [
     { label: "Record", value: recordLabel(card), href: card.route },
     { label: "Customer", value: card.customerName },
-    { label: "Phone", value: card.customerPhone },
+    { label: "Phone", value: formatPhone(card.customerPhone) || card.customerPhone },
     { label: "Address", value: card.address },
     { label: "Status", value: card.status },
     { label: "From", value: card.source },

@@ -13,6 +13,7 @@ import {
 import { format } from "date-fns";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
 import { CustomerCard } from "@/components/CustomerCard";
+import { formatPhone } from "@/lib/formatters";
 
 interface CallerInfoCenterProps {
   phoneNumber: string | null | undefined;
@@ -85,10 +86,11 @@ export function CallerInfoCenter({ phoneNumber, callerName }: CallerInfoCenterPr
   const { data: equipment } = useCustomerEquipment(customerId);
 
   // Copilot context string
+  const prettyPhone = formatPhone(phoneNumber) || phoneNumber || "";
   const contextSummary = useMemo(() => {
     if (!customer) return null;
     const name = [customer.first_name, customer.last_name].filter(Boolean).join(" ");
-    const parts = [`On a call with ${name} (${phoneNumber})`];
+    const parts = [`On a call with ${name} (${prettyPhone})`];
     if (recentJobs?.length) parts.push(`${recentJobs.length} recent jobs`);
     if (estimates?.length) parts.push(`${estimates.length} estimates`);
     if (equipment?.length) parts.push(`Equipment: ${equipment.map(e => `${e.brand || ""} ${e.model_number || e.equipment_type}`).join(", ")}`);
@@ -96,7 +98,7 @@ export function CallerInfoCenter({ phoneNumber, callerName }: CallerInfoCenterPr
       parts.push(`Plan: ${enrichment.agreement_plan_name}`);
     }
     return parts.join(". ");
-  }, [customer, phoneNumber, recentJobs, estimates, equipment, enrichment]);
+  }, [customer, prettyPhone, recentJobs, estimates, equipment, enrichment]);
 
   if (!phoneNumber) {
     return (
@@ -122,7 +124,7 @@ export function CallerInfoCenter({ phoneNumber, callerName }: CallerInfoCenterPr
           <User className="h-4 w-4" />
           <span className="text-sm font-medium">Unknown Caller</span>
         </div>
-        <p className="text-xs text-muted-foreground">{phoneNumber}</p>
+        <p className="text-xs text-muted-foreground">{prettyPhone}</p>
         {activeCallLog && (
           <Badge variant="outline" className="text-xs gap-1 border-amber-500/50 text-amber-600">
             <PhoneIncoming className="h-3 w-3" /> {activeCallLog}

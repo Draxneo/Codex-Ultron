@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useUpdateCustomer } from "@/hooks/useCustomers";
+import { formatPhoneInput } from "@/lib/formatters";
 
 type CustomerLike = {
   id: string;
@@ -59,8 +60,8 @@ export function CustomerEditDialog({ customer }: { customer: CustomerLike }) {
       first_name: text(customer.first_name),
       last_name: text(customer.last_name),
       company: text(customer.company),
-      phone: text(customer.phone),
-      mobile_phone: text(customer.mobile_phone),
+      phone: formatPhoneInput(customer.phone),
+      mobile_phone: formatPhoneInput(customer.mobile_phone),
       email: text(customer.email),
       address: text(customer.address),
       city: text(customer.city),
@@ -134,8 +135,8 @@ export function CustomerEditDialog({ customer }: { customer: CustomerLike }) {
             <Field label="Last name" value={form.last_name} onChange={(v) => setField("last_name", v)} />
             <Field label="Company" value={form.company} onChange={(v) => setField("company", v)} />
             <Field label="Lead source" value={form.lead_source} onChange={(v) => setField("lead_source", v)} />
-            <Field label="Phone" value={form.phone} onChange={(v) => setField("phone", v)} />
-            <Field label="Mobile phone" value={form.mobile_phone} onChange={(v) => setField("mobile_phone", v)} />
+            <Field label="Phone" value={form.phone} onChange={(v) => setField("phone", formatPhoneInput(v))} />
+            <Field label="Mobile phone" value={form.mobile_phone} onChange={(v) => setField("mobile_phone", formatPhoneInput(v))} />
             <Field label="Email" value={form.email} onChange={(v) => setField("email", v)} />
             <Field label="Tags" value={form.tags} onChange={(v) => setField("tags", v)} placeholder="Comfort Club, Install, VIP" />
           </div>

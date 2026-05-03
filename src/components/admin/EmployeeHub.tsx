@@ -32,6 +32,7 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { ClickToCall } from "@/components/ClickToCall";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { formatPhone, formatPhoneInput } from "@/lib/formatters";
 
 const CANONICAL_ROLES: RoleKey[] = ["admin", "office", "supervisor", "tech", "installer"];
 
@@ -84,7 +85,7 @@ function RosterTab() {
     setForm({
       name: emp.name ?? "",
       role,
-      phone: emp.phone ?? "",
+      phone: formatPhoneInput(emp.phone),
       home_address: emp.home_address ?? "",
       email: emp.email ?? "",
     });
@@ -188,7 +189,7 @@ function RosterTab() {
                           {emp.phone && (
                             <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                               <ClickToCall phone={emp.phone} contactName={emp.name} iconClassName="h-3 w-3" className="text-muted-foreground hover:text-primary">
-                                {emp.phone}
+                                {formatPhone(emp.phone) || emp.phone}
                               </ClickToCall>
                               <button
                                 onClick={() => {
@@ -281,7 +282,7 @@ function RosterTab() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Phone</Label>
-              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+15551234567" />
+              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} placeholder="(555) 123-4567" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Home Address</Label>

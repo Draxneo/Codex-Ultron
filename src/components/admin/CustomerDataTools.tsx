@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { formatPhone } from "@/lib/formatters";
 
 type CustomerRow = {
   id: string;
@@ -188,7 +189,7 @@ export function CustomerDataTools() {
                 customers.map((customer) => (
                   <div key={customer.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                     <span className="font-medium">{customerName(customer)}</span>
-                    {customer.phone && <span className="text-muted-foreground">{customer.phone}</span>}
+                    {customer.phone && <span className="text-muted-foreground">{formatPhone(customer.phone) || customer.phone}</span>}
                     {customer.email && <span className="text-muted-foreground">{customer.email}</span>}
                     <div className="ml-auto flex flex-wrap gap-1">
                       {(customer.tags || []).map((customerTag) => (

@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StreetViewThumbnail } from "@/components/tech/StreetViewThumbnail";
 import { format, parseISO } from "date-fns";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { formatPhone } from "@/lib/formatters";
 
 export default function TechCustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -110,7 +111,7 @@ export default function TechCustomerDetail() {
                   onClick={() => softphone.dial?.(phone, [customer.first_name, customer.last_name].filter(Boolean).join(" ") || undefined)}
                   className="flex-1 flex items-center gap-2 h-10 px-3 rounded-md bg-primary/10 text-primary text-sm font-medium active:bg-primary/20"
                 >
-                  <Phone className="h-4 w-4" /> {phone}
+                  <Phone className="h-4 w-4" /> {formatPhone(phone) || phone}
                 </button>
                 <button
                   type="button"

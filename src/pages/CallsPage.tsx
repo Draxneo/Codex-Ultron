@@ -97,7 +97,7 @@ function MobileDialPad() {
             {softphone.callerInfo?.name && (
               <p className="text-lg font-bold text-foreground">{softphone.callerInfo.name}</p>
             )}
-            <p className="text-sm text-muted-foreground font-mono">{softphone.callerInfo?.number || "Connecting..."}</p>
+            <p className="text-sm text-muted-foreground font-mono">{formatPhone(softphone.callerInfo?.number) || softphone.callerInfo?.number || "Connecting..."}</p>
             {isOnCall && (
               <p className="text-sm font-mono text-[hsl(var(--success))] mt-1">{formatDuration(softphone.callDuration)}</p>
             )}

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCreateEstimate } from "@/hooks/useEstimates";
 import { toast } from "sonner";
+import { formatPhoneInput } from "@/lib/formatters";
 
 const ESTIMATE_TYPES = ["System Replacement", "Service/Repair", "Duct Work Replacement"] as const;
 const SYSTEM_TYPES = ["gas_heat", "heat_pump", "dual_fuel", "ac_only"];
@@ -169,7 +170,7 @@ export function NewEstimateDialog({ open, onOpenChange, sourceJobId }: NewEstima
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Phone</Label>
-              <Input value={form.customer_phone} onChange={e => set("customer_phone", e.target.value)} placeholder="(555) 123-4567" />
+              <Input value={form.customer_phone} onChange={e => set("customer_phone", formatPhoneInput(e.target.value))} placeholder="(555) 123-4567" />
             </div>
             <div className="space-y-2">
               <Label>Email</Label>

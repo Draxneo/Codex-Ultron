@@ -11,6 +11,7 @@
 import { format } from "date-fns";
 import { Clock, Phone, MapPin, Car } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatPhone } from "@/lib/formatters";
 import type { CalendarVisibleFields } from "@/components/job/CalendarSettings";
 
 const JOB_TYPE_EMOJI: Record<string, string> = {
@@ -141,7 +142,7 @@ export function JobScheduleCard({
         {!compact && item.customer_phone && visibleFields?.phone && (
           <span className="text-[10px] text-white/70 flex items-center gap-0.5">
             <Phone className="h-3 w-3 shrink-0" />
-            {item.customer_phone}
+            {formatPhone(item.customer_phone) || item.customer_phone}
           </span>
         )}
 

@@ -997,7 +997,7 @@ function JobContextDialog({
                 </div>
                 <div className="flex gap-2">
                   <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>{item.customer_phone || "No phone on this record"}</span>
+                  <span>{formatPhone(item.customer_phone) || item.customer_phone || "No phone on this record"}</span>
                 </div>
                 <p className="rounded-md bg-muted/60 p-3 text-muted-foreground">
                   {item.description || "No job description yet. This is where dispatch notes, booking reason, and customer concerns should be visible."}

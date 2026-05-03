@@ -49,6 +49,7 @@ import { useStatusBar } from "@/hooks/useStatusBar";
 import { useIncomingCallNotification } from "@/hooks/useIncomingCallNotification";
 import { useGeofenceTracking } from "@/hooks/useGeofenceTracking";
 import { NATIVE_PHONE_DIAL_EVENT, createPhoneConsoleChannel, openPhoneConsole, type PhoneConsoleMessage } from "@/lib/phoneConsoleBridge";
+import { formatPhone } from "@/lib/formatters";
 import type { LucideIcon } from "lucide-react";
 
 export interface MobileTab {
@@ -312,7 +313,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
               <Phone className="h-4 w-4 animate-bounce" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold truncate">
-                  {callerInfo?.name || callerInfo?.number || "Incoming Call"}
+                  {callerInfo?.name || formatPhone(callerInfo?.number) || callerInfo?.number || "Incoming Call"}
                 </p>
                 <p className="text-[10px] opacity-80">Tap to answer</p>
               </div>
@@ -336,7 +337,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
               <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold truncate">
-                  {callerInfo?.name || callerInfo?.number || (isConnecting ? "Connecting..." : "On Call")}
+                  {callerInfo?.name || formatPhone(callerInfo?.number) || callerInfo?.number || (isConnecting ? "Connecting..." : "On Call")}
                 </p>
                 {isOnCall && (
                   <p className="text-[10px] font-mono opacity-80">{formatDuration(callDuration)}</p>
@@ -372,11 +373,11 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
               <div className={cn("h-2.5 w-2.5 rounded-full", hasIncoming ? "animate-pulse bg-[hsl(var(--success))]" : "bg-[hsl(var(--success))]")} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">
-                  {callerInfo?.name || callerInfo?.number || (hasIncoming ? "Incoming call" : "Active call")}
+                  {callerInfo?.name || formatPhone(callerInfo?.number) || callerInfo?.number || (hasIncoming ? "Incoming call" : "Active call")}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {hasIncoming ? "Incoming" : isConnecting ? "Connecting" : formatDuration(callDuration)}
-                  {callerInfo?.number ? ` - ${callerInfo.number}` : ""}
+                  {callerInfo?.number ? ` - ${formatPhone(callerInfo.number) || callerInfo.number}` : ""}
                 </p>
               </div>
               <button

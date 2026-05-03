@@ -21,6 +21,7 @@ import { useTelephonyMode } from "@/hooks/useTelephonyMode";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatPhone } from "@/lib/formatters";
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -436,8 +437,8 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
           // Delay to let summarize-call finish processing
           setTimeout(() => {
             const nameHint = row.contact_name
-              ? `${row.contact_name} (${row.phone_number})`
-              : row.phone_number;
+              ? `${row.contact_name} (${formatPhone(row.phone_number) || row.phone_number})`
+              : formatPhone(row.phone_number) || row.phone_number;
             sendQuery(
               `The call with ${nameHint} just ended. Review the call log and any transcription/summary for this number. What actions should I take — should I book a job, send a follow-up, or create a customer record? Show me the options.`
             );
@@ -554,7 +555,7 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
             {isOnCall ? (
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <span className="text-xs font-semibold text-foreground truncate">
-                  {softphone.callerInfo?.name || softphone.callerInfo?.number || "On Call"}
+                  {softphone.callerInfo?.name || formatPhone(softphone.callerInfo?.number) || softphone.callerInfo?.number || "On Call"}
                 </span>
                 <span className="text-[10px] font-mono text-[hsl(var(--success))]">{formatDuration(softphone.callDuration)}</span>
               </div>
@@ -594,7 +595,7 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Incoming</p>
               <p className="text-sm font-bold text-foreground">{softphone.callerInfo?.name || "Unknown"}</p>
-              <p className="text-xs text-muted-foreground font-mono">{softphone.callerInfo?.number}</p>
+              <p className="text-xs text-muted-foreground font-mono">{formatPhone(softphone.callerInfo?.number) || softphone.callerInfo?.number}</p>
             </div>
             <div className="flex gap-2 justify-center">
               <button
@@ -628,7 +629,7 @@ export function SoftphoneStrip({ onCallContextChange, alwaysExpanded = false }: 
               {softphone.callerInfo?.name && (
                 <p className="text-sm font-bold text-foreground">{softphone.callerInfo.name}</p>
               )}
-              <p className="text-xs text-muted-foreground font-mono">{softphone.callerInfo?.number || "Connecting..."}</p>
+              <p className="text-xs text-muted-foreground font-mono">{formatPhone(softphone.callerInfo?.number) || softphone.callerInfo?.number || "Connecting..."}</p>
               {isOnCall && (
                 <p className="text-xs font-mono text-[hsl(var(--success))] mt-0.5">{formatDuration(softphone.callDuration)}</p>
               )}

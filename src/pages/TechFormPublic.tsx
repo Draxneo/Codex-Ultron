@@ -30,6 +30,7 @@ import { CheckCircle, Camera, Loader2, Phone, ChevronDown, ChevronUp, Circle, Al
 import { ClickToCall } from "@/components/ClickToCall";
 import { launchNavigation } from "@/lib/launchNavigation";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { formatPhone } from "@/lib/formatters";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { TechFormCopilot } from "@/components/TechFormCopilot";
@@ -1072,7 +1073,7 @@ export default function TechFormPublic() {
                 <AddressLink address={job.address} className="text-sm text-foreground" iconClassName="h-3.5 w-3.5" />
               )}
               {job.customer_phone && (
-                <span className="text-sm text-foreground">{job.customer_phone}</span>
+                <span className="text-sm text-foreground">{formatPhone(job.customer_phone) || job.customer_phone}</span>
               )}
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-primary/10">

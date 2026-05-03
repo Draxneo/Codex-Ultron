@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Phone, MapPin, BadgeCheck } from "lucide-react";
 import type { CompanyContact } from "@/lib/quoteTemplate";
+import { formatPhone } from "@/lib/formatters";
 
 interface Props { company: CompanyContact | null; }
 
@@ -23,7 +24,7 @@ export function ContactSection({ company }: Props) {
           <span className="text-foreground">{[company.address, cityLine].filter(Boolean).join(", ")}</span>
         </div>
         <a href={`tel:${company.phone.replace(/\D/g, "")}`} className="flex items-center gap-2 text-primary font-semibold hover:underline">
-          <Phone className="h-4 w-4" /> {company.phone}
+          <Phone className="h-4 w-4" /> {formatPhone(company.phone) || company.phone}
         </a>
         {company.tacla && (
           <div className="flex items-center gap-2 text-muted-foreground">

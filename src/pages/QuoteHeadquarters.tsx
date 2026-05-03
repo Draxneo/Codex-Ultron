@@ -37,6 +37,7 @@ import { useQuotePipelineMap, type QuotePipelineRow } from "@/hooks/useCanonical
 import { useEstimates, type Estimate } from "@/hooks/useEstimates";
 import { supabase } from "@/integrations/supabase/client";
 import { errorMessage } from "@/lib/errorMessage";
+import { formatPhone } from "@/lib/formatters";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { cn } from "@/lib/utils";
 
@@ -681,7 +682,7 @@ function QuotePipelineCard({
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5" />
-              {estimate.customer_phone || "No phone"}
+              {formatPhone(estimate.customer_phone) || estimate.customer_phone || "No phone"}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" />

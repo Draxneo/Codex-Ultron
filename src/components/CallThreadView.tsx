@@ -14,6 +14,7 @@ import { InspectTwilioButton } from "@/components/inbox/InspectTwilioButton";
 import { DayDivider } from "@/components/shared/DayDivider";
 import { ctTimeLabel, groupByDay } from "@/lib/dateGrouping";
 import { UniversalMediaPlayer } from "@/components/media";
+import { formatPhone } from "@/lib/formatters";
 import type { CallConversation } from "@/hooks/useCallLog";
 
 interface Props {
@@ -73,6 +74,7 @@ export function CallThreadView({ conversation, onBack }: Props) {
   }
 
   const { calls, contactName, phoneNumber } = conversation;
+  const prettyPhone = formatPhone(phoneNumber) || phoneNumber;
 
   return (
     <div className="flex flex-col h-full">
@@ -82,7 +84,7 @@ export function CallThreadView({ conversation, onBack }: Props) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{contactName || phoneNumber}</p>
+          <p className="text-sm font-semibold truncate">{contactName || prettyPhone}</p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <ClickToCall
               phone={phoneNumber}
@@ -90,7 +92,7 @@ export function CallThreadView({ conversation, onBack }: Props) {
               className="text-xs text-muted-foreground hover:text-primary gap-1"
               iconClassName="h-3 w-3"
             >
-              {phoneNumber}
+              {prettyPhone}
             </ClickToCall>
 
             {callerLookup.data?.email && (

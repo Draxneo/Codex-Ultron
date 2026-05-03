@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClickToCall } from "@/components/ClickToCall";
 import { cn } from "@/lib/utils";
-import { normalizeLast10 } from "@/lib/formatters";
+import { formatPhone, normalizeLast10 } from "@/lib/formatters";
 import { groupByDay, ctTimeLabel } from "@/lib/dateGrouping";
 import { DayDivider } from "@/components/shared/DayDivider";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
@@ -180,7 +180,7 @@ function CallList({ calls }: { calls: CallRow[] }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium truncate">
-                          {call.contact_name || call.phone_number}
+                          {call.contact_name || formatPhone(call.phone_number) || call.phone_number}
                         </p>
                         {call.ai_summary && (
                           <Badge variant="secondary" className="text-[10px] gap-0.5 shrink-0">

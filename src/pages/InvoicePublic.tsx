@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { errorMessage } from "@/lib/errorMessage";
+import { formatPhone } from "@/lib/formatters";
 
 const fmt = (n: number) => `$${n.toFixed(2)}`;
 
@@ -100,7 +101,7 @@ export default function InvoicePublic() {
           <div className="text-right text-sm text-primary-foreground/80 space-y-0.5">
             {cs.company_phone && (
               <p className="flex items-center gap-1.5 justify-end">
-                <Phone className="h-3.5 w-3.5" /> {cs.company_phone}
+                <Phone className="h-3.5 w-3.5" /> {formatPhone(cs.company_phone) || cs.company_phone}
               </p>
             )}
             {cs.company_email && (
@@ -160,7 +161,7 @@ export default function InvoicePublic() {
               </p>
             )}
             {customer.email && <p className="text-sm text-muted-foreground">{customer.email}</p>}
-            {customer.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+            {customer.phone && <p className="text-sm text-muted-foreground">{formatPhone(customer.phone) || customer.phone}</p>}
           </div>
         )}
 

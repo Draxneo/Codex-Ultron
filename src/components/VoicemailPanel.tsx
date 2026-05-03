@@ -9,6 +9,7 @@ import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
 import { getRecordingProxyUrl } from "@/lib/recordingProxy";
 import { UniversalMediaPlayer } from "@/components/media";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
+import { formatPhone } from "@/lib/formatters";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "0:00";
@@ -68,7 +69,7 @@ export function VoicemailPanel() {
               >
                 <div className="flex items-center gap-2">
                   <span className={`text-sm truncate ${!vm.is_read ? "font-semibold" : "font-medium"}`}>
-                    {vm.contact_name || vm.phone_number}
+                    {vm.contact_name || formatPhone(vm.phone_number) || vm.phone_number}
                   </span>
                   {vm.contact_type !== "unknown" && (
                     <Badge variant="secondary" className="text-[9px]">{vm.contact_type}</Badge>

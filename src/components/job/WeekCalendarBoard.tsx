@@ -13,6 +13,7 @@ import { useHistoricalWeather } from "@/hooks/useHistoricalWeather";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { getUsHolidayName } from "@/lib/usHolidays";
 import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
+import { formatPhone } from "@/lib/formatters";
 
 interface BoardItem {
   id: string;
@@ -510,7 +511,7 @@ function WeekCard({
         {!isSmall && !isCompact && item.customer_phone && visibleFields?.phone && (
           <span className="text-[9px] text-white/70 flex items-center gap-0.5">
             <Phone className="h-2.5 w-2.5 shrink-0" />
-            {item.customer_phone}
+            {formatPhone(item.customer_phone) || item.customer_phone}
           </span>
         )}
 

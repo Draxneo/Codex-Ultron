@@ -524,7 +524,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                         <ArrowUpRight className="h-3 w-3 opacity-60" />
                       )}
                       <span className="text-[10px] font-medium opacity-60">
-                        {msg.direction === "inbound" ? (msg.contact_name || msg.phone_number) : "You"}
+                        {msg.direction === "inbound" ? (msg.contact_name || formatPhone(msg.phone_number) || msg.phone_number) : "You"}
                       </span>
                     </div>
                     <p className="whitespace-pre-wrap break-words overflow-hidden">{renderMessageBody(msg.body || "")}</p>
@@ -562,7 +562,7 @@ export function SmsThreadView({ conversation, sending, onSend, onMarkRead, onSta
                         )}
                       <SmsForwardButton
                         messageBody={msg.body || ""}
-                        senderName={msg.direction === "inbound" ? (msg.contact_name || msg.phone_number) : "You"}
+                        senderName={msg.direction === "inbound" ? (msg.contact_name || formatPhone(msg.phone_number) || msg.phone_number) : "You"}
                         mediaUrls={(msg as any).media_urls}
                       />
                     </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPhone } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -330,7 +331,7 @@ export default function Leads() {
                         <div className="flex flex-col gap-0.5 text-sm">
                           {lead.phone && (
                             <span className="flex items-center gap-1 text-muted-foreground">
-                              <Phone className="h-3 w-3" /> {lead.phone}
+                              <Phone className="h-3 w-3" /> {formatPhone(lead.phone) || lead.phone}
                             </span>
                           )}
                           {lead.email && (

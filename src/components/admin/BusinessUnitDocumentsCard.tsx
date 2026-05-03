@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { errorMessage } from "@/lib/errorMessage";
+import { formatPhone, formatPhoneInput } from "@/lib/formatters";
 
 type BusinessUnitDocumentSettings = {
   id: string;
@@ -211,7 +212,7 @@ export function BusinessUnitDocumentsCard() {
                       <h3 className="font-semibold">{unit.display_name}</h3>
                       {unit.is_default && <Badge variant="outline">Default</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground">{unit.primary_phone_number}</p>
+                    <p className="text-xs text-muted-foreground">{formatPhone(unit.primary_phone_number) || unit.primary_phone_number}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -266,7 +267,11 @@ export function BusinessUnitDocumentsCard() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="flex items-center gap-1 text-xs"><Phone className="h-3 w-3" /> Billing Phone</Label>
-                    <Input value={draft.billing_phone || ""} onChange={(event) => setField(unit, "billing_phone", event.target.value)} placeholder={unit.primary_phone_number} />
+                    <Input
+                      value={draft.billing_phone || ""}
+                      onChange={(event) => setField(unit, "billing_phone", formatPhoneInput(event.target.value))}
+                      placeholder={formatPhone(unit.primary_phone_number) || unit.primary_phone_number}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="flex items-center gap-1 text-xs"><Mail className="h-3 w-3" /> Billing Email</Label>

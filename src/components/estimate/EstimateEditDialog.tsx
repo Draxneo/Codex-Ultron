@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useUpdateEstimate } from "@/hooks/useEstimates";
+import { formatPhoneInput } from "@/lib/formatters";
 
 const WORK_STATUS_OPTIONS = [
   { value: "new", label: "New" },
@@ -66,7 +67,7 @@ export function EstimateEditDialog({ estimate }: { estimate: any }) {
       arrival_start: toDateTimeLocal(estimate?.arrival_start),
       arrival_end: toDateTimeLocal(estimate?.arrival_end),
       customer_name: text(estimate?.customer_name),
-      customer_phone: text(estimate?.customer_phone),
+      customer_phone: formatPhoneInput(estimate?.customer_phone),
       customer_email: text(estimate?.customer_email),
       address: text(estimate?.address),
       description: text(estimate?.description),
@@ -188,7 +189,7 @@ export function EstimateEditDialog({ estimate }: { estimate: any }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Field label="Customer name" value={form.customer_name} onChange={(v) => setField("customer_name", v)} />
-            <Field label="Phone" value={form.customer_phone} onChange={(v) => setField("customer_phone", v)} />
+            <Field label="Phone" value={form.customer_phone} onChange={(v) => setField("customer_phone", formatPhoneInput(v))} />
             <Field label="Email" value={form.customer_email} onChange={(v) => setField("customer_email", v)} />
           </div>
 

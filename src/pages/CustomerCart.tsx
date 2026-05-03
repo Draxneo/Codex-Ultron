@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPhone } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -218,7 +219,7 @@ export default function CustomerCart() {
             </div>
             {company.phone && (
               <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground shrink-0">
-                <Phone className="h-4 w-4" /> {company.phone}
+                <Phone className="h-4 w-4" /> {formatPhone(company.phone) || company.phone}
               </a>
             )}
           </div>
@@ -680,7 +681,7 @@ export default function CustomerCart() {
         )}
 
         <p className="text-[11px] text-center text-muted-foreground pt-2">
-          Questions? Call {company.name} at {company.phone || "the number above"}.
+          Questions? Call {company.name} at {formatPhone(company.phone) || company.phone || "the number above"}.
         </p>
       </main>
     </div>
