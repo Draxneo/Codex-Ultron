@@ -65,7 +65,7 @@ import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { formatPhone, normalizeLast10, toE164 } from "@/lib/formatters";
+import { formatDateFriendly, formatPhone, normalizeLast10, toE164 } from "@/lib/formatters";
 import { verifyAddressWithGoogle, type GoogleAddressVerification } from "@/lib/google-maps";
 import { insertAtSelection } from "@/lib/insertAtCursor";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
@@ -95,6 +95,9 @@ type DeskConversation = {
   latestJobId?: string | null;
   raw: CallConversation | SmsConversation;
   canonical?: UnifiedCommunication | null;
+  handledByName?: string | null;
+  handledAt?: string | null;
+  handledMetadata?: Record<string, any> | null;
 };
 
 type IntakeThreadStatusRow = {
@@ -108,6 +111,7 @@ type IntakeThreadStatusRow = {
   handled_by_name: string | null;
   handled_at: string | null;
   updated_at: string | null;
+  metadata?: Record<string, any> | null;
 };
 
 type UIMode = "ai" | "human";
@@ -210,6 +214,35 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unscheduled";
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function handledReceiptLabel(item?: DeskConversation | null) {
+  if (!item || !isHandledConversation(item)) return null;
+  const meta = item.handledMetadata || {};
+  if (meta.handled_label) return String(meta.handled_label);
+  if (meta.handled_outcome === "scheduled" || meta.scheduled_date) {
+    const date = meta.scheduled_date ? formatDateFriendly(String(meta.scheduled_date)) || String(meta.scheduled_date) : "";
+    const start = String(meta.scheduled_time || "").split(":")[0];
+    const end = String(meta.scheduled_end || "").split(":")[0];
+    const toHour = (value: string) => {
+      const hour = Number(value);
+      return Number.isFinite(hour) ? String(hour % 12 || 12) : value;
+    };
+    const block = start ? `${toHour(start)}${end ? ` to ${toHour(end)}` : ""}` : "";
+    return `Scheduled ${[date, block].filter(Boolean).join(", ")}`.trim();
+  }
+  if (item.handledByName && item.handledAt) return `Handled by ${item.handledByName}`;
+  return "Handled";
+}
+
+function handledReceiptDetail(item?: DeskConversation | null) {
+  if (!item || !isHandledConversation(item)) return null;
+  const meta = item.handledMetadata || {};
+  return (
+    meta.handled_detail ||
+    meta.handled_work_reason ||
+    (item.handledByName && item.handledAt ? `Handled by ${item.handledByName} at ${formatDateTime(item.handledAt)}.` : null)
+  );
 }
 
 function timeAgo(value?: string | null) {
@@ -2037,6 +2070,8 @@ function CustomerWorkspace({
   const openText = () => {
     setSmsDialogOpen(true);
   };
+  const handledLabel = handledReceiptLabel(selected);
+  const handledDetail = handledReceiptDetail(selected);
   const markHandled = async () => {
     if (!selected || handling) return;
     if (!user?.id) {
@@ -2237,9 +2272,15 @@ function CustomerWorkspace({
               <Sparkles className="h-4 w-4" />
               Jarvis notes
             </Button>
-            <Button size="sm" className="gap-2" onClick={markHandled} disabled={handling}>
+            <Button
+              size="sm"
+              className="max-w-[260px] gap-2"
+              onClick={markHandled}
+              disabled={handling || Boolean(handledLabel)}
+              title={handledDetail || handledLabel || "Mark this conversation handled"}
+            >
               {handling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Handled
+              <span className="truncate">{handledLabel || "Handled"}</span>
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate("/now")}>
               <Zap className="h-4 w-4" />
@@ -2260,6 +2301,11 @@ function CustomerWorkspace({
         {handledStamp?.id === selected.id && (
           <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-100">
             Handled by {handledStamp.label} at {formatDateTime(handledStamp.at)}.
+          </div>
+        )}
+        {handledLabel && handledDetail && (
+          <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/25 dark:text-emerald-100">
+            {handledDetail}
           </div>
         )}
       </div>
@@ -3501,11 +3547,11 @@ export default function OperationsDeskV2() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("intake_thread_status")
-        .select("channel, phone_last10, company_phone_number, company_phone_last10, thread_key, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
+        .select("channel, phone_last10, company_phone_number, company_phone_last10, thread_key, status, handled_by_user_id, handled_by_name, handled_at, updated_at, metadata");
       if (error) {
         const legacy = await (supabase as any)
           .from("intake_thread_status")
-          .select("channel, phone_last10, status, handled_by_user_id, handled_by_name, handled_at, updated_at");
+          .select("channel, phone_last10, status, handled_by_user_id, handled_by_name, handled_at, updated_at, metadata");
         if (legacy.error) throw legacy.error;
         return (legacy.data || []) as IntakeThreadStatusRow[];
       }
@@ -3550,7 +3596,14 @@ export default function OperationsDeskV2() {
         const handledAt = sharedStatus.handled_at || sharedStatus.updated_at;
         const handledAfterSignal = handledAt && new Date(handledAt).getTime() >= new Date(item.createdAt).getTime();
         if (!handledAfterSignal) return item;
-        return { ...item, status: "done", unread: false };
+        return {
+          ...item,
+          status: "done",
+          unread: false,
+          handledByName: sharedStatus.handled_by_name || null,
+          handledAt: sharedStatus.handled_at || sharedStatus.updated_at || null,
+          handledMetadata: sharedStatus.metadata || null,
+        };
       })
       .filter((item) => !isEmployeeConversation(item))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

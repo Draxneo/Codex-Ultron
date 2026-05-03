@@ -72,6 +72,27 @@ const TIME_BLOCKS = [
   { label: "4 to 6", start: "16:00", end: "18:00" },
 ];
 
+function cleanWorkReason(value?: unknown) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function actionWorkReason(item: any, meta: Record<string, any>) {
+  return (
+    cleanWorkReason(meta.description) ||
+    cleanWorkReason(meta.job_description) ||
+    cleanWorkReason(meta.work_reason) ||
+    cleanWorkReason(meta.quote_subject) ||
+    cleanWorkReason(meta.quote_options_requested) ||
+    cleanWorkReason(meta.customer_request) ||
+    cleanWorkReason(meta.suggested_action) ||
+    cleanWorkReason(item.suggested_action) ||
+    cleanWorkReason(item.description) ||
+    "Follow-up"
+  );
+}
+
 function isScheduleableActionItem(item: any) {
   const ownership = getActionOwnership(item);
   if (ownership.requiresSchedule && item?.category !== "new_appointment") return true;
@@ -192,7 +213,8 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           scheduled_time: scheduleForm.blockStart,
           scheduled_end: scheduleForm.blockEnd,
           job_type: meta.job_type || (isQuoteLike ? "estimate" : "phone_call"),
-          description: meta.description || item.description || item.suggested_action || "Follow-up",
+          description: actionWorkReason(item, meta),
+          work_reason: actionWorkReason(item, meta),
           customer_name: meta.customer_name || item.customer_name || "Unknown",
           customer_phone: meta.customer_phone || meta.phone || item.customer_phone || null,
           customer_email: meta.customer_email || meta.email || null,

@@ -46,6 +46,7 @@ interface Stop {
   arrival_end: string | null;
   job_type: string | null;
   number: string | null;
+  description: string | null;
 }
 
 async function buildDigestForTech(sb: any, employee: { id: string; name: string; phone: string | null }, date: string) {
@@ -55,13 +56,13 @@ async function buildDigestForTech(sb: any, employee: { id: string; name: string;
 
   const [{ data: jobs }, { data: estimates }, { data: legs }] = await Promise.all([
     sb.from("jobs")
-      .select("id, customer_name, address, arrival_start, arrival_end, job_type, hcp_job_number")
+      .select("id, customer_name, address, arrival_start, arrival_end, job_type, hcp_job_number, description")
       .eq("scheduled_date", date)
       .eq("assigned_to", employee.name)
       .not("status", "in", '("canceled","done","invoiced")')
       .order("arrival_start", { ascending: true, nullsFirst: false }),
     sb.from("estimates")
-      .select("id, customer_name, address, arrival_start, arrival_end, estimate_number")
+      .select("id, customer_name, address, arrival_start, arrival_end, estimate_number, description")
       .eq("scheduled_date", date)
       .eq("assigned_to", employee.name)
       .not("status", "in", '("canceled","lost")')
@@ -76,10 +77,12 @@ async function buildDigestForTech(sb: any, employee: { id: string; name: string;
     ...(jobs || []).map((j: any) => ({
       type: "job" as const, id: j.id, customer_name: j.customer_name, address: j.address,
       arrival_start: j.arrival_start, arrival_end: j.arrival_end, job_type: j.job_type, number: j.hcp_job_number,
+      description: j.description || null,
     })),
     ...(estimates || []).map((e: any) => ({
       type: "estimate" as const, id: e.id, customer_name: e.customer_name, address: e.address,
       arrival_start: e.arrival_start, arrival_end: e.arrival_end, job_type: "estimate", number: e.estimate_number,
+      description: e.description || null,
     })),
   ].sort((a, b) => {
     if (a.arrival_start && b.arrival_start) return a.arrival_start.localeCompare(b.arrival_start);
@@ -109,6 +112,7 @@ async function buildDigestForTech(sb: any, employee: { id: string; name: string;
     const travel = travelByDest.get(s.id);
     const travelLabel = travel?.mins ? ` 🚗 ${travel.mins}m` : "";
     lines.push(`${i + 1}. ${time} — ${cust}${typeTag}${travelLabel}`);
+    if (s.description) lines.push(`   Work: ${String(s.description).replace(/\s+/g, " ").slice(0, 180)}`);
     if (s.address) lines.push(`   ${s.address}`);
   });
 

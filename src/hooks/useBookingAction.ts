@@ -18,12 +18,73 @@ import {
   invalidateActionItemQueues,
   resolveActionItem,
 } from "@/lib/actionItemLifecycle";
+import { detectCentralOffset, formatDateFriendly } from "@/lib/formatters";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function debugBooking(message: string, detail?: Record<string, unknown>) {
   if (!import.meta.env.DEV) return;
   console.debug(`[useBookingAction] ${message}`, detail);
+}
+
+function cleanText(value?: unknown) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function formatBlockLabel(start?: string | null, end?: string | null) {
+  if (!start) return "";
+  const toHour = (value: string) => {
+    const [hourRaw] = value.split(":");
+    const hour = Number(hourRaw);
+    if (!Number.isFinite(hour)) return value;
+    const hour12 = hour % 12 || 12;
+    return String(hour12);
+  };
+  return end ? `${toHour(start)} to ${toHour(end)}` : toHour(start);
+}
+
+function buildHandledReceipt(input: {
+  metadata: Record<string, any>;
+  jobId?: string | null;
+  jobNumber?: string | null;
+  type?: "job" | "estimate";
+}) {
+  const meta = input.metadata || {};
+  const date = cleanText(meta.scheduled_date);
+  const block = formatBlockLabel(meta.scheduled_time, meta.scheduled_end);
+  const dateLabel = date ? formatDateFriendly(date) || date : "";
+  const workReason =
+    cleanText(meta.work_reason) ||
+    cleanText(meta.description) ||
+    cleanText(meta.quote_subject) ||
+    cleanText(meta.quote_options_requested) ||
+    cleanText(meta.suggested_action) ||
+    "Scheduled work";
+  const assignedTo = cleanText(meta.assigned_to);
+  const scheduledLabel = [dateLabel, block].filter(Boolean).join(", ");
+  const handledLabel = scheduledLabel ? `Scheduled ${scheduledLabel}` : "Scheduled";
+
+  return {
+    handled_outcome: "scheduled",
+    handled_label: handledLabel,
+    handled_detail: [
+      assignedTo ? `Assigned to ${assignedTo}` : "",
+      workReason ? `Work: ${workReason}` : "",
+    ].filter(Boolean).join(" - "),
+    handled_work_reason: workReason,
+    handled_owner: assignedTo || null,
+    handled_job_id: input.jobId || null,
+    handled_job_number: input.jobNumber || null,
+    handled_type: input.type || "job",
+    scheduled_date: date || null,
+    scheduled_time: meta.scheduled_time || null,
+    scheduled_end: meta.scheduled_end || null,
+  };
+}
+
+function centralDateTime(date?: string | null, time?: string | null) {
+  if (!date || !time) return null;
+  return `${date}T${time}:00${detectCentralOffset(date)}`;
 }
 
 export type BookingPhase = "idle" | "resolving" | "booking" | "syncing" | "booked" | "failed";
@@ -139,12 +200,8 @@ export function useBookingAction() {
             job_type: body.job_type,
             address: body.address,
             assigned_to: body.assigned_to,
-            scheduled_start: body.scheduled_date && body.scheduled_time
-              ? `${body.scheduled_date}T${body.scheduled_time}:00`
-              : null,
-            scheduled_end: body.scheduled_date && body.scheduled_end
-              ? `${body.scheduled_date}T${body.scheduled_end}:00`
-              : null,
+            scheduled_start: centralDateTime(body.scheduled_date, body.scheduled_time),
+            scheduled_end: centralDateTime(body.scheduled_date, body.scheduled_end),
             action_item_id,
             created_by: body.created_by,
             is_estimate: body.is_estimate,
@@ -173,6 +230,60 @@ export function useBookingAction() {
         };
 
         setState(action_item_id, { phase: "syncing", result });
+
+        const receipt = buildHandledReceipt({
+          metadata: m,
+          jobId: result.job_id,
+          jobNumber: result.job_number,
+          type: result.type,
+        });
+        try {
+          await supabase
+            .from("action_items" as any)
+            .update({
+              job_id: result.job_id,
+              metadata: {
+                ...m,
+                ...receipt,
+              },
+            })
+            .eq("id", action_item_id);
+
+          const sourceEventId =
+            m.source_event_id ||
+            m.inbound_sms_log_id ||
+            m.sms_log_id ||
+            m.call_id ||
+            null;
+          const sourceTable =
+            m.source_table ||
+            (m.inbound_sms_log_id || m.sms_log_id ? "sms_log" : m.call_id ? "call_log" : null);
+          const communicationChannel =
+            sourceTable === "call_log" || m.call_id ? "call" : "sms";
+          const companyPhone =
+            m.company_phone_number ||
+            m.companyPhoneNumber ||
+            m.called_number ||
+            m.calledNumber ||
+            m.to_number ||
+            m.toNumber ||
+            null;
+          const customerPhoneForThread = body.customer_phone || m.phone || customer_phone;
+          if (customerPhoneForThread) {
+            await (supabase as any).rpc("mark_intake_communication_handled", {
+              _channel: communicationChannel,
+              _phone_number: customerPhoneForThread,
+              _handled_by_name: user?.email || "Dispatcher",
+              _source_table: sourceTable,
+              _source_event_id: sourceEventId,
+              _metadata: receipt,
+              _business_unit_id: m.business_unit_id || m.businessUnitId || null,
+              _company_phone_number: companyPhone,
+            });
+          }
+        } catch (receiptError) {
+          console.warn("[useBookingAction] Job was scheduled, but the intake receipt did not save.", receiptError);
+        }
 
         await resolveActionItem({
           id: action_item_id,
