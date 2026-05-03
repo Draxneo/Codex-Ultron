@@ -364,6 +364,7 @@ serve(async (req) => {
         customer_id: body.customer_id,
         customer_name: body.customer_name || "Unknown",
         customer_phone: body.customer_phone || customerPhone,
+        customer_email: body.customer_email || null,
         description: body.description || "Service call",
         job_type: effectiveJobType,
         status: "new",
@@ -373,6 +374,8 @@ serve(async (req) => {
       if (body.scheduled_start) {
         jobRecord.scheduled_date = body.scheduled_start.split("T")[0];
         jobRecord.arrival_start = body.scheduled_start;
+        jobRecord.arrival_end = body.scheduled_end || null;
+        jobRecord.status = "scheduled";
       }
 
       const { data: jobData, error: jobError } = await sb

@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
 import { useBookingAction } from "@/hooks/useBookingAction";
 import { useSharedActionItemTasks } from "@/hooks/useSharedActionItemTasks";
+import { useEmployees } from "@/hooks/useEmployees";
 import { format } from "date-fns";
 import {
   ChevronLeft, Loader2, Check, X, MapPin, UserCheck,
@@ -21,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TrainContactDialog } from "@/components/jarvis/TrainContactDialog";
 import {
   ACTION_ITEM_STATUS,
@@ -60,6 +63,55 @@ const PRIORITY_COLORS: Record<string, string> = {
   low:      "bg-muted/50 text-muted-foreground/70 border-border/50",
 };
 
+const TIME_BLOCKS = [
+  { label: "8 to 10", start: "08:00", end: "10:00" },
+  { label: "10 to 12", start: "10:00", end: "12:00" },
+  { label: "12 to 2", start: "12:00", end: "14:00" },
+  { label: "2 to 4", start: "14:00", end: "16:00" },
+  { label: "4 to 6", start: "16:00", end: "18:00" },
+];
+
+function isScheduleableActionItem(item: any) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  if (item.category === "new_appointment") return false;
+  if (meta.needs_schedule_before_accept) return true;
+  if (meta.follow_up_date || meta.scheduled_date) return true;
+  const haystack = [
+    item.category,
+    item.title,
+    item.description,
+    item.suggested_action,
+    meta.jarvis_intent,
+    meta.quote_subject,
+    meta.workflow_type,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return /\b(quote|bid|estimate|follow[-\s]?up|callback|call back)\b/.test(haystack);
+}
+
+function defaultScheduleForm(item: any, employees: any[] = []) {
+  const meta = (item?.metadata || {}) as Record<string, any>;
+  const defaultDate = meta.follow_up_date || meta.scheduled_date || new Date().toISOString().slice(0, 10);
+  const requested = String(meta.scheduled_time || "").toLowerCase();
+  const defaultBlock =
+    TIME_BLOCKS.find((block) => block.start === meta.scheduled_time || block.label === requested) ||
+    (requested.includes("morning") ? TIME_BLOCKS[0] : TIME_BLOCKS[0]);
+  const defaultEmployee =
+    meta.assigned_to ||
+    ((meta.business_unit_name || meta.company_label || "").toLowerCase().includes("fix")
+      ? "Clint Carnes"
+      : meta.job_type === "service"
+        ? "Jonathan Carnes"
+        : "Clint Carnes");
+  const employeeExists = employees.some((employee) => employee.name === defaultEmployee);
+
+  return {
+    assignedTo: employeeExists ? defaultEmployee : employees.find((employee) => employee.is_active !== false)?.name || defaultEmployee,
+    scheduledDate: defaultDate,
+    blockStart: defaultBlock.start,
+    blockEnd: defaultBlock.end,
+  };
+}
+
 function getActionItemSmsContext(item: any) {
   const meta = (item?.metadata || {}) as Record<string, any>;
   return {
@@ -89,12 +141,77 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
   const softphone = useSoftphoneContext();
   const { book, getState } = useBookingAction();
   const sharedTasks = useSharedActionItemTasks();
+  const { data: employees = [] } = useEmployees();
   const [actionId, setActionId] = useState<string | null>(null);
   const [trainPhone, setTrainPhone] = useState<{ phone: string; name?: string } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [propertySelections, setPropertySelections] = useState<Record<string, any>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
+  const [scheduleItem, setScheduleItem] = useState<any | null>(null);
+  const [scheduleForm, setScheduleForm] = useState({ assignedTo: "Clint Carnes", scheduledDate: "", blockStart: "08:00", blockEnd: "10:00" });
+
+  const activeEmployees = (employees as any[]).filter((employee) => employee.is_active !== false);
+
+  const openScheduleDialog = (item: any) => {
+    setScheduleItem(item);
+    setScheduleForm(defaultScheduleForm(item, activeEmployees));
+  };
+
+  const scheduleActionItem = async () => {
+    if (!scheduleItem) return;
+    if (!scheduleForm.assignedTo || !scheduleForm.scheduledDate || !scheduleForm.blockStart || !scheduleForm.blockEnd) {
+      toast({ title: "Pick a person and time block", description: "This card stays in Now until it is actually on the schedule.", variant: "destructive" });
+      return;
+    }
+
+    const item = scheduleItem;
+    const meta = (item.metadata || {}) as any;
+    setActionId(item.id);
+    try {
+      const claimed = await sharedTasks.claimActionItem(item);
+      if (!claimed.ok) throw new Error(claimed.reason || "This card is already being handled.");
+
+      const isQuoteLike = /\b(quote|bid|estimate)\b/i.test([
+        item.title,
+        item.description,
+        item.suggested_action,
+        meta.jarvis_intent,
+        meta.quote_subject,
+      ].filter(Boolean).join(" "));
+
+      const result = await book({
+        action_item_id: item.id,
+        metadata: {
+          ...meta,
+          assigned_to: scheduleForm.assignedTo,
+          scheduled_date: scheduleForm.scheduledDate,
+          scheduled_time: scheduleForm.blockStart,
+          scheduled_end: scheduleForm.blockEnd,
+          job_type: meta.job_type || (isQuoteLike ? "estimate" : "phone_call"),
+          description: meta.description || item.description || item.suggested_action || "Follow-up",
+          customer_name: meta.customer_name || item.customer_name || "Unknown",
+          customer_phone: meta.customer_phone || meta.phone || item.customer_phone || null,
+          customer_email: meta.customer_email || meta.email || null,
+          address: meta.address || null,
+          override_active_work: true,
+        },
+        description: item.description,
+        customer_phone: item.customer_phone,
+      });
+
+      if (result.ok) {
+        setScheduleItem(null);
+        invalidateActionItemQueues(qc);
+        qc.invalidateQueries({ queryKey: ["jobs"] });
+        qc.invalidateQueries({ queryKey: ["dispatch-jobs"] });
+      }
+    } catch (e: any) {
+      toast({ title: "Could not schedule it", description: e.message, variant: "destructive" });
+    } finally {
+      setActionId(null);
+    }
+  };
 
   const handleDraftReply = async (item: any) => {
     setDraftingId(item.id);
@@ -306,6 +423,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           const Icon = meta.icon;
           const priorityClass = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.normal;
           const itemMetadata = (item.metadata || {}) as any;
+          const scheduleable = isScheduleableActionItem(item);
           const editableApprovalField =
             item.category === "jarvis_action_approval" ? itemMetadata.editable_message_field : null;
           const editableApprovalText = editableApprovalField
@@ -657,12 +775,17 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         size="sm"
                         className="flex-1"
                         onClick={() => {
+                          if (scheduleable) {
+                            openScheduleDialog(item);
+                            return;
+                          }
                           if (reviewPath) navigate(reviewPath);
                           closeAsAccepted();
                         }}
                         disabled={isBusy}
                       >
-                        <Eye className="h-3 w-3" /> Review
+                        {scheduleable ? <CalendarPlus className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        {scheduleable ? "Schedule" : "Review"}
                       </Button>
                       <Button
                         size="sm"
@@ -697,11 +820,13 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                     <Button
                       size="sm"
                       className="flex-1"
-                      onClick={closeAsAccepted}
+                      onClick={scheduleable ? () => openScheduleDialog(item) : closeAsAccepted}
                       disabled={isBusy || (needsPropertySelection && !selectedProperty)}
                     >
                       {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                      {isBookingItem
+                      {scheduleable
+                        ? "Schedule"
+                        : isBookingItem
                         ? (bs.phase === "resolving" ? "Resolving…"
                           : bs.phase === "booking" ? "Booking..."
                           : bs.phase === "syncing" ? "Updating..."
@@ -737,6 +862,80 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           );
         })
       )}
+
+      <Dialog open={!!scheduleItem} onOpenChange={(open) => !open && setScheduleItem(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Put this on the schedule</DialogTitle>
+            <DialogDescription>
+              Pick who owns it and the time block. The card stays in Now until it is actually on the calendar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {scheduleItem && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-sm font-semibold">{scheduleItem.title}</p>
+                {scheduleItem.description && (
+                  <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{scheduleItem.description}</p>
+                )}
+              </div>
+
+              <label className="grid gap-1.5 text-sm font-medium">
+                Person responsible
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={scheduleForm.assignedTo}
+                  onChange={(event) => setScheduleForm((form) => ({ ...form, assignedTo: event.target.value }))}
+                >
+                  {activeEmployees.map((employee: any) => (
+                    <option key={employee.id} value={employee.name}>{employee.name}</option>
+                  ))}
+                  {!activeEmployees.some((employee: any) => employee.name === scheduleForm.assignedTo) && (
+                    <option value={scheduleForm.assignedTo}>{scheduleForm.assignedTo}</option>
+                  )}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium">
+                Day
+                <Input
+                  type="date"
+                  value={scheduleForm.scheduledDate}
+                  onChange={(event) => setScheduleForm((form) => ({ ...form, scheduledDate: event.target.value }))}
+                />
+              </label>
+
+              <div className="grid gap-2">
+                <p className="text-sm font-medium">Time block</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {TIME_BLOCKS.map((block) => {
+                    const active = scheduleForm.blockStart === block.start && scheduleForm.blockEnd === block.end;
+                    return (
+                      <Button
+                        key={block.label}
+                        type="button"
+                        variant={active ? "default" : "outline"}
+                        onClick={() => setScheduleForm((form) => ({ ...form, blockStart: block.start, blockEnd: block.end }))}
+                      >
+                        {block.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleItem(null)}>Not yet</Button>
+            <Button onClick={scheduleActionItem} disabled={!!scheduleItem && actionId === scheduleItem.id}>
+              {scheduleItem && actionId === scheduleItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+              Schedule it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {trainPhone && (
         <TrainContactDialog

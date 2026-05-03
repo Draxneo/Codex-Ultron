@@ -110,9 +110,11 @@ export function useBookingAction() {
           assigned_to: m.assigned_to || "Jonathan Carnes",
           scheduled_date: m.scheduled_date || null,
           scheduled_time: m.scheduled_time || null,
+          scheduled_end: m.scheduled_end || null,
           action_item_id,
           created_by: user?.id || "Dispatcher",
           is_estimate: m.job_type === "estimate",
+          override_active_work: m.override_active_work === true,
         };
 
         debugBooking("creating job from action item", {
@@ -140,9 +142,13 @@ export function useBookingAction() {
             scheduled_start: body.scheduled_date && body.scheduled_time
               ? `${body.scheduled_date}T${body.scheduled_time}:00`
               : null,
+            scheduled_end: body.scheduled_date && body.scheduled_end
+              ? `${body.scheduled_date}T${body.scheduled_end}:00`
+              : null,
             action_item_id,
             created_by: body.created_by,
             is_estimate: body.is_estimate,
+            override_active_work: body.override_active_work,
           },
         });
 
