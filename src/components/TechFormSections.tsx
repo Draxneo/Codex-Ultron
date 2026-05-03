@@ -124,7 +124,7 @@ const SECTION_LABELS: Record<string, string> = {
 };
 
 function inferStepGroup(field: FormField): string {
-  const label = field.label.toLowerCase();
+  const label = String(field.label || "").toLowerCase();
   const type = field.field_type;
 
   // Signature → completion

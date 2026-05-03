@@ -458,7 +458,7 @@ export function FormFieldsEditor() {
                       <Label>
                         {field.label} {field.is_required && <span className="text-destructive">*</span>}
                       </Label>
-                      {field.label.toLowerCase().includes("note") || field.label.toLowerCase().includes("diagnosis") || field.label.toLowerCase().includes("recommendation") ? (
+                      {String(field.label || "").toLowerCase().includes("note") || String(field.label || "").toLowerCase().includes("diagnosis") || String(field.label || "").toLowerCase().includes("recommendation") ? (
                         <Textarea disabled rows={3} placeholder={field.label} />
                       ) : (
                         <Input disabled placeholder={field.label} />

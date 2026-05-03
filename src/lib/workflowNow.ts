@@ -198,6 +198,10 @@ function normalized(value?: string | null) {
   return (value || "").trim().toLowerCase();
 }
 
+function lowerText(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function isLegacyHcpImport(row: any) {
   return Boolean(row?.hcp_id);
 }
@@ -299,7 +303,11 @@ function readPath(row: any, path: string) {
 function resolveActionLinks(step: WorkflowStepDefinition, row: any): WorkflowActionLink[] {
   const text = contextText(row);
   return (step.actionLinks || []).flatMap((link) => {
-    if (link.brandIncludes?.length && !link.brandIncludes.some((brand) => text.includes(brand.toLowerCase()))) return [];
+    const brandIncludes = Array.isArray(link.brandIncludes) ? link.brandIncludes : [];
+    if (brandIncludes.length && !brandIncludes.some((brand) => {
+      const needle = lowerText(brand);
+      return needle ? text.includes(needle) : false;
+    })) return [];
     let url = link.url;
     const placeholder = url.match(/^\{\{(.+)\}\}$/);
     if (placeholder) {

@@ -42,12 +42,13 @@ export default function PartsAndSupplies() {
   const [newPartNum, setNewPartNum] = useState("");
   const [newCost, setNewCost] = useState("");
 
+  const searchLower = search.toLowerCase();
   const filtered = parts.filter(
     (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.category || "").toLowerCase().includes(search.toLowerCase()) ||
+      String(p.name || "").toLowerCase().includes(searchLower) ||
+      (p.category || "").toLowerCase().includes(searchLower) ||
       p.supply_house_numbers.some((s) =>
-        s.part_number.toLowerCase().includes(search.toLowerCase())
+        String(s.part_number || "").toLowerCase().includes(searchLower)
       )
   );
 

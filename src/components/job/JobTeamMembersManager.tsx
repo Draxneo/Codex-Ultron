@@ -21,7 +21,7 @@ export function JobTeamMembersManager({
     primaryName,
     ...members.map((member) => member.employee_name),
   ].filter(Boolean).map((name) => String(name).toLowerCase()));
-  const available = employees.filter((employee) => employee.is_active && !existingNames.has(employee.name.toLowerCase()));
+  const available = employees.filter((employee) => employee.is_active && !existingNames.has(String(employee.name || "").toLowerCase()));
 
   const handleAdd = async (employeeId: string) => {
     const employee = employees.find((item) => item.id === employeeId);

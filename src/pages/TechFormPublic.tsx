@@ -501,7 +501,7 @@ export default function TechFormPublic() {
     if (!e.target.files || !techFormId) return;
     const files = Array.from(e.target.files);
     const field = fields.find(f => f.id === fieldId);
-    const labelLower = field?.label.toLowerCase() || "";
+    const labelLower = String(field?.label || "").toLowerCase();
     const fieldType = field?.field_type || "";
     const isDataPlate = labelLower.includes("data plate");
     const isSupplyTicket = labelLower.includes("supply house") || labelLower.includes("pickup ticket");
