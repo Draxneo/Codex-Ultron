@@ -39,6 +39,7 @@ export type SmsMessage = {
   media_urls?: SmsMediaItem[] | null;
   to_number?: string | null;
   business_unit_id?: string | null;
+  related_customer_id?: string | null;
   client_id?: string | null;
   /** CT day key (YYYY-MM-DD) — server-computed. */
   day_ct?: string | null;
@@ -51,6 +52,9 @@ export type SmsConversation = {
   phoneNumber: string;
   contactName: string | null;
   contactType: string;
+  customerId?: string | null;
+  contactEmail?: string | null;
+  contactAddress?: string | null;
   status: SmsConversationStatus;
   lastMessage: SmsMessage;
   unreadCount: number;
@@ -197,6 +201,15 @@ function hasCurrentWorkDate(value?: string | null) {
   return timestamp >= Date.now() - CURRENT_WORK_LOOKBACK_MS;
 }
 
+function customerAddressLine(customer: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}) {
+  return [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(", ") || null;
+}
+
 interface UseSmsLogOptions {
   role?: string | null;
   employeeId?: string | null;
@@ -230,7 +243,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
 
       const [{ data: employees }, { data: customers }, { data: estimates }, { data: jobs }, { data: supplyHouses }, { data: vendorContacts }] = await Promise.all([
         supabase.from("employees").select("name, phone, is_active"),
-        supabase.from("customers").select("first_name, last_name, phone, mobile_phone"),
+        supabase.from("customers").select("id, first_name, last_name, phone, mobile_phone, email, address, city, state, zip"),
         supabase
           .from("estimates")
           .select("id, estimate_number, customer_name, customer_phone, scheduled_date, status, work_status")
@@ -257,8 +270,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       for (const cust of customers || []) {
         const custName = buildCustomerDisplayName(cust);
         if (!custName) continue;
+        const address = customerAddressLine(cust);
         for (const ph of [cust.phone, cust.mobile_phone]) {
-          addContactLookup(map, ph, { name: custName, type: "customer" });
+          addContactLookup(map, ph, { name: custName, type: "customer", id: cust.id, email: cust.email || null, address });
         }
       }
 
@@ -539,6 +553,33 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
     buildFilter();
   }, [role, employeeId, disabled]);
 
+  const cacheCustomerLookup = useCallback(async (customerId?: string | null, phoneHint?: string | null) => {
+    if (!customerId) return;
+    const { data } = await supabase
+      .from("customers")
+      .select("id, first_name, last_name, phone, mobile_phone, email, address, city, state, zip")
+      .eq("id", customerId)
+      .maybeSingle();
+    if (!data) return;
+
+    const name = buildCustomerDisplayName(data);
+    if (!name) return;
+    const address = customerAddressLine(data);
+    setContactMap((prev) => {
+      const next = { ...prev };
+      for (const ph of [phoneHint, data.phone, data.mobile_phone]) {
+        addContactLookup(next, ph, {
+          name,
+          type: "customer",
+          id: data.id,
+          email: data.email || null,
+          address,
+        }, { overwrite: true });
+      }
+      return next;
+    });
+  }, []);
+
   const fetchMessages = useCallback(async (offset = 0, append = false) => {
     if (disabled) return;
     // For tech role, wait until filter is ready
@@ -674,6 +715,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
               console.error("Failed to mark inbound SMS thread as needing reply:", error);
             });
           }
+          if (msg.related_customer_id) {
+            void cacheCustomerLookup(msg.related_customer_id, msg.phone_number);
+          }
         }
       )
       .on(
@@ -684,6 +728,10 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
             const next = prev.map((m) => (m.id === payload.new.id ? (payload.new as SmsMessage) : m));
             return sortMessagesChrono(next);
           });
+          const msg = payload.new as SmsMessage;
+          if (msg.related_customer_id) {
+            void cacheCustomerLookup(msg.related_customer_id, msg.phone_number);
+          }
         }
       )
       .subscribe((status) => {
@@ -709,7 +757,7 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       clearInterval(heartbeat);
       supabase.removeChannel(channel);
     };
-  }, [fetchMessages, role, setThreadStatus, techPhoneFilter, disabled, userId, reconnectSeq]);
+  }, [cacheCustomerLookup, fetchMessages, role, setThreadStatus, techPhoneFilter, disabled, userId, reconnectSeq]);
 
   // Resolve a phone number to a contact via DB fields first, then client-side lookup
   const resolveContact = useCallback(
@@ -755,6 +803,8 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
       const latestToNumber = [...convoMsgs].reverse().find((m) => m.to_number)?.to_number || null;
       const latestBusinessUnitId = [...convoMsgs].reverse().find((m) => m.business_unit_id)?.business_unit_id || null;
       const phoneLast10 = normalizeLast10(phone);
+      const lookupDetails = phoneLast10 ? contactMap[phoneLast10] : undefined;
+      const relatedCustomerId = [...convoMsgs].reverse().find((m) => m.related_customer_id)?.related_customer_id || null;
       const legacyKey = phoneLast10 ? legacySmsThreadKey(phoneLast10) : "";
       const canUseLegacyStatus = !!phoneLast10 && threadCountByPhone[phoneLast10] === 1;
       const setting = threadSettings[threadKey] || (canUseLegacyStatus ? threadSettings[legacyKey] : undefined);
@@ -780,6 +830,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         phoneNumber: phone,
         contactName: resolved.name,
         contactType: resolved.type,
+        customerId: relatedCustomerId || lookupDetails?.id || null,
+        contactEmail: lookupDetails?.email || null,
+        contactAddress: lookupDetails?.address || null,
         status,
         lastMessage: lastMsg,
         unreadCount: unread,

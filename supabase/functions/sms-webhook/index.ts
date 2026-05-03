@@ -132,6 +132,51 @@ function customerNameParts(name: string | null) {
   };
 }
 
+function fullNameFromParts(first?: string | null, last?: string | null, fallback?: string | null) {
+  return [first, last].filter(Boolean).join(" ").trim() || fallback || null;
+}
+
+function composeAddress(street?: string | null, city?: string | null, state?: string | null, zip?: string | null) {
+  return [street, city, state, zip].filter(Boolean).join(", ") || null;
+}
+
+async function backfillCommunicationIdentity(
+  supabase: any,
+  args: {
+    phone: string;
+    businessUnitId?: string | null;
+    customerId?: string | null;
+    customerName?: string | null;
+  },
+) {
+  const name = args.customerName || null;
+  const smsUpdates: Record<string, unknown> = {
+    contact_type: "customer",
+  };
+  if (name) smsUpdates.contact_name = name;
+  if (args.customerId) smsUpdates.related_customer_id = args.customerId;
+  if (args.businessUnitId) smsUpdates.business_unit_id = args.businessUnitId;
+
+  let smsBackfill = supabase.from("sms_log")
+    .update(smsUpdates)
+    .eq("phone_number", args.phone);
+  if (args.businessUnitId) smsBackfill = smsBackfill.eq("business_unit_id", args.businessUnitId);
+  await smsBackfill;
+
+  const callUpdates: Record<string, unknown> = {
+    contact_type: "customer",
+  };
+  if (name) callUpdates.contact_name = name;
+  if (args.customerId) callUpdates.related_customer_id = args.customerId;
+  if (args.businessUnitId) callUpdates.business_unit_id = args.businessUnitId;
+
+  let callBackfill = supabase.from("call_log")
+    .update(callUpdates)
+    .eq("phone_number", args.phone);
+  if (args.businessUnitId) callBackfill = callBackfill.eq("business_unit_id", args.businessUnitId);
+  await callBackfill;
+}
+
 async function sendGoogleRelayCaptureSms(
   supabase: any,
   to: string,
@@ -1027,7 +1072,7 @@ Deno.serve(async (req) => {
 
     // ── Observer mode: structured extraction + call correlation + auto-customer creation ──
     // FIX #2: Extraction always runs for non-employee inbound SMS, regardless of auto-draft setting
-    if (!isEmployee && !testModeOn) {
+    if (!isEmployee) {
       const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
       if (openaiApiKey) {
         try {
@@ -1219,6 +1264,68 @@ IMPORTANT RULES:
                   await supabase.from("customers").update(updates).eq("id", existingCust.id);
                   console.log(`SMS: updated customer ${existingCust.id} with`, Object.keys(updates));
                 }
+
+                const enrichedName = fullNameFromParts(
+                  (updates.first_name as string | undefined) || custFull.first_name || extracted.first_name,
+                  (updates.last_name as string | undefined) || custFull.last_name || extracted.last_name,
+                  contactName || from,
+                );
+                const enrichedAddress = composeAddress(
+                  (updates.address as string | undefined) || custFull.address || extracted.address,
+                  (updates.city as string | undefined) || custFull.city || extracted.city,
+                  (updates.state as string | undefined) || custFull.state || extracted.state || "TX",
+                  (updates.zip as string | undefined) || custFull.zip || extracted.zip,
+                );
+                const enrichedEmail = (updates.email as string | undefined) || custFull.email || extracted.email || null;
+
+                await backfillCommunicationIdentity(supabase, {
+                  phone: from,
+                  businessUnitId: businessUnit?.id || null,
+                  customerId: existingCust.id,
+                  customerName: enrichedName,
+                });
+
+                await upsertLiveActionItem(supabase, {
+                  title: `${enrichedName || from} contact updated`,
+                  description: `Jarvis enriched this customer record from the latest SMS.${enrichedAddress ? `\n\nAddress: ${enrichedAddress}` : ""}${enrichedEmail ? `\nEmail: ${enrichedEmail}` : ""}`,
+                  category: "create_customer",
+                  priority: Object.keys(updates).length > 0 ? "high" : "medium",
+                  source: "sms",
+                  status: "pending",
+                  customer_phone: from,
+                  job_id: linkedJobId,
+                  suggested_action: Object.keys(updates).length > 0
+                    ? "Review the updated customer details, then book or continue the workflow."
+                    : "Customer info is already on file. Continue the intake workflow.",
+                  metadata: {
+                    ...messageCompanyMetadata,
+                    workflow_type: "intake",
+                    jarvis_intent: "create_customer",
+                    action_type: "create_customer",
+                    customer_name: enrichedName,
+                    customer_id: existingCust.id,
+                    phone: from,
+                    alternate_phone: extracted.phone || extracted.callback_phone || null,
+                    email: enrichedEmail,
+                    address: enrichedAddress,
+                    city: (updates.city as string | undefined) || custFull.city || extracted.city || null,
+                    state: (updates.state as string | undefined) || custFull.state || extracted.state || "TX",
+                    zip: (updates.zip as string | undefined) || custFull.zip || extracted.zip || null,
+                    contact_fields_captured: {
+                      name: !!enrichedName,
+                      phone: true,
+                      email: !!enrichedEmail,
+                      address: !!enrichedAddress,
+                    },
+                    updated_fields: Object.keys(updates),
+                    sms_extraction: extracted,
+                    inbound_sms_log_id: logEntry.id,
+                    source_event_id: messageSid,
+                    inbound_message: body,
+                    thread_snippet: body.slice(0, 200),
+                  },
+                  merge_window_hours: 72,
+                });
               }
             } else if (extracted.first_name || extracted.last_name) {
               // Auto-create new customer

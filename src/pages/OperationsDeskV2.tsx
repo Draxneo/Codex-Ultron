@@ -82,6 +82,9 @@ type DeskConversation = {
   companyPhone?: string | null;
   businessUnitId?: string | null;
   name: string | null;
+  email?: string | null;
+  address?: string | null;
+  customerId?: string | null;
   customerType: string;
   status: string;
   summary: string;
@@ -570,6 +573,9 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
     companyPhone: conversation.toNumber || null,
     businessUnitId: conversation.businessUnitId || null,
     name: conversation.contactName,
+    email: conversation.contactEmail || null,
+    address: conversation.contactAddress || null,
+    customerId: conversation.customerId || null,
     customerType: conversation.contactType,
     status: conversation.status,
     summary: smsSummary(conversation),
@@ -1351,6 +1357,7 @@ function ConversationList({
                 const badges = getAttentionBadges(item);
                 const primaryBadge = badges[0] || null;
                 const name = item.name || formatPhone(item.phone) || item.phone;
+                const contactLine = [item.address, item.email].filter(Boolean).join(" / ");
                 const summaryText = isChannelOnlyText(item.summary) ? "Review what happened" : item.summary;
                 const detailText = cleanConversationDetail(item.detail);
                 const isSelected = selectedId === item.id;
@@ -1427,6 +1434,9 @@ function ConversationList({
                               </span>
                             )}
                           </div>
+                          {contactLine && (
+                            <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">{contactLine}</p>
+                          )}
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             {badges.slice(0, 2).map((badge) => {
                               const BadgeIcon = badge.icon;

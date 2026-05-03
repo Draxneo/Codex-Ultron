@@ -5,6 +5,9 @@ export type ContactType = "employee" | "customer" | "vendor";
 export type ContactLookup = {
   name: string;
   type: ContactType;
+  id?: string | null;
+  email?: string | null;
+  address?: string | null;
 };
 
 export type ContactLookupMap = Record<string, ContactLookup>;
