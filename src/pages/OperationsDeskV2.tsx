@@ -3641,7 +3641,16 @@ export default function OperationsDeskV2() {
 
   useEffect(() => {
     if (!selected) return;
-    if (conversations.some((item) => item.id === selected.id)) return;
+    const refreshedSelection =
+      conversations.find((item) => item.id === selected.id) ||
+      conversations.find((item) => intakeThreadKeyForDeskItem(item) === intakeThreadKeyForDeskItem(selected)) ||
+      conversations.find((item) => item.kind === selected.kind && normalizeLast10(item.phone) === normalizeLast10(selected.phone));
+
+    if (refreshedSelection) {
+      if (refreshedSelection !== selected) setSelected(refreshedSelection);
+      return;
+    }
+
     setSelected(null);
   }, [conversations, selected]);
 
@@ -3712,7 +3721,7 @@ export default function OperationsDeskV2() {
           clearingIds={clearingIds}
         />
         <CustomerWorkspace
-          key={selected?.id || "empty"}
+          key={selected ? intakeThreadKeyForDeskItem(selected) : "empty"}
           selected={selected}
           tutorialMode={tutorialMode}
           smsSending={smsSending}
