@@ -369,8 +369,15 @@ function PhoneConsolePopup() {
     if (isDesktopMainWindow) return;
 
     const handleResize = () => setPosition((current) => clampPosition(current.x, current.y));
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPhoneUrl(null);
+    };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [clampPosition, isDesktopMainWindow]);
 
   const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -423,7 +430,11 @@ function PhoneConsolePopup() {
         <button
           type="button"
           className="rounded-md px-2 py-1 text-lg leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={() => setPhoneUrl(null)}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setPhoneUrl(null);
+          }}
           aria-label="Close phone"
         >
           ×

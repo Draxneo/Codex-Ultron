@@ -32,7 +32,10 @@ function parseStoredDialRequest(raw: string | null): StoredDialRequest | null {
 }
 
 export function isElectron(): boolean {
-  return typeof navigator !== "undefined" && /Electron/i.test(navigator.userAgent);
+  return (
+    (typeof navigator !== "undefined" && /Electron/i.test(navigator.userAgent)) ||
+    (typeof window !== "undefined" && Boolean((window as any).electronAPI))
+  );
 }
 
 /** True when this window is the Electron pop-out softphone window */
