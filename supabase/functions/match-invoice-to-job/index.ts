@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 
@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-            const sb = getSupabaseAdmin();
+    const sb = getSupabaseAdmin();
 
     const {
       source,
@@ -31,17 +31,6 @@ Deno.serve(async (req) => {
     if (source === "photo") {
       const { data: existing } = await sb
         .from("tech_form_photos")
-        .select("job_invoice_id")
-        .eq("id", source_ref_id)
-        .single();
-      if (existing?.job_invoice_id) {
-        return new Response(JSON.stringify({ success: true, existing: true, job_invoice_id: existing.job_invoice_id }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else if (source === "email") {
-      const { data: existing } = await sb
-        .from("emails")
         .select("job_invoice_id")
         .eq("id", source_ref_id)
         .single();
@@ -105,68 +94,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // TIER 2 — email: scan subject for job number
+    // Email ingestion tables were retired; email sources need an explicit job_id.
     if (source === "email" && !matchedJobId) {
-      const { data: emailRow } = await sb
-        .from("emails")
-        .select("subject, from_address, body_text")
-        .eq("id", source_ref_id)
-        .single();
-
-      if (emailRow) {
-        const jobNumMatch = (emailRow.subject || "").match(/#?(\d{3,})/);
-        if (jobNumMatch) {
-          const { data: job } = await sb
-            .from("jobs")
-            .select("id")
-            .eq("job_number", jobNumMatch[1])
-            .maybeSingle();
-          if (job) {
-            matchedJobId = job.id;
-            matchConfidence = "medium";
-            matchStatus = "confirmed";
-            matchReason = `Job #${jobNumMatch[1]} found in email subject`;
-          }
-        }
-
-        // TIER 2 — match by sender email to customer's open jobs today
-        if (!matchedJobId && emailRow.from_address) {
-          const { data: customer } = await sb
-            .from("customers")
-            .select("id")
-            .ilike("email", emailRow.from_address)
-            .maybeSingle();
-
-          if (customer) {
-            const today = new Date().toISOString().split("T")[0];
-            const { data: openJobs } = await sb
-              .from("jobs")
-              .select("id")
-              .eq("customer_id", customer.id)
-              .eq("scheduled_date", today)
-              .not("status", "in", '("completed","cancelled","invoiced","done")')
-              .limit(2);
-
-            if (openJobs && openJobs.length === 1) {
-              matchedJobId = openJobs[0].id;
-              matchConfidence = "medium";
-              matchStatus = "confirmed";
-              matchReason = `Matched to customer's only open job today`;
-            } else if (openJobs && openJobs.length > 1) {
-              matchConfidence = "low";
-              matchStatus = "pending_review";
-              matchReason = `Customer has ${openJobs.length} open jobs today — needs manual match`;
-            }
-          }
-        }
-
-        // TIER 3 — no match
-        if (!matchedJobId && matchStatus !== "pending_review") {
-          matchConfidence = "low";
-          matchStatus = "pending_review";
-          matchReason = "No job match found — needs manual assignment";
-        }
-      }
+      matchConfidence = "low";
+      matchStatus = "pending_review";
+      matchReason = "Email source needs explicit job assignment; legacy email tables are retired";
     }
 
     // Resolve supply_house_id from name
@@ -233,8 +165,6 @@ Deno.serve(async (req) => {
     // Update source record with job_invoice_id
     if (source === "photo") {
       await sb.from("tech_form_photos").update({ job_invoice_id: jobInvoiceId }).eq("id", source_ref_id);
-    } else if (source === "email") {
-      await sb.from("emails").update({ job_invoice_id: jobInvoiceId } as any).eq("id", source_ref_id);
     }
 
     // If pending_review, log to activity_log

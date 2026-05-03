@@ -141,7 +141,7 @@ serve(async (req) => {
 
       // ── 3. Recent history (parallel) ─────────────────────────────────────
       const customerId = fullCustomer?.id;
-      const [jobsRes, unifiedRes, emailsRes] = await Promise.all([
+      const [jobsRes, unifiedRes] = await Promise.all([
         customerId
           ? sb.from("jobs")
               .select("id, hcp_job_number, job_type, status, scheduled_date, customer_name, address, assigned_to, total_amount")
@@ -155,13 +155,6 @@ serve(async (req) => {
           p_view: "all",
           p_search: phoneForLookup,
         }),
-        customerId
-          ? sb.from("emails")
-              .select("id, subject, from_address, to_address, snippet, received_at, is_outbound")
-              .eq("linked_customer_id", customerId)
-              .order("received_at", { ascending: false })
-              .limit(5)
-          : Promise.resolve({ data: [] as any[] }),
       ]);
 
       let unifiedRows = (unifiedRes as any).data || [];
@@ -235,7 +228,7 @@ serve(async (req) => {
         jobs: jobsRes.data || [],
         calls: recentCalls,
         sms: recentSms,
-        emails: emailsRes.data || [],
+        emails: [],
       };
 
       const activeWork = await lookupActiveWorkContext(sb, {
@@ -338,32 +331,25 @@ serve(async (req) => {
 
       // Try to resolve sender by email if no phone-based contact was found
       if (!payload.contact && body.sender_email) {
-        const { data: ec } = await sb
-          .from("email_contacts")
-          .select("customer_id, display_name")
-          .eq("email_address", body.sender_email.toLowerCase())
+        const { data: c } = await sb
+          .from("customers")
+          .select("id, first_name, last_name, phone, mobile_phone, address, city, state, email")
+          .ilike("email", body.sender_email.toLowerCase())
           .maybeSingle();
-        if (ec?.customer_id) {
-          const { data: c } = await sb
-            .from("customers")
-            .select("id, first_name, last_name, phone, mobile_phone, address, city, state, email")
-            .eq("id", ec.customer_id)
-            .maybeSingle();
-          if (c) {
-            payload.contact = {
-              type: "customer",
-              name: ec.display_name ?? [c.first_name, c.last_name].filter(Boolean).join(" "),
-              email: body.sender_email,
-              customer_id: c.id,
-              customer: {
-                id: c.id,
-                full_name: [c.first_name, c.last_name].filter(Boolean).join(" "),
-                email: c.email,
-                phone: c.mobile_phone || c.phone,
-                address: [c.address, c.city, c.state].filter(Boolean).join(", "),
-              },
-            };
-          }
+        if (c) {
+          payload.contact = {
+            type: "customer",
+            name: [c.first_name, c.last_name].filter(Boolean).join(" "),
+            email: body.sender_email,
+            customer_id: c.id,
+            customer: {
+              id: c.id,
+              full_name: [c.first_name, c.last_name].filter(Boolean).join(" "),
+              email: c.email,
+              phone: c.mobile_phone || c.phone,
+              address: [c.address, c.city, c.state].filter(Boolean).join(", "),
+            },
+          };
         }
       }
     }
