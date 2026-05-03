@@ -695,17 +695,11 @@ function QuotePipelineCard({
           </div>
         </div>
 
-        <div className="grid gap-2 text-sm">
-          <InfoRow icon={CircleDot} label="Created" value={shortDate(estimate.created_at)} />
+        {/* Reduced from 4 columns (Created/Sent/Custody/Viewed) to the 2 essentials.
+            Created date is already implied by the age badge in the header; Custody is folded
+            into the next-action label below. Sent + Viewed are the actual decision-driving signals. */}
+        <div className="grid gap-2 text-sm sm:grid-cols-2">
           <InfoRow icon={Send} label="Sent" value={shortDate(estimate.presentation_sent_at || item.presentation?.created_at)} />
-          <InfoRow
-            icon={FileCheck2}
-            label="Custody"
-            value={
-              item.canonical?.authorized_work_label ||
-              (item.canonical?.source_job_id ? "Job add-on" : "Quote only")
-            }
-          />
           <InfoRow
             icon={Eye}
             label="Viewed"

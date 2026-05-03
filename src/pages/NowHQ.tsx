@@ -348,15 +348,13 @@ function WorkflowCard({
               <div className="h-full rounded-full bg-primary" style={{ width: `${card.progress}%` }} />
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-md border bg-card/70 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Why this is here</p>
-                <p className="mt-1 text-sm">{card.stuckReason}</p>
-              </div>
-              <div className="rounded-md border bg-primary/5 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Jarvis says</p>
-                <p className="mt-1 text-sm">{card.jarvisRecommendation}</p>
-              </div>
+            {/* Merged context + recommendation. Previously two side-by-side boxes that often
+                said redundant things — combined here as a labeled context line + recommendation,
+                more compact and easier to read at a glance. */}
+            <div className="rounded-md border bg-primary/5 p-3 text-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Context &amp; next step</p>
+              <p className="mt-1"><span className="text-muted-foreground">Why:</span> {card.stuckReason}</p>
+              <p className="mt-1"><span className="text-muted-foreground">Jarvis:</span> {card.jarvisRecommendation}</p>
             </div>
           </div>
 

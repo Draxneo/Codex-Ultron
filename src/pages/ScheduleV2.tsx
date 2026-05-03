@@ -1080,10 +1080,6 @@ function JobContextDialog({
                 Send field update to Now
               </Button>
             )}
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => toast({ title: "Route action", description: "Next pass can open map routing and fit-this-job suggestions." })}>
-              <Navigation className="h-4 w-4" />
-              Route / fit
-            </Button>
             <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
               This pulls in the job record, tech notes, checklist answers, photos, and attachments so the office can see the latest without hunting around.
             </div>

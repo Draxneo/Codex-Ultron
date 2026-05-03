@@ -1676,31 +1676,6 @@ export default function TeamCommunications() {
 
                 <section>
                   <div className="mb-2 flex items-center gap-1.5">
-                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick Access</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {quickAccessItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          to={item.href}
-                          className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-2 text-xs font-medium hover:bg-muted"
-                          aria-label={`Open ${item.label}`}
-                        >
-                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                          <span className="truncate">{item.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                <Separator />
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
                     <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Links</p>
                   </div>

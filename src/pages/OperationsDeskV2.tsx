@@ -1376,7 +1376,6 @@ function ConversationList({
             className="h-9 pl-9"
           />
         </div>
-        <TeamInboxSignal />
         {readModelError ? (
           <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
             Calls and texts are showing, but customer/job matching is behind. Refresh or check Control Room if this stays on.

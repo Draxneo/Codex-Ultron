@@ -156,31 +156,6 @@ function RelationshipBrief({
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4 text-primary" />
-              One-Click Follow Up
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
-              <CalendarClock className="h-4 w-4" />
-              Maintenance reminder pending
-            </Button>
-            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
-              <HeartHandshake className="h-4 w-4" />
-              Comfort Club review pending
-            </Button>
-            <Button className="w-full justify-start gap-2" variant="outline" disabled title="Not wired yet">
-              <BadgeDollarSign className="h-4 w-4" />
-              Replacement marker pending
-            </Button>
-            <p className="pt-1 text-xs text-muted-foreground">
-              These are approval buttons for the next rebuild pass. No customer-facing action is sent automatically.
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="space-y-4">
@@ -540,6 +515,31 @@ export default function CustomerDetail() {
       ? `${overview.agreement.plan_name || "Comfort Club"} active`
       : "No active Comfort Club";
 
+  // Sticky-header signals: the 5 questions a dispatcher asks in 2 seconds about a customer.
+  // Per principles §7 (Customer Relationship Loop): status, next appt, last visit, open work, and
+  // immediate-action affordances should be visible without clicking or scrolling.
+  const nextAppt = overview.upcoming_appointments?.[0];
+  const openJobCount = overview.open_job_count ?? overview.upcoming_appointments?.length ?? 0;
+  const balanceDue = Number(overview.outstanding_balance || 0);
+  const statusBadges: Array<{ label: string; tone: "primary" | "warn" | "success" | "muted" }> = [];
+  if (overview.agreement?.status === "active") {
+    statusBadges.push({ label: overview.agreement.plan_name || "Comfort Club", tone: "success" });
+  }
+  if (balanceDue > 0) {
+    statusBadges.push({ label: `${money(balanceDue)} balance`, tone: "warn" });
+  }
+  if (overview.has_install) {
+    statusBadges.push({ label: "Install on file", tone: "primary" });
+  }
+  const badgeToneClass = (t: string) =>
+    t === "warn"
+      ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
+      : t === "success"
+        ? "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
+        : t === "primary"
+          ? "bg-primary/10 text-primary border-primary/30"
+          : "bg-muted text-foreground border-border";
+
   return (
     <div className="min-h-screen bg-muted/20">
       <CustomerHeaderV2
@@ -549,6 +549,60 @@ export default function CustomerDetail() {
         primaryPhone={primaryPhone}
         customer={c}
       />
+
+      {/* Sticky 5-signal header: status, next appt, last visit, open jobs, quick actions.
+          Designed to answer dispatch's "what's their status / what's open / what's coming up"
+          in 2 seconds without scrolling. */}
+      <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-6 py-2.5 text-xs">
+          {/* Status badges */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {statusBadges.length > 0 ? statusBadges.map((b, i) => (
+              <span key={i} className={`rounded-full border px-2 py-0.5 font-semibold ${badgeToneClass(b.tone)}`}>{b.label}</span>
+            )) : (
+              <span className="text-muted-foreground italic">No active flags</span>
+            )}
+          </div>
+          <span className="hidden h-4 w-px bg-border md:block" />
+          {/* Next appointment */}
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <CalendarClock className="h-3.5 w-3.5" />
+            <span className="font-semibold text-foreground">{nextAppt?.scheduled_date ? formatShortDate(nextAppt.scheduled_date) : "No upcoming"}</span>
+            {nextAppt?.job_type && <span className="opacity-70">· {nextAppt.job_type}</span>}
+          </div>
+          <span className="hidden h-4 w-px bg-border md:block" />
+          {/* Last visit */}
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <span>Last visit:</span>
+            <span className="font-semibold text-foreground">{formatShortDate(overview.last_job_date, "Never")}</span>
+          </div>
+          <span className="hidden h-4 w-px bg-border md:block" />
+          {/* Open jobs */}
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+            <span className="font-semibold text-foreground">{openJobCount}</span>
+            <span>open</span>
+          </div>
+          {/* Quick actions push to right */}
+          <div className="ml-auto flex items-center gap-1.5">
+            {primaryPhone && (
+              <>
+                <ClickToCall phone={primaryPhone}>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs"><Phone className="h-3.5 w-3.5" />Call</Button>
+                </ClickToCall>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => openSmsComposer(primaryPhone, { contactName: fullName, customerId: id })}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />Text
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       <main className="mx-auto max-w-[1600px] space-y-5 px-6 py-5">
         {timelineError ? (
