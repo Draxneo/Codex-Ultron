@@ -60,6 +60,7 @@ const CALL_DEBUG_MAX = 200;
 let _callStartedAt: number | null = null;
 const SILENT_TWILIO_SOUND =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQQAAAAAAA==";
+const KNOWN_COMPANY_LINE_LAST10 = new Set(["2106005091", "2106005671"]);
 
 function callDebug(tag: string, data: Record<string, any> = {}) {
   const ts = new Date().toISOString();
@@ -773,6 +774,7 @@ export function useSoftphone(enabled: boolean = true) {
 
       device.on("incoming", async (call: Call) => {
         const from = call.parameters?.From || "Unknown";
+        const fromLooksLikeCompanyLine = KNOWN_COMPANY_LINE_LAST10.has(normalizeLast10(from));
         const inviteTransition = dispatchLifecycle({
           type: "INBOUND_INVITE",
           call: buildCallRecord(call, "inbound", from),
@@ -835,7 +837,7 @@ export function useSoftphone(enabled: boolean = true) {
         // created one. The webhook has richer enrichment (vendor matching,
         // CNAM, STIR status) — overwriting it with our partial client-side
         // resolution would clobber that data.
-        if (incomingSid) {
+        if (incomingSid && !fromLooksLikeCompanyLine) {
           (async () => {
             const { data: existing } = await supabase
               .from("call_log")

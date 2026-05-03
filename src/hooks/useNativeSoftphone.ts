@@ -31,6 +31,8 @@ import {
   type CallLifecycleState,
 } from "@/lib/softphoneCallStateMachine";
 
+const KNOWN_COMPANY_LINE_LAST10 = new Set(["2106005091", "2106005671"]);
+
 let nativePlugin: any = null;
 let pluginLoadPromise: Promise<void> | null = null;
 
@@ -353,6 +355,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
     const callInviteReceivedHandle = await plugin.addListener("callInviteReceived", async (data: any) => {
       const from = data?.from || "Unknown";
       const callSid = data?.callSid || "";
+      const fromLooksLikeCompanyLine = KNOWN_COMPANY_LINE_LAST10.has(normalizeLast10(from));
 
       // ── Auto-reject 2nd calls while on a live call ──
       // The native Twilio plugin's notification/ringer can leak into the
@@ -401,7 +404,7 @@ export function useNativeSoftphone(enabled: boolean = true) {
       });
 
       // Insert a call_log row immediately so other devices can see it's ringing
-      if (callSid) {
+      if (callSid && !fromLooksLikeCompanyLine) {
         supabase
           .from("call_log")
           .upsert({

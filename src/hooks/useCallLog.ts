@@ -10,6 +10,8 @@ import {
 } from "@/lib/communications";
 import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
+const KNOWN_COMPANY_LINE_LAST10 = new Set(["2106005091", "2106005671"]);
+
 function buildContactMap(
   employees: { name: string; phone: string | null; is_active: boolean | null }[] | null,
   customers: { first_name: string | null; last_name: string | null; phone: string | null; mobile_phone: string | null }[] | null
@@ -69,6 +71,20 @@ export type CallConversation = {
 
 export function useCallLog() {
   const queryClient = useQueryClient();
+  const { data: companyLineKeys = [] } = useQuery({
+    queryKey: ["business_unit_phone_last10"],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("business_units" as any)
+        .select("primary_phone_number")
+        .eq("is_active", true);
+      return (data || [])
+        .map((row: any) => normalizeLast10(row.primary_phone_number || ""))
+        .filter(Boolean);
+    },
+  });
   const { data: contactMap = {} } = useQuery({
     queryKey: ["communication_contact_lookup", "calls"],
     staleTime: 5 * 60 * 1000,
@@ -119,9 +135,16 @@ export function useCallLog() {
 
   const conversations = useMemo<CallConversation[]>(() => {
     const map = new Map<string, CallRow[]>();
+    const companyLineSet = new Set([...KNOWN_COMPANY_LINE_LAST10, ...companyLineKeys]);
     for (const call of calls) {
       const customerKey = normalizeLast10(call.phone_number);
       if (!customerKey) continue;
+      const isSoftphoneLegGhost =
+        call.direction === "inbound" &&
+        companyLineSet.has(customerKey) &&
+        !normalizeLast10(call.called_number || "") &&
+        !call.business_unit_id;
+      if (isSoftphoneLegGhost) continue;
       const companyKey = normalizeLast10(call.called_number || "") || (call.business_unit_id ? `bu:${call.business_unit_id}` : "legacy");
       const threadKey = `${customerKey}|line:${companyKey}`;
       if (!map.has(threadKey)) map.set(threadKey, []);
@@ -149,7 +172,7 @@ export function useCallLog() {
         };
       })
       .sort((a, b) => new Date(b.lastCall.created_at).getTime() - new Date(a.lastCall.created_at).getTime());
-  }, [calls, contactMap]);
+  }, [calls, contactMap, companyLineKeys]);
 
   const resolveContactName = useCallback((phone: string): string | null => {
     const key = normalizeLast10(phone);
