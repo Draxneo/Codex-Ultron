@@ -19,6 +19,7 @@ import CustomerInvoicePanel from "@/components/CustomerInvoicePanel";
 import { JobActivityFeed } from "@/components/ActivityFeed";
 import { PhotoLocationMap } from "@/components/PhotoLocationMap";
 import { JobPurchasesPanel } from "@/components/job/JobPurchasesPanel";
+import { JobTeamMembersManager } from "@/components/job/JobTeamMembersManager";
 import { WorkSummaryCard } from "@/components/work/WorkSummaryCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TechJobDetail from "@/pages/TechJobDetail";
@@ -169,6 +170,8 @@ export default function JobDetail() {
           {/* MAIN COLUMN */}
           <section className="col-span-12 lg:col-span-9 space-y-3">
             <JobV2ActionBar job={job} jobId={id!} onInvoiceClick={scrollToInvoice} />
+
+            <JobTeamMembersManager jobId={id!} primaryName={job.assigned_to} />
 
             <JobExpectedItemsCard job={job} jobId={id!} />
 
