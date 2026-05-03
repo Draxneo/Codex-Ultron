@@ -15,6 +15,10 @@ export type QuotePipelineRow = {
   address: string | null;
   estimate_type: string | null;
   status: string | null;
+  approval_status: string | null;
+  approval_method: string | null;
+  approved_option_key: string | null;
+  authorized_work_label: string | null;
   total_amount: number | null;
   scheduled_date: string | null;
   arrival_start: string | null;
@@ -24,6 +28,9 @@ export type QuotePipelineRow = {
   customer_approved_at: string | null;
   brochure_sent: boolean | null;
   created_at: string;
+  latest_approval_at: string | null;
+  latest_approval_method: string | null;
+  latest_approval_note: string | null;
   latest_communication_at: string | null;
   latest_communication_type: string | null;
   latest_communication_summary: string | null;
@@ -78,6 +85,7 @@ export function useQuotePipeline(limit = 300) {
       { table: "estimates", queryKeys: [["quote-pipeline-read-model"]] },
       { table: "sms_log", queryKeys: [["quote-pipeline-read-model"]] },
       { table: "call_log", queryKeys: [["quote-pipeline-read-model"]] },
+      { table: "estimate_approval_events", queryKeys: [["quote-pipeline-read-model"]] },
       { table: "intake_thread_status", queryKeys: [["quote-pipeline-read-model"]] },
     ],
     "quote-pipeline-read-model"

@@ -92,6 +92,29 @@ export interface EstimateResponse {
   responded_at: string;
 }
 
+export interface EstimateApprovalEvent {
+  id: string;
+  estimate_id: string;
+  source_job_id: string | null;
+  authorized_job_id: string | null;
+  presentation_id: string | null;
+  job_cart_id: string | null;
+  approval_method: "digital" | "verbal" | "office" | "import";
+  approval_status: "approved" | "declined" | "changes_requested" | "revoked";
+  selected_option_key: string | null;
+  payment_method: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  actor_type: "customer" | "technician" | "office" | "system";
+  recorded_by: string | null;
+  recorded_by_name: string | null;
+  note: string | null;
+  approved_scope_snapshot: any;
+  metadata: any;
+  approved_at: string;
+  created_at: string;
+}
+
 export function usePresentationsForEstimate(estimateId: string | undefined) {
   return useQuery({
     queryKey: ["estimate_presentations", estimateId],
@@ -104,6 +127,73 @@ export function usePresentationsForEstimate(estimateId: string | undefined) {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as EstimatePresentation[];
+    },
+  });
+}
+
+export function useEstimateApprovalEvents(estimateId: string | undefined) {
+  return useQuery({
+    queryKey: ["estimate_approval_events", estimateId],
+    enabled: !!estimateId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estimate_approval_events" as any)
+        .select("*")
+        .eq("estimate_id", estimateId!)
+        .order("approved_at", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as unknown as EstimateApprovalEvent[];
+    },
+  });
+}
+
+export function useRecordVerbalEstimateApproval() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      estimate_id: string;
+      note?: string;
+      selected_option_key?: string | null;
+      payment_method?: string | null;
+      recorded_by_name?: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("record_estimate_approval_event" as any, {
+        p_estimate_id: params.estimate_id,
+        p_approval_method: "verbal",
+        p_approval_status: "approved",
+        p_selected_option_key: params.selected_option_key || null,
+        p_payment_method: params.payment_method || null,
+        p_note: params.note || "Customer verbally approved the proposed work.",
+        p_recorded_by_name: params.recorded_by_name || null,
+        p_actor_type: "office",
+        p_presentation_id: null,
+        p_job_cart_id: null,
+        p_scope_snapshot: {},
+        p_metadata: { source: "estimate_detail_verbal_approval" },
+      });
+      if (error) throw error;
+
+      const { error: responseError } = await supabase
+        .from("estimate_responses" as any)
+        .insert({
+          estimate_id: params.estimate_id,
+          action: "approved",
+          message: params.note || "Customer verbally approved the proposed work.",
+          payment_preference: params.payment_method || null,
+          selected_tier: params.selected_option_key || null,
+        });
+      if (responseError) throw responseError;
+
+      return data as string;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["estimate_approval_events", vars.estimate_id] });
+      queryClient.invalidateQueries({ queryKey: ["estimate_responses", vars.estimate_id] });
+      queryClient.invalidateQueries({ queryKey: ["estimates", vars.estimate_id] });
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["quote-pipeline-read-model"] });
     },
   });
 }

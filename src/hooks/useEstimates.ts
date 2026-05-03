@@ -31,9 +31,19 @@ export interface Estimate {
   presentation_sent_at: string | null;
   customer_approved_at: string | null;
   status: string | null;
+  source_job_id?: string | null;
+  converted_job_id?: string | null;
+  approval_status?: string | null;
+  approval_method?: string | null;
+  approval_recorded_by?: string | null;
+  approval_recorded_by_name?: string | null;
+  approval_note?: string | null;
+  approved_scope_snapshot?: any;
+  approved_option_key?: string | null;
+  authorized_work_label?: string | null;
 }
 
-const ESTIMATE_LIST_FIELDS = "id, hcp_id, estimate_number, customer_id, customer_name, customer_phone, customer_email, address, assigned_to, work_status, scheduled_date, description, hcp_customer_id, options, created_at, arrival_start, arrival_end, status, confirmation_sent_at, dispatch_sent_at, on_my_way_sent_at, completion_form_sent_at, brochure_sent, presentation_sent_at, customer_approved_at";
+const ESTIMATE_LIST_FIELDS = "id, hcp_id, estimate_number, customer_id, customer_name, customer_phone, customer_email, address, assigned_to, work_status, scheduled_date, description, hcp_customer_id, options, created_at, arrival_start, arrival_end, status, confirmation_sent_at, dispatch_sent_at, on_my_way_sent_at, completion_form_sent_at, brochure_sent, presentation_sent_at, customer_approved_at, source_job_id, converted_job_id, approval_status, approval_method, approval_recorded_by, approval_recorded_by_name, approval_note, approved_scope_snapshot, approved_option_key, authorized_work_label";
 const TERMINAL_ESTIMATE_WORK_STATUSES = '("won","lost","canceled","cancelled","completed","complete","closed","legacy_complete","created job from estimate","pro canceled","user canceled","complete rated","complete unrated")';
 
 export function useEstimates(showLost = false) {

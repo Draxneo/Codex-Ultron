@@ -304,6 +304,28 @@ Deno.serve(async (req) => {
       payment_preference: payment_method || "stripe",
     });
 
+    const { error: approvalEventError } = await supabase.rpc("record_estimate_approval_event", {
+      p_estimate_id: pres.estimate_id,
+      p_approval_method: "digital",
+      p_approval_status: "approved",
+      p_selected_option_key: selected_option_key,
+      p_payment_method: payment_method || "stripe",
+      p_note: null,
+      p_recorded_by_name: null,
+      p_actor_type: "customer",
+      p_presentation_id: presentation_id,
+      p_job_cart_id: cartId,
+      p_scope_snapshot: selected.selectedSnapshot || {},
+      p_metadata: {
+        source: "estimate-checkout",
+        payment_timing: timing,
+        total: checkoutTotal,
+      },
+    });
+    if (approvalEventError) {
+      console.warn("estimate approval custody event failed:", approvalEventError.message);
+    }
+
     await logQuoteCartEvent(supabase, {
       event_type: "customer_approved",
       actor_type: "customer",

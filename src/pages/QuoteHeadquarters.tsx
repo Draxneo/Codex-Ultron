@@ -699,6 +699,14 @@ function QuotePipelineCard({
           <InfoRow icon={CircleDot} label="Created" value={shortDate(estimate.created_at)} />
           <InfoRow icon={Send} label="Sent" value={shortDate(estimate.presentation_sent_at || item.presentation?.created_at)} />
           <InfoRow
+            icon={FileCheck2}
+            label="Custody"
+            value={
+              item.canonical?.authorized_work_label ||
+              (item.canonical?.source_job_id ? "Job add-on" : "Quote only")
+            }
+          />
+          <InfoRow
             icon={Eye}
             label="Viewed"
             value={

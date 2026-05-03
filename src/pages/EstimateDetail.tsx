@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +49,13 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useEstimate, useUpdateEstimateStatus } from "@/hooks/useEstimates";
-import { usePresentationsForEstimate, useResponsesForEstimate } from "@/hooks/useEstimatePresentations";
+import {
+  useEstimateApprovalEvents,
+  usePresentationsForEstimate,
+  useRecordVerbalEstimateApproval,
+  useResponsesForEstimate,
+  type EstimateApprovalEvent,
+} from "@/hooks/useEstimatePresentations";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getExpectedJobItems } from "@/lib/expectedJobItems";
 import { paymentPreferenceLabel } from "@/lib/paymentOptions";
@@ -294,6 +301,8 @@ function EstimateActionBar({
   latestPresentationToken,
   converting,
   onConvert,
+  onVerbalApprove,
+  verbalApproving,
   jarvisContext,
 }: {
   estimate: any;
@@ -305,6 +314,8 @@ function EstimateActionBar({
   latestPresentationToken?: string | null;
   converting: boolean;
   onConvert: () => void;
+  onVerbalApprove: () => void;
+  verbalApproving?: boolean;
   jarvisContext: Record<string, any>;
 }) {
   const navigate = useNavigate();
@@ -380,6 +391,11 @@ function EstimateActionBar({
             <span className="text-center text-[10px] leading-tight text-muted-foreground">Approved to job</span>
           </button>
         )}
+        <button type="button" className={actionClass} disabled={verbalApproving} onClick={onVerbalApprove}>
+          {verbalApproving ? <Loader2 className="h-5 w-5 animate-spin" /> : <ClipboardCheck className="h-5 w-5" />}
+          <span className="text-xs font-semibold uppercase tracking-wide">Verbal OK</span>
+          <span className="text-center text-[10px] leading-tight text-muted-foreground">Customer said yes</span>
+        </button>
         <button
           type="button"
           className={presentationUrl ? actionClass : disabledActionClass}
@@ -435,6 +451,147 @@ function MobileActionPill({
   );
 }
 
+function ApprovalCustodyCard({
+  estimate,
+  linkedJobId,
+  events,
+}: {
+  estimate: any;
+  linkedJobId: string | null;
+  events: EstimateApprovalEvent[];
+}) {
+  const latest = events[0];
+  const sourceJobId = estimate?.source_job_id || null;
+  const approvedAt = latest?.approved_at || estimate?.customer_approved_at || null;
+  const method = latest?.approval_method || estimate?.approval_method || null;
+  const label = estimate?.authorized_work_label || estimate?.estimate_number || "Not assigned yet";
+  const status = latest?.approval_status || estimate?.approval_status || (estimate?.customer_approved_at ? "approved" : "pending");
+
+  return (
+    <Card>
+      <CardHeader className="border-b py-3">
+        <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+          <ClipboardCheck className="h-4 w-4" /> Approval Custody
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 text-sm">
+        <div className="grid gap-2 md:grid-cols-4">
+          <div className="rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Status</p>
+            <p className="mt-1 font-semibold capitalize">{String(status).replace(/_/g, " ")}</p>
+          </div>
+          <div className="rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Approval</p>
+            <p className="mt-1 font-semibold capitalize">{method ? String(method).replace(/_/g, " ") : "Not approved yet"}</p>
+          </div>
+          <div className="rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Work label</p>
+            <p className="mt-1 font-semibold">{label}</p>
+          </div>
+          <div className="rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Attached to</p>
+            <p className="mt-1 font-semibold">{sourceJobId ? "Original job" : linkedJobId ? "Converted job" : "Quote only"}</p>
+          </div>
+        </div>
+
+        <div className="rounded-md border p-3">
+          <p className="font-medium">Rule</p>
+          <p className="mt-1 text-muted-foreground">
+            This quote is proposed work until the customer approves it digitally or someone records a verbal approval.
+            Once approved, it becomes authorized work with this approval trail attached.
+          </p>
+        </div>
+
+        {approvedAt ? (
+          <div className="space-y-2">
+            {events.length > 0 ? events.map((event) => (
+              <div key={event.id} className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold capitalize">
+                    {event.approval_method} approval - {event.approval_status.replace(/_/g, " ")}
+                  </p>
+                  <span className="text-xs text-muted-foreground">{format(new Date(event.approved_at), "MMM d, yyyy h:mm a")}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {event.actor_type === "customer" ? "Customer approved from the public link." : `Recorded by ${event.recorded_by_name || "office user"}.`}
+                </p>
+                {event.selected_option_key && <p className="mt-1"><strong>Option:</strong> {event.selected_option_key}</p>}
+                {event.payment_method && <p className="mt-1"><strong>Payment:</strong> {paymentPreferenceLabel(event.payment_method)}</p>}
+                {event.note && <p className="mt-2 italic text-muted-foreground">"{event.note}"</p>}
+              </div>
+            )) : (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="font-semibold">Approved</p>
+                <p className="mt-1 text-xs text-muted-foreground">{format(new Date(approvedAt), "MMM d, yyyy h:mm a")}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+            <p className="font-semibold">No approval recorded yet</p>
+            <p className="mt-1 text-muted-foreground">
+              Send the proposal link, or use Verbal OK if the customer gives permission out loud.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function VerbalApprovalDialog({
+  open,
+  onOpenChange,
+  note,
+  onNoteChange,
+  customerName,
+  saving,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  note: string;
+  onNoteChange: (note: string) => void;
+  customerName: string;
+  saving: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Record verbal approval</AlertDialogTitle>
+          <AlertDialogDescription>
+            Use this when {customerName || "the customer"} says yes out loud instead of approving from the link.
+            This stamps the quote as customer-approved and saves who recorded it.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="verbal-approval-note">
+            Approval note
+          </label>
+          <Textarea
+            id="verbal-approval-note"
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            placeholder="Customer verbally approved the proposed work while we were on site."
+            className="min-h-24"
+          />
+          <p className="text-xs text-muted-foreground">
+            This does not fake a digital signature. It records that the approval was spoken and logged by the office or technician.
+          </p>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+          <AlertDialogAction disabled={saving} onClick={onConfirm}>
+            {saving ? "Recording..." : "Record verbal approval"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function EstimateDataWarning({ issues }: { issues: string[] }) {
   if (issues.length === 0) return null;
   return (
@@ -464,8 +621,12 @@ export default function EstimateDetail() {
   const [linkedJobId, setLinkedJobId] = useState<string | null>(null);
   const [convertingToJob, setConvertingToJob] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [verbalApprovalOpen, setVerbalApprovalOpen] = useState(false);
+  const [verbalApprovalNote, setVerbalApprovalNote] = useState("Customer verbally approved the proposed work.");
   const { data: presentations, isError: presentationsError, error: presentationsQueryError } = usePresentationsForEstimate(id);
   const { data: customerResponses, isError: responsesError, error: responsesQueryError } = useResponsesForEstimate(id);
+  const { data: approvalEvents = [] } = useEstimateApprovalEvents(id);
+  const recordVerbalApproval = useRecordVerbalEstimateApproval();
   const estimateStatus = estimate?.work_status || estimate?.status || "new";
   const expectedItems = useMemo(
     () => estimate ? getExpectedJobItems({ ...estimate, job_type: "estimate", status: estimateStatus }) : [],
@@ -587,6 +748,22 @@ export default function EstimateDetail() {
     }
   };
 
+  const handleRecordVerbalApproval = async () => {
+    try {
+      await recordVerbalApproval.mutateAsync({
+        estimate_id: id,
+        note: verbalApprovalNote.trim() || "Customer verbally approved the proposed work.",
+        recorded_by_name: "Office",
+      });
+      toast.success("Verbal approval recorded", {
+        description: "The customer approval trail is now stamped on this quote.",
+      });
+      setVerbalApprovalOpen(false);
+    } catch (e: any) {
+      toast.error("Could not record verbal approval", { description: e?.message || String(e) });
+    }
+  };
+
   if (isMobile) {
     const estimateNumber = estimate.estimate_number || "-";
     const jobCount = linkedJobId ? 1 : undefined;
@@ -663,6 +840,7 @@ export default function EstimateDetail() {
             }}
           />
           <MobileActionPill icon={ArrowRight} label={linkedJobId ? "Job" : "Convert"} onClick={linkedJobId ? () => navigate(`/jobs/${linkedJobId}`) : handleConvert} />
+          <MobileActionPill icon={ClipboardCheck} label="Verbal OK" onClick={() => setVerbalApprovalOpen(true)} disabled={recordVerbalApproval.isPending} />
           {presentationUrl && <MobileActionPill icon={FileText} label="View" onClick={() => window.open(presentationUrl, "_blank", "noopener")} />}
           {estimate.hcp_id && (
             <a
@@ -731,6 +909,8 @@ export default function EstimateDetail() {
             }}
           />
 
+          <ApprovalCustodyCard estimate={estimate} linkedJobId={linkedJobId} events={approvalEvents} />
+
           <EstimateCartStatus estimateId={id} customerPhone={customerPhone || undefined} customerName={customerName} />
 
           <TechCollapsibleCard icon={FileText} title="Summary" iconBg="bg-slate-500/10" iconColor="text-slate-500" defaultOpen={false}>
@@ -787,6 +967,15 @@ export default function EstimateDetail() {
             </div>
           </TechCollapsibleCard>
         </main>
+        <VerbalApprovalDialog
+          open={verbalApprovalOpen}
+          onOpenChange={setVerbalApprovalOpen}
+          note={verbalApprovalNote}
+          onNoteChange={setVerbalApprovalNote}
+          customerName={customerName}
+          saving={recordVerbalApproval.isPending}
+          onConfirm={handleRecordVerbalApproval}
+        />
       </div>
     );
   }
@@ -883,6 +1072,8 @@ export default function EstimateDetail() {
               latestPresentationToken={latestPresentationToken}
               converting={convertingToJob || updateStatus.isPending}
               onConvert={handleConvert}
+              onVerbalApprove={() => setVerbalApprovalOpen(true)}
+              verbalApproving={recordVerbalApproval.isPending}
               jarvisContext={jarvisEstimateContext}
             />
 
@@ -904,6 +1095,8 @@ export default function EstimateDetail() {
             />
 
             <WorkSummaryCard description={estimate.description} />
+
+            <ApprovalCustodyCard estimate={estimate} linkedJobId={linkedJobId} events={approvalEvents} />
 
             <EstimateOptionsWorkbench
               estimateId={id}
@@ -1026,6 +1219,15 @@ export default function EstimateDetail() {
           </section>
         </div>
       </main>
+      <VerbalApprovalDialog
+        open={verbalApprovalOpen}
+        onOpenChange={setVerbalApprovalOpen}
+        note={verbalApprovalNote}
+        onNoteChange={setVerbalApprovalNote}
+        customerName={customerName}
+        saving={recordVerbalApproval.isPending}
+        onConfirm={handleRecordVerbalApproval}
+      />
     </div>
   );
 }
