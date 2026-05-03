@@ -26,6 +26,34 @@ export interface JobRepairItem {
   created_at: string;
 }
 
+type ServiceRepairItemRow = {
+  id: string;
+  job_id: string;
+  description: string;
+  severity: string;
+  suggested_price: number | string | null;
+  final_price: number | string | null;
+  customer_description: string | null;
+  source: string | null;
+  created_at: string;
+};
+
+function toJobRepairItem(row: ServiceRepairItemRow): JobRepairItem {
+  const unitPrice = Number(row.final_price || row.suggested_price || 0);
+  return {
+    id: row.id,
+    job_id: row.job_id,
+    pricebook_item_id: null,
+    name: row.description,
+    quantity: 1,
+    unit_price: Number.isFinite(unitPrice) ? unitPrice : 0,
+    severity: row.severity || "recommended",
+    notes: row.customer_description,
+    added_by: row.source,
+    created_at: row.created_at,
+  };
+}
+
 export function useServicePricebook() {
   return useQuery<PricebookItem[]>({
     queryKey: ["service_pricebook"],
@@ -44,16 +72,16 @@ export function useServicePricebook() {
 
 export function useJobRepairItems(jobId: string | undefined) {
   return useQuery<JobRepairItem[]>({
-    queryKey: ["job_repair_items", jobId],
+    queryKey: ["service_repair_items", jobId],
     enabled: !!jobId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("job_repair_items")
-        .select("*")
+        .from("service_repair_items")
+        .select("id, job_id, description, severity, suggested_price, final_price, customer_description, source, created_at")
         .eq("job_id", jobId!)
         .order("created_at");
       if (error) throw error;
-      return (data ?? []) as JobRepairItem[];
+      return ((data ?? []) as ServiceRepairItemRow[]).map(toJobRepairItem);
     },
   });
 }
@@ -63,33 +91,19 @@ export function useAddRepairItem(jobId: string | undefined) {
   return useMutation({
     mutationFn: async (item: { pricebook_item_id?: string; name: string; unit_price: number; added_by?: string }) => {
       if (!jobId) throw new Error("No job ID");
-      // Check if this pricebook item already exists for this job — if so, increment quantity
-      if (item.pricebook_item_id) {
-        const { data: existing } = await supabase
-          .from("job_repair_items")
-          .select("id, quantity")
-          .eq("job_id", jobId)
-          .eq("pricebook_item_id", item.pricebook_item_id)
-          .maybeSingle();
-        if (existing) {
-          const { error } = await supabase
-            .from("job_repair_items")
-            .update({ quantity: existing.quantity + 1 })
-            .eq("id", existing.id);
-          if (error) throw error;
-          return;
-        }
-      }
-      const { error } = await supabase.from("job_repair_items").insert({
+      const { error } = await supabase.from("service_repair_items").insert({
         job_id: jobId,
-        pricebook_item_id: item.pricebook_item_id || null,
-        name: item.name,
-        unit_price: item.unit_price,
-        added_by: item.added_by || null,
+        description: item.name,
+        suggested_price: item.unit_price,
+        final_price: item.unit_price,
+        source: item.added_by ? `tech:${item.added_by}` : "tech-pricebook",
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job_repair_items", jobId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["service_repair_items", jobId] });
+      qc.invalidateQueries({ queryKey: ["dispatch-live-cards"] });
+    },
   });
 }
 
@@ -97,25 +111,12 @@ export function useRemoveRepairItem(jobId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (itemId: string) => {
-      const { error } = await supabase.from("job_repair_items").delete().eq("id", itemId);
+      const { error } = await supabase.from("service_repair_items").delete().eq("id", itemId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job_repair_items", jobId] }),
-  });
-}
-
-export function useUpdateRepairItemQty(jobId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ itemId, quantity }: { itemId: string; quantity: number }) => {
-      if (quantity <= 0) {
-        const { error } = await supabase.from("job_repair_items").delete().eq("id", itemId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("job_repair_items").update({ quantity }).eq("id", itemId);
-        if (error) throw error;
-      }
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["service_repair_items", jobId] });
+      qc.invalidateQueries({ queryKey: ["dispatch-live-cards"] });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job_repair_items", jobId] }),
   });
 }

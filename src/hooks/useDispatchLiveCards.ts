@@ -94,7 +94,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
       { table: "job_attachments", queryKeys: [["job_attachments"], ["dispatch-live-cards"]] },
       { table: "job_carts", queryKeys: [["job_cart"], ["dispatch-live-cards"]] },
       { table: "job_cart_items", queryKeys: [["job_cart_items"], ["dispatch-live-cards"]] },
-      { table: "job_repair_items", queryKeys: [["dispatch-live-cards"]] },
+      { table: "service_repair_items", queryKeys: [["dispatch-live-cards"]] },
       { table: "job_transcripts", queryKeys: [["dispatch-live-cards"]] },
       { table: "tech_forms", queryKeys: [["dispatch-live-cards"]] },
       { table: "tech_form_photos", queryKeys: [["tech_form_photos"], ["dispatch-live-cards"]] },
@@ -161,7 +161,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
           .order("created_at", { ascending: false })
           .limit(250),
         (supabase as any)
-          .from("job_repair_items")
+          .from("service_repair_items")
           .select("id, job_id, created_at")
           .in("job_id", stableJobIds)
           .order("created_at", { ascending: false })
@@ -192,7 +192,7 @@ export function useDispatchLiveCards(jobIds: string[]) {
           message: repairItemsRes.error.message || "Repair item context unavailable",
           severity: "warning",
           context: {
-            table: "job_repair_items",
+            table: "service_repair_items",
             job_count: stableJobIds.length,
           },
         });

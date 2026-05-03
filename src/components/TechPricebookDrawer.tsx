@@ -13,7 +13,6 @@ import {
   useJobRepairItems,
   useAddRepairItem,
   useRemoveRepairItem,
-  useUpdateRepairItemQty,
   type PricebookItem,
   type JobRepairItem,
 } from "@/hooks/useServicePricebook";
@@ -26,6 +25,12 @@ interface Props {
   techName?: string;
 }
 
+type DisplayRepairItem = JobRepairItem & { rowIds: string[] };
+
+function repairItemKey(name: string, price: number) {
+  return `${name.trim().toLowerCase()}|${Number(price || 0).toFixed(2)}`;
+}
+
 export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Props) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showCart, setShowCart] = useState(false);
@@ -35,7 +40,6 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
   const { data: repairItems = [] } = useJobRepairItems(jobId);
   const addItem = useAddRepairItem(jobId);
   const removeItem = useRemoveRepairItem(jobId);
-  const updateQty = useUpdateRepairItemQty(jobId);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(pricebook.map((i) => i.category)));
@@ -47,14 +51,29 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
     [pricebook, activeCategory]
   );
 
-  // Map pricebook item id → quantity in cart
+  // Group repeated service repair rows so the tech sees one clean cart line.
+  const groupedRepairItems = useMemo<DisplayRepairItem[]>(() => {
+    const groups = new Map<string, DisplayRepairItem>();
+    repairItems.forEach((ri) => {
+      const key = repairItemKey(ri.name, ri.unit_price);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.quantity += 1;
+        existing.rowIds.push(ri.id);
+        return;
+      }
+      groups.set(key, { ...ri, quantity: 1, rowIds: [ri.id] });
+    });
+    return Array.from(groups.values());
+  }, [repairItems]);
+
   const qtyMap = useMemo(() => {
     const m: Record<string, { qty: number; itemId: string }> = {};
-    repairItems.forEach((ri) => {
-      if (ri.pricebook_item_id) m[ri.pricebook_item_id] = { qty: ri.quantity, itemId: ri.id };
+    groupedRepairItems.forEach((ri) => {
+      m[repairItemKey(ri.name, ri.unit_price)] = { qty: ri.quantity, itemId: ri.rowIds[0] };
     });
     return m;
-  }, [repairItems]);
+  }, [groupedRepairItems]);
 
   const totalItems = repairItems.reduce((s, r) => s + r.quantity, 0);
   const totalPrice = repairItems.reduce((s, r) => s + r.quantity * r.unit_price, 0);
@@ -98,8 +117,8 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
             {repairItems.length === 0 && (
               <p className="text-center text-muted-foreground py-8 text-sm">No items added yet</p>
             )}
-            {repairItems.map((ri) => (
-              <div key={ri.id} className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
+            {groupedRepairItems.map((ri) => (
+              <div key={repairItemKey(ri.name, ri.unit_price)} className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{ri.name}</p>
                   <p className="text-xs text-muted-foreground">${ri.unit_price.toFixed(0)} ea</p>
@@ -111,7 +130,8 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
                     className="h-8 w-8"
                     onClick={() => {
                       impact("light");
-                      updateQty.mutate({ itemId: ri.id, quantity: ri.quantity - 1 });
+                      const itemId = ri.rowIds[ri.rowIds.length - 1];
+                      if (itemId) removeItem.mutate(itemId);
                     }}
                   >
                     {ri.quantity === 1 ? <Trash2 className="h-3 w-3 text-destructive" /> : <Minus className="h-3 w-3" />}
@@ -123,7 +143,7 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
                     className="h-8 w-8"
                     onClick={() => {
                       impact("light");
-                      updateQty.mutate({ itemId: ri.id, quantity: ri.quantity + 1 });
+                      addItem.mutate({ name: ri.name, unit_price: ri.unit_price, added_by: techName });
                     }}
                   >
                     <Plus className="h-3 w-3" />
@@ -158,7 +178,7 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
             <div className="flex-1 overflow-y-auto p-3">
               <div className="grid grid-cols-2 gap-3">
                 {filtered.map((item) => {
-                  const inCart = qtyMap[item.id];
+                  const inCart = qtyMap[repairItemKey(item.name, item.base_price)];
                   return (
                     <button
                       key={item.id}
