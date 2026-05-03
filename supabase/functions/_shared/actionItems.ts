@@ -1,3 +1,5 @@
+import { withActionOwnership } from "./actionOwnership.ts";
+
 type UpsertActionItemInput = {
   title: string;
   description?: string | null;
@@ -47,7 +49,13 @@ function compactEvidence(value: unknown) {
 }
 
 export async function upsertLiveActionItem(supabase: any, input: UpsertActionItemInput) {
-  const metadata = input.metadata || {};
+  const metadata = withActionOwnership({
+    category: input.category,
+    title: input.title,
+    description: input.description || null,
+    suggested_action: input.suggested_action || null,
+    metadata: input.metadata || {},
+  });
   const phone = input.customer_phone || (metadata as any).phone || (metadata as any).customer_phone || null;
   const digits = phoneDigits(phone);
   const since = new Date(Date.now() - (input.merge_window_hours || 24) * 60 * 60 * 1000).toISOString();
@@ -111,6 +119,11 @@ export async function upsertLiveActionItem(supabase: any, input: UpsertActionIte
   const nextMeta = {
     ...previousMeta,
     ...metadata,
+    owner_type: (metadata as any).owner_type || previousMeta.owner_type,
+    owner_queue: (metadata as any).owner_queue || previousMeta.owner_queue,
+    owner_label: (metadata as any).owner_label || previousMeta.owner_label,
+    owner_required: (metadata as any).owner_required ?? previousMeta.owner_required,
+    needs_schedule_before_accept: (metadata as any).needs_schedule_before_accept ?? previousMeta.needs_schedule_before_accept,
     living_card: true,
     previous_category: previousMeta.previous_category || existing.category,
     last_context_update_at: new Date().toISOString(),

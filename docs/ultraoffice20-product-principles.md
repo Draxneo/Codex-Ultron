@@ -91,6 +91,10 @@ JARVIS should not silently mutate important operational or customer-facing recor
 - Humans approve the work.
 - Mutating actions should go through reviewable action cards or approval buttons.
 - Each approval should show what will happen, what data JARVIS used, and what is missing or uncertain.
+- Every approved customer promise must land on a named person or a shared office queue.
+- Person-owned work must be scheduled before the card leaves Now HQ.
+- Office-queue work stays visible until someone marks it handled.
+- CPS rebates, warranties, permits, inspections, paperwork, and billing cleanup usually belong to a shared office queue unless the dispatcher chooses a person.
 
 ## 3A. Brand Voice
 

@@ -86,6 +86,15 @@ JARVIS should understand these workflows, update cards as new information comes 
 
 If a customer calls back and changes the situation, JARVIS should update the existing card instead of creating a new mess.
 
+No action is allowed to disappear just because someone clicked accept. Every quote, job, estimate, follow-up, paperwork question, CPS rebate question, warranty question, permit item, inspection item, or customer promise must land somewhere with an owner.
+
+Ownership can be either:
+
+- A named person, when the work needs a calendar block, visit, quote, callback, estimate, job, or personal follow-up.
+- A shared office queue, when the work is paperwork, closeout, CPS rebate, warranty, permit, inspection, billing cleanup, or another oddball office item.
+
+JARVIS should choose the likely owner, but the human must be able to override it. Person-owned work must be scheduled before it leaves Now HQ. Office-queue work should stay visible until someone marks it handled.
+
 ## System Summary
 
 UltraOffice2.0 is a communication-first HVAC command center where every phone call, text, job, quote, technician update, and customer decision flows into one tracked customer journey.

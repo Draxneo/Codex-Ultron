@@ -35,6 +35,7 @@ import {
 } from "@/lib/actionItemLifecycle";
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { APP_ACTION_GO_LIVE_ISO } from "@/lib/appLifecycle";
+import { getActionOwnership } from "@/lib/actionOwnership";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   new_appointment:  { label: "New Job",  icon: CalendarPlus,  color: "text-green-500" },
@@ -72,6 +73,8 @@ const TIME_BLOCKS = [
 ];
 
 function isScheduleableActionItem(item: any) {
+  const ownership = getActionOwnership(item);
+  if (ownership.requiresSchedule && item?.category !== "new_appointment") return true;
   const meta = (item?.metadata || {}) as Record<string, any>;
   if (item.category === "new_appointment") return false;
   if (meta.needs_schedule_before_accept) return true;
@@ -423,6 +426,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
           const Icon = meta.icon;
           const priorityClass = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.normal;
           const itemMetadata = (item.metadata || {}) as any;
+          const ownership = getActionOwnership(item);
           const scheduleable = isScheduleableActionItem(item);
           const editableApprovalField =
             item.category === "jarvis_action_approval" ? itemMetadata.editable_message_field : null;
@@ -459,6 +463,16 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                     </Badge>
                   )}
                   <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${
+                      ownership.ownerType === "person"
+                        ? "border-blue-500/40 text-blue-600"
+                        : "border-emerald-500/40 text-emerald-600"
+                    }`}
+                  >
+                    {ownership.ownerLabel}
+                  </Badge>
                   <span className="text-[10px] text-muted-foreground">
                     {format(new Date(item.created_at), "h:mm a")}
                   </span>
@@ -785,7 +799,7 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                         disabled={isBusy}
                       >
                         {scheduleable ? <CalendarPlus className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                        {scheduleable ? "Schedule" : "Review"}
+                        {scheduleable ? "Schedule" : "Review / handle"}
                       </Button>
                       <Button
                         size="sm"
@@ -834,7 +848,9 @@ export function ActionItemCards({ onBack }: { onBack: () => void }) {
                           : bs.phase === "failed" ? "Retry Booking"
                           : needsPropertySelection && !selectedProperty ? "Choose Property"
                           : "Accept & Book")
-                        : "Accept"}
+                        : ownership.ownerType === "office_queue"
+                          ? "Mark handled"
+                          : "Accept"}
                     </Button>
                     {isTrainable && (
                       <Button
