@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import {
   ACTION_ITEM_STATUS,
   invalidateActionItemQueues,
@@ -85,6 +86,55 @@ function buildHandledReceipt(input: {
 function centralDateTime(date?: string | null, time?: string | null) {
   if (!date || !time) return null;
   return `${date}T${time}:00${detectCentralOffset(date)}`;
+}
+
+function collectActionMedia(metadata: Record<string, any>) {
+  const candidates = [
+    metadata.media_urls,
+    metadata.mediaUrls,
+    metadata.sms_media_urls,
+    metadata.source_sms_media_urls,
+    metadata.attachments,
+    metadata.sms_extraction?.media_urls,
+    metadata.sms_extraction?.attachments,
+  ];
+
+  const seen = new Set<string>();
+  return candidates
+    .flatMap((candidate) => normalizeMediaAttachments(candidate))
+    .filter((item) => {
+      const key = item.url.split("?")[0];
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+async function attachActionMediaToJob(jobId: string, metadata: Record<string, any>) {
+  const media = collectActionMedia(metadata);
+  if (!jobId || media.length === 0) return;
+
+  const { data: existing, error: existingError } = await supabase
+    .from("job_attachments" as any)
+    .select("file_path")
+    .eq("job_id", jobId);
+  if (existingError) throw existingError;
+
+  const existingPaths = new Set(((existing || []) as any[]).map((row) => String(row.file_path || "").split("?")[0]));
+  const inserts = media
+    .filter((item) => !existingPaths.has(item.url.split("?")[0]))
+    .map((item, index) => ({
+      job_id: jobId,
+      file_name: item.fileName || `sms-photo-${index + 1}.jpg`,
+      file_path: item.url,
+      file_type: item.fileType || "image/jpeg",
+      category: "sms",
+      hidden_from_tech_share: false,
+    }));
+
+  if (inserts.length === 0) return;
+  const { error } = await supabase.from("job_attachments" as any).insert(inserts);
+  if (error) throw error;
 }
 
 export type BookingPhase = "idle" | "resolving" | "booking" | "syncing" | "booked" | "failed";
@@ -237,6 +287,12 @@ export function useBookingAction() {
           jobNumber: result.job_number,
           type: result.type,
         });
+        try {
+          await attachActionMediaToJob(result.job_id, m);
+        } catch (attachmentError) {
+          console.warn("[useBookingAction] Job was scheduled, but SMS media did not attach.", attachmentError);
+        }
+
         try {
           await supabase
             .from("action_items" as any)

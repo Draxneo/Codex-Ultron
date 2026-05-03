@@ -386,7 +386,7 @@ function openItem(items: ExpectedJobItem[]) {
 export function buildJobWorkflowCard(
   job: any,
   templateOverrides?: WorkflowTemplateMap,
-  context?: { invoices?: any[]; partsOrders?: any[]; cart?: any | null }
+  context?: { invoices?: any[]; partsOrders?: any[]; cart?: any | null; attachments?: any[] }
 ): WorkflowNowCard | null {
   if (isLegacyHcpImport(job)) return null;
 
@@ -404,6 +404,11 @@ export function buildJobWorkflowCard(
   const { stepIndex, step } = resolveTemplateStep(template, templateKey, active);
   const dueAt = job.scheduled_date || job.created_at || null;
   const recordLabel = `job #${job.job_number || job.hcp_job_number || String(job.id).slice(0, 8)}`;
+  const mediaUrls = (context?.attachments || []).map((attachment) => ({
+    url: attachment.url || attachment.file_path,
+    file_name: attachment.file_name,
+    file_type: attachment.file_type,
+  }));
 
   return {
     id: `job-${job.id}-${step.key}`,
@@ -418,6 +423,7 @@ export function buildJobWorkflowCard(
     status: job.status,
     source: job.job_type,
     description: job.description,
+    mediaUrls,
     title: step.title,
     subtitle: active.reason,
     owner: step.owner,

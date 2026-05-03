@@ -53,6 +53,7 @@ import { APP_ACTION_GO_LIVE_ISO, CLOSED_CART_STATUS_FILTER, CLOSED_LEAD_STATUS_F
 import { openSmsComposer } from "@/lib/smsComposerBridge";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
+import { resolveStorageMediaUrl } from "@/lib/mediaUrls";
 import { MediaGallery } from "@/components/media";
 import { cn } from "@/lib/utils";
 
@@ -587,6 +588,22 @@ export default function NowHQ() {
       return (data as any[]) || [];
     },
   });
+  const { data: jobAttachments = [], isLoading: jobAttachmentsLoading, isError: jobAttachmentsError, error: jobAttachmentsQueryError } = useQuery({
+    queryKey: ["now-hq-job-attachments", jobCartKey],
+    enabled: nowJobIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("job_attachments" as any)
+        .select("id, job_id, file_name, file_path, file_type, category, created_at")
+        .in("job_id", nowJobIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return ((data || []) as any[]).map((attachment) => ({
+        ...attachment,
+        url: resolveStorageMediaUrl(attachment.file_path, "job-photos"),
+      }));
+    },
+  });
   const { data: workflowCardAcks = [], isLoading: workflowCardAcksLoading, isError: workflowCardAcksError, error: workflowCardAcksQueryError } = useQuery({
     queryKey: ["now-hq-workflow-card-acks"],
     queryFn: async () => {
@@ -624,6 +641,7 @@ export default function NowHQ() {
       { table: "jobs", queryKeys: [["jobs"], ["now-hq-closeout-jobs"], ["now-hq-workflow-alerts"], ["hud_attention_counts"]] },
       { table: "job_carts", queryKeys: [["now-hq-job-carts"], ["jobs"], ["hud_attention_counts"]] },
       { table: "job_cart_items", queryKeys: [["now-hq-job-carts"], ["hud_attention_counts"]] },
+      { table: "job_attachments", queryKeys: [["now-hq-job-attachments"], ["hud_attention_counts"]] },
       { table: "customer_invoices", queryKeys: [["now-hq-job-invoices"], ["hud_attention_counts"]] },
       { table: "parts_orders", queryKeys: [["now-hq-parts-orders"], ["hud_attention_counts"]] },
       { table: "estimates", queryKeys: [["estimates"], ["hud_attention_counts"]] },
@@ -639,6 +657,7 @@ export default function NowHQ() {
     queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-alerts"] });
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-job-carts"] });
+    queryClient.invalidateQueries({ queryKey: ["now-hq-job-attachments"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-job-invoices"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-parts-orders"] });
     queryClient.invalidateQueries({ queryKey: ["now-hq-workflow-card-acks"] });
@@ -744,6 +763,13 @@ export default function NowHQ() {
       list.push(order);
       partsOrdersByJobId.set(order.job_id, list);
     }
+    const attachmentsByJobId = new Map<string, any[]>();
+    for (const attachment of (jobAttachments as any[])) {
+      if (!attachment.job_id) continue;
+      const list = attachmentsByJobId.get(attachment.job_id) || [];
+      list.push(attachment);
+      attachmentsByJobId.set(attachment.job_id, list);
+    }
     const acknowledgedCardIds = new Set((workflowCardAcks as any[]).map((ack) => ack.card_id).filter(Boolean));
     const actionCards = (actionItems as any[]).map((item) => buildActionItemWorkflowCard(item, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
     const alertCards = (workflowAlerts as any[]).map((alert) => buildWorkflowAlertCard(alert, workflowTemplates)).filter(Boolean) as WorkflowNowCard[];
@@ -754,6 +780,7 @@ export default function NowHQ() {
         cart: jobCartByJobId.get(job.id) || null,
         invoices: invoicesByJobId.get(job.id) || [],
         partsOrders: partsOrdersByJobId.get(job.id) || [],
+        attachments: attachmentsByJobId.get(job.id) || [],
       }))
       .filter(Boolean) as WorkflowNowCard[];
     const closeoutJobCards = (closeoutJobs as any[])
@@ -762,6 +789,7 @@ export default function NowHQ() {
         cart: jobCartByJobId.get(job.id) || null,
         invoices: invoicesByJobId.get(job.id) || [],
         partsOrders: partsOrdersByJobId.get(job.id) || [],
+        attachments: attachmentsByJobId.get(job.id) || [],
       }))
       .filter(Boolean) as WorkflowNowCard[];
     const estimateCards = (estimates as any[])
@@ -772,9 +800,9 @@ export default function NowHQ() {
     return [...alertCards, ...actionCards, ...jobCards, ...closeoutJobCards, ...estimateCards, ...leadCards]
       .filter((card) => card.recordType === "action" || card.recordType === "alert" || !acknowledgedCardIds.has(card.id))
       .sort(workflowSort);
-  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, jobInvoices, partsOrders, workflowCardAcks, estimates, quotePipelineById, leads, workflowTemplates]);
+  }, [actionItems, workflowAlerts, jobs, closeoutJobs, jobCarts, jobInvoices, partsOrders, jobAttachments, workflowCardAcks, estimates, quotePipelineById, leads, workflowTemplates]);
 
-  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || jobInvoicesLoading || partsOrdersLoading || workflowCardAcksLoading || estimatesLoading || quotePipelineLoading || leadsLoading || workflowTemplatesLoading;
+  const isLoading = actionItemsLoading || workflowAlertsLoading || jobsLoading || closeoutJobsLoading || jobCartsLoading || jobInvoicesLoading || partsOrdersLoading || jobAttachmentsLoading || workflowCardAcksLoading || estimatesLoading || quotePipelineLoading || leadsLoading || workflowTemplatesLoading;
   const dataErrors = [
     { label: "workflow cards", active: actionItemsError, error: actionItemsQueryError },
     { label: "workflow alerts", active: workflowAlertsError, error: workflowAlertsQueryError },
@@ -783,6 +811,7 @@ export default function NowHQ() {
     { label: "job carts", active: jobCartsError, error: jobCartsQueryError },
     { label: "job invoices", active: jobInvoicesError, error: jobInvoicesQueryError },
     { label: "parts orders", active: partsOrdersError, error: partsOrdersQueryError },
+    { label: "job attachments", active: jobAttachmentsError, error: jobAttachmentsQueryError },
     { label: "workflow acknowledgements", active: workflowCardAcksError, error: workflowCardAcksQueryError },
     { label: "estimates", active: estimatesError, error: estimatesQueryError },
     { label: "quote pipeline", active: quotePipelineError, error: quotePipelineQueryError },
