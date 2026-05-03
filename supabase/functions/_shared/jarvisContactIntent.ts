@@ -127,7 +127,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\bput (him|her|them|the dogs?) (up|away)\b/,
     /\bbackyard\b.*\b(dog|dogs|pet|pets)\b/,
   ]);
-  const hasCallbackUpdate = !!extracted.callback_phone || !!extracted.phone || includesAny(text, [
+  const hasCallbackUpdate = !!extracted.callback_phone || (hasActiveWork && !!extracted.phone) || includesAny(text, [
     /\b(call|text)\s+(me|us|him|her|my wife|my husband|my spouse)\s+(at|on)\b/,
     /\bdifferent\s+(number|phone)\b/,
     /\buse\s+this\s+(number|phone)\b/,
@@ -137,6 +137,7 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\beta\b/,
     /\b(on the way|heads up|30 minute|thirty minute)\b/,
     /\bwhen\s+(will|is|are|can).*\b(arriv|come|show)\b/,
+    /\bwhen\b.*\b(will|is|are|can)\b.*\bbe\s+here\b/,
     /\bwhat\s+time\b.*\b(arriv|come|show)\b/,
   ]);
   const hasReschedule = extracted.intent === "reschedule" || extracted.call_intent === "reschedule_existing" || includesAny(text, [
@@ -165,6 +166,10 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\b(quote|estimate|bid|proposal|price|pricing|option|financing|approved|approve|decline)\b/,
     /\b(work|write|make|build|send|prepare)\s+(up\s+)?(a\s+)?(quote|estimate|bid|proposal)\b/,
     /\b(carport|flat roof|wood|shingles|metal)\b.*\b(quote|estimate|bid|price)\b/,
+  ]);
+  const hasQuoteDecision = hasQuoteFollowUp && includesAny(text, [
+    /\b(approve|approved|approval|accept|accepted|go ahead|move forward|looks good|let'?s do it|we'?re ready|sign me up)\b/,
+    /\b(customer|homeowner|they|we|i)\s+(approved|accepted|want|wants)\b/,
   ]);
   const hasComplaint = extracted.intent === "complaint" || includesAny(text, [
     /\b(complaint|upset|angry|not happy|still not working|never fixed|bad service)\b/,
@@ -212,16 +217,19 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   if (hasEtaRequest) return specific("eta_request", "eta_request", `Check dispatch board and send an ETA update for ${workRef}`, "Customer is asking when someone will arrive.");
   if (hasAccess) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
   if (hasPetWarning) return specific("pet_warning", "pet_warning", `Add pet/access warning to ${workRef}`, "Customer warned us about pets or site access.");
-  if (hasCallbackUpdate) return specific("callback_number_update", "contact_update", `Save the callback preference and tell the tech which number to use`, "Customer provided a different callback or text number.");
-  if (hasConfirm) return specific("confirm_existing_work", "confirmation", `Mark ${workRef} as confirmed`, "Customer confirmed an existing appointment.");
-  if (hasBilling) return specific("billing_question", "thread_attention", "Review billing/payment context and reply", "Customer is asking about billing or payment.");
-  if (hasWarranty) return specific("warranty_or_membership_question", "thread_attention", "Review warranty or Comfort Club status and reply", "Customer is asking about warranty or membership.");
+  if (hasQuoteDecision) {
+    return specific("quote_follow_up", "follow_up", hasActiveWork ? `Review ${workRef} and move the quote/proposal forward` : "Create or update the quote follow-up card for human approval", "Customer appears to be approving, choosing, or moving forward on a quote/proposal.");
+  }
   if (hasQuoteFollowUp && hasActiveWork && !explicitSeparateWork) {
     return specific("quote_follow_up", "follow_up", `Review ${workRef} and follow up on quote/proposal`, "Customer is discussing an existing estimate or proposal.");
   }
   if ((extracted.intent === "quote_request" || extracted.intent === "quote_follow_up" || hasQuoteFollowUp) && !hasActiveWork) {
     return specific("quote_follow_up", "follow_up", "Prepare the quote/bid and send it to the customer", "Customer is asking for a quote or we promised to prepare one.");
   }
+  if (hasCallbackUpdate) return specific("callback_number_update", "contact_update", `Save the callback preference and tell the tech which number to use`, "Customer provided a different callback or text number.");
+  if (hasConfirm) return specific("confirm_existing_work", "confirmation", `Mark ${workRef} as confirmed`, "Customer confirmed an existing appointment.");
+  if (hasBilling) return specific("billing_question", "thread_attention", "Review billing/payment context and reply", "Customer is asking about billing or payment.");
+  if (hasWarranty) return specific("warranty_or_membership_question", "thread_attention", "Review warranty or Comfort Club status and reply", "Customer is asking about warranty or membership.");
   if (hasComplaint) return specific("complaint", "thread_attention", `Review ${workRef} and escalate if needed`, "Customer appears unhappy or the issue may still be unresolved.");
   if (hasActiveWork && !explicitSeparateWork && (hasBooking || isInfoReply || text.length > 0)) {
     return specific("customer_info_update", "follow_up", `Attach this update to ${workRef}`, "Customer has active work, so defaulting to update instead of new booking.");
