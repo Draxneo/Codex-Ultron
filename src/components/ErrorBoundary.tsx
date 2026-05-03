@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
+import { logClientSystemError } from "@/lib/systemErrorLog";
 
 interface Props {
   children: ReactNode;
@@ -56,6 +57,19 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught:", error, errorInfo);
+
+    void logClientSystemError({
+      sourceName: "react-error-boundary",
+      message: error.message || "React render error",
+      severity: isRecoverableLoadError(error) ? "warning" : "error",
+      stackTrace: error.stack || errorInfo.componentStack || null,
+      context: {
+        error_name: error.name || null,
+        component_stack: errorInfo.componentStack || null,
+        recoverable_load_error: isRecoverableLoadError(error),
+        native_webview: isNativeWebView(),
+      },
+    });
 
     if (isRecoverableLoadError(error) && canAutoRecover()) {
       window.sessionStorage.setItem(CHUNK_RECOVERY_KEY, String(Date.now()));
