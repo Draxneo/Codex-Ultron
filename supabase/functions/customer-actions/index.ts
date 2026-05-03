@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getTaskModel } from "../_shared/getTaskModel.ts";import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { describeActiveWork, lookupActiveWorkContext } from "../_shared/jarvisContactIntent.ts";
+import { toCentralDate } from "../_shared/formatters.ts";
 
 
 
@@ -381,7 +382,7 @@ serve(async (req) => {
           },
         };
         if (body.scheduled_start) {
-          estimateRecord.scheduled_date = body.scheduled_start.split("T")[0];
+          estimateRecord.scheduled_date = toCentralDate(body.scheduled_start) || body.scheduled_start.split("T")[0];
           estimateRecord.arrival_start = body.scheduled_start;
           estimateRecord.arrival_end = body.scheduled_end || null;
         }
@@ -422,7 +423,7 @@ serve(async (req) => {
         assigned_to: defaultTech,
       };
       if (body.scheduled_start) {
-        jobRecord.scheduled_date = body.scheduled_start.split("T")[0];
+        jobRecord.scheduled_date = toCentralDate(body.scheduled_start) || body.scheduled_start.split("T")[0];
         jobRecord.arrival_start = body.scheduled_start;
         jobRecord.arrival_end = body.scheduled_end || null;
         jobRecord.status = "scheduled";
