@@ -2,6 +2,7 @@ export type JarvisContactIntent =
   | "new_service_booking"
   | "new_estimate_request"
   | "maintenance_request"
+  | "quote_request"
   | "reschedule_existing_work"
   | "cancel_existing_work"
   | "eta_request"
@@ -157,7 +158,9 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     /\b(warranty|labor warranty|parts warranty|comfort club|membership|maintenance plan|service agreement)\b/,
   ]);
   const hasQuoteFollowUp = includesAny(text, [
-    /\b(quote|estimate|proposal|option|financing|approved|approve|decline)\b/,
+    /\b(quote|estimate|bid|proposal|price|pricing|option|financing|approved|approve|decline)\b/,
+    /\b(work|write|make|build|send|prepare)\s+(up\s+)?(a\s+)?(quote|estimate|bid|proposal)\b/,
+    /\b(carport|flat roof|wood|shingles|metal)\b.*\b(quote|estimate|bid|price)\b/,
   ]);
   const hasComplaint = extracted.intent === "complaint" || includesAny(text, [
     /\b(complaint|upset|angry|not happy|still not working|never fixed|bad service)\b/,
@@ -211,6 +214,9 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   if (hasWarranty) return specific("warranty_or_membership_question", "thread_attention", "Review warranty or Comfort Club status and reply", "Customer is asking about warranty or membership.");
   if (hasQuoteFollowUp && hasActiveWork && !explicitSeparateWork) {
     return specific("quote_follow_up", "follow_up", `Review ${workRef} and follow up on quote/proposal`, "Customer is discussing an existing estimate or proposal.");
+  }
+  if ((extracted.intent === "quote_request" || extracted.intent === "quote_follow_up" || hasQuoteFollowUp) && !hasActiveWork) {
+    return specific("quote_follow_up", "follow_up", "Prepare the quote/bid and send it to the customer", "Customer is asking for a quote or we promised to prepare one.");
   }
   if (hasComplaint) return specific("complaint", "thread_attention", `Review ${workRef} and escalate if needed`, "Customer appears unhappy or the issue may still be unresolved.");
   if (hasActiveWork && !explicitSeparateWork && (hasBooking || isInfoReply || text.length > 0)) {

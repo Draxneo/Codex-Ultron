@@ -13,7 +13,8 @@ import { upsertLiveActionItem } from "../_shared/actionItems.ts";
 import { resolveSmsTemplateBody } from "../_shared/smsTemplates.ts";
 import { getDefaultBusinessUnit, resolveBusinessUnitByPhone, type BusinessUnit } from "../_shared/businessUnits.ts";
 
-import { getCentralToday } from "../_shared/formatters.ts";import { corsHeaders } from "../_shared/cors.ts";
+import { getCentralNow, getCentralToday } from "../_shared/formatters.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 function normalize10(value: string | null | undefined): string {
   return (value || "").replace(/\D/g, "").slice(-10);
@@ -140,6 +141,48 @@ function composeAddress(street?: string | null, city?: string | null, state?: st
   return [street, city, state, zip].filter(Boolean).join(", ") || null;
 }
 
+function resolveThreadFollowUpDate(threadText: string, explicitDate?: string | null): string | null {
+  const explicit = String(explicitDate || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+
+  const text = String(threadText || "").toLowerCase();
+  const weekdays: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+  const match = text.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (!match) return null;
+
+  const now = getCentralNow();
+  const currentDow = now.getUTCDay();
+  const targetDow = weekdays[match[1]];
+  let daysAhead = (targetDow - currentDow + 7) % 7;
+  if (daysAhead === 0 && /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(text)) {
+    daysAhead = 7;
+  }
+  const target = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + daysAhead,
+    12,
+    0,
+    0,
+  ));
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(target.getUTCDate()).padStart(2, "0")}`;
+}
+
+function quoteFollowUpLabel(threadText: string, fallback?: string | null): string | null {
+  const text = String(threadText || "").toLowerCase();
+  if (/\b(first thing|morning)\b/.test(text) && /\bmonday\b/.test(text)) return "Monday morning";
+  if (/\bmonday\b/.test(text)) return "Monday";
+  return fallback || null;
+}
+
 async function backfillCommunicationIdentity(
   supabase: any,
   args: {
@@ -237,8 +280,8 @@ const smsExtractTool = {
         cancel_reason: { type: "string", description: "Reason for canceling an existing appointment if provided" },
         intent: {
           type: "string",
-          enum: ["booking", "reschedule", "cancel", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "question", "complaint", "confirmation", "info_reply", "other"],
-          description: "Customer's primary intent. Use the specific update intents for existing-work updates. 'info_reply' = they are providing contact info in response to a prior call or request.",
+          enum: ["booking", "quote_request", "quote_follow_up", "reschedule", "cancel", "eta_request", "access_instructions", "pet_warning", "callback_number_update", "question", "complaint", "confirmation", "info_reply", "other"],
+          description: "Customer's primary intent. Use quote_request/quote_follow_up when the conversation is about preparing or sending a quote, bid, estimate, or proposal. 'info_reply' = they are only providing contact info in response to a prior call or request.",
         },
         service_type: {
           type: "string",
@@ -246,6 +289,12 @@ const smsExtractTool = {
           description: "Type of service if identifiable",
         },
         scheduling_preference: { type: "string", description: "Any date/time preference mentioned" },
+        scheduled_date: { type: "string", description: "YYYY-MM-DD if the conversation clearly names a date for the next action or appointment" },
+        scheduled_time: { type: "string", description: "Time or time window if clearly mentioned" },
+        follow_up_due: { type: "string", description: "Natural language follow-up promise, e.g. 'Monday morning' or 'tomorrow afternoon'" },
+        quote_subject: { type: "string", description: "What the quote/bid/proposal is for, e.g. carport, flat roof option, equipment replacement" },
+        quote_options_requested: { type: "string", description: "Options or variants the customer asked us to quote" },
+        problem_description: { type: "string", description: "Issue, project, or work request described by the customer" },
         summary: { type: "string", description: "One-line summary of what the customer wants" },
         urgency: { type: "string", enum: ["low", "medium", "high", "emergency"] },
         suggested_action: { type: "string", description: "What the dispatcher should do next" },
@@ -1081,11 +1130,12 @@ Deno.serve(async (req) => {
             .select("direction, body, created_at")
             .eq("phone_number", from)
             .order("created_at", { ascending: false })
-            .limit(10);
+            .limit(25);
 
           const threadContext = (recentThread || []).reverse()
-            .map((m: any) => `[${m.direction === "outbound" ? "Us" : "Them"}] ${m.body.slice(0, 200)}`)
+            .map((m: any) => `[${m.direction === "outbound" ? "Us" : "Them"}] ${String(m.body || "").slice(0, 500)}`)
             .join("\n");
+          const conversationText = `${threadContext}\n\nLatest message: "${body}"`;
 
           // Cross-reference: check call_log for recent inbound call from same number (24h window)
           const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -1145,7 +1195,7 @@ Deno.serve(async (req) => {
             ? `\n\nATTACHED MEDIA (${mediaUrls.length} file${mediaUrls.length > 1 ? "s" : ""}):\n${mediaUrls.map((m, i) => `${i + 1}. ${m.content_type} — ${m.url}`).join("\n")}\nNote: Customer sent photo/video attachments. Consider these as evidence of the issue when determining intent and urgency.`
             : "";
 
-          const analysisPrompt = `Analyze this inbound SMS and extract ALL customer contact information and intent. This is for an HVAC company CRM.
+          const analysisPrompt = `Analyze this inbound SMS and the recent thread. Extract ALL customer contact information and the current business intent. This is for a home services CRM with multiple companies, including HVAC and construction.
 
 Customer: ${contactName || from} (${from})
 ${customerContext}
@@ -1159,7 +1209,11 @@ ${threadContext}
 Latest message: "${body}"
 
 IMPORTANT RULES:
+- Judge intent from the ENTIRE THREAD, not only the latest message. A late "thanks" or "who is this" does not erase a quote/bid/request discussed earlier.
 - Extract ALL contact details: name, email, address, city, state, zip, lockbox/gate codes
+- If the thread says the customer wants a quote, bid, proposal, estimate, price, or options, use intent "quote_request" or "quote_follow_up" even if the latest text only gives contact info or says thank you
+- If our company said we would "work up a bid", "work on this Monday", "send a quote", or similar, extract follow_up_due and scheduled_date/scheduled_time if possible
+- If the customer asked for multiple quote options, such as wood/shingles and flat roof, capture those in quote_options_requested
 - If the message gives a gate/lockbox/door/garage code or access instructions, classify as "access_instructions"
 - If the message warns about dogs, pets, backyard access, or animals, classify as "pet_warning"
 - If the message asks when we will arrive, asks for ETA, or asks for a heads-up, classify as "eta_request"
@@ -1400,7 +1454,7 @@ IMPORTANT RULES:
                 await callBackfill;
 
                 let smsBackfill = supabase.from("sms_log")
-                  .update({ contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
+                  .update({ related_customer_id: newCust.id, contact_name: `${extracted.first_name || ""} ${extracted.last_name || ""}`.trim(), contact_type: "customer", business_unit_id: businessUnit?.id || null })
                   .eq("phone_number", from)
                   .in("contact_type", ["unknown", "lead"]);
                 if (businessUnit?.id) smsBackfill = smsBackfill.eq("business_unit_id", businessUnit.id);
@@ -1455,7 +1509,7 @@ IMPORTANT RULES:
             pendingBooking: existingBooking || activeWorkLookup.pendingBooking,
           };
           const intentDecision = classifyCustomerContactIntent({
-            text: body,
+            text: conversationText,
             extracted,
             activeWork: activeWorkContext,
             channel: "sms",
@@ -1468,8 +1522,10 @@ IMPORTANT RULES:
           }));
           const isExplicitBookingIntent =
             intentDecision.actionCategory === "new_appointment" && intentDecision.shouldCreateNewWork;
-          const isInfoReply =
+          const isPureInfoReply =
             extracted.intent === "info_reply" || intentDecision.intent === "customer_info_update";
+          const isInfoReply =
+            isPureInfoReply && !["quote_request", "quote_follow_up", "new_estimate_request", "new_service_booking"].includes(intentDecision.intent);
 
           // ACTIVE-WORK SUPPRESSION: if customer has an open job OR an upcoming/today
           // estimate, this SMS is a follow-up on existing work, NOT a new booking.
@@ -1614,6 +1670,10 @@ IMPORTANT RULES:
               scheduling_preference: effectiveScheduling,
               scheduled_date: extracted.scheduled_date || callExtraction?.scheduled_date || null,
               scheduled_time: extracted.scheduled_time || callExtraction?.scheduled_time || null,
+              follow_up_due: extracted.follow_up_due || quoteFollowUpLabel(conversationText, effectiveScheduling) || null,
+              follow_up_date: resolveThreadFollowUpDate(conversationText, extracted.scheduled_date || null),
+              quote_subject: extracted.quote_subject || null,
+              quote_options_requested: extracted.quote_options_requested || null,
               description: extracted.summary || callExtraction?.problem_description || body.slice(0, 200),
               sms_extraction: extracted,
               call_extraction: callExtraction || null,
@@ -1740,6 +1800,8 @@ IMPORTANT RULES:
             // (To-Do creation removed — lockbox codes / scheduling notes now flow through action_items + booking card only.)
 
           } else if (!isInfoReply && intentDecision.actionCategory !== "new_appointment" && intentDecision.intent !== "general_question") {
+            const followUpDate = resolveThreadFollowUpDate(conversationText, extracted.scheduled_date || null);
+            const followUpDue = extracted.follow_up_due || quoteFollowUpLabel(conversationText, effectiveScheduling) || null;
             let staleNewLeadDelete = supabase.from("action_items")
               .delete()
               .eq("category", "new_lead")
@@ -1750,7 +1812,7 @@ IMPORTANT RULES:
               staleNewLeadDelete = staleNewLeadDelete.eq("metadata->>business_unit_id", businessUnit.id);
             }
             await staleNewLeadDelete;
-            await supabase.from("action_items").insert({
+            await upsertLiveActionItem(supabase, {
               title: `${customerName} - ${intentDecision.intent.replaceAll("_", " ")}`,
               description: intentDecision.summary || extracted.summary || body.slice(0, 200),
               category: intentDecision.actionCategory,
@@ -1759,16 +1821,27 @@ IMPORTANT RULES:
               status: "pending",
               customer_phone: from,
               job_id: linkedJobId,
-              suggested_action: intentDecision.suggestedAction,
+              suggested_action: intentDecision.intent === "quote_follow_up"
+                ? `Prepare the quote/bid${followUpDue ? ` ${followUpDue}` : ""} and send it to ${customerName}.`
+                : intentDecision.suggestedAction,
               metadata: buildJarvisIntentMetadata(intentDecision, {
                 ...messageCompanyMetadata,
                 customer_name: customerName,
                 customer_id: resolvedCustomerId,
                 phone: from,
+                email: extracted.email || null,
+                address: extracted.address || null,
+                follow_up_due: followUpDue,
+                follow_up_date: followUpDate,
+                scheduled_date: followUpDate || extracted.scheduled_date || null,
+                scheduled_time: extracted.scheduled_time || null,
+                quote_subject: extracted.quote_subject || null,
+                quote_options_requested: extracted.quote_options_requested || null,
                 sms_extraction: extracted,
                 inbound_message: body,
-                thread_snippet: body.slice(0, 200),
+                thread_snippet: conversationText.slice(-500),
               }),
+              merge_window_hours: 72,
             });
             console.log(`SMS: created ${intentDecision.actionCategory} action_item for ${from} (${intentDecision.intent})`);
           } else if (extracted.intent !== "other" && extracted.intent !== "confirmation") {
