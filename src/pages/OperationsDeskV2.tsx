@@ -569,9 +569,42 @@ function callSummary(conversation: CallConversation) {
 
 function smsSummary(conversation: SmsConversation) {
   if (conversation.status === "needs_reply") return "Needs reply";
-  if (conversation.latestJobId || conversation.jobContext) return "Text tied to active work";
+  if (conversation.estimateContext) return formatSmsWorkHeadline(conversation.estimateContext, "Quote");
+  if (conversation.latestJobId || conversation.jobContext) return formatSmsWorkHeadline(conversation.jobContext, "Job");
   if (conversation.lastMessage.direction === "inbound") return "Incoming text";
   return "Outbound text";
+}
+
+function cleanWorkText(value?: string | null) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^new\s+job:\s*/i, "")
+    .trim();
+}
+
+function formatSmsWorkHeadline(
+  context: SmsConversation["jobContext"] | SmsConversation["estimateContext"],
+  fallbackKind: "Job" | "Quote"
+) {
+  const description = cleanWorkText(context?.description);
+  const label = cleanWorkText(context?.label);
+  const type = cleanWorkText((context as any)?.estimateType || (context as any)?.jobType);
+  const prefix = fallbackKind === "Quote" || /estimate|quote|bid/i.test(`${label} ${type} ${description}`) ? "Quote" : "Job";
+  const headline = description || type || label || "Active work";
+  return `${prefix}: ${headline}`;
+}
+
+function smsDetail(conversation: SmsConversation) {
+  const messageText = cleanWorkText(conversation.lastMessage.body);
+  const context = conversation.estimateContext || conversation.jobContext;
+  const schedule = context?.scheduledDate ? formatDateFriendly(context.scheduledDate) : "";
+  const status = cleanWorkText(context?.status);
+  const parts = [
+    schedule ? `Scheduled ${schedule}` : "",
+    status ? status : "",
+    messageText ? `Latest: ${messageText}` : "",
+  ].filter(Boolean);
+  return parts.join(" • ") || "Open this text to read it and reply.";
 }
 
 function callToDeskItem(conversation: CallConversation): DeskConversation {
@@ -612,7 +645,7 @@ function smsToDeskItem(conversation: SmsConversation): DeskConversation {
     customerType: conversation.contactType,
     status: conversation.status,
     summary: smsSummary(conversation),
-    detail: message.body || "Open this text to read it and reply.",
+    detail: smsDetail(conversation),
     createdAt: message.created_at,
     timeLabel: message.time_ct || formatDateTime(message.created_at),
     unread: conversation.unreadCount > 0,

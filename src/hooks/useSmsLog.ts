@@ -93,6 +93,9 @@ export type SmsJobContext = {
   customerName: string | null;
   scheduledDate: string | null;
   status: string | null;
+  jobType?: string | null;
+  description?: string | null;
+  address?: string | null;
 };
 
 export type SmsEstimateContext = {
@@ -101,6 +104,9 @@ export type SmsEstimateContext = {
   customerName: string | null;
   scheduledDate: string | null;
   status: string | null;
+  estimateType?: string | null;
+  description?: string | null;
+  address?: string | null;
 };
 
 function compareByCreatedAt(a: SmsMessage, b: SmsMessage): number {
@@ -246,13 +252,13 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         supabase.from("customers").select("id, first_name, last_name, phone, mobile_phone, email, address, city, state, zip"),
         supabase
           .from("estimates")
-          .select("id, estimate_number, customer_name, customer_phone, scheduled_date, status, work_status")
+          .select("id, estimate_number, estimate_type, customer_name, customer_phone, scheduled_date, status, work_status, description, address")
           .not("customer_phone", "is", null)
           .not("customer_name", "is", null)
           .gte("scheduled_date", currentCutoff),
         supabase
           .from("jobs")
-          .select("id, customer_name, customer_phone, hcp_job_number, job_type, scheduled_date, status")
+          .select("id, customer_name, customer_phone, hcp_job_number, job_number, job_type, scheduled_date, status, description, address")
           .not("customer_phone", "is", null)
           .not("customer_name", "is", null)
           .gte("scheduled_date", currentCutoff),
@@ -299,10 +305,13 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
         if (!key || jobsByPhone[key]) continue;
         jobsByPhone[key] = {
           id: job.id,
-          label: job.hcp_job_number ? `Job #${job.hcp_job_number}` : job.job_type || "Job",
+          label: job.hcp_job_number || job.job_number ? `Job #${job.hcp_job_number || job.job_number}` : job.job_type || "Job",
           customerName: job.customer_name,
           scheduledDate: job.scheduled_date,
           status: job.status,
+          jobType: job.job_type,
+          description: job.description,
+          address: job.address,
         };
       }
 
@@ -321,6 +330,9 @@ export function useSmsLog(options: UseSmsLogOptions = {}) {
           customerName: est.customer_name,
           scheduledDate: est.scheduled_date,
           status: est.work_status || est.status || null,
+          estimateType: est.estimate_type,
+          description: est.description,
+          address: est.address,
         };
       }
 
