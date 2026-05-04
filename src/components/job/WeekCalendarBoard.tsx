@@ -643,6 +643,70 @@ function WeekCard({
   );
 }
 
+/**
+ * 2026-05-04: getJobNextStep — given a calendar item, returns the next
+ * unfulfilled workflow step as a human label. Used by CardPopover to render
+ * the "Next" line so dispatchers can always see where the job is in its
+ * lifecycle on hover, not just when something errors.
+ *
+ * The check order mirrors INSTALL_WORKFLOW / SERVICE_WORKFLOW from
+ * src/lib/workflowNow.ts but is intentionally independent: we don't need
+ * the heavy WorkflowNowCard plumbing to surface a single label, and the
+ * popover doesn't have access to invoices/parts/cart context anyway.
+ *
+ * Returns null for fully-completed jobs and estimates we don't track.
+ */
+function getJobNextStep(item: BoardItem): { label: string; route: string } | null {
+  if (item.item_type === "estimate") {
+    if (!item.scheduled_date) return { label: "Schedule sales visit", route: `/estimates/${item.id}` };
+    if (!item.assigned_to) return { label: "Assign sales tech", route: `/estimates/${item.id}` };
+    if (!(item as any).confirmation_sent_at) return { label: "Send appointment reminder", route: `/estimates/${item.id}` };
+    if (!(item as any).completion_form_sent_at) return { label: "Walk site + present quote", route: `/estimates/${item.id}` };
+    if (!(item as any).presentation_sent_at) return { label: "Send presentation", route: `/estimates/${item.id}` };
+    return { label: "Win/lose decision", route: `/estimates/${item.id}` };
+  }
+
+  // jobs ─────────────────────────────────────────────────────────────────
+  const route = `/jobs/${item.id}`;
+  const isInstall = item.job_type === "install";
+
+  if (!item.scheduled_date) return { label: "Schedule date", route };
+  if (!item.assigned_to) return { label: isInstall ? "Assign installer" : "Assign tech", route };
+
+  if (isInstall) {
+    if (!(item as any).equipment_ordered_at) return { label: "Order equipment", route };
+    if ((item as any).permit_required && !(item as any).permit_pulled_at) return { label: "Pull permit", route };
+    if (!(item as any).deposit_paid_at && (item as any).payment_method !== "financed") {
+      return { label: "Collect deposit (or mark financed)", route };
+    }
+    if ((item as any).payment_method === "financed" && !(item as any).finance_paperwork_at) {
+      return { label: "Finance paperwork", route };
+    }
+  }
+
+  if (!(item as any).confirmation_sent_at) return { label: "Send appointment reminder", route };
+  if (!(item as any).dispatch_sent_at) return { label: "Text job details to tech", route };
+  if (!(item as any).on_my_way_sent_at) return { label: "Tech to send 'on my way'", route };
+
+  const status = String(item.status || item.work_status || "").toLowerCase();
+  const onSite = status === "in_progress" || status === "on_site";
+  const done = status === "done" || status === "completed" || status === "complete" || status === "invoiced";
+  if (!onSite && !done) return { label: "Tech to arrive on site", route };
+
+  if (!(item as any).completion_form_sent_at) return { label: "Send completion form", route };
+  if ((item as any).site_visit_missing && !(item as any).photos_uploaded_at) {
+    return { label: "Upload site photos", route };
+  }
+  if (!(item as any).invoice_sent_at) return { label: "Send invoice", route };
+  if (!(item as any).payment_collected_at) return { label: "Collect payment", route };
+  if (!(item as any).review_request_sent_at) return { label: "Request review", route };
+  if (isInstall && !(item as any).warranty_registered_at) return { label: "Register warranty", route };
+  if (isInstall && (item as any).permit_required && !(item as any).inspection_passed_at) {
+    return { label: "Schedule inspection", route };
+  }
+  return null; // fully done
+}
+
 // ── Hover Popover Content ──
 function CardPopover({
   item,
@@ -731,7 +795,33 @@ function CardPopover({
 
       {/* Body */}
       <div className="p-3 space-y-2.5">
-        {/* 2026-05-04: Action-required alerts. Renders inline at the top of
+        {/* 2026-05-04: "What's next" — the workflow step this job is currently
+            waiting for. Always shown (when there is a next step) so dispatchers
+            can see where any job is in its lifecycle without reading the alerts
+            section. Click navigates to the job page where the action lives. */}
+        {(() => {
+          const next = getJobNextStep(item);
+          if (!next) return null;
+          return (
+            <button
+              type="button"
+              onClick={() => navigate(next.route)}
+              className="w-full flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-left transition-colors hover:bg-primary/10"
+            >
+              <Zap className="h-4 w-4 text-primary shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground leading-none">
+                  Next
+                </div>
+                <div className="text-sm font-semibold text-foreground leading-tight mt-0.5 truncate">
+                  {next.label}
+                </div>
+              </div>
+            </button>
+          );
+        })()}
+
+        {/* Action-required alerts. Renders inline at the top of
             the popover so dispatchers see the workflow blockers + their
             resolution buttons together with the customer details — instead
             of in a separate second popover that overlapped the card. Each
