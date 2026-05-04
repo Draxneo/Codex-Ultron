@@ -250,14 +250,15 @@ export default function DispatchCalendar() {
               <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setCurrentDay(new Date())}>
                 Today
               </Button>
+              {/* 2026-05-04 (v2): Ops alert chips moved INTO the header toolbar
+                  next to the date nav. Was on its own row below the header,
+                  which pushed the day-headers (with weather!) down and clipped
+                  the weather emoji + temps. Now lives inline so dispatchers
+                  always see the weather. */}
+              <DispatchOpsChipStrip className="ml-1" />
             </div>
           </div>
         </div>
-
-        {/* 2026-05-04: Ops alert chip strip — non-customer alerts (unmatched
-            HCP invoices, payment failures, tech proposals pending review,
-            outbox SMS waiting). Hides itself entirely when all counts are 0. */}
-        <DispatchOpsChipStrip className="shrink-0 border-b bg-muted/20 px-3 py-1.5" />
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {calendarDataIssues.length > 0 && (
@@ -276,13 +277,10 @@ export default function DispatchCalendar() {
             </div>
           ) : (
             <>
-              <div className="flex shrink-0 items-center gap-2 border-b bg-muted/30 px-3 py-1">
-                <CalendarDays className="h-4 w-4 text-primary" />
-                <span className="text-xs font-semibold text-foreground">Weekly calendar</span>
-                <span className="text-[11px] text-muted-foreground">
-                  Scroll vertically for the day, horizontally for surrounding days.
-                </span>
-              </div>
+              {/* 2026-05-04: Removed the "Weekly calendar / Scroll vertically..."
+                  subheader. It was an obvious hint nobody needs and was eating
+                  vertical space that pushed the day-headers (with weather!)
+                  partially off-screen. */}
               <WeekCalendarBoard
                 weekItems={calendarItems}
                 employees={employees}
