@@ -57,7 +57,21 @@ export function PhotoLocationMap({ jobId, jobAddress }: { jobId: string; jobAddr
     if (!mapContainer.current || (!photos?.length && !jobCoords)) return;
 
     const initMap = async () => {
-      await loadGoogleMaps();
+      try {
+        await loadGoogleMaps();
+      } catch (err) {
+        console.warn("[PhotoLocationMap] Google Maps load failed:", err);
+        return;
+      }
+      // 2026-05-03 fix: guard against the constructor being unavailable on
+      // slow connections — same pattern as AddressesMap. Without this we
+      // get "google.maps.Map is not a constructor" reported to Mission
+      // Control on every job-detail page that the script hadn't finished
+      // loading for yet.
+      if (typeof google === "undefined" || !google.maps?.Map) {
+        console.warn("[PhotoLocationMap] google.maps.Map not available after load");
+        return;
+      }
 
       // Clean up previous
       markersRef.current.forEach(m => m.setMap(null));

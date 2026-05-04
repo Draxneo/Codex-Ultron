@@ -21,8 +21,21 @@ export function AddressesMap({ addresses }: Props) {
     let cancelled = false;
 
     (async () => {
-      await loadGoogleMaps();
+      try {
+        await loadGoogleMaps();
+      } catch (err) {
+        console.warn("[AddressesMap] Google Maps load failed:", err);
+        return;
+      }
       if (cancelled || !containerRef.current) return;
+
+      // 2026-05-03 fix: loadGoogleMaps() can resolve before window.google.maps
+      // is fully attached on slow connections, throwing "google.maps.Map is
+      // not a constructor". Guard before calling the constructor.
+      if (typeof google === "undefined" || !google.maps?.Map) {
+        console.warn("[AddressesMap] google.maps.Map not available after load");
+        return;
+      }
 
       if (!mapRef.current) {
         mapRef.current = new google.maps.Map(containerRef.current, {
