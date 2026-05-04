@@ -18,6 +18,7 @@ import { useDesktopNotifications } from "@/hooks/useDesktopNotifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
+import { useCapacitor } from "@/hooks/useCapacitor";
 import { usePreWarmCache } from "@/hooks/usePreWarmCache";
 import { useAppResume } from "@/hooks/useAppResume";
 import { useCallerLookup } from "@/hooks/useCallerLookup";
@@ -196,11 +197,27 @@ function SoftphoneOnlyView() {
   );
 }
 
-/** Redirects tech users to /tech, everyone else to Dispatch HQ. */
+/**
+ * RoleAwareHome — landing-page router for `/`.
+ *
+ * Priority order:
+ *  1. **Native Capacitor (Android/iOS) shell → /communications.** Mobile is intentionally
+ *     a focused phone+SMS surface for owners/admins on the go. Office workflows (dispatch
+ *     board, intake desk, admin) belong on desktop. Tech-role users still land on /tech
+ *     because that's their primary mobile workflow.
+ *  2. **Per-employee tab access** (database-driven) — used when an employee has a custom
+ *     restricted toolset.
+ *  3. **Tech / supervisor → /tech.**
+ *  4. **Everyone else → /dispatch (Dispatch HQ).**
+ *
+ * The user can still navigate anywhere from the main nav — this only controls the
+ * default landing screen when they hit `/`.
+ */
 function RoleAwareHome() {
   const location = useLocation();
   const { role, loading } = useEffectiveAuth();
   const allowedTabs = useEmployeeTabAccess();
+  const { isNative } = useCapacitor();
   if (loading) return null;
   if (allowedTabs) {
     const targetRoute = getFirstAllowedRoute(allowedTabs, role);
@@ -208,7 +225,11 @@ function RoleAwareHome() {
       return <Navigate to={targetRoute} replace />;
     }
   }
+  // Tech/supervisor on any platform → tech app (already mobile-optimized).
   if (role === "tech" || role === "supervisor") return <Navigate to="/tech" replace />;
+  // Owner/admin/office-role users on a Capacitor native shell → focused phone+SMS view.
+  // Avoids dropping them into the full Dispatch HQ on a phone screen they didn't want.
+  if (isNative) return <Navigate to="/communications" replace />;
   return <Navigate to="/dispatch" replace />;
 }
 
