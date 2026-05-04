@@ -1,6 +1,7 @@
 import { useMemo, useState, type ComponentType } from "react";
+import { useNavigate } from "react-router-dom";
 import { addDays, format, isToday, subDays } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, MessageSquare, Navigation, Phone, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, MapPin, MessageSquare, Navigation, Phone, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -53,6 +54,7 @@ function normalizeEmployeeName(value?: string | null) {
 export default function TechTeamSchedule() {
   const { role, employeeId } = useEffectiveAuth();
   const { data: employees, isLoading: loadingEmployees } = useEmployees();
+  const navigate = useNavigate();
   const [currentDay, setCurrentDay] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -173,7 +175,12 @@ export default function TechTeamSchedule() {
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {/* Back to the user's own schedule. Supervisors who came here from
+              TechMySchedule's Team FAB get a clear way home. */}
+          <Button variant="outline" className="h-10" onClick={() => navigate("/tech")}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> My schedule
+          </Button>
           <Button variant="outline" className="h-10" onClick={() => setCurrentDay(new Date())}>
             <CalendarDays className="mr-2 h-4 w-4" /> Today
           </Button>

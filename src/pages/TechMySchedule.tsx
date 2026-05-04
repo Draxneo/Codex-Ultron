@@ -8,7 +8,7 @@
 import { useState, useMemo, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, eachDayOfInterval } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, MessageSquare, Navigation, Phone, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, MessageSquare, Navigation, Phone, Play, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,10 +38,14 @@ const TECH_HEX_PALETTE = [
 const UNASSIGNED_COLOR = "#64748b";
 
 export default function TechMySchedule() {
-  const { employeeId } = useEffectiveAuth();
+  const { employeeId, role } = useEffectiveAuth();
   const { data: employees } = useEmployees();
   const navigate = useNavigate();
   useTechDashboardRealtime();
+
+  // Supervisors and admins can hop over to the team-wide schedule from here.
+  // Plain techs only see their own schedule (the default for this page).
+  const canViewTeam = role === "supervisor" || role === "admin";
 
   const [currentDay, setCurrentDay] = useState(() => {
     const d = new Date();
@@ -322,6 +326,21 @@ export default function TechMySchedule() {
           className="fixed bottom-20 right-4 z-20 h-12 px-4 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center gap-2 active:scale-95 transition-transform font-medium text-sm"
         >
           <Calendar className="h-4 w-4" /> Today
+        </button>
+      )}
+
+      {/* FAB to Team Schedule — supervisors + admins only.
+          Mirrors the Today FAB on the opposite side so they don't overlap.
+          Lets a supervisor (e.g. Jonathan) jump from his own daily schedule
+          into the full team view to see what every tech is working on. */}
+      {canViewTeam && (
+        <button
+          type="button"
+          onClick={() => navigate("/tech/team-schedule")}
+          className="fixed bottom-20 left-4 z-20 h-12 px-4 rounded-full bg-secondary text-secondary-foreground shadow-lg flex items-center gap-2 active:scale-95 transition-transform font-medium text-sm border border-border"
+          aria-label="View team schedule"
+        >
+          <Users className="h-4 w-4" /> Team
         </button>
       )}
     </div>
