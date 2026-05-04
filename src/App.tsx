@@ -3,6 +3,7 @@ import { ThemeProvider } from "next-themes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useEmployeeTabAccess, getFirstAllowedRoute } from "@/hooks/useEmployeeTabAccess";
+import { useFieldViewMode } from "@/hooks/useFieldViewMode";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -223,7 +224,19 @@ function RoleAwareHome() {
   const { role, loading } = useEffectiveAuth();
   const allowedTabs = useEmployeeTabAccess();
   const { isNative } = useCapacitor();
+  // Field View Mode: an admin who's also out in the field can flip a toggle
+  // (in MobileShell header) to land on /tech and use the simpler tech-style
+  // mobile layout, while keeping their full admin permissions and ability
+  // to navigate anywhere. Hook respects the same localStorage flag every
+  // call site reads, so the choice persists across reloads.
+  const fieldViewMode = useFieldViewMode();
   if (loading) return null;
+
+  // Admin in field view mode → /tech (overrides everything else)
+  if (role === "admin" && fieldViewMode.enabled) {
+    return <Navigate to="/tech" replace />;
+  }
+
   if (allowedTabs) {
     const targetRoute = getFirstAllowedRoute(allowedTabs, role);
     if (targetRoute !== location.pathname) {

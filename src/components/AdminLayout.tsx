@@ -12,12 +12,17 @@ import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 
+/**
+ * Tab key used for filtering bottom-nav tabs via employee_tab_access.
+ * Updated 2026-05-03 to align with the redesigned 12-key vocabulary.
+ * The admin "Dispatch" tab maps to the dispatch HQ key; CRM uses customer.
+ */
 const TAB_KEY_MAP: Record<string, string> = {
-  "/": "jobs",
+  "/": "dispatch",
   "/communications": "phone",
   "/phone": "phone",
   "/sms": "sms",
-  "/customers": "customers",
+  "/customers": "customer",
   "/admin": "admin",
 };
 

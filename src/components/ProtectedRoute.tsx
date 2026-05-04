@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEmployeeTabAccess, routeToTabKey, getFirstAllowedRoute } from "@/hooks/useEmployeeTabAccess";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useViewAs } from "@/contexts/ViewAsContext";
+import { useFieldViewMode } from "@/hooks/useFieldViewMode";
 import { TechLayout } from "@/components/TechLayout";
 import { AdminLayout } from "@/components/AdminLayout";
 import { DispatcherLayout } from "@/components/DispatcherLayout";
@@ -22,6 +23,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { role } = useEffectiveAuth();
   const viewAs = useViewAs();
+  const fieldViewMode = useFieldViewMode();
   const isMobile = useIsMobile();
   const location = useLocation();
   const allowedTabs = useEmployeeTabAccess();
@@ -62,6 +64,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       layoutNode = <AdminLayout>{children}</AdminLayout>;
     }
   } else if (role === "tech" || role === "supervisor") {
+    layoutNode = <TechLayout>{children}</TechLayout>;
+  } else if (isMobile && role === "admin" && fieldViewMode.enabled) {
+    // Field View Mode (2026-05-03): admins out in the field can opt into the
+    // tech-style mobile layout. Permissions stay full — they can still
+    // navigate to /admin or any other surface — they just get the cleaner
+    // shell that doesn't try to cram dispatch UI onto a phone.
     layoutNode = <TechLayout>{children}</TechLayout>;
   } else if (isMobile && role === "office" && allowedTabs && !allowedTabs.has("admin")) {
     layoutNode = <DispatcherLayout>{children}</DispatcherLayout>;

@@ -147,8 +147,13 @@ export function getFirstAllowedRoute(allowedTabs: Set<string> | null, role?: str
   // Field roles always prefer /tech if they have it
   if (isFieldRole && allowedTabs.has("tech")) return "/tech";
 
-  // Otherwise walk the canonical key order and pick the first match
+  // Office/admin roles SKIP the "tech" key when picking a default landing —
+  // they have it for completeness (so they can navigate to /tech if needed)
+  // but their natural home is /dispatch or /communications, not the tech
+  // mobile schedule. Without this skip, my 2026-05-03 permissions reorder
+  // would land every admin on /tech because tech is first in ALL_ACCESS_KEYS.
   for (const key of ALL_ACCESS_KEYS) {
+    if (key === "tech" && !isFieldRole) continue;
     if (allowedTabs.has(key)) return ACCESS_FALLBACK_ROUTE[key];
   }
 

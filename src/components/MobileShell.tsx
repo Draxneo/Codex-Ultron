@@ -31,9 +31,11 @@ import {
   MicOff,
   Keyboard,
   X,
+  HardHat,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewAs } from "@/contexts/ViewAsContext";
+import { useFieldViewMode } from "@/hooks/useFieldViewMode";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { useSoftphoneContext } from "@/components/SoftphoneProvider";
@@ -101,6 +103,7 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   const queryClient = useQueryClient();
   
   const softphone = useSoftphoneContext();
+  const fieldViewMode = useFieldViewMode();
   const companyName = settings.company_name || DEFAULT_COMPANY_NAME;
   const { data: dialTonesSetting } = useQuery({
     queryKey: ["company_settings", "softphone_dial_tones"],
@@ -300,6 +303,32 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
                 aria-label="Exit impersonation mode"
               >
                 Exit View
+              </button>
+            )}
+            {/* Field View toggle — admins only. Flips to TechLayout on mobile
+                 so admins out in the field don't have to navigate the heavier
+                 admin/dispatch UI on a phone. Permissions stay full; the user
+                 can still hit /admin or anywhere else manually. The icon is
+                 a hard-hat to suggest "field crew mode." */}
+            {role === "admin" && (
+              <button
+                onClick={() => {
+                  fieldViewMode.toggle();
+                  // Snap them to the appropriate landing right after toggling
+                  // so they don't have to hit Home — UX feels like a single tap.
+                  window.location.href = !fieldViewMode.enabled ? "/tech" : "/";
+                }}
+                className={cn(
+                  "h-8 rounded-lg px-2.5 flex items-center gap-1.5 text-[11px] font-medium transition-colors",
+                  fieldViewMode.enabled
+                    ? "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]"
+                    : "text-[hsl(var(--navy-foreground)/0.85)] hover:text-[hsl(var(--navy-foreground))] hover:bg-white/10"
+                )}
+                aria-label={fieldViewMode.enabled ? "Exit field view" : "Enter field view (tech-style mobile layout)"}
+                title={fieldViewMode.enabled ? "Field view ON — tap to return to admin view" : "Tap for field view (tech-style)"}
+              >
+                <HardHat className="h-3.5 w-3.5" />
+                {fieldViewMode.enabled ? "Field" : "Field View"}
               </button>
             )}
             <button
