@@ -29,3 +29,21 @@ export async function getPublicCompanySettings(): Promise<Record<string, string>
   if (error) throw error;
   return (data || {}) as Record<string, string>;
 }
+
+/**
+ * Upsert a company setting. Used by admin settings cards that let the user
+ * edit a single key/value pair. The table has a UNIQUE constraint on `key`,
+ * so a plain upsert with onConflict='key' replaces the existing row.
+ *
+ * Empty-string values are preserved (not converted to null) so a setting
+ * can be intentionally cleared from the UI.
+ */
+export async function setCompanySetting(key: string, value: string): Promise<void> {
+  const { error } = await supabase
+    .from("company_settings" as any)
+    .upsert(
+      { key, value, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+  if (error) throw error;
+}
