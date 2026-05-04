@@ -200,20 +200,14 @@ Deno.serve(async (req) => {
     }
 
     // ── Fallback: Resolve or create customer by phone (for outbound-only contacts) ──
-    // If relatedCustomerId was not passed and phone is valid, look it up or create a stub.
-    // This ensures every SMS has a link back to a customer for later querying.
-    // For outbound, skipCreate=false so even manually-sent messages to new numbers
-    // get a customer record (they may become a lead).
-    let resolvedCustomerId = relatedCustomerId || null;
-    if (!resolvedCustomerId && normalizedTo.length >= 10) {
-      const phoneResolution = await resolveOrCreateCustomerByPhone(supabase, normalizedTo, {
-        businessUnitId: senderResolution.businessUnit?.id || null,
-        sourceLabel: "outbound_sms",
-        contactName: contactName || null,
-        skipCreate: false,
-      });
-      resolvedCustomerId = phoneResolution.customerId;
-    }
+    // Declare here so consent gate + downstream code can read it.
+    // Actual resolution is deferred until AFTER senderResolution is computed below
+    // (we need businessUnitId from senderResolution to set primary_business_unit_id
+    // on the auto-created stub). The TDZ bug we hit: this block previously called
+    // resolveOrCreateCustomerByPhone() up here referencing senderResolution before
+    // it was declared, which crashed every send-sms with "Cannot access
+    // 'senderResolution' before initialization."
+    let resolvedCustomerId: string | null = relatedCustomerId || null;
 
     // ── TCPA / consent gate ─────────────────────────────────────────────
     // Block outbound SMS to any customer who has explicitly opted out.
@@ -293,6 +287,20 @@ Deno.serve(async (req) => {
         }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // ── Resolve-or-create customer for this outbound number ─────────────
+    // Now that senderResolution is computed, we know which business unit owns
+    // this conversation, so a freshly-created stub gets the right BU tag.
+    // Skipped if caller already passed relatedCustomerId (most common path).
+    if (!resolvedCustomerId && normalizedTo.length >= 10) {
+      const phoneResolution = await resolveOrCreateCustomerByPhone(supabase, normalizedTo, {
+        businessUnitId: senderResolution.businessUnit?.id || null,
+        sourceLabel: "outbound_sms",
+        contactName: contactName || null,
+        skipCreate: false,
+      });
+      resolvedCustomerId = phoneResolution.customerId;
     }
 
     const fromNumber = senderResolution.fromNumber;
