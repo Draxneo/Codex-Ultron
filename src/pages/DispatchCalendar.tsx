@@ -292,7 +292,12 @@ export default function DispatchCalendar() {
                 businessHoursOnly={calendarSettings.businessHoursOnly}
                 showHolidays={calendarSettings.showHolidays}
                 hourHeight={44}
-                headerHeight={92}
+                /* 2026-05-04: Bumped from 92 -> 124 so the day-header tile
+                   has enough room to show all four lines without clipping
+                   the weather badge: day name, date number, item count,
+                   and weather emoji + temps + precip. 92 was clipping the
+                   bottom of the weather row. */
+                headerHeight={124}
                 /* 2026-05-04: Per-card alerts now ride with each calendar card.
                    The badge component renders inside the card grid item AND
                    inside the hover popover so dispatchers can see + act on
