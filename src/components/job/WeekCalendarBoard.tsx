@@ -186,26 +186,49 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
     return { laid, untimed, maxOverlap: totalCols };
   }
 
+  // 2026-05-04: Make the calendar fill the screen so 7 days show without
+  // needing a horizontal scroll. We measure the live container width and set
+  // each day column to (containerWidth - timeGutter) / 7. Days with multiple
+  // overlapping cards still expand beyond that floor — the resulting overflow
+  // is preserved as horizontal scroll for those busy days only. Empty/normal
+  // days fill the viewport evenly. (Before this change, columnWidth was a
+  // fixed 120-180px which crammed 11+ days into the viewport.)
+  const totalHeight = (endHour - startHour) * hourHeight;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const activeDayRef = useRef<HTMLDivElement>(null);
+  const [edgePadding, setEdgePadding] = useState({ left: 0, right: 0 });
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  // Compute base width once we know the container size. Floor of 180 so we
+  // never go below readable; 7 days fit when container is at least 1320px.
+  const baseColumnWidth = containerWidth > 0
+    ? Math.max(180, Math.floor((containerWidth - TIME_GUTTER_WIDTH) / 7))
+    : 180;
+
   const dayColumns = useMemo(() => {
     return days.map((day) => {
       const key = format(day, "yyyy-MM-dd");
       const dayItems = dayItemsMap.get(key) || [];
       const { laid, untimed, maxOverlap } = layoutDay(dayItems);
       const CARD_MIN_WIDTH = 180;
-      const columnWidth = dayItems.length === 0 ? 120 : Math.max(CARD_MIN_WIDTH, maxOverlap * CARD_MIN_WIDTH);
+      // Empty days take the base. Days with cards take whichever is larger
+      // between (a) the base "fit 7 in viewport" width or (b) the overlap-driven
+      // width that prevents cards from overlapping visually.
+      const columnWidth = dayItems.length === 0
+        ? baseColumnWidth
+        : Math.max(baseColumnWidth, maxOverlap * CARD_MIN_WIDTH);
       return { day, key, dayItems, laid, untimed, columnWidth };
     });
-  }, [days, dayItemsMap]);
-
-  const totalHeight = (endHour - startHour) * hourHeight;
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const activeDayRef = useRef<HTMLDivElement>(null);
-  const [edgePadding, setEdgePadding] = useState({ left: 0, right: 0 });
+  }, [days, dayItemsMap, baseColumnWidth]);
 
   useEffect(() => {
     const measure = () => {
       const container = scrollContainerRef.current;
       if (!container || dayColumns.length === 0) return;
+
+      // Track container width so the next render can compute baseColumnWidth.
+      // Using ResizeObserver-equivalent via window resize + initial RAF.
+      setContainerWidth((prev) => (prev === container.clientWidth ? prev : container.clientWidth));
 
       const firstWidth = dayColumns[0]?.columnWidth ?? 120;
       const lastWidth = dayColumns[dayColumns.length - 1]?.columnWidth ?? 120;
