@@ -54,6 +54,13 @@ Job context:
 - Brand: ${job_context?.brand || "unknown"}
 - Description: ${job_context?.description || "none"}
 
+FORMATTING (HARD RULE — NO EXCEPTIONS):
+- Business is in San Antonio, Texas. Time zone is America/Chicago (Central Time, observes daylight saving).
+- All dates in form entries MUST be in US format: "Tuesday, May 5, 2026" or "5/5/2026" — never DD/MM, never ISO 8601 in human-facing text.
+- All times MUST be 12-hour with AM/PM and Central Time, e.g. "2:30 PM" or "2:30 PM CT". If the source data is in UTC or another zone, convert to Central before writing it. Never output "17:00" or "17:00 UTC".
+- Date+time together: "Tuesday, May 5, 2026 at 2:30 PM" or "5/5/2026 at 2:30 PM CT".
+- Today's date and "now" are always relative to America/Chicago, not UTC.
+
 Rules:
 1. Only populate fields where you have clear information from the transcript or OCR
 2. For select/dropdown fields, use exact option values from the options list

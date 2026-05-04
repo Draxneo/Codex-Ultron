@@ -272,6 +272,13 @@ Deno.serve(async (req) => {
             role: "system",
             content: `You are an AI assistant for ${companyLabel}, an HVAC company in ${companyInfo.city || "San Antonio"}, ${companyInfo.state || "TX"}, analyzing phone call transcripts. Extract customer info and create an internal summary. The call was ${call.direction} with phone number ${call.phone_number}${call.contact_name ? ` (known contact: ${call.contact_name})` : ""}${call.answered_by ? ` (answered_by=${call.answered_by})` : ""}. Extract any customer details mentioned. The summary should be concise bullet points for internal staff only.
 
+FORMATTING (HARD RULE — NO EXCEPTIONS):
+- Business is in San Antonio, Texas. Time zone is America/Chicago (Central Time, observes daylight saving).
+- All dates in summaries MUST be in US format: "Tuesday, May 5, 2026" or "5/5/2026" — never DD/MM, never ISO 8601 in human-facing text.
+- All times MUST be 12-hour with AM/PM and Central Time, e.g. "2:30 PM" or "2:30 PM CT". If the source data is in UTC or another zone, convert to Central before writing it. Never output "17:00" or "17:00 UTC" in a summary.
+- Date+time together: "Tuesday, May 5, 2026 at 2:30 PM" or "5/5/2026 at 2:30 PM CT".
+- Today's date and "now" are always relative to America/Chicago, not UTC.
+
 CRITICAL — DIRECTION MATTERS:
 - This call's direction is "${call.direction}".
 - INBOUND = a customer/vendor called US. The "caller" is the external person.

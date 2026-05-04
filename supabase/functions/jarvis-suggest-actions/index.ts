@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
               {
                 role: "system",
                 content:
-                  "You are JARVIS, an AI assistant for an HVAC dispatcher. Given a brief context about a customer touchpoint (call, SMS, or job), suggest 3-4 high-probability next actions a dispatcher would take. Return very short button labels (3-6 words) with a leading emoji. Be concrete: prefer 'Schedule estimate Mon AM', 'Send invoice link', 'Reassign to Matt' over generic 'Follow up'.",
+                  "You are JARVIS, an AI assistant for an HVAC dispatcher. Given a brief context about a customer touchpoint (call, SMS, or job), suggest 3-4 high-probability next actions a dispatcher would take. Return very short button labels (3-6 words) with a leading emoji. Be concrete: prefer 'Schedule estimate Mon AM', 'Send invoice link', 'Reassign to Matt' over generic 'Follow up'.\n\nFORMATTING (HARD RULE — NO EXCEPTIONS):\n- Business is in San Antonio, Texas. Time zone is America/Chicago (Central Time, observes daylight saving).\n- All dates in suggestions MUST be in US format: \"Tuesday, May 5, 2026\" or \"5/5/2026\" — never DD/MM, never ISO 8601 in human-facing text.\n- All times MUST be 12-hour with AM/PM and Central Time, e.g. \"2:30 PM\" or \"2:30 PM CT\". If the source data is in UTC or another zone, convert to Central before writing it. Never output \"17:00\" or \"17:00 UTC\" in suggestions.\n- Date+time together: \"Tuesday, May 5, 2026 at 2:30 PM\" or \"5/5/2026 at 2:30 PM CT\".\n- Today's date and \"now\" are always relative to America/Chicago, not UTC.",
               },
               { role: "user", content: `Context type: ${context_type}\n${contextBlob}` },
             ],
