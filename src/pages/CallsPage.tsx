@@ -19,6 +19,7 @@ import { getCompanySetting } from "@/lib/companySettings";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { formatPhone } from "@/lib/formatters";
 import { ctHeaderLabel } from "@/lib/dateGrouping";
+import { useCapacitor } from "@/hooks/useCapacitor";
 
 const DIAL_KEYS: { key: string; sub?: string }[][] = [
   [{ key: "1", sub: "" }, { key: "2", sub: "ABC" }, { key: "3", sub: "DEF" }],
@@ -29,6 +30,7 @@ const DIAL_KEYS: { key: string; sub?: string }[][] = [
 
 function MobileDialPad() {
   const softphone = useSoftphoneContext();
+  const { isNative } = useCapacitor();
   const { consumeDialNumber, pendingDialNumber } = softphone;
   const [searchParams, setSearchParams] = useSearchParams();
   const [dialInput, setDialInput] = useState("");
@@ -78,7 +80,17 @@ function MobileDialPad() {
     if (!dialInput.trim()) return;
     const digits = dialInput.replace(/\D/g, "");
     const e164 = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}` : `+${digits}`;
-    openPhoneConsole(e164);
+    // CAPACITOR DIAL FIX (2026-05-03):
+    // On Capacitor we dial directly — bouncing through openPhoneConsole was
+    // navigating to /phone with the number in the URL but never actually
+    // placing the call (the phoneConsoleBridge dispatch + URL hop was a
+    // legacy Electron-popout pattern). Dial directly so the native softphone
+    // hook can place the call and the global banner can show progress.
+    if (isNative) {
+      void softphone.dial(e164);
+    } else {
+      openPhoneConsole(e164);
+    }
     setDialInput("");
   };
 

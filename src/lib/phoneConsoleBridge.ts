@@ -51,19 +51,35 @@ export function openPhoneConsole(
   }
 
   if (isNativeCapacitorShell()) {
+    // CAPACITOR DIAL FIX (2026-05-03):
+    // The previous implementation navigated to `/phone?phone=...` after dispatching
+    // the dial event. That caused two problems:
+    //  1) The MobileShell listener only staged the number into the input field
+    //     (setDialNumber) — it never actually invoked softphone.dial(). So tapping
+    //     the call button bounced the number through the URL and back into the
+    //     dialpad without ever placing the call. Both Clint and Jonathan reported
+    //     this as "Twilio is not working on the capacitor."
+    //  2) The route hop (/communications → /phone) was disorienting since the
+    //     active-call banner is rendered globally by MobileShell anyway.
+    // Fix: dispatch the dial event ONLY. The MobileShell listener now calls
+    // softphone.dial() directly with full context. No navigation needed because
+    // the in-progress UI is in MobileShell's global banner.
     if (number) {
       window.dispatchEvent(new CustomEvent(NATIVE_PHONE_DIAL_EVENT, {
         detail: { number, context },
       }));
-      const params = new URLSearchParams();
-      params.set("phone", number);
-      if (context?.jobId) params.set("jobId", context.jobId);
-      if (context?.customerId) params.set("customerId", context.customerId);
-      window.location.assign(`/phone?${params.toString()}`);
       return;
     }
 
-    window.location.assign("/phone");
+    // No number provided — caller just wants the phone screen open. Navigate to
+    // /phone (CallsPage) so the dialpad is visible. Skip if already on a phone
+    // surface to avoid pointless re-renders.
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path !== "/phone" && path !== "/communications") {
+        window.location.assign("/phone");
+      }
+    }
     return;
   }
 

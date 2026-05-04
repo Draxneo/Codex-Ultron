@@ -183,12 +183,29 @@ export function MobileShell({ tabs, children }: MobileShellProps) {
   }, []);
 
   useEffect(() => {
+    /**
+     * NATIVE_PHONE_DIAL_EVENT listener — fires whenever any UI on Capacitor
+     * called openPhoneConsole(number, context). Previously this only staged
+     * the number into the dial input via setDialNumber(), which meant the
+     * call was NEVER actually placed — Twilio appeared "broken on Capacitor"
+     * to both Clint and Jonathan (2026-05-03).
+     *
+     * Fix: invoke softphone.dial() directly with the full context. The
+     * native softphone hook handles registration check, mic permission,
+     * and the plugin.makeCall() path. The global active-call banner in
+     * MobileShell renders the in-progress UI on every page, so we don't
+     * need to navigate the user to /phone after dialing.
+     */
     const handleNativeDial = (event: Event) => {
-      const detail = (event as CustomEvent<{ number?: string; context?: { jobId?: string; customerId?: string } }>).detail;
+      const detail = (event as CustomEvent<{
+        number?: string;
+        context?: { contactName?: string; jobId?: string; customerId?: string };
+      }>).detail;
       if (!detail?.number) return;
-      softphone.setDialNumber(detail.number);
-      if (detail.context?.jobId) softphone.setPendingJobId(detail.context.jobId);
-      if (detail.context?.customerId) softphone.setPendingCustomerId(detail.context.customerId);
+      const { contactName, jobId, customerId } = detail.context || {};
+      // Fire-and-forget — dial() is async but the rest of this handler doesn't
+      // need to wait. Errors surface through softphone state (status === "error").
+      void softphone.dial(detail.number, contactName, jobId, customerId);
     };
 
     window.addEventListener(NATIVE_PHONE_DIAL_EVENT, handleNativeDial);

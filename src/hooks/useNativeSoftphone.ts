@@ -771,10 +771,39 @@ export function useNativeSoftphone(enabled: boolean = true) {
 
   const dial = useCallback(async (number: string, contactName?: string, jobId?: string, customerId?: string) => {
     const plugin = getPlugin();
-    if (!plugin) return;
+    if (!plugin) {
+      console.error("[NativeSoftphone] dial(): plugin not loaded");
+      setState((s) => ({ ...s, status: "error", error: "Phone plugin not available — please reinstall the app." }));
+      return;
+    }
     if (!registeredRef.current) {
+      console.log("[NativeSoftphone] dial(): not yet registered, calling initialize()");
       await initialize();
       await new Promise((r) => setTimeout(r, 1500));
+    }
+    // CRITICAL: native Twilio Voice plugin's makeCall() silently fails if the
+    // OS hasn't granted RECORD_AUDIO. The user sees nothing happen — no error,
+    // no toast, no ring. Explicitly check mic before dialing and request it
+    // inline if missing. This is belt-and-suspenders alongside the
+    // useNativePermissionsBootstrap hook in case the bootstrap was skipped or
+    // the user denied previously. (2026-05-03 fix: Clint + Jonathan unable to
+    // make calls — both running an APK before permission bootstrap shipped.)
+    try {
+      const checkResult = await (plugin as any).checkMicrophonePermission?.();
+      if (checkResult && !checkResult.granted) {
+        console.warn("[NativeSoftphone] dial(): microphone not granted, requesting now");
+        const requestResult = await (plugin as any).requestMicrophonePermission?.();
+        if (!requestResult?.granted) {
+          setState((s) => ({
+            ...s,
+            status: "error",
+            error: "Microphone permission denied — open Settings → Apps → UltraOffice → Permissions and enable Microphone.",
+          }));
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[NativeSoftphone] mic permission check failed (continuing):", e);
     }
     const normalizedNumber = toE164(number) ?? number;
     const resolvedName = contactName || await resolveCallerName(normalizedNumber);
