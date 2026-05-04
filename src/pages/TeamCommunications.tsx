@@ -43,6 +43,7 @@ import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { Input } from "@/components/ui/input";
 import { MediaItem } from "@/components/media";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
