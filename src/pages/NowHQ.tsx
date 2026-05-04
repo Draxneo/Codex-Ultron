@@ -33,6 +33,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Trash2 } from "lucide-react";
+import { JarvisTrainingButton } from "@/components/JarvisTrainingButton";
 import { useQuotePipelineMap } from "@/hooks/useCanonicalOperations";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useJobs } from "@/hooks/useJobs";
@@ -268,6 +269,32 @@ function WorkflowCard({
               <Badge variant="secondary">
                 Step {card.stepNumber}/{card.totalSteps}
               </Badge>
+              {/* Train JARVIS — top-right of the badge row, action_items only.
+                  Lets the user tell JARVIS what it got wrong (e.g. wrong
+                  customer, wrong address, treated a relay number as a real
+                  phone). Feedback goes to jarvis_training_feedback for
+                  later prompt-tightening. (2026-05-03) */}
+              {card.recordType === "action" && (
+                <div className="ml-auto">
+                  <JarvisTrainingButton
+                    actionItemId={card.recordId}
+                    jarvisOutput={{
+                      title: card.title,
+                      subtitle: card.subtitle,
+                      customerName: card.customerName,
+                      customerPhone: card.customerPhone,
+                      address: card.address,
+                      status: card.status,
+                      source: card.source,
+                      workflowType: card.workflowType,
+                      group: card.group,
+                      description: card.description,
+                    }}
+                    sourceFunction={card.source ?? null}
+                    variant="labeled"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
