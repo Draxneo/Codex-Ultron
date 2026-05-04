@@ -49,6 +49,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
 import { useQuickLinks } from "@/hooks/useQuickLinks";
+import { useSmsLogScoped } from "@/hooks/useSmsLogScoped";
+import { TechSmsSection } from "@/components/TechSmsSection";
+import { TechSmsThreadView } from "@/components/TechSmsThreadView";
 import { supabase } from "@/integrations/supabase/client";
 import { audioCallProvider, type ProviderCall } from "@/lib/audioCallProvider";
 import { errorMessage } from "@/lib/errorMessage";
@@ -230,12 +233,94 @@ function SidebarEmpty({ children }: { children: string }) {
   return <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">{children}</p>;
 }
 
+/**
+ * TechSmsThreadHeader — Header for SMS thread view.
+ * Shows tech name, phone, BU selector, and back button.
+ */
+function TechSmsThreadHeader({
+  techSmsId,
+  selectedBu,
+  onChangeBu,
+  onBack,
+}: {
+  techSmsId: string;
+  selectedBu: string | null;
+  onChangeBu: (buId: string) => void;
+  onBack: () => void;
+}) {
+  // Fetch the tech's details from employees table
+  const { data: techData } = useQuery({
+    queryKey: ["tech-sms-header", techSmsId],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("employees")
+        .select("id, name, phone")
+        .eq("id", techSmsId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const BU_OPTIONS = [
+    { id: "fb2545d8-072f-4d43-8649-4a6aa8bc2519", label: "FIX Construction" },
+    { id: "267af11c-712f-4651-b32b-70581f190cf8", label: "Carnes and Sons" },
+  ];
+
+  // Default to FIX for installers/techs
+  const defaultBu = BU_OPTIONS[0]?.id || null;
+  const activeBu = selectedBu || defaultBu;
+
+  return (
+    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="rounded-md p-1 hover:bg-muted"
+            title="Back to chat"
+            aria-label="Back to chat"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="truncate text-sm font-semibold">
+            {techData?.name || "Loading..."}
+          </h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {techData?.phone || ""}
+          {activeBu && ` • From ${BU_OPTIONS.find((bu) => bu.id === activeBu)?.label || "Company"}`}
+        </p>
+      </div>
+
+      {/* Business Unit selector */}
+      <Select value={activeBu || ""} onValueChange={onChangeBu}>
+        <SelectTrigger className="w-36 h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {BU_OPTIONS.map((bu) => (
+            <SelectItem key={bu.id} value={bu.id}>
+              {bu.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </header>
+  );
+}
+
 export default function TeamCommunications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const requestedConversationId = searchParams.get("conversation");
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  // 2026-05-04 — Tech Texts feature: selectedTechSmsId is an employee ID;
+  // when set, the center pane shows SMS thread for that technician instead
+  // of an in-app chat conversation. Clear it to go back to chat.
+  const [selectedTechSmsId, setSelectedTechSmsId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -251,6 +336,10 @@ export default function TeamCommunications() {
   const [resourceHref, setResourceHref] = useState("");
   const [resourceNote, setResourceNote] = useState("");
   const [resourceCategory, setResourceCategory] = useState("Team Resources");
+  // 2026-05-04 — Tech Texts: track selected BU for the SMS composer.
+  const [selectedTechSmsBusinessUnitId, setSelectedTechSmsBusinessUnitId] = useState<string | null>(null);
+  const [selectedTechSmsPhone, setSelectedTechSmsPhone] = useState<string | null>(null);
+  const [selectedTechSmsName, setSelectedTechSmsName] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -1096,6 +1185,20 @@ export default function TeamCommunications() {
                   </div>
                 </section>
 
+                {/* ── 2026-05-04 — Tech Texts section. Lets dispatchers text
+                     technicians directly without leaving Team HQ. Sorted by
+                     most recent message. Click to view thread in center pane. */}
+                <TechSmsSection
+                  selectedTechSmsId={selectedTechSmsId}
+                  onSelectTech={(empId, phone, name) => {
+                    setSelectedTechSmsId(empId);
+                    setSelectedTechSmsPhone(phone);
+                    setSelectedTechSmsName(name);
+                    setSelectedTechSmsBusinessUnitId(null); // Reset BU selector
+                    setSelectedConversationId(null); // Clear in-app chat selection
+                  }}
+                />
+
                 {/* ── Team Links + Links — moved here from the right aside on
                      2026-05-04 per Clint. Compact list view (one link per row)
                      fits the 280px left column comfortably. */}
@@ -1205,48 +1308,69 @@ export default function TeamCommunications() {
           </aside>
 
           <section className="flex min-h-0 min-w-0 flex-col bg-background">
-            <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
-              <div className="min-w-0">
+            {/* 2026-05-04 — Show SMS thread header if tech SMS is selected,
+                 otherwise show normal chat header. */}
+            {selectedTechSmsId ? (
+              <TechSmsThreadHeader
+                techSmsId={selectedTechSmsId}
+                selectedBu={selectedTechSmsBusinessUnitId}
+                onChangeBu={setSelectedTechSmsBusinessUnitId}
+                onBack={() => setSelectedTechSmsId(null)}
+              />
+            ) : (
+              <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {selectedConversation?.type === "room" ? <Hash className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                    <h2 className="truncate text-sm font-semibold">
+                      {selectedConversation ? conversationTitle(selectedConversation) : "Team Room"}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedMembers.length} member{selectedMembers.length === 1 ? "" : "s"}
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
-                  {selectedConversation?.type === "room" ? <Hash className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
-                  <h2 className="truncate text-sm font-semibold">
-                    {selectedConversation ? conversationTitle(selectedConversation) : "Team Room"}
-                  </h2>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedMembers.length} member{selectedMembers.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={() => startCall.mutate()}
-                  disabled={!selectedConversation || startCall.isPending}
-                  title="Start call"
-                  aria-label="Start call"
-                >
-                  <PhoneCall className="h-4 w-4" />
-                </Button>
-              </div>
-            </header>
-
-            {activeCall && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100 sm:px-4">
-                <div className="flex min-w-0 items-center gap-2">
-                  <PhoneCall className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <p className="font-medium">Live call</p>
-                  <p className="truncate text-xs opacity-80">{activeCall.call_url}</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  <Button size="sm" variant="secondary" onClick={() => joinCall.mutate(activeCall)}>
-                    Join
-                  </Button>
                   <Button
                     size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() =>
+                    className="h-9 w-9"
+                    onClick={() => startCall.mutate()}
+                    disabled={!selectedConversation || startCall.isPending}
+                    title="Start call"
+                    aria-label="Start call"
+                  >
+                    <PhoneCall className="h-4 w-4" />
+                  </Button>
+                </div>
+              </header>
+            )}
+
+            {/* 2026-05-04 — Show SMS thread if tech SMS is selected, otherwise show chat */}
+            {selectedTechSmsId ? (
+              <TechSmsThreadView
+                techId={selectedTechSmsId}
+                techPhone={selectedTechSmsPhone || ""}
+                techName={selectedTechSmsName || "Technician"}
+                businessUnitId={selectedTechSmsBusinessUnitId}
+              />
+            ) : (
+              <>
+                {activeCall && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100 sm:px-4">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <PhoneCall className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <p className="font-medium">Live call</p>
+                      <p className="truncate text-xs opacity-80">{activeCall.call_url}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                      <Button size="sm" variant="secondary" onClick={() => joinCall.mutate(activeCall)}>
+                        Join
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() =>
                       setMutedCallIds((previous) => {
                         const next = new Set(previous);
                         if (next.has(activeCall.id)) {
@@ -1467,7 +1591,10 @@ export default function TeamCommunications() {
                 <div ref={endRef} />
               </div>
             </ScrollArea>
+              </>
+            )}
 
+            {!selectedTechSmsId && (
             <footer className="border-t bg-card/90 p-2.5 sm:p-3">
               <div className="mx-auto max-w-4xl space-y-2">
                 {composer.preview && (
@@ -1583,6 +1710,7 @@ export default function TeamCommunications() {
                 </div>
               </div>
             </footer>
+            )}
           </section>
 
           <aside className="hidden min-h-0 border-l bg-card/95 xl:block">
