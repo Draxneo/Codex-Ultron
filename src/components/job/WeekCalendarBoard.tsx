@@ -193,17 +193,29 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
   // is preserved as horizontal scroll for those busy days only. Empty/normal
   // days fill the viewport evenly. (Before this change, columnWidth was a
   // fixed 120-180px which crammed 11+ days into the viewport.)
-  const totalHeight = (endHour - startHour) * hourHeight;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeDayRef = useRef<HTMLDivElement>(null);
   const [edgePadding, setEdgePadding] = useState({ left: 0, right: 0 });
   const [containerWidth, setContainerWidth] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
 
   // Compute base width once we know the container size. Floor of 180 so we
   // never go below readable; 7 days fit when container is at least 1320px.
   const baseColumnWidth = containerWidth > 0
     ? Math.max(180, Math.floor((containerWidth - TIME_GUTTER_WIDTH) / 7))
     : 180;
+
+  // 2026-05-04: Stretch hour rows to fill the container vertically too.
+  // Before this, hourHeight was a fixed 44px and the calendar only used
+  // the first ~620px of viewport, leaving big empty space below 6 PM
+  // (Clint's report). Now we floor at the prop-passed hourHeight (so we
+  // never shrink below readable) and grow to fill whatever vertical
+  // space remains after the day-header takes its share.
+  const hoursVisible = endHour - startHour;
+  const effectiveHourHeight = containerHeight > 0
+    ? Math.max(hourHeight, Math.floor((containerHeight - headerHeight) / hoursVisible))
+    : hourHeight;
+  const totalHeight = hoursVisible * effectiveHourHeight;
 
   const dayColumns = useMemo(() => {
     return days.map((day) => {
@@ -226,9 +238,11 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
       const container = scrollContainerRef.current;
       if (!container || dayColumns.length === 0) return;
 
-      // Track container width so the next render can compute baseColumnWidth.
-      // Using ResizeObserver-equivalent via window resize + initial RAF.
+      // Track container width AND height so the next render can compute
+      // baseColumnWidth and effectiveHourHeight to fill the viewport in
+      // both axes. Using ResizeObserver-equivalent via window resize + RAF.
       setContainerWidth((prev) => (prev === container.clientWidth ? prev : container.clientWidth));
+      setContainerHeight((prev) => (prev === container.clientHeight ? prev : container.clientHeight));
 
       const firstWidth = dayColumns[0]?.columnWidth ?? 120;
       const lastWidth = dayColumns[dayColumns.length - 1]?.columnWidth ?? 120;
@@ -279,7 +293,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
               <div
                 key={hour}
                 className="absolute w-full border-b border-border/30 flex items-start justify-end pr-2 pt-0.5"
-                style={{ top: (hour - startHour) * hourHeight, height: hourHeight }}
+                style={{ top: (hour - startHour) * effectiveHourHeight, height: effectiveHourHeight }}
               >
                 <span className="text-[10px] text-muted-foreground font-medium">
                   {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
@@ -350,7 +364,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   style={{ height: totalHeight }}
                 >
                   {hours.map((hour) => (
-                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * hourHeight, height: hourHeight }} />
+                    <div key={hour} className="absolute w-full border-b border-border/20" style={{ top: (hour - startHour) * effectiveHourHeight, height: effectiveHourHeight }} />
                   ))}
 
                   {/* Untimed items */}
@@ -364,8 +378,8 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
 
                   {/* Timed cards */}
                   {laid.map(({ item, startH, endH, col, totalCols }) => {
-                    const top = (startH - startHour) * hourHeight;
-                    const height = Math.max((endH - startH) * hourHeight, 34);
+                    const top = (startH - startHour) * effectiveHourHeight;
+                    const height = Math.max((endH - startH) * effectiveHourHeight, 34);
                     const colWidth = 100 / totalCols;
                     const left = col * colWidth;
                     return (
