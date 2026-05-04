@@ -446,8 +446,14 @@ function WeekCard({
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
+  // 2026-05-04: Lowered isTiny from 50→40 so 1-hour arrival windows (44px
+  // tall on the calendar with hourHeight=44) still show the time + job
+  // number. Without this, jobs with short arrival windows like Clay Hays
+  // (5–6pm) only showed the customer name and looked broken next to longer
+  // jobs that had full detail. isSmall stays at 80 so address+phone still
+  // hide on small cards (those need more visual space).
   const isSmall = (height || 0) < 80;
-  const isTiny = (height || 0) < 50;
+  const isTiny = (height || 0) < 40;
   const isCompact = cardDensity === "compact";
   const isExpanded = cardDensity === "expanded";
 
@@ -535,7 +541,15 @@ function WeekCard({
           )}
         </div>
 
-        {/* Row 2: Tag + Time */}
+        {/* Row 2: Tag + Time. 2026-05-04: time is always shown (when present)
+            — it's the most valuable field on a calendar card. The full row
+            including tag/amount only renders on non-tiny / non-compact cards. */}
+        {isTiny && !isCompact && showTime && timeStr && visibleFields?.arrivalWindow !== false && (
+          <span className="text-[9px] text-white/80 flex items-center gap-0.5">
+            <Clock className="h-2.5 w-2.5 shrink-0" />
+            {timeStr}
+          </span>
+        )}
         {!isTiny && !isCompact && (
           <div className="flex items-center gap-1 flex-wrap">
             {visibleFields?.customerTags !== false && <span className="text-[8px] font-bold uppercase px-1 py-0 rounded bg-white/20 text-white">
