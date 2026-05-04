@@ -66,7 +66,13 @@ export interface UseComposerIntelligenceResult {
 export function useComposerIntelligence(
   opts: UseComposerIntelligenceOptions
 ): UseComposerIntelligenceResult {
-  const { value, setValue, context = "sms", mode = "safe", skipPolish, skipBlurPass, onSend } = opts;
+  // 2026-05-04: AI grammar polish (layer 3) defaults to OFF now that Whisper
+  // dictation produces clean text and we still have keystroke autocorrect
+  // (layer 1, mode="safe") + the on-blur dictionary pass (layer 2). The AI
+  // polish was firing on every send with a preview dialog — overkill that
+  // interrupted the user's flow without adding much over the dictionary
+  // passes. To opt back in: pass `skipPolish: false` explicitly.
+  const { value, setValue, context = "sms", mode = "safe", skipPolish = true, skipBlurPass, onSend } = opts;
 
   const { handleChange, inputRef } = useAutoCorrect(value, setValue, mode);
   const [polishing, setPolishing] = useState(false);

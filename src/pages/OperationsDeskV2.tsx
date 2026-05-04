@@ -3672,7 +3672,12 @@ export default function OperationsDeskV2() {
           handledMetadata: sharedStatus.metadata || null,
         };
       })
-      .filter((item) => !isEmployeeConversation(item))
+      // 2026-05-04 fix: only SMS gets the employee filter (so employee↔
+      // employee text chitchat doesn't clog Intake). Inbound CALLS from an
+      // employee number (e.g. an employee dialing the main line to test, ask
+      // for help, or report a problem) always show — Clint wants every call
+      // visible regardless of who dialed, with full transcript + JARVIS.
+      .filter((item) => item.kind === "call" || !isEmployeeConversation(item))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const q = search.trim().toLowerCase();
