@@ -46,6 +46,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { DictateButton } from "@/components/voice/DictateButton";
+import { insertAtSelection } from "@/lib/insertAtCursor";
 import { useAuth } from "@/hooks/useAuth";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
 import { useQuickLinks } from "@/hooks/useQuickLinks";
@@ -1675,6 +1677,25 @@ export default function TeamCommunications() {
                         </button>
                       ))}
                       <Smile className="h-3.5 w-3.5 text-muted-foreground" aria-label="Emoji" />
+                      {/* 2026-05-04: Dictate button — Whisper-driven voice-to-text
+                          for the team chat composer. Same pattern as the SMS
+                          composer: tap, talk, transcript inserts at the caret
+                          position so dispatchers can dictate hands-free while
+                          handling other things. */}
+                      <DictateButton
+                        size="sm"
+                        showLabel={false}
+                        hideOnMobile={false}
+                        autoStopOnSilence={false}
+                        context="chat"
+                        title="Dictate message"
+                        onTranscript={(text) => {
+                          const el = composer.inputRef.current;
+                          const { value, caret } = insertAtSelection(draft, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);
+                          setDraft(value);
+                          requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+                        }}
+                      />
                     </div>
                     <Textarea
                       ref={composer.inputRef}

@@ -27,6 +27,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { MmsMediaRenderer } from "@/components/chat/MmsMediaRenderer";
 import { normalizeMediaAttachments } from "@/lib/mediaAttachments";
 import { getFileCategory } from "@/lib/fileTypes";
+import { DictateButton } from "@/components/voice/DictateButton";
+import { insertAtSelection } from "@/lib/insertAtCursor";
 
 interface SmsMessage {
   id: string;
@@ -62,6 +64,9 @@ export function TechSmsThreadView({
 }: TechSmsThreadViewProps) {
   const { sendSms, markAsRead } = useSmsLogScoped();
   const [body, setBody] = useState("");
+  // 2026-05-04: ref for the textarea so the DictateButton can insert
+  // transcribed text at the user's caret position.
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -349,7 +354,24 @@ export function TechSmsThreadView({
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
             </Button>
+            {/* 2026-05-04: Dictate button — Whisper-driven voice-to-text for the
+                tech texts composer. Same pattern as the SMS / chat composers. */}
+            <DictateButton
+              size="sm"
+              showLabel={false}
+              hideOnMobile={false}
+              autoStopOnSilence={false}
+              context="sms"
+              title="Dictate message"
+              onTranscript={(text) => {
+                const el = bodyTextareaRef.current;
+                const { value, caret } = insertAtSelection(body, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);
+                setBody(value);
+                requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+              }}
+            />
             <Textarea
+              ref={bodyTextareaRef}
               placeholder="Type a message... (Ctrl+Enter to send, drop files here)"
               value={body}
               onChange={(e) => setBody(e.target.value)}
