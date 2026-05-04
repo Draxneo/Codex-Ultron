@@ -2692,8 +2692,24 @@ function ActionPanel({
       setBookStart(metadata.scheduled_time || "09:00");
       setBookEnd(metadata.scheduled_end || "11:00");
 
-      // Default assignee: metadata.assigned_to > bookingSuggestion.defaultOwner > "Jonathan Carnes"
-      const defaultAssignee = metadata.assigned_to || bookingSuggestion?.defaultOwner || "Jonathan Carnes";
+      // 2026-05-04: Default assignee picks by BUSINESS UNIT now.
+      //   - FIX Construction work → Tim Konecny (Clint's preferred FIX sub)
+      //   - Carnes and Sons work  → Jonathan Carnes
+      // Resolution order:
+      //   1. Whatever JARVIS extracted into metadata.assigned_to (most authoritative)
+      //   2. BU-driven default (customer's primary_business_unit_id OR action_item's
+      //      metadata.business_unit_id resolved against business_units.slug)
+      //   3. bookingSuggestion.defaultOwner from the legacy intent inferer
+      //   4. "Jonathan Carnes" fallback
+      const buIdFromMeta = metadata.business_unit_id as string | undefined;
+      const buIdFromCustomer = (customer as any)?.primary_business_unit_id as string | undefined;
+      const buId = buIdFromMeta || buIdFromCustomer || null;
+      // We only need to recognize FIX vs Carnes for now. FIX_BU_ID is the
+      // production FIX Construction id; everything else falls through to
+      // the legacy "Jonathan Carnes" default which IS the Carnes sub.
+      const FIX_BU_ID = "fb2545d8-072f-4d43-8649-4a6aa8bc2519";
+      const buDefault = buId === FIX_BU_ID ? "Tim Konecny" : "Jonathan Carnes";
+      const defaultAssignee = metadata.assigned_to || buDefault || bookingSuggestion?.defaultOwner || "Jonathan Carnes";
       setBookAssignee(defaultAssignee);
 
       // Map job_type to our confirm dialog's enum; handle is_estimate flag
@@ -2703,7 +2719,10 @@ function ActionPanel({
       setBookJobType(derivedJobType);
     }
     setBookConfirmOpen(false);
-  }, [bookingActionItem?.id, bookingSuggestion?.defaultOwner]);
+    // Include customer's BU id so the BU-default flips when caller-lookup resolves
+    // a moment after the conversation selection (avoids the dialog briefly showing
+    // Jonathan as default for a FIX call before the customer record loads).
+  }, [bookingActionItem?.id, bookingSuggestion?.defaultOwner, (customer as any)?.primary_business_unit_id]);
 
   // Handle opening the confirmation dialog (replaces the old immediate book call)
   const handleInlineBook = useCallback(() => {
