@@ -49,6 +49,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DictateButton } from "@/components/voice/DictateButton";
 import { useCopilotPanel } from "@/contexts/CopilotPanelContext";
+import { useBookingAction } from "@/hooks/useBookingAction";
 import { useCallLog, type CallConversation } from "@/hooks/useCallLog";
 import { useCallerLookup } from "@/hooks/useCallerLookup";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
@@ -2605,6 +2606,58 @@ function ActionPanel({
     () => (selected ? inferBookingIntent(selected, customer) : null),
     [selected, customer]
   );
+
+  // 2026-05-04 — Inline booking from Intake.
+  // CONTEXT: Per Clint, Intake should own the entire flow up to and including
+  // clicking the Book button. Previously this panel said "Open Now HQ to book"
+  // and forced a navigation away from the conversation. Now we look up the
+  // latest pending booking-intent action_item for this customer's phone and,
+  // if found, expose `book()` directly in the panel so they never leave.
+  //
+  // Fallback chain if no action_item exists yet (JARVIS may still be drafting
+  // it from the live transcript): we keep the "Open Now HQ" button as a
+  // secondary action so the operator can still escape if needed.
+  const last10Phone = useMemo(() => {
+    const raw = selected?.phone || "";
+    return String(raw).replace(/\D/g, "").slice(-10);
+  }, [selected?.phone]);
+  const { data: bookingActionItem } = useQuery({
+    queryKey: ["intake-booking-action-item", last10Phone],
+    enabled: last10Phone.length === 10,
+    staleTime: 10_000,
+    queryFn: async () => {
+      // Pull recent pending action_items in booking categories whose phone
+      // matches the selected conversation. We use ilike on customer_phone
+      // because phone formatting varies across sources (E.164, raw digits,
+      // dashed). Take the most recent and let the user act on it.
+      const { data, error } = await supabase
+        .from("action_items" as any)
+        .select("*")
+        .eq("status", "pending")
+        .in("category", ["new_appointment", "booking_confirm"])
+        .ilike("customer_phone", `%${last10Phone}%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = ((data as any[]) || [])[0];
+      return row || null;
+    },
+  });
+  const { book, getState: getBookingState } = useBookingAction();
+  const bookingState = bookingActionItem ? getBookingState(bookingActionItem.id) : null;
+  const bookingPhase = bookingState?.phase || "idle";
+  const bookingBusy = bookingPhase === "resolving" || bookingPhase === "booking" || bookingPhase === "syncing";
+  const bookingDone = bookingPhase === "booked";
+  const bookingFailed = bookingPhase === "failed";
+  const handleInlineBook = useCallback(async () => {
+    if (!bookingActionItem || bookingBusy) return;
+    await book({
+      action_item_id: bookingActionItem.id,
+      metadata: bookingActionItem.metadata || {},
+      description: bookingActionItem.description || null,
+      customer_phone: bookingActionItem.customer_phone || selected?.phone || null,
+    });
+  }, [bookingActionItem, bookingBusy, book, selected?.phone]);
   const addressVerification = useMemo(
     () => addressVerificationFromContext(selected, customer, liveAddressVerification, acceptedAddressVerification),
     [selected, customer, liveAddressVerification, acceptedAddressVerification]
@@ -2878,18 +2931,76 @@ function ActionPanel({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold">
-                        {minimumReady ? "Ready for Now HQ review" : approvalState.label}
+                        {bookingDone
+                          ? "Booked"
+                          : minimumReady
+                            ? bookingActionItem
+                              ? `Ready to book ${bookingSuggestion.type === "book_estimate" ? "estimate" : bookingSuggestion.type === "book_maintenance" ? "maintenance" : "service"}`
+                              : "Ready — Jarvis is finalizing the card"
+                            : approvalState.label}
                       </p>
                       <p className="mt-1 text-xs leading-5 opacity-80">
-                        Jarvis should keep one follow-up card for this customer. If they call back and change direction, that same card should change with them.
+                        {bookingDone
+                          ? "The job is on the calendar. Now HQ owns the live workflow from here."
+                          : bookingActionItem
+                            ? "Confirm the captured details, then book directly from Intake — no need to jump to Now HQ."
+                            : "Jarvis should keep one follow-up card for this customer. If they call back and change direction, that same card changes with them."}
                       </p>
-                      <Button
-                        className="mt-3 w-full gap-2"
-                        onClick={() => navigate("/now")}
-                      >
-                        <Zap className="h-4 w-4" />
-                        Open Now HQ
-                      </Button>
+                      {/* 2026-05-04: Inline Book button — Intake now owns booking through the click.
+                          Shows when a pending booking action_item exists for this caller.
+                          If JARVIS is still drafting the action_item, we show a disabled hint and
+                          fall back to Open Now HQ so the operator can still navigate away. */}
+                      {bookingActionItem ? (
+                        <div className="mt-3 space-y-2">
+                          <Button
+                            className="w-full gap-2"
+                            onClick={handleInlineBook}
+                            disabled={bookingBusy || bookingDone || !minimumReady}
+                          >
+                            {bookingBusy ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {bookingPhase === "resolving" ? "Resolving customer…" : bookingPhase === "syncing" ? "Syncing…" : "Booking…"}
+                              </>
+                            ) : bookingDone ? (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Booked
+                              </>
+                            ) : (
+                              <>
+                                <CalendarDays className="h-4 w-4" />
+                                {bookingSuggestion.type === "book_estimate"
+                                  ? "Book Estimate"
+                                  : bookingSuggestion.type === "book_maintenance"
+                                    ? "Book Maintenance"
+                                    : "Book Service"}
+                              </>
+                            )}
+                          </Button>
+                          {bookingFailed && bookingState?.error && (
+                            <p className="text-xs text-destructive">{bookingState.error}</p>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full gap-2 text-xs"
+                            onClick={() => navigate("/now")}
+                          >
+                            <Zap className="h-3.5 w-3.5" />
+                            Or review in Now HQ
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          className="mt-3 w-full gap-2"
+                          onClick={() => navigate("/now")}
+                          variant="outline"
+                        >
+                          <Zap className="h-4 w-4" />
+                          Open Now HQ
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3000,9 +3111,9 @@ function ActionPanel({
                 <div className="mt-3 flex items-start gap-2 rounded-md border bg-primary/5 p-3 text-xs text-muted-foreground">
                   <Briefcase className="mt-0.5 h-3.5 w-3.5 text-primary" />
                   <span>
-                    This screen is for the call or text. Now HQ is where we approve{" "}
-                    {bookingSuggestion.type === "book_estimate" ? "the estimate booking" : "the service job"} and hand it to{" "}
-                    <strong className="text-foreground">{bookingSuggestion.defaultOwner}</strong> when it is ready.
+                    Intake owns the conversation through booking. Once booked,{" "}
+                    {bookingSuggestion.type === "book_estimate" ? "the estimate" : "the job"} hands off to{" "}
+                    <strong className="text-foreground">{bookingSuggestion.defaultOwner}</strong> in Now HQ for the live workflow.
                   </span>
                 </div>
               </div>
@@ -3673,212 +3784,3 @@ export default function OperationsDeskV2() {
         };
       })
       // 2026-05-04 fix: only SMS gets the employee filter (so employee↔
-      // employee text chitchat doesn't clog Intake). Inbound CALLS from an
-      // employee number (e.g. an employee dialing the main line to test, ask
-      // for help, or report a problem) always show — Clint wants every call
-      // visible regardless of who dialed, with full transcript + JARVIS.
-      .filter((item) => item.kind === "call" || !isEmployeeConversation(item))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const haystack = [
-        item.name,
-        item.phone,
-        normalizeLast10(item.phone),
-        item.summary,
-        item.detail,
-        getConversationContextText(item),
-        item.status,
-      ].join(" ").toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [callConversations, smsConversations, canonicalBySource, search, sharedStatusByThread]);
-
-  const selectConversation = (item: DeskConversation) => {
-    setSelected(item);
-  };
-
-  const handleConversationHandled = (conversationId: string) => {
-    setSelected((current) => (current?.id === conversationId ? null : current));
-  };
-
-  const clearConversationForTesting = async (item: DeskConversation) => {
-    if (role !== "admin") {
-      toast({ title: "Admins only", description: "Only an admin can clear intake cards while testing.", variant: "destructive" });
-      return;
-    }
-    if (!user?.id) {
-      toast({ title: "Sign in required", description: "We need your user account so the cleanup stamp is accountable." });
-      return;
-    }
-    if (clearingIds.has(item.id)) return;
-
-    setClearingIds((current) => new Set(current).add(item.id));
-    const phoneLast10 = normalizeLast10(item.phone);
-    const canonical = item.canonical || null;
-    const latestCall = item.kind === "call" ? (item.raw as CallConversation).lastCall : null;
-    const smsConversation = item.kind === "sms" ? item.raw as SmsConversation : null;
-    const communicationId = item.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id;
-    const clearedBy = user.email || "Admin";
-
-    try {
-      if (item.kind === "sms") {
-        const threadKey = smsConversation?.threadKey || item.phone;
-        await markSmsAsRead(threadKey);
-        await setSmsThreadStatus(threadKey, "done");
-      } else {
-        await markCallsAsRead((item.raw as CallConversation).threadKey || item.phone);
-      }
-
-      const { data, error } = await (supabase as any)
-        .rpc("mark_intake_communication_handled", {
-          _channel: canonical?.intake_channel || item.kind,
-          _phone_number: item.phone,
-          _handled_by_name: clearedBy,
-          _source_table: canonical?.source_table || (item.kind === "call" ? "call_log" : "sms_log"),
-          _source_event_id: canonical?.source_id || communicationId || null,
-          _metadata: {
-            reason: "admin_testing_clear",
-            conversation_id: item.id,
-            communication_id: communicationId || null,
-            phone_last10: phoneLast10 || null,
-            summary: item.summary || null,
-            cleared_by_user_id: user.id,
-            cleared_by_name: clearedBy,
-            cleared_at: new Date().toISOString(),
-          },
-        });
-      if (error) throw error;
-      if (data && data.ok === false) throw new Error(data.reason || "The intake card was not cleared.");
-
-      setSelected((current) => (current?.id === item.id ? null : current));
-      queryClient.invalidateQueries({ queryKey: ["call_log"] });
-      queryClient.invalidateQueries({ queryKey: ["sms_log"] });
-      queryClient.invalidateQueries({ queryKey: ["unified-communications"] });
-      queryClient.invalidateQueries({ queryKey: ["intake-thread-statuses"] });
-      toast({ title: "Intake card cleared", description: "The call/text history stayed saved, but this card is out of the testing queue." });
-    } catch (error: any) {
-      toast({
-        title: "Could not clear card",
-        description: error?.message || "The intake card stayed in the queue.",
-        variant: "destructive",
-      });
-    } finally {
-      setClearingIds((current) => {
-        const next = new Set(current);
-        next.delete(item.id);
-        return next;
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (!selected) return;
-    // Refresh the selected conversation reference so the right pane shows the
-    // latest data. Match priority: exact id (cheapest), then thread key
-    // (survives lastMessage-id changes), then last-10 digits + kind (survives
-    // contact-resolution rebuilds).
-    const refreshedSelection =
-      conversations.find((item) => item.id === selected.id) ||
-      conversations.find((item) => intakeThreadKeyForDeskItem(item) === intakeThreadKeyForDeskItem(selected)) ||
-      conversations.find((item) => item.kind === selected.kind && normalizeLast10(item.phone) === normalizeLast10(selected.phone));
-
-    if (refreshedSelection && refreshedSelection !== selected) {
-      setSelected(refreshedSelection);
-    }
-    // 2026-05-03 fix: do NOT setSelected(null) when the conversation isn't
-    // found in the freshly-computed list. That branch was kicking users out
-    // of the active thread whenever an inbound SMS triggered a list rebuild
-    // that briefly didn't include their selected conversation (race between
-    // realtime INSERT, smsConversations recompute, and contact resolution).
-    // Intentional clears go through clearConversationForTesting() and
-    // handleConversationHandled() which set null explicitly. Letting the
-    // selected ref go stale for a beat is far better than dumping the user
-    // back to "no conversation selected" mid-typing.
-  }, [conversations, selected]);
-
-  useEffect(() => {
-    const phone = searchParams.get("phone");
-    if (!phone || conversations.length === 0) return;
-    const digits = normalizeLast10(phone);
-    const match = conversations.find((item) => normalizeLast10(item.phone) === digits);
-    if (match && selected?.id !== match.id) {
-      selectConversation(match);
-    }
-  }, [conversations, searchParams, selected?.id]);
-
-  useEffect(() => {
-    localStorage.setItem("intake_tutorial_mode", String(tutorialMode));
-  }, [tutorialMode]);
-
-  const loading = callsLoading || smsLoading || unifiedLoading;
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <AppHeader />
-      <div className="border-b bg-card px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight">Intake HQ</h1>
-              <Badge variant="secondary">Communication Desk</Badge>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Handle calls and texts here. Now HQ keeps track of what needs doing next.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
-              <Switch
-                checked={tutorialMode}
-                onCheckedChange={setTutorialMode}
-                aria-label="Toggle intake tutorial mode"
-              />
-              <span className="text-sm font-medium">Tutorial</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => navigate("/now")}>
-              <Zap className="h-4 w-4" />
-              Now HQ
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/dispatch")}>
-              <CalendarDays className="h-4 w-4" />
-              Dispatch HQ
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)] overflow-hidden">
-        <ConversationList
-          items={conversations}
-          selectedId={selected?.id}
-          businessUnits={businessUnits}
-          isAdmin={role === "admin"}
-          loading={loading}
-          readModelError={unifiedError}
-          search={search}
-          tutorialMode={tutorialMode}
-          onSearch={setSearch}
-          onSelect={selectConversation}
-          onClearForTesting={clearConversationForTesting}
-          clearingIds={clearingIds}
-        />
-        <CustomerWorkspace
-          key={selected ? intakeThreadKeyForDeskItem(selected) : "empty"}
-          selected={selected}
-          tutorialMode={tutorialMode}
-          smsSending={smsSending}
-          onSendSms={sendSms}
-          onMarkSmsRead={markSmsAsRead}
-          onMarkCallRead={markCallsAsRead}
-          onSetSmsThreadStatus={setSmsThreadStatus}
-          onHandled={handleConversationHandled}
-        />
-      </div>
-
-      <NewJobDialog open={newJobOpen} onOpenChange={setNewJobOpen} />
-    </div>
-  );
-}

@@ -420,4 +420,4 @@ export function BookingIntentAlert() {
       })}
     </div>
   );
-}
+}

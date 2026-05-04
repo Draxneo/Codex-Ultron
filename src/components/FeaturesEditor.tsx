@@ -187,4 +187,4 @@ export function FeaturesEditor({ matchup, open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   );
-}
+}

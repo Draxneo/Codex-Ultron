@@ -193,4 +193,4 @@ export function UniversalMediaPlayer({
       )}
     </div>
   );
-}
+}

@@ -238,4 +238,4 @@ export function EquipmentCatalogBrowser({ onAddToCart, compact, initialBrand, ma
       )}
     </div>
   );
-}
+}

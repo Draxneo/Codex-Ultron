@@ -297,4 +297,4 @@ export function NewEstimateDialog({ open, onOpenChange, sourceJobId }: NewEstima
       </DialogContent>
     </Dialog>
   );
-}
+}

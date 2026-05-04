@@ -27,6 +27,30 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Initialize Supabase admin client first — needed by both the auth check below
+    // (which reads roles) AND the action_items read/update further down.
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // Auth gate: only authenticated staff or service-role internal callers may invoke.
+    // Prevents anonymous OpenAI cost abuse via guessed action_item_ids.
+    const auth = await requireStaffOrInternal(req, supabase);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { action_item_id } = await req.json();
+    if (!action_item_id) {
+      return new Response(JSON.stringify({ error: "action_item_id required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
     const { data: item, error: itemErr } = await supabase

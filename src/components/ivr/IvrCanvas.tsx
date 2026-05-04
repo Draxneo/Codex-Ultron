@@ -432,42 +432,4 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
             onEdgesChange={onEdgesChange}
             onNodeDragStop={handleNodeDragStop}
             nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.3 }}
-            minZoom={0.3}
-            maxZoom={1.5}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background gap={20} size={1} />
-            <Controls showInteractive={false} />
-            <Panel position="top-right">
-              <Button
-                onClick={handleSaveAll}
-                size="sm"
-                variant={saved ? "outline" : "default"}
-                className="gap-1.5 shadow-md"
-              >
-                {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-                {saved ? "Saved!" : "Save"}
-              </Button>
-            </Panel>
-          </ReactFlow>
-        </div>
-
-        {selectedNodeId && selectedType && (
-          <IvrNodeDetail
-            nodeId={selectedNodeId}
-            nodeType={selectedType}
-            onClose={() => setSelectedNodeId(null)}
-            config={config}
-            menuOption={selectedMenuOption}
-            profiles={profiles}
-            onUpdateConfig={onUpdateConfig}
-            onUpdateDept={onUpdateDept}
-            onDeleteDept={(id) => { onDeleteDept(id); setSelectedNodeId(null); }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
+            fi

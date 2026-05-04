@@ -510,5 +510,4 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
         )}
       </DrawerContent>
     </Drawer>
-  );
-}
+  );

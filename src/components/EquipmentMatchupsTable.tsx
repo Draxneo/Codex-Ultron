@@ -348,4 +348,4 @@ export function EquipmentMatchupsTable({ rows, editable }: Props) {
       )}
     </div>
   );
-}
+}

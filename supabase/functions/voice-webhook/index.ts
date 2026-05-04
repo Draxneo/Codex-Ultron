@@ -478,7 +478,7 @@ Deno.serve(async (req) => {
         escapeXml(callerId)
       }" record="record-from-answer-dual" recordingStatusCallback="${
         escapeXml(overflowStatusCallback)
-      }" recordingStatusCallbackEvent="completed" statusCallback="${
+      }" recordingStatusCallbackEvent="completed failed absent" statusCallback="${
         escapeXml(overflowStatusCallback)
       }" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(overflowNumber)}</Number>
@@ -538,7 +538,7 @@ Deno.serve(async (req) => {
           escapeXml(businessCallerId)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
-        }" recordingStatusCallbackEvent="completed" statusCallback="${
+        }" recordingStatusCallbackEvent="completed failed absent" statusCallback="${
           escapeXml(statusCallbackUrl)
         }" statusCallbackEvent="initiated ringing answered completed">
     ${clientTags}
@@ -590,7 +590,7 @@ Deno.serve(async (req) => {
             escapeXml(voicemailUrl)
           }" recordingStatusCallback="${
             escapeXml(voicemailUrl)
-          }" recordingStatusCallbackEvent="completed" playBeep="true" />
+          }" recordingStatusCallbackEvent="completed failed absent" playBeep="true" />
 </Response>`,
           {
             headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -673,7 +673,7 @@ Deno.serve(async (req) => {
             escapeXml(businessCallerId)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(statusCallbackUrl)
-          }" recordingStatusCallbackEvent="completed" statusCallback="${
+          }" recordingStatusCallbackEvent="completed failed absent" statusCallback="${
             escapeXml(statusCallbackUrl)
           }" statusCallbackEvent="initiated ringing answered completed">
     ${numberTags}
@@ -858,7 +858,7 @@ Deno.serve(async (req) => {
               escapeXml(voicemailUrl)
             }" recordingStatusCallback="${
               escapeXml(voicemailUrl)
-            }" recordingStatusCallbackEvent="completed" playBeep="true" />
+            }" recordingStatusCallbackEvent="completed failed absent" playBeep="true" />
 </Response>`,
             {
               headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -914,7 +914,7 @@ Deno.serve(async (req) => {
           escapeXml(businessCallerId)
         }" record="record-from-answer-dual" recordingStatusCallback="${
           escapeXml(statusCallbackUrl)
-        }" recordingStatusCallbackEvent="completed" statusCallback="${
+        }" recordingStatusCallbackEvent="completed failed absent" statusCallback="${
           escapeXml(statusCallbackUrl)
         }" statusCallbackEvent="initiated ringing answered completed">
     ${clientTags}

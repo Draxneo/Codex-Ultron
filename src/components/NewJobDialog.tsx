@@ -427,4 +427,4 @@ export function NewJobDialog({ open, onOpenChange, defaultDate }: { open: boolea
       </DialogContent>
     </Dialog>
   );
-}
+}

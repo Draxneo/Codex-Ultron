@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
             escapeXml(twilioNumber)
           }" record="record-from-answer-dual" recordingStatusCallback="${
             escapeXml(overflowStatusCallback)
-          }" recordingStatusCallbackEvent="completed" statusCallback="${
+          }" recordingStatusCallbackEvent="completed failed absent" statusCallback="${
             escapeXml(overflowStatusCallback)
           }" statusCallbackEvent="initiated ringing answered completed">
     <Number>${escapeXml(overflowNumber)}</Number>
@@ -530,7 +530,7 @@ Deno.serve(async (req) => {
           escapeXml(selfUrl)
         }" recordingStatusCallback="${
           escapeXml(selfUrl)
-        }" recordingStatusCallbackEvent="completed" playBeep="true" />
+        }" recordingStatusCallbackEvent="completed failed absent" playBeep="true" />
   <Say voice="Polly.Joanna">We didn't receive a message. Goodbye.</Say>
   <Hangup />
 </Response>`,

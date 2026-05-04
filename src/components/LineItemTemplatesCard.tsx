@@ -225,4 +225,4 @@ export function LineItemTemplatesCard() {
       </Dialog>
     </Card>
   );
-}
+}

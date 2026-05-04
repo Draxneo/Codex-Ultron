@@ -360,4 +360,4 @@ export function NewCustomerDialog({ open, onOpenChange, onCustomerCreated }: Pro
       </DialogContent>
     </Dialog>
   );
-}
+}

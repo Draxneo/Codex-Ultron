@@ -776,4 +776,4 @@ export function BrochureFooter({ expiresAt, showPhone = false }: { expiresAt?: s
       </div>
     </div>
   );
-}
+}
