@@ -873,7 +873,11 @@ function CardPopover({
         (item as any).system_type,
       ].filter(Boolean).join(" · ") || null;
 
-      const { data, error } = await (supabase as any).rpc("create_subcontractor_job_link", {
+      // 2026-05-04 fix: switched from create_subcontractor_job_link (which had
+      // an ambiguous overload after today's estimate-parity migration) to the
+      // new clean create_subcontractor_link RPC. Same job/estimate routing
+      // via p_record_type, no overload conflict, no 'Failed to generate link'.
+      const { data, error } = await (supabase as any).rpc("create_subcontractor_link", {
         p_record_id: item.id,
         p_record_type: item.item_type,  // 'job' or 'estimate'
         p_subcontractor_name: null,
