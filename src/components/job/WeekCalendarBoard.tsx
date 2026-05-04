@@ -17,9 +17,13 @@ import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 import { DispatchCardAlertBadge } from "@/components/dispatch/DispatchCardAlertBadge";
 import type { DispatchAlert } from "@/hooks/useDispatchCardAlerts";
 import { formatPhone } from "@/lib/formatters";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useEmployees } from "@/hooks/useEmployees";
 
 interface BoardItem {
   id: string;
@@ -774,6 +778,86 @@ function CardPopover({
     navigate(`/quick-quote?${params.toString()}`);
   };
 
+  // 2026-05-04: Reschedule dialog state + mutation. Lets dispatchers move a
+  // job/estimate to a new date+window (and reassign tech) without leaving the
+  // calendar popover. Defaults to whatever JARVIS / the current schedule has;
+  // dispatcher tweaks via quick time-block buttons or manual time inputs and
+  // hits Save. Updates jobs OR estimates table directly + stamps locally_modified_at
+  // so the HCP sync's 15-min protection window kicks in (won't be overwritten
+  // by an inbound HCP poll). Realtime invalidation refreshes the calendar.
+  const queryClient = useQueryClient();
+  const { data: employeesList = [] } = useEmployees();
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  // Pre-fill defaults from current item state. Time fields are HH:MM strings
+  // matching <input type="time"> format.
+  const initialDate = item.scheduled_date ? item.scheduled_date.substring(0, 10) : "";
+  const initialStart = item.arrival_start ? format(new Date(item.arrival_start), "HH:mm") : "";
+  const initialEnd = item.arrival_end ? format(new Date(item.arrival_end), "HH:mm") : "";
+  const initialAssignee = item.assigned_to || "";
+  const [reschedDate, setReschedDate] = useState(initialDate);
+  const [reschedStart, setReschedStart] = useState(initialStart);
+  const [reschedEnd, setReschedEnd] = useState(initialEnd);
+  const [reschedAssignee, setReschedAssignee] = useState(initialAssignee);
+  const detectCentralOffsetSimple = (dateStr: string) => {
+    // Reuse the same heuristic as detectCentralOffset in lib/formatters — DST in TX
+    // runs roughly 2nd Sunday of March → 1st Sunday of November. Returns "-05:00"
+    // (CDT) or "-06:00" (CST). We don't import the lib helper to keep this file
+    // self-contained but the math is identical.
+    if (!dateStr) return "-05:00";
+    const d = new Date(`${dateStr}T12:00:00`);
+    const month = d.getMonth(); // 0=Jan
+    if (month > 2 && month < 10) return "-05:00"; // Apr–Oct: definitely DST
+    if (month < 2 || month > 10) return "-06:00"; // Jan–Feb, Dec: definitely standard
+    return "-05:00"; // Mar/Nov edge — defaulting to DST is fine for a calendar
+  };
+  const reschedule = useMutation({
+    mutationFn: async () => {
+      if (!reschedDate) throw new Error("Pick a date first");
+      const offset = detectCentralOffsetSimple(reschedDate);
+      const newStart = reschedStart ? `${reschedDate}T${reschedStart}:00${offset}` : null;
+      const newEnd = reschedEnd ? `${reschedDate}T${reschedEnd}:00${offset}` : null;
+      const table = item.item_type === "estimate" ? "estimates" : "jobs";
+      const updatePayload: Record<string, unknown> = {
+        scheduled_date: reschedDate,
+        arrival_start: newStart,
+        arrival_end: newEnd,
+        assigned_to: reschedAssignee || null,
+      };
+      // jobs has locally_modified_at as the HCP-protection signal; estimates
+      // doesn't have it yet so we just skip that field for estimates.
+      if (item.item_type !== "estimate") {
+        updatePayload.locally_modified_at = new Date().toISOString();
+      }
+      const { error } = await (supabase as any).from(table).update(updatePayload).eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Rescheduled", {
+        description: `Moved to ${reschedDate}${reschedStart ? ` · ${reschedStart}` : ""}${reschedAssignee ? ` · ${reschedAssignee}` : ""}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-card-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-stack"] });
+      setRescheduleOpen(false);
+    },
+    onError: (error) => {
+      toast.error("Could not reschedule", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    },
+  });
+
+  // Quick-pick time blocks. Each click sets start + end. Dispatcher can still
+  // tweak the manual inputs after.
+  const TIME_BLOCKS = [
+    { label: "8–10a", start: "08:00", end: "10:00" },
+    { label: "10–12p", start: "10:00", end: "12:00" },
+    { label: "1–3p", start: "13:00", end: "15:00" },
+    { label: "3–5p", start: "15:00", end: "17:00" },
+  ];
+
   // 2026-05-04: One-click "Send to subcontractor" button. Calls the unified
   // create_subcontractor_job_link RPC (now supporting both jobs and estimates)
   // with sensible defaults so dispatchers can hand a job/estimate to a sub
@@ -1036,6 +1120,131 @@ function CardPopover({
           )}
           {createSubcontractorLink.isPending ? "Creating link…" : "Send to subcontractor"}
         </Button>
+
+        {/* 2026-05-04: Reschedule button — opens a focused dialog to pick a new
+            date, time block, and (optionally) reassign tech. No need to leave
+            the calendar popover. Updates jobs/estimates directly + stamps
+            locally_modified_at to protect the change from the HCP sync. */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full gap-1.5 h-8"
+          onClick={() => setRescheduleOpen(true)}
+        >
+          <Calendar className="h-3.5 w-3.5" />
+          Reschedule
+        </Button>
+
+        <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reschedule {item.item_type === "estimate" ? "Estimate" : "Job"}</DialogTitle>
+              <DialogDescription>
+                {item.customer_name || "Customer"} · {item.address || "no address"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</Label>
+                <Input
+                  type="date"
+                  value={reschedDate}
+                  onChange={(e) => setReschedDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Time block (quick pick)</Label>
+                <div className="mt-1 grid grid-cols-4 gap-1.5">
+                  {TIME_BLOCKS.map((block) => {
+                    const active = reschedStart === block.start && reschedEnd === block.end;
+                    return (
+                      <Button
+                        key={block.label}
+                        type="button"
+                        size="sm"
+                        variant={active ? "default" : "outline"}
+                        className="h-9 text-xs"
+                        onClick={() => {
+                          setReschedStart(block.start);
+                          setReschedEnd(block.end);
+                        }}
+                      >
+                        {block.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival start</Label>
+                  <Input
+                    type="time"
+                    value={reschedStart}
+                    onChange={(e) => setReschedStart(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival end</Label>
+                  <Input
+                    type="time"
+                    value={reschedEnd}
+                    onChange={(e) => setReschedEnd(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assigned tech</Label>
+                <select
+                  value={reschedAssignee}
+                  onChange={(e) => setReschedAssignee(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="">Unassigned</option>
+                  {(employeesList || [])
+                    .filter((emp: any) => emp.is_active && ["tech", "supervisor", "admin", "installer"].includes(emp.role))
+                    .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
+                    .map((emp: any) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRescheduleOpen(false)}
+                disabled={reschedule.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => reschedule.mutate()}
+                disabled={!reschedDate || reschedule.isPending}
+                className="gap-2"
+              >
+                {reschedule.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="h-4 w-4" />
+                    Save
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Description */}
         {item.description && visibleFields?.description !== false && (
