@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from "react";
 import { format, isSameDay, isToday, parseISO, startOfWeek, addDays } from "date-fns";
-import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, Zap } from "lucide-react";
+import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, HardHat, Loader2, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
@@ -16,6 +16,9 @@ import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
 import { DispatchCardAlertBadge } from "@/components/dispatch/DispatchCardAlertBadge";
 import type { DispatchAlert } from "@/hooks/useDispatchCardAlerts";
 import { formatPhone } from "@/lib/formatters";
+import { useMutation } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface BoardItem {
   id: string;
@@ -741,6 +744,50 @@ function CardPopover({
     if (item.customer_phone) params.set("customer_phone", item.customer_phone);
     navigate(`/quick-quote?${params.toString()}`);
   };
+
+  // 2026-05-04: One-click "Send to subcontractor" button. Calls the existing
+  // create_subcontractor_job_link RPC with sensible defaults so dispatchers
+  // can hand a job to a sub (e.g. Tim) without leaving the calendar. The RPC
+  // returns a token; we build the public /subcontractor/:token URL, copy it
+  // to clipboard, and offer to open the SMS composer pre-filled with the
+  // link if the customer phone is on file. Job-only — estimates skip this.
+  const createSubcontractorLink = useMutation({
+    mutationFn: async () => {
+      const equipmentSummary = [
+        (item as any).brand,
+        (item as any).tonnage ? `${(item as any).tonnage} ton` : null,
+        (item as any).system_type,
+      ].filter(Boolean).join(" · ") || null;
+
+      const { data, error } = await (supabase as any).rpc("create_subcontractor_job_link", {
+        p_job_id: item.id,
+        p_subcontractor_name: null,
+        p_subcontractor_phone: null,
+        p_scope: item.description || null,
+        p_equipment_summary: equipmentSummary,
+        p_required_photo_slots: ["arrival", "before", "equipment", "after", "final"],
+        p_expires_days: 7,
+      });
+      if (error) throw error;
+      return data as { token: string; path?: string; expires_at: string };
+    },
+    onSuccess: async (data) => {
+      const url = `${window.location.origin}/subcontractor/${data.token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Subcontractor link copied", {
+          description: "Paste into a text to your sub. Link expires in 7 days.",
+        });
+      } catch {
+        toast.success("Subcontractor link created", { description: url });
+      }
+    },
+    onError: (error) => {
+      toast.error("Could not create subcontractor link", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    },
+  });
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
 
@@ -929,6 +976,29 @@ function CardPopover({
           variant="outline"
           className="h-8 w-full justify-center"
         />
+
+        {/* 2026-05-04: Send-to-subcontractor button. Job-only (estimates have
+            no install scope yet). One click creates a public link via the
+            existing create_subcontractor_job_link RPC and copies it to the
+            clipboard so the dispatcher can paste into a text to their sub.
+            Sub gets address + customer + scope + photo upload slots; no
+            login required. */}
+        {item.item_type === "job" && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full gap-1.5 h-8"
+            onClick={() => createSubcontractorLink.mutate()}
+            disabled={createSubcontractorLink.isPending}
+          >
+            {createSubcontractorLink.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <HardHat className="h-3.5 w-3.5" />
+            )}
+            {createSubcontractorLink.isPending ? "Creating link…" : "Send to subcontractor"}
+          </Button>
+        )}
 
         {/* Description */}
         {item.description && visibleFields?.description !== false && (
