@@ -517,6 +517,64 @@ INTENT EXTRACTION:
       }
     }
 
+    // ── Build the call-summary note body once. Used for BOTH the local
+    //    hcp_notes insert (so the assigned tech sees it in our app) AND the
+    //    optional HCP API push. Direction-aware framing so the note reads
+    //    correctly for inbound vs outbound calls.
+    const knownContact = call.contact_name || null;
+    const extractedName = extracted.first_name
+      ? `${extracted.first_name} ${extracted.last_name || ""}`.trim()
+      : null;
+    const otherParty = knownContact || extractedName || call.phone_number;
+    const partyLabel = call.direction === "outbound"
+      ? `Called ${otherParty}`
+      : `Caller: ${otherParty}`;
+    const noteBody = `📞 Call Notes (${partyLabel}):\n${extracted.summary}${extracted.problem_description ? `\n\nIssue: ${extracted.problem_description}` : ""}`;
+
+    // ── ALWAYS attach the note to the local hcp_notes table when we have a
+    //    job / estimate / customer FK on the call. This is independent of the
+    //    HCP API push below. Without this, techs can't see call summaries on
+    //    their assigned jobs in our app — the note only existed in HCP, which
+    //    they don't always have open. (2026-05-03 fix per Clint)
+    //
+    //    Idempotency: source_type='call_summary' + source_id=call.id. We check
+    //    for an existing row first so retries don't double-insert.
+    if (call.related_job_id || call.related_estimate_id || call.related_customer_id) {
+      try {
+        const { data: existing } = await supabase
+          .from("hcp_notes")
+          .select("id")
+          .eq("source_type", "call_summary")
+          .eq("source_id", call.id)
+          .maybeSingle();
+
+        if (!existing) {
+          const { error: noteErr } = await supabase.from("hcp_notes").insert({
+            source_type: "call_summary",
+            source_id: call.id,
+            job_id: call.related_job_id ?? null,
+            estimate_id: call.related_estimate_id ?? null,
+            customer_id: call.related_customer_id ?? null,
+            visibility: "internal",
+            author_name: "JARVIS (call summary)",
+            body: noteBody,
+            note_created_at: new Date().toISOString(),
+          });
+          if (noteErr) {
+            console.warn(`Call ${call_id}: local note insert failed: ${noteErr.message}`);
+          } else {
+            console.log(`Call ${call_id}: attached local note (job=${call.related_job_id ?? "-"} est=${call.related_estimate_id ?? "-"} cust=${call.related_customer_id ?? "-"})`);
+          }
+        } else {
+          console.log(`Call ${call_id}: local note already exists for source_id=${call.id}, skipping`);
+        }
+      } catch (localNoteErr: any) {
+        console.warn(`Call ${call_id}: local note attach error: ${localNoteErr?.message ?? localNoteErr}`);
+      }
+    } else {
+      console.log(`Call ${call_id}: no related job/estimate/customer to attach local note to`);
+    }
+
     // ── Push call summary as note to HCP (job or estimate) ──
     const hcpApiKey = Deno.env.get("HCP_NOTE_SYNC_ENABLED") === "true" ? Deno.env.get("HCP_API_KEY") : null;
     let hcpNotePushed = false;
@@ -680,22 +738,10 @@ INTENT EXTRACTION:
         }
       }
 
-      // Push note to HCP if we found a target
+      // Push note to HCP if we found a target. noteBody is already built
+      // above (used by both the local note insert and this HCP push).
       if (hcpId) {
         try {
-          // Prefer the resolved contact name (DB truth) over AI-extracted names which
-          // can be polluted by voicemail greetings ("You've reached Parker…").
-          const knownContact = call.contact_name || null;
-          const extractedName = extracted.first_name
-            ? `${extracted.first_name} ${extracted.last_name || ""}`.trim()
-            : null;
-          const otherParty = knownContact || extractedName || call.phone_number;
-          // Direction-aware framing: outbound = WE called THEM, inbound = THEY called US
-          const partyLabel = call.direction === "outbound"
-            ? `Called ${otherParty}`
-            : `Caller: ${otherParty}`;
-          const noteBody = `📞 Call Notes (${partyLabel}):\n${extracted.summary}${extracted.problem_description ? `\n\nIssue: ${extracted.problem_description}` : ""}`;
-
           const noteRes = await fetch(
             `https://api.housecallpro.com/jobs/${hcpId}/notes`,
             {
