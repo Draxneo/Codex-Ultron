@@ -3,6 +3,7 @@ import { format, isSameDay, isToday, parseISO, startOfWeek, addDays } from "date
 import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, HardHat, Loader2, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import type { BusinessUnitLite } from "@/hooks/useJobBusinessUnit";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { ClickToCall } from "@/components/ClickToCall";
 import { SmsButton } from "@/components/SmsButton";
@@ -126,9 +127,13 @@ interface WeekCalendarBoardProps {
    *  financed". Callers typically wire this to runAction from
    *  useDispatchCardAlertActions(). */
   onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
+  // 2026-05-04: Business unit map for calendar cards. Maps customer_id → BusinessUnitLite.
+  // Allows WeekCard to render FIX vs C&S badges. Optional so other consumers
+  // (Tech mobile) don't have to wire it unless they want BU tags.
+  businessUnitsByCustomerId?: Map<string, BusinessUnitLite>;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate, onAlertAction }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate, onAlertAction, businessUnitsByCustomerId }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
@@ -379,7 +384,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   {untimed.length > 0 && (
                     <div className="absolute top-0 left-0 right-0 z-20 p-0.5 flex flex-col gap-0.5">
                       {untimed.map(item => (
-                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} alerts={alertsByJobId?.get(item.id) || []} onAlertResolve={onAlertResolve} onAlertRetry={onAlertRetry} onAlertNavigate={onAlertNavigate} onAlertAction={onAlertAction} />
+                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} alerts={alertsByJobId?.get(item.id) || []} onAlertResolve={onAlertResolve} onAlertRetry={onAlertRetry} onAlertNavigate={onAlertNavigate} onAlertAction={onAlertAction} businessUnit={businessUnitsByCustomerId?.get(item.customer_id || "")} />
                       ))}
                     </div>
                   )}
@@ -414,6 +419,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                           onAlertRetry={onAlertRetry}
                           onAlertNavigate={onAlertNavigate}
                           onAlertAction={onAlertAction}
+                          businessUnit={businessUnitsByCustomerId?.get(item.customer_id || "")}
                         />
                       </div>
                     );
@@ -448,6 +454,7 @@ function WeekCard({
   onAlertRetry,
   onAlertNavigate,
   onAlertAction,
+  businessUnit,
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -468,6 +475,10 @@ function WeekCard({
   onAlertRetry?: (alert: DispatchAlert) => void;
   onAlertNavigate?: (alert: DispatchAlert) => void;
   onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
+  // 2026-05-04: Business unit info for the card (FIX vs Carnes). If present,
+  // renders a small pill badge on the card. Optional so other consumers
+  // (Tech mobile) don't have to wire it.
+  businessUnit?: BusinessUnitLite | null;
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -535,8 +546,8 @@ function WeekCard({
         </div>
       )}
       <div className={cn("flex-1 min-w-0 px-1.5 py-1 flex flex-col gap-0.5 overflow-hidden", isTiny && "py-0.5")}>
-        {/* Row 1: route order + checkbox/emoji + customer name + travel badge + initials */}
-        <div className="flex items-center gap-1 min-w-0">
+        {/* Row 1: route order + checkbox/emoji + customer name + travel badge + initials + BU badge */}
+        <div className="flex items-center gap-1 min-w-0 flex-wrap">
           {routeInfo && visibleFields?.travelTime !== false && (
             <span className="text-[8px] font-bold bg-white/30 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center shrink-0">
               {routeInfo.order}
@@ -555,6 +566,19 @@ function WeekCard({
           <span className="text-[11px] font-semibold text-white flex-1 break-words leading-tight">
             {visibleFields?.customer === false ? (number || tag) : (item.customer_name || "No Name")}
           </span>
+          {/* 2026-05-04: Business unit pill badge. Small inline tag showing FIX or C&S.
+              Uses tinted background colors: carnes=blue/neutral, fix-construction=orange/amber.
+              Matches the intake badge styling from OperationsDeskV2. Hidden if no BU resolved. */}
+          {businessUnit && (
+            <span className={cn(
+              "text-[8px] font-bold rounded-full px-1.5 py-0.5 shrink-0 whitespace-nowrap",
+              businessUnit.slug === "fix-construction"
+                ? "bg-cyan-400/80 text-slate-950"
+                : "bg-blue-400/80 text-slate-950"
+            )}>
+              {businessUnit.slug === "fix-construction" ? "FIX" : "C&S"}
+            </span>
+          )}
           {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
             <span className={cn("text-[8px] font-bold text-white px-1 py-0 rounded flex items-center gap-0.5 shrink-0", travelColor)}>
               <Car className="h-2.5 w-2.5" />
@@ -640,6 +664,7 @@ function WeekCard({
           onAlertRetry={onAlertRetry}
           onAlertNavigate={onAlertNavigate}
           onAlertAction={onAlertAction}
+          businessUnit={businessUnit}
         />
       </HoverCardContent>
     </HoverCard>
@@ -721,6 +746,7 @@ function CardPopover({
   onAlertRetry,
   onAlertNavigate,
   onAlertAction,
+  businessUnit,
 }: {
   item: BoardItem;
   techColor: string;
@@ -734,6 +760,9 @@ function CardPopover({
   onAlertRetry?: (alert: DispatchAlert) => void;
   onAlertNavigate?: (alert: DispatchAlert) => void;
   onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
+  // 2026-05-04: Business unit for the popover header. If present, shows the
+  // full company name (FIX Construction or Carnes and Sons) next to the job/est number.
+  businessUnit?: BusinessUnitLite | null;
 }) {
   const navigate = useNavigate();
   const openQuickQuote = () => {
@@ -830,11 +859,20 @@ function CardPopover({
       {/* Header bar */}
       <div className="px-3 py-2 flex items-center gap-2" style={{ backgroundColor: techColor }}>
         <Icon className="h-4 w-4 text-white/90" />
-        <span className="text-sm font-bold text-white flex-1 truncate">
-          {number || `${emoji} ${tag}`}
-        </span>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-bold text-white block truncate">
+            {number || `${emoji} ${tag}`}
+          </span>
+          {/* 2026-05-04: Business unit label in popover header. Shows full company name
+              (FIX Construction or Carnes and Sons) so dispatchers see the BU at a glance. */}
+          {businessUnit && (
+            <span className="text-[9px] text-white/75 block truncate font-medium">
+              {businessUnit.display_name}
+            </span>
+          )}
+        </div>
         {item.work_status && (
-          <span className="text-[9px] bg-white/25 text-white px-1.5 py-0.5 rounded font-medium uppercase">
+          <span className="text-[9px] bg-white/25 text-white px-1.5 py-0.5 rounded font-medium uppercase shrink-0">
             {item.work_status}
           </span>
         )}
