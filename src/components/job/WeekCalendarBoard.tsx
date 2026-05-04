@@ -858,6 +858,109 @@ function CardPopover({
     { label: "3–5p", start: "15:00", end: "17:00" },
   ];
 
+  // 2026-05-04 v3: Send-to-subcontractor is now a Dialog flow per Clint:
+  //   Click Send to subcontractor →
+  //   Dialog opens → backend creates the link → iframe shows the public
+  //     /subcontractor/:token page so dispatcher sees what the sub will see →
+  //   Dispatcher picks a contractor from the dropdown (active employees with
+  //     phone numbers — Tim, Cedric, App, etc.) →
+  //   Hit Send → SMS goes out via send-sms with the link in the body, routed
+  //     through the customer's business unit so it sends from the right line.
+  //   Copy URL fallback if the dispatcher wants to text it manually elsewhere.
+  const [subDialogOpen, setSubDialogOpen] = useState(false);
+  const [subRecipient, setSubRecipient] = useState<string>(""); // employee.id
+  const [subPreviewToken, setSubPreviewToken] = useState<string | null>(null);
+  const [subPreviewError, setSubPreviewError] = useState<string | null>(null);
+  const subPreviewUrl = subPreviewToken
+    ? `${window.location.origin}/subcontractor/${subPreviewToken}`
+    : null;
+  const subRecipients = (employeesList || [])
+    .filter((emp: any) => emp.is_active && emp.phone && ["tech", "supervisor", "installer"].includes(emp.role))
+    .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
+  const subRecipientEmp = subRecipients.find((e: any) => e.id === subRecipient);
+
+  // Auto-create the link when the dialog opens. Uses the same record-aware
+  // RPC as the calendar popover so estimates work too. We create the link
+  // BEFORE the dispatcher hits Send so the iframe preview is meaningful.
+  // If they cancel, the link still exists in the DB but harmless — dispatcher
+  // can revoke from /admin if needed.
+  const generateSubLink = useMutation({
+    mutationFn: async () => {
+      const equipmentSummary = [
+        (item as any).brand,
+        (item as any).tonnage ? `${(item as any).tonnage} ton` : null,
+        (item as any).system_type,
+      ].filter(Boolean).join(" · ") || null;
+      const { data, error } = await (supabase as any).rpc("create_subcontractor_link", {
+        p_record_id: item.id,
+        p_record_type: item.item_type,
+        p_subcontractor_name: null,
+        p_subcontractor_phone: null,
+        p_scope: item.description || null,
+        p_equipment_summary: equipmentSummary,
+        p_required_photo_slots: ["arrival", "before", "equipment", "after", "final"],
+        p_expires_days: 7,
+      });
+      if (error) throw error;
+      if (!data?.token) throw new Error("RPC returned no token");
+      return data as { token: string; path?: string };
+    },
+    onSuccess: (data) => {
+      setSubPreviewToken(data.token);
+      setSubPreviewError(null);
+    },
+    onError: (error) => {
+      setSubPreviewError(error instanceof Error ? error.message : "Could not generate link.");
+    },
+  });
+
+  // Send SMS to chosen recipient with the link embedded.
+  const sendSubLinkSms = useMutation({
+    mutationFn: async () => {
+      if (!subRecipientEmp || !subPreviewUrl) throw new Error("Pick a contractor first");
+      const phone = subRecipientEmp.phone;
+      const body = `Job info: ${item.customer_name || "Customer"} — ${item.address || "see link"}\n${subPreviewUrl}`;
+      const { error } = await (supabase as any).functions.invoke("send-sms", {
+        body: {
+          to: phone,
+          body,
+          // Caller's BU isn't known on the calendar card (jobs/estimates don't
+          // carry business_unit_id directly); send-sms will fall back to the
+          // customer's primary_business_unit_id which we now stamp from the
+          // action_item metadata via the trigger added today. Good enough.
+          source: "subcontractor-link-share",
+          isManual: true,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Link sent to subcontractor", {
+        description: `Texted ${subRecipientEmp?.name || "contractor"} the job info.`,
+      });
+      setSubDialogOpen(false);
+    },
+    onError: (error) => {
+      toast.error("Could not send", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    },
+  });
+
+  // Reset state + auto-generate link when dialog opens.
+  useEffect(() => {
+    if (subDialogOpen && !subPreviewToken && !generateSubLink.isPending && !subPreviewError) {
+      generateSubLink.mutate();
+    }
+    if (!subDialogOpen) {
+      // Reset on close so re-opening regenerates a fresh link.
+      setSubPreviewToken(null);
+      setSubPreviewError(null);
+      setSubRecipient("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subDialogOpen]);
+
   // 2026-05-04: One-click "Send to subcontractor" button. Calls the unified
   // create_subcontractor_job_link RPC (now supporting both jobs and estimates)
   // with sensible defaults so dispatchers can hand a job/estimate to a sub
@@ -1105,25 +1208,137 @@ function CardPopover({
           className="h-8 w-full justify-center"
         />
 
-        {/* 2026-05-04: Send-to-subcontractor button. Works for jobs and estimates
-            identically. One click creates a public link via the unified
-            create_subcontractor_job_link RPC and copies it to the clipboard so
-            the dispatcher can paste into a text to their sub. Sub gets address +
-            customer + scope + photo upload slots; no login required. */}
+        {/* 2026-05-04 v3: Send-to-subcontractor opens the Dialog flow described
+            above. Click → preview the public sub page in an iframe → pick the
+            contractor from the dropdown → Send. */}
         <Button
           size="sm"
           variant="outline"
           className="w-full gap-1.5 h-8"
-          onClick={() => createSubcontractorLink.mutate()}
-          disabled={createSubcontractorLink.isPending}
+          onClick={() => setSubDialogOpen(true)}
         >
-          {createSubcontractorLink.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <HardHat className="h-3.5 w-3.5" />
-          )}
-          {createSubcontractorLink.isPending ? "Creating link…" : "Send to subcontractor"}
+          <HardHat className="h-3.5 w-3.5" />
+          Send to subcontractor
         </Button>
+
+        <Dialog open={subDialogOpen} onOpenChange={setSubDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Send to subcontractor</DialogTitle>
+              <DialogDescription>
+                Preview what the sub will see, pick a contractor, then send the link.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Preview pane */}
+              <div className="rounded-md border bg-muted/30">
+                <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Preview
+                  </span>
+                  {subPreviewUrl && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[260px]">
+                        {subPreviewUrl}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(subPreviewUrl);
+                            toast.success("URL copied");
+                          } catch {
+                            toast.info("Could not access clipboard");
+                          }
+                        }}
+                      >
+                        Copy URL
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {generateSubLink.isPending && (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Generating link…</span>
+                  </div>
+                )}
+                {subPreviewError && (
+                  <div className="space-y-2 p-4 text-sm">
+                    <p className="text-destructive font-medium">Could not generate link.</p>
+                    <p className="text-xs text-muted-foreground">{subPreviewError}</p>
+                    <Button size="sm" variant="outline" onClick={() => generateSubLink.mutate()}>
+                      Try again
+                    </Button>
+                  </div>
+                )}
+                {subPreviewUrl && !generateSubLink.isPending && (
+                  <iframe
+                    title="Subcontractor preview"
+                    src={subPreviewUrl}
+                    className="h-[420px] w-full bg-slate-950"
+                  />
+                )}
+              </div>
+
+              {/* Recipient picker */}
+              <div>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Assign contractor
+                </Label>
+                <select
+                  value={subRecipient}
+                  onChange={(e) => setSubRecipient(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="">— Pick a contractor —</option>
+                  {subRecipients.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} · {emp.phone}
+                    </option>
+                  ))}
+                </select>
+                {subRecipients.length === 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No active techs/installers with phone numbers in your roster. Add one in admin → Roster.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSubDialogOpen(false)}
+                disabled={sendSubLinkSms.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => sendSubLinkSms.mutate()}
+                disabled={!subRecipient || !subPreviewUrl || sendSubLinkSms.isPending}
+                className="gap-2"
+              >
+                {sendSubLinkSms.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <HardHat className="h-4 w-4" />
+                    Send
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* 2026-05-04: Reschedule button — opens a focused dialog to pick a new
             date, time block, and (optionally) reassign tech. No need to leave
