@@ -56,16 +56,37 @@ function isGoogleRelayInbound(fromDigits: string, body: string, settings: Record
 function addressReviewMetadata(extracted: any, geo: any | null) {
   const address = String(extracted?.address || "").trim();
   if (!address) return {};
-  const missingCityOrZip = !String(extracted?.city || geo?.city || "").trim() || !String(extracted?.zip || geo?.zip || "").trim();
+
+  // 2026-05-03 fix: original logic flagged "needs verification" whenever
+  // the AI extraction missed ZIP, EVEN IF Google had already standardized
+  // the address with high confidence. Result: Sandy Rice (action #102c6361)
+  // was flagged "Customer did not give enough city/ZIP detail" while the
+  // metadata literally contained Google's standardized "450 Wallace St,
+  // Seguin, TX 78155, USA" at confidence 0.95.
+  //
+  // New rule: if Google standardized the address with confidence ≥ 0.8,
+  // accept it. Google's standardized string contains city + state + ZIP
+  // even when our AI couldn't parse them out as separate fields, and the
+  // standardized form is what dispatch actually uses for routing.
   const lowConfidence = !geo || typeof geo.confidence !== "number" || geo.confidence < 0.8;
-  if (!missingCityOrZip && !lowConfidence) {
+
+  if (!lowConfidence) {
     return {
       address_verified: true,
       address_confidence: "high",
-      address_verification_confidence: geo?.confidence ?? null,
-      verified_address: geo?.standardized || null,
+      address_verification_confidence: geo.confidence,
+      verified_address: geo.standardized || null,
     };
   }
+
+  // Low Google confidence (or no Google match at all) → flag for human
+  // review. Distinguish "missing fields from extraction" (more actionable
+  // — office user can ask the customer for the ZIP) from "ambiguous Google
+  // result" (office user should pick the right candidate).
+  const city = String(extracted?.city || geo?.city || "").trim();
+  const zip = String(extracted?.zip || geo?.zip || "").trim();
+  const missingCityOrZip = !city || !zip;
+
   return {
     address_needs_verification: true,
     address_confidence: lowConfidence ? "low" : "unknown",

@@ -564,8 +564,13 @@ export function buildLeadWorkflowCard(lead: any, templateOverrides?: WorkflowTem
 }
 
 function actionItemStep(item: any) {
-  const category = normalized(item.category);
-  const metadata = (item.metadata || {}) as any;
+  // 2026-05-03 hardening: action_item rows ingested from Jarvis or external
+  // syncs sometimes have NULL category/priority. normalized() crashes calling
+  // .toLowerCase() on undefined, taking down the whole NowHQ render. Optional
+  // chaining + nullish coalescing returns "" for missing fields, which falls
+  // through to the safe default branch.
+  const category = normalized(item?.category ?? "");
+  const metadata = (item?.metadata || {}) as any;
 
   if (metadata.requires_property_selection || category === "address_verify") return "review";
   if (["new_appointment", "booking_confirm"].includes(category)) return "convert";
@@ -575,9 +580,10 @@ function actionItemStep(item: any) {
 }
 
 function actionItemGroup(item: any): WorkflowGroup {
-  const category = normalized(item.category);
-  const priority = normalized(item.priority);
-  const metadata = (item.metadata || {}) as any;
+  // Same hardening as actionItemStep — see comment above.
+  const category = normalized(item?.category ?? "");
+  const priority = normalized(item?.priority ?? "");
+  const metadata = (item?.metadata || {}) as any;
   if (priority === "critical" || priority === "high") return "ready";
   if (metadata.requires_property_selection || category === "address_verify") return "ready";
   if (["create_customer", "new_appointment", "booking_confirm", "schedule_change", "reschedule", "eta_request", "confirmation", "tech_field_update"].includes(category)) return "ready";

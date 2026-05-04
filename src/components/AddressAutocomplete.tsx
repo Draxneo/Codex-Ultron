@@ -30,12 +30,30 @@ export function AddressAutocomplete({ value, onChange, placeholder = "Start typi
 
   useEffect(() => { setInputValue(value); }, [value]);
 
-  // Initialize Google Places services
+  // Initialize Google Places services.
+  // 2026-05-03 fix: loadGoogleMaps() may resolve before the script's globals
+  // are actually attached to window in slow-network conditions. Without the
+  // typeof + optional-chaining guard, accessing google.maps.places.X throws
+  // "Cannot read properties of undefined (reading 'AutocompleteService')"
+  // and the component crashes the whole admin page. Also added isMounted
+  // so we don't poke the ref after unmount and silently log load errors
+  // instead of leaving an unhandled rejection in the console.
   useEffect(() => {
-    loadGoogleMaps().then(() => {
-      autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
-      readyRef.current = true;
-    });
+    let isMounted = true;
+    loadGoogleMaps()
+      .then(() => {
+        if (!isMounted) return;
+        if (typeof google === "undefined" || !google.maps?.places?.AutocompleteService) {
+          console.warn("[AddressAutocomplete] google.maps.places not available after load");
+          return;
+        }
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        readyRef.current = true;
+      })
+      .catch((err) => {
+        console.warn("[AddressAutocomplete] Google Maps failed to load:", err);
+      });
+    return () => { isMounted = false; };
   }, []);
 
   // Close on outside click
