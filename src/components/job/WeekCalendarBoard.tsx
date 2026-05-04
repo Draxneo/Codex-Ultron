@@ -506,12 +506,14 @@ function WeekCard({
       )}
       style={{ backgroundColor: techColor }}
     >
-      {/* 2026-05-04: Per-card alert badge — overlays the top-right corner of
-          every calendar card. Renders nothing when there are no alerts.
-          Click + hover open a popover with action buttons (Resolve, Retry,
-          View). This is what replaces Now HQ's separate card surface. */}
+      {/* 2026-05-04: Per-card alert badge. Originally at top-0.5 right-0.5
+          but that sat on top of the tech avatar/initials circle and (when
+          we wire avatar photos) the tech picture. Moved to bottom-right
+          so the badge stays clearly visible without ever covering the
+          tech identity. Hover/click opens a popover with action buttons
+          (Resolve, Retry, View). Replaces Now HQ's separate card surface. */}
       {alerts.length > 0 && (
-        <div className="absolute top-0.5 right-0.5 z-30" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute bottom-0.5 right-0.5 z-30" onClick={(e) => e.stopPropagation()}>
           <DispatchCardAlertBadge
             alerts={alerts}
             size="sm"
