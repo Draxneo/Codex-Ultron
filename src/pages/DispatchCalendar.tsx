@@ -33,6 +33,7 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useCalendarJobs } from "@/hooks/useJobs";
 import { useJobBusinessUnit } from "@/hooks/useJobBusinessUnit";
+import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { errorMessage } from "@/lib/errorMessage";
 
 type CalendarItem = {
@@ -185,6 +186,9 @@ export default function DispatchCalendar() {
   }, [calendarItems]);
 
   const { data: businessUnitsByCustomerId } = useJobBusinessUnit(visibleCustomerIds.length > 0 ? visibleCustomerIds : undefined);
+  // 2026-05-04: Comfort Club + other customer tags for calendar cards.
+  // Parallel to businessUnitsByCustomerId — maps customer_id → string[].
+  const { data: tagsByCustomerId } = useCustomerTags(visibleCustomerIds.length > 0 ? visibleCustomerIds : undefined);
 
   const currentDayCount = filteredItems.filter((item) => item.scheduled_date && isSameDay(parseISO(item.scheduled_date), currentDay)).length;
   const activeFilterLabel = FILTERS.find((option) => option.value === filter)?.label || "All";
@@ -345,6 +349,10 @@ export default function DispatchCalendar() {
                    to BU (FIX vs Carnes). Fetched after calendarItems are computed,
                    so only visible/filtered items trigger the BU lookup. */
                 businessUnitsByCustomerId={businessUnitsByCustomerId}
+                /* 2026-05-04: Customer tags map for calendar cards. Maps customer_id
+                   to string[] (e.g., ["Comfort Club"]). Renders on WeekCard + CardPopover
+                   when visibleFields?.customerTags is not false. */
+                tagsByCustomerId={tagsByCustomerId}
               />
             </>
           )}

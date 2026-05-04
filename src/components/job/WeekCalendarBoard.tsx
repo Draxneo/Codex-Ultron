@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from "react";
 import { format, isSameDay, isToday, parseISO, startOfWeek, addDays } from "date-fns";
-import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, HardHat, Loader2, Zap } from "lucide-react";
+import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, HardHat, Loader2, Zap, Crown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { BusinessUnitLite } from "@/hooks/useJobBusinessUnit";
@@ -135,9 +135,13 @@ interface WeekCalendarBoardProps {
   // Allows WeekCard to render FIX vs C&S badges. Optional so other consumers
   // (Tech mobile) don't have to wire it unless they want BU tags.
   businessUnitsByCustomerId?: Map<string, BusinessUnitLite>;
+  // 2026-05-04: Customer tags map for calendar cards. Maps customer_id → string[].
+  // Allows WeekCard + CardPopover to render "Comfort Club" and other tags.
+  // Optional so other consumers (Tech mobile) don't have to wire it unless they want tags.
+  tagsByCustomerId?: Map<string, string[]>;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate, onAlertAction, businessUnitsByCustomerId }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate, onAlertAction, businessUnitsByCustomerId, tagsByCustomerId }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
@@ -424,6 +428,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                           onAlertNavigate={onAlertNavigate}
                           onAlertAction={onAlertAction}
                           businessUnit={businessUnitsByCustomerId?.get(item.customer_id || "")}
+                          tags={tagsByCustomerId?.get(item.customer_id || "") || []}
                         />
                       </div>
                     );
@@ -459,6 +464,7 @@ function WeekCard({
   onAlertNavigate,
   onAlertAction,
   businessUnit,
+  tags = [],
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -483,6 +489,10 @@ function WeekCard({
   // renders a small pill badge on the card. Optional so other consumers
   // (Tech mobile) don't have to wire it.
   businessUnit?: BusinessUnitLite | null;
+  // 2026-05-04: Customer tags (e.g., "Comfort Club"). Rendered as pills when
+  // visibleFields?.customerTags is not false. Optional — defaults to empty array
+  // so Tech mobile doesn't have to wire it.
+  tags?: string[];
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -583,6 +593,23 @@ function WeekCard({
               {businessUnit.slug === "fix-construction" ? "FIX" : "C&S"}
             </span>
           )}
+          {/* 2026-05-04: Customer tags pills. Gated by visibleFields?.customerTags.
+              Renders "Comfort Club" with a gold Crown icon, other tags as neutral. */}
+          {visibleFields?.customerTags !== false && tags && tags.length > 0 && (
+            <>
+              {tags.includes("Comfort Club") && (
+                <span className="flex items-center gap-0.5 text-[8px] font-bold rounded-full px-1.5 py-0.5 shrink-0 whitespace-nowrap bg-amber-400/80 text-slate-950">
+                  <Crown className="h-2.5 w-2.5" />
+                  CC
+                </span>
+              )}
+              {tags.filter(t => t !== "Comfort Club").map((tag) => (
+                <span key={tag} className="text-[8px] font-bold rounded-full px-1.5 py-0.5 shrink-0 whitespace-nowrap bg-white/20 text-white">
+                  {tag.substring(0, 3).toUpperCase()}
+                </span>
+              ))}
+            </>
+          )}
           {routeInfo?.travelMin != null && visibleFields?.travelTime !== false && (
             <span className={cn("text-[8px] font-bold text-white px-1 py-0 rounded flex items-center gap-0.5 shrink-0", travelColor)}>
               <Car className="h-2.5 w-2.5" />
@@ -669,6 +696,7 @@ function WeekCard({
           onAlertNavigate={onAlertNavigate}
           onAlertAction={onAlertAction}
           businessUnit={businessUnit}
+          tags={tags}
         />
       </HoverCardContent>
     </HoverCard>
@@ -751,6 +779,7 @@ function CardPopover({
   onAlertNavigate,
   onAlertAction,
   businessUnit,
+  tags = [],
 }: {
   item: BoardItem;
   techColor: string;
@@ -767,6 +796,9 @@ function CardPopover({
   // 2026-05-04: Business unit for the popover header. If present, shows the
   // full company name (FIX Construction or Carnes and Sons) next to the job/est number.
   businessUnit?: BusinessUnitLite | null;
+  // 2026-05-04: Customer tags (e.g., "Comfort Club"). Rendered prominently
+  // under customer name when visibleFields?.customerTags is not false.
+  tags?: string[];
 }) {
   const navigate = useNavigate();
   const openQuickQuote = () => {
@@ -1177,6 +1209,23 @@ function CardPopover({
         {visibleFields?.customer !== false && <div className="text-sm font-semibold text-foreground">
           {item.customer_name || "No Name"}
         </div>}
+
+        {/* Customer Tags */}
+        {visibleFields?.customerTags !== false && tags && tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {tags.includes("Comfort Club") && (
+              <span className="flex items-center gap-1 text-[11px] font-bold rounded-full px-2 py-1 bg-amber-400/80 text-slate-950">
+                <Crown className="h-3 w-3" />
+                Comfort Club
+              </span>
+            )}
+            {tags.filter(t => t !== "Comfort Club").map((tag) => (
+              <span key={tag} className="text-[11px] font-bold rounded-full px-2 py-1 bg-slate-200 text-slate-950">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Address */}
         {item.address && visibleFields?.street !== false && (
