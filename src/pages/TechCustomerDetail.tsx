@@ -5,7 +5,7 @@
  * Reuses existing hooks; deeper editing happens on dispatch UI.
  */
 
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, MapPin, Phone, MessageSquare, Calendar, Wrench, ChevronRight } from "lucide-react";
 import { useCustomer } from "@/hooks/useCustomers";
 import { useCustomerJobs } from "@/hooks/useCustomerHistory";
