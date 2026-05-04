@@ -317,4 +317,21 @@ function SmsFilteredList({
       <ScrollArea className="flex-1">
         <div className={cn(padding, itemSpacing)}>
           {conversations.length === 0 ? (
-            <p className="text-xs text-muted-foregr
+            <p className="text-xs text-muted-foreground text-center py-8">
+              {empty ? "No conversations" : "No conversations in this filter"}
+            </p>
+          ) : (
+            conversations.map((c) => (
+              <SmsConversationListItem
+                key={c.threadKey}
+                conversation={c}
+                isSelected={selectedThreadKey === c.threadKey}
+                onSelect={() => onSelect(c.threadKey)}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}

@@ -186,4 +186,22 @@ export function PhotoLocationMap({ jobId, jobAddress }: { jobId: string; jobAddr
         <CardTitle className="text-sm flex items-center gap-2">
           <Camera className="h-4 w-4" />
           Photo Locations
-          {photos && photos.length > 0
+          {photos && photos.length > 0 && (
+            <span className="text-xs font-normal text-muted-foreground">
+              ({photos.length} geotagged)
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div ref={mapContainer} className="h-[250px] w-full rounded-b-lg" />
+        {photos && photos.length === 0 && (
+          <div className="px-4 py-3 text-xs text-muted-foreground flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5" />
+            No geotagged photos yet — showing job address only
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

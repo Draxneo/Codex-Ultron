@@ -494,6 +494,15 @@ function buildLiveIntakeFields(
   const timing = bookingSuggestion?.preferredTiming || detectPreferredTiming(text);
   const issue = bookingSuggestion?.action.description || text;
   const verifiedAddress = addressVerification?.standardized || addressVerification?.address || customerAddress(customer);
+
+  // Extract call data for tenant/role and alternate contact fields
+  const extraction = getConversationExtraction(selected);
+  const customerRole = extraction?.customer_role || "";
+  const altName = extraction?.alternate_contact_name || "";
+  const altRelationship = extraction?.alternate_contact_relationship || "";
+  const altPhone = extraction?.alternate_contact_phone || "";
+  const altContactDisplay = [altName, altRelationship ? `(${altRelationship})` : "", altPhone].filter(Boolean).join(" ");
+
   const fields: LiveIntakeField[] = [
     {
       label: "Customer",
@@ -551,6 +560,16 @@ function buildLiveIntakeFields(
       label: "Default owner",
       value: bookingSuggestion?.defaultOwner || "",
       status: bookingSuggestion ? "captured" : "listening",
+    },
+    {
+      label: "Tenant?",
+      value: customerRole ? (customerRole === "unknown" ? "" : customerRole.charAt(0).toUpperCase() + customerRole.slice(1)) : "",
+      status: customerRole && customerRole !== "unknown" ? "captured" : "listening",
+    },
+    {
+      label: "Also present",
+      value: altContactDisplay,
+      status: altName || altRelationship || altPhone ? "captured" : "listening",
     },
   ];
 
@@ -2967,7 +2986,7 @@ function ActionPanel({
                                 <CheckCircle2 className="h-4 w-4" />
                                 Booked
                               </>
-                            ) : (
+                            ) : bookingSuggestion ? (
                               <>
                                 <CalendarDays className="h-4 w-4" />
                                 {bookingSuggestion.type === "book_estimate"
@@ -2975,6 +2994,11 @@ function ActionPanel({
                                   : bookingSuggestion.type === "book_maintenance"
                                     ? "Book Maintenance"
                                     : "Book Service"}
+                              </>
+                            ) : (
+                              <>
+                                <CalendarDays className="h-4 w-4" />
+                                Book Service
                               </>
                             )}
                           </Button>
@@ -3784,3 +3808,212 @@ export default function OperationsDeskV2() {
         };
       })
       // 2026-05-04 fix: only SMS gets the employee filter (so employee↔
+      // employee text chitchat doesn't clog Intake). Inbound CALLS from an
+      // employee number (e.g. an employee dialing the main line to test, ask
+      // for help, or report a problem) always show — Clint wants every call
+      // visible regardless of who dialed, with full transcript + JARVIS.
+      .filter((item) => item.kind === "call" || !isEmployeeConversation(item))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => {
+      const haystack = [
+        item.name,
+        item.phone,
+        normalizeLast10(item.phone),
+        item.summary,
+        item.detail,
+        getConversationContextText(item),
+        item.status,
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [callConversations, smsConversations, canonicalBySource, search, sharedStatusByThread]);
+
+  const selectConversation = (item: DeskConversation) => {
+    setSelected(item);
+  };
+
+  const handleConversationHandled = (conversationId: string) => {
+    setSelected((current) => (current?.id === conversationId ? null : current));
+  };
+
+  const clearConversationForTesting = async (item: DeskConversation) => {
+    if (role !== "admin") {
+      toast({ title: "Admins only", description: "Only an admin can clear intake cards while testing.", variant: "destructive" });
+      return;
+    }
+    if (!user?.id) {
+      toast({ title: "Sign in required", description: "We need your user account so the cleanup stamp is accountable." });
+      return;
+    }
+    if (clearingIds.has(item.id)) return;
+
+    setClearingIds((current) => new Set(current).add(item.id));
+    const phoneLast10 = normalizeLast10(item.phone);
+    const canonical = item.canonical || null;
+    const latestCall = item.kind === "call" ? (item.raw as CallConversation).lastCall : null;
+    const smsConversation = item.kind === "sms" ? item.raw as SmsConversation : null;
+    const communicationId = item.kind === "call" ? latestCall?.id : smsConversation?.lastMessage.id;
+    const clearedBy = user.email || "Admin";
+
+    try {
+      if (item.kind === "sms") {
+        const threadKey = smsConversation?.threadKey || item.phone;
+        await markSmsAsRead(threadKey);
+        await setSmsThreadStatus(threadKey, "done");
+      } else {
+        await markCallsAsRead((item.raw as CallConversation).threadKey || item.phone);
+      }
+
+      const { data, error } = await (supabase as any)
+        .rpc("mark_intake_communication_handled", {
+          _channel: canonical?.intake_channel || item.kind,
+          _phone_number: item.phone,
+          _handled_by_name: clearedBy,
+          _source_table: canonical?.source_table || (item.kind === "call" ? "call_log" : "sms_log"),
+          _source_event_id: canonical?.source_id || communicationId || null,
+          _metadata: {
+            reason: "admin_testing_clear",
+            conversation_id: item.id,
+            communication_id: communicationId || null,
+            phone_last10: phoneLast10 || null,
+            summary: item.summary || null,
+            cleared_by_user_id: user.id,
+            cleared_by_name: clearedBy,
+            cleared_at: new Date().toISOString(),
+          },
+        });
+      if (error) throw error;
+      if (data && data.ok === false) throw new Error(data.reason || "The intake card was not cleared.");
+
+      setSelected((current) => (current?.id === item.id ? null : current));
+      queryClient.invalidateQueries({ queryKey: ["call_log"] });
+      queryClient.invalidateQueries({ queryKey: ["sms_log"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-communications"] });
+      queryClient.invalidateQueries({ queryKey: ["intake-thread-statuses"] });
+      toast({ title: "Intake card cleared", description: "The call/text history stayed saved, but this card is out of the testing queue." });
+    } catch (error: any) {
+      toast({
+        title: "Could not clear card",
+        description: error?.message || "The intake card stayed in the queue.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!selected) return;
+    // Refresh the selected conversation reference so the right pane shows the
+    // latest data. Match priority: exact id (cheapest), then thread key
+    // (survives lastMessage-id changes), then last-10 digits + kind (survives
+    // contact-resolution rebuilds).
+    const refreshedSelection =
+      conversations.find((item) => item.id === selected.id) ||
+      conversations.find((item) => intakeThreadKeyForDeskItem(item) === intakeThreadKeyForDeskItem(selected)) ||
+      conversations.find((item) => item.kind === selected.kind && normalizeLast10(item.phone) === normalizeLast10(selected.phone));
+
+    if (refreshedSelection && refreshedSelection !== selected) {
+      setSelected(refreshedSelection);
+    }
+    // 2026-05-03 fix: do NOT setSelected(null) when the conversation isn't
+    // found in the freshly-computed list. That branch was kicking users out
+    // of the active thread whenever an inbound SMS triggered a list rebuild
+    // that briefly didn't include their selected conversation (race between
+    // realtime INSERT, smsConversations recompute, and contact resolution).
+    // Intentional clears go through clearConversationForTesting() and
+    // handleConversationHandled() which set null explicitly. Letting the
+    // selected ref go stale for a beat is far better than dumping the user
+    // back to "no conversation selected" mid-typing.
+  }, [conversations, selected]);
+
+  useEffect(() => {
+    const phone = searchParams.get("phone");
+    if (!phone || conversations.length === 0) return;
+    const digits = normalizeLast10(phone);
+    const match = conversations.find((item) => normalizeLast10(item.phone) === digits);
+    if (match && selected?.id !== match.id) {
+      selectConversation(match);
+    }
+  }, [conversations, searchParams, selected?.id]);
+
+  useEffect(() => {
+    localStorage.setItem("intake_tutorial_mode", String(tutorialMode));
+  }, [tutorialMode]);
+
+  const loading = callsLoading || smsLoading || unifiedLoading;
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <AppHeader />
+      <div className="border-b bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">Intake HQ</h1>
+              <Badge variant="secondary">Communication Desk</Badge>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Handle calls and texts here. Now HQ keeps track of what needs doing next.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+              <Switch
+                checked={tutorialMode}
+                onCheckedChange={setTutorialMode}
+                aria-label="Toggle intake tutorial mode"
+              />
+              <span className="text-sm font-medium">Tutorial</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate("/now")}>
+              <Zap className="h-4 w-4" />
+              Now HQ
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/dispatch")}>
+              <CalendarDays className="h-4 w-4" />
+              Dispatch HQ
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)] overflow-hidden">
+        <ConversationList
+          items={conversations}
+          selectedId={selected?.id}
+          businessUnits={businessUnits}
+          isAdmin={role === "admin"}
+          loading={loading}
+          readModelError={unifiedError}
+          search={search}
+          tutorialMode={tutorialMode}
+          onSearch={setSearch}
+          onSelect={selectConversation}
+          onClearForTesting={clearConversationForTesting}
+          clearingIds={clearingIds}
+        />
+        <CustomerWorkspace
+          key={selected ? intakeThreadKeyForDeskItem(selected) : "empty"}
+          selected={selected}
+          tutorialMode={tutorialMode}
+          smsSending={smsSending}
+          onSendSms={sendSms}
+          onMarkSmsRead={markSmsAsRead}
+          onMarkCallRead={markCallsAsRead}
+          onSetSmsThreadStatus={setSmsThreadStatus}
+          onHandled={handleConversationHandled}
+        />
+      </div>
+
+      <NewJobDialog open={newJobOpen} onOpenChange={setNewJobOpen} />
+    </div>
+  );
+}

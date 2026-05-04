@@ -288,6 +288,10 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
     requested_eta: firstNonEmpty(extracted.requested_eta),
     requested_schedule_change: firstNonEmpty(extracted.requested_schedule_change, extracted.scheduling_preference),
     cancel_reason: firstNonEmpty(extracted.cancel_reason),
+    customer_role: firstNonEmpty(extracted.customer_role),
+    alternate_contact_name: firstNonEmpty(extracted.alternate_contact_name),
+    alternate_contact_relationship: firstNonEmpty(extracted.alternate_contact_relationship),
+    alternate_contact_phone: firstNonEmpty(extracted.alternate_contact_phone),
     target_job_id: activeWork?.activeJob?.id || null,
     target_estimate_id: activeWork?.activeEstimate?.id || null,
   };

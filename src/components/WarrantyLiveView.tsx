@@ -111,4 +111,4 @@ export default function WarrantyLiveView({ open, onOpenChange, liveViewUrl, stat
       </DialogContent>
     </Dialog>
   );
-}
+}

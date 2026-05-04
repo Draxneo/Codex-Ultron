@@ -93,6 +93,23 @@ const extractTool = {
           type: "string",
           description: "If a specific time or arrival window was discussed (e.g. '10am', '10-12', 'morning'), return start time in 24h HH:MM format. For windows like '10-12' return '10:00'. For 'morning' return '09:00', 'afternoon' '13:00', 'evening' '16:00'. Empty if no time discussed.",
         },
+        customer_role: {
+          type: "string",
+          enum: ["owner", "tenant", "manager", "other", "unknown"],
+          description: "Is the caller the property owner, tenant, property manager, or other? Set to 'unknown' if not stated.",
+        },
+        alternate_contact_name: {
+          type: "string",
+          description: "Name of person who will be present at the property if not the caller (spouse, manager, etc.). Empty if none mentioned.",
+        },
+        alternate_contact_relationship: {
+          type: "string",
+          description: "Relationship of the alternate contact to the caller or property (e.g. 'husband', 'wife', 'manager', 'tenant', 'neighbor'). Empty if none mentioned.",
+        },
+        alternate_contact_phone: {
+          type: "string",
+          description: "Phone number of the alternate contact if mentioned during the call. Formatted (XXX) XXX-XXXX. Empty if none mentioned.",
+        },
         summary: {
           type: "string",
           description:
@@ -290,6 +307,11 @@ SCHEDULE EXTRACTION (CRITICAL for booking):
 - If a time or arrival window was discussed (e.g. "10am", "10 to 12", "morning"), set scheduled_time to the START time in HH:MM 24h format.
 - DO NOT guess. Only fill these if the conversation actually committed to that day/time.
 
+CALLER ROLE & ALTERNATE CONTACT CAPTURE:
+- Capture whether the caller is the owner, tenant, property manager, or other. Set to 'unknown' if not stated.
+- If someone else will be present at the property (spouse, manager, tenant, etc.), capture their name, relationship, and phone if mentioned.
+- Example: "My wife will be home — call her at 555-1234 instead" → alternate_contact_name="Jane", relationship="wife", phone="(555) 123-4234", customer_role="owner"
+
 INTENT EXTRACTION:
 - "New booking" means the caller wants a new service call, maintenance visit, or estimate.
 - Judge intent from the call transcript AND the recent SMS context from the last 48 hours.
@@ -420,6 +442,10 @@ INTENT EXTRACTION:
       address_verification_confidence: addressVerificationConfidence,
       address_verification_status: addressVerificationStatus,
       name_verified: nameConfident,
+      customer_role: extracted.customer_role || "unknown",
+      alternate_contact_name: extracted.alternate_contact_name || "",
+      alternate_contact_relationship: extracted.alternate_contact_relationship || "",
+      alternate_contact_phone: extracted.alternate_contact_phone || "",
     };
 
     // Update call_log with AI summary, extracted_data, AND call_extraction

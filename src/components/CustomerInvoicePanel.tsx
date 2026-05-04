@@ -556,3 +556,4 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
       </Dialog>
     </div>
   );
+}

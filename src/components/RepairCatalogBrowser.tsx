@@ -202,4 +202,4 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
       )}
     </div>
   );
-}
+}

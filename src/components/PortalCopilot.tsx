@@ -206,4 +206,4 @@ export function PortalCopilot({ customerId }: { customerId: string }) {
       </div>
     </div>
   );
-}
+}

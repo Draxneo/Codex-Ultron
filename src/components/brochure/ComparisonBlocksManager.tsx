@@ -188,4 +188,4 @@ export default function ComparisonBlocksManager() {
       </CardContent>
     </Card>
   );
-}
+}

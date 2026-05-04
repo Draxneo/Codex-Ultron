@@ -95,4 +95,24 @@ export function AddressesMap({ addresses }: Props) {
 
     return () => {
       cancelled = true;
-    }
+    };
+  }, [addresses]);
+
+  if (addresses.length === 0) {
+    return (
+      <div className="h-48 rounded-md bg-muted/40 flex items-center justify-center border">
+        <div className="text-center text-muted-foreground">
+          <MapPin className="h-8 w-8 mx-auto mb-1 opacity-40" />
+          <p className="text-xs">No addresses to map</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-48 w-full rounded-md border overflow-hidden bg-muted/30"
+    />
+  );
+}
