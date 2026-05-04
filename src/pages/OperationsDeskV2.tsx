@@ -14,6 +14,7 @@ import {
   File as FileIcon,
   FileText,
   Hash,
+  Info,
   Loader2,
   MapPin,
   MessageSquare,
@@ -2023,6 +2024,11 @@ function CustomerWorkspace({
   const { startRecordSession } = useCopilotPanel();
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [jarvisDialogOpen, setJarvisDialogOpen] = useState(false);
+  // 2026-05-04 — moved "What happened" + "Customer work history" out of the
+  // always-rendered intake card and behind a More Info button. The card
+  // stays focused on the action (reply / call / handle); details are one
+  // tap away when the user actually needs them.
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [handledStamp, setHandledStamp] = useState<{ id: string; label: string; at: string } | null>(null);
   const [handling, setHandling] = useState(false);
   const lookup = useCallerLookup(selected?.phone);
@@ -2369,75 +2375,104 @@ function CustomerWorkspace({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
-        <Section title="What happened" detail="The latest call or text and why it needs attention.">
-          <div className="rounded-md border bg-card p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Latest call or text
-            </div>
-            <p className="mt-2 line-clamp-5 text-sm leading-6 text-muted-foreground">
-              {contactReason}
-            </p>
-            {selected.detail && selected.detail !== selected.summary && (
-              <p className="mt-3 line-clamp-3 rounded-md bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-                {selected.detail}
-              </p>
-            )}
-          </div>
-        </Section>
-
-        <Section title="Customer work history" detail="Recent jobs and estimates so you do not have to open the full record.">
-          {overviewLoading ? (
-            <Skeleton className="h-24 rounded-lg" />
-          ) : !customer ? (
-            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              No customer history yet. Approve a customer action before attaching work.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {activeJobs.length > 0 ? (
-                <div className="space-y-2">
-                  {activeJobs.slice(0, 3).map((job: any) => (
-                    <button
-                      key={job.id}
-                      type="button"
-                      onClick={() => navigate(`/jobs/${job.id}`)}
-                      className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{job.job_number || job.hcp_job_number || job.job_type || "Active job"}</p>
-                          <p className="mt-1 truncate text-xs text-muted-foreground">{job.address || address || "No address"}</p>
-                        </div>
-                        <Badge variant="outline" className="shrink-0 text-[10px]">{job.status || "open"}</Badge>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                  No active jobs found. This likely needs a new booking, estimate, or follow-up.
-                </p>
-              )}
-              {recentRecords.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent jobs and quotes</p>
-                  {recentRecords.map((row: any) => (
-                    <div key={row.id} className="rounded-md border bg-muted/30 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold">{row.job_number || row.estimate_number || row.job_type || "Record"}</p>
-                        <span className="text-[10px] text-muted-foreground">{formatDate(row.scheduled_date || row.created_at)}</span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.description || row.address || row.status || row.work_status || "No detail"}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* More info trigger — content moved into the dialog below so the card
+           stays compact. Counts hint at how much detail is behind the click. */}
+      <div className="mt-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => setMoreInfoOpen(true)}
+        >
+          <Info className="h-4 w-4" />
+          More info
+          {(activeJobs.length > 0 || recentRecords.length > 0) && (
+            <span className="text-xs text-muted-foreground">
+              · {activeJobs.length + recentRecords.length} record{(activeJobs.length + recentRecords.length) === 1 ? "" : "s"}
+            </span>
           )}
-        </Section>
+        </Button>
       </div>
+
+      <Dialog open={moreInfoOpen} onOpenChange={setMoreInfoOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{displayName} · More info</DialogTitle>
+            <DialogDescription>
+              Latest call/text context and recent work history.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+            <Section title="What happened" detail="The latest call or text and why it needs attention.">
+              <div className="rounded-md border bg-card p-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Latest call or text
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {contactReason}
+                </p>
+                {selected.detail && selected.detail !== selected.summary && (
+                  <p className="mt-3 rounded-md bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                    {selected.detail}
+                  </p>
+                )}
+              </div>
+            </Section>
+
+            <Section title="Customer work history" detail="Recent jobs and estimates so you do not have to open the full record.">
+              {overviewLoading ? (
+                <Skeleton className="h-24 rounded-lg" />
+              ) : !customer ? (
+                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  No customer history yet. Approve a customer action before attaching work.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {activeJobs.length > 0 ? (
+                    <div className="space-y-2">
+                      {activeJobs.slice(0, 3).map((job: any) => (
+                        <button
+                          key={job.id}
+                          type="button"
+                          onClick={() => { setMoreInfoOpen(false); navigate(`/jobs/${job.id}`); }}
+                          className="w-full rounded-md border bg-background p-3 text-left transition hover:border-primary/40"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{job.job_number || job.hcp_job_number || job.job_type || "Active job"}</p>
+                              <p className="mt-1 truncate text-xs text-muted-foreground">{job.address || address || "No address"}</p>
+                            </div>
+                            <Badge variant="outline" className="shrink-0 text-[10px]">{job.status || "open"}</Badge>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                      No active jobs found. This likely needs a new booking, estimate, or follow-up.
+                    </p>
+                  )}
+                  {recentRecords.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent jobs and quotes</p>
+                      {recentRecords.map((row: any) => (
+                        <div key={row.id} className="rounded-md border bg-muted/30 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-semibold">{row.job_number || row.estimate_number || row.job_type || "Record"}</p>
+                            <span className="text-[10px] text-muted-foreground">{formatDate(row.scheduled_date || row.created_at)}</span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.description || row.address || row.status || row.work_status || "No detail"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Section>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
         <DialogContent className="flex h-[82dvh] max-w-4xl flex-col overflow-hidden p-0">
