@@ -960,6 +960,18 @@ function getAttentionBadges(item: DeskConversation) {
   const missedCall = eligibleForAction && unhandledCall && /missed|voicemail|no.?answer|busy|failed/.test(text);
   const unknown = isUnknownConversation(item);
   const freshUnknownInbound = eligibleForAction && unknown && inbound && item.unread && isRecentWithinDays(item.createdAt, 2);
+  // 2026-05-04: Bubble recently-completed customer calls into Needs Action
+  // for the first 60 min. Was the Rudy bug — completed calls had no badge,
+  // so they never made it past 'Recent' even though the dispatcher just
+  // hung up and might want to triage / book / send a follow-up. Excludes
+  // already-handled, employee, unknown, and bot calls (those have their
+  // own badges or were filtered upstream).
+  const recentCustomerCall = eligibleForAction
+    && item.kind === "call"
+    && inbound
+    && !unknown
+    && !isHandledConversation(item)
+    && (Date.now() - new Date(item.createdAt).getTime() <= 60 * 60 * 1000);
 
   if (urgent) {
     badges.push({
@@ -984,6 +996,19 @@ function getAttentionBadges(item: DeskConversation) {
       label: "Missed",
       prefix: "Missed call",
       className: "border-red-300 bg-red-50 text-red-950 dark:border-red-800/70 dark:bg-red-950/30 dark:text-red-100",
+      icon: PhoneIncoming,
+      group: "needs_action",
+    });
+  }
+  // 2026-05-04: Rudy bug — a customer just called, hung up, and his card
+  // sat in 'Recent' instead of 'Now'. Completed inbound customer calls now
+  // surface in Needs Action for the first hour so the dispatcher can book /
+  // follow up. Skipped if missedCall already badged (don't double-pill).
+  if (recentCustomerCall && !missedCall) {
+    badges.push({
+      label: "Recent call",
+      prefix: "Recent call",
+      className: "border-blue-300 bg-blue-50 text-blue-950 dark:border-blue-800/70 dark:bg-blue-950/30 dark:text-blue-100",
       icon: PhoneIncoming,
       group: "needs_action",
     });
