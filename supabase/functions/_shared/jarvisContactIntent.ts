@@ -312,6 +312,19 @@ export function classifyCustomerContactIntent(args: ClassifyArgs): JarvisIntentR
   if (hasComplaint) return specific("complaint", "thread_attention", `Review ${workRef} and escalate if needed`, "Customer appears unhappy or the issue may still be unresolved.");
   if (hasReschedule) return specific("reschedule_existing_work", "schedule_change", `Review ${workRef} and offer a new arrival window`, "Customer is trying to move an existing appointment.");
   if (hasCancel) return specific("cancel_existing_work", "schedule_change", `Review ${workRef} before canceling anything`, "Customer may be canceling existing work.");
+
+  // 2026-05-04: Booking + estimate intent now wins over contact-update / access /
+  // ETA decorations. Previously the order was reversed and a phrase like "tell
+  // the tech to call when on the way" inside an estimate-request call was
+  // misclassifying the whole call as `contact_update` — which prevented the
+  // inline Book button from ever appearing on the Intake panel because that
+  // button only listens for `new_appointment` / `booking_confirm` categories.
+  // Customers asking for a NEW estimate or service visit is the dominant
+  // intent; callback/ETA/access details belong in that booking's metadata,
+  // not as separate cards.
+  if (hasEstimateRequest && !hasActiveWork) return specific("new_estimate_request", "new_appointment", "Prepare a replacement estimate booking card", "Customer appears to want a quote or replacement estimate.");
+  if (hasBooking && !hasActiveWork) return specific("new_service_booking", "new_appointment", "Prepare a service booking card", "Customer appears to want a new service visit.");
+
   if (hasNavigationAccess) return specific("access_instructions", "access_note", `Attach access instructions to ${workRef}`, "Customer provided gate, lockbox, door, or entry instructions.");
   if (hasCallbackUpdate) return specific("callback_number_update", "contact_update", `Save the callback preference and tell the tech which number to use`, "Customer provided a different callback or text number.");
   if (hasEtaRequest) return specific("eta_request", "eta_request", `Check dispatch board and send an ETA update for ${workRef}`, "Customer is asking when someone will arrive.");
