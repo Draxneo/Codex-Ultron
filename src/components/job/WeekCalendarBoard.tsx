@@ -13,6 +13,8 @@ import { useHistoricalWeather } from "@/hooks/useHistoricalWeather";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { getUsHolidayName } from "@/lib/usHolidays";
 import { AskJarvisButton } from "@/components/jarvis/AskJarvisButton";
+import { DispatchCardAlertBadge } from "@/components/dispatch/DispatchCardAlertBadge";
+import type { DispatchAlert } from "@/hooks/useDispatchCardAlerts";
 import { formatPhone } from "@/lib/formatters";
 
 interface BoardItem {
@@ -110,9 +112,15 @@ interface WeekCalendarBoardProps {
   showHolidays?: boolean;
   hourHeight?: number;
   headerHeight?: number;
+  // 2026-05-04: Per-card alerts. Optional so other consumers of WeekCalendarBoard
+  // (Tech mobile, etc.) don't have to wire alerts unless they want them.
+  alertsByJobId?: Map<string, DispatchAlert[]>;
+  onAlertResolve?: (alert: DispatchAlert) => void;
+  onAlertRetry?: (alert: DispatchAlert) => void;
+  onAlertNavigate?: (alert: DispatchAlert) => void;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
@@ -326,7 +334,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   {untimed.length > 0 && (
                     <div className="absolute top-0 left-0 right-0 z-20 p-0.5 flex flex-col gap-0.5">
                       {untimed.map(item => (
-                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} />
+                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} alerts={alertsByJobId?.get(item.id) || []} onAlertResolve={onAlertResolve} onAlertRetry={onAlertRetry} onAlertNavigate={onAlertNavigate} />
                       ))}
                     </div>
                   )}
@@ -356,6 +364,10 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                           routeInfo={routeOrders?.get(item.id)}
                           cardDensity={cardDensity}
                           visibleFields={visibleFields}
+                          alerts={alertsByJobId?.get(item.id) || []}
+                          onAlertResolve={onAlertResolve}
+                          onAlertRetry={onAlertRetry}
+                          onAlertNavigate={onAlertNavigate}
                         />
                       </div>
                     );
@@ -385,6 +397,10 @@ function WeekCard({
   routeInfo,
   cardDensity = "comfortable",
   visibleFields,
+  alerts = [],
+  onAlertResolve,
+  onAlertRetry,
+  onAlertNavigate,
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -398,6 +414,12 @@ function WeekCard({
   routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null };
   cardDensity?: CardDensity;
   visibleFields?: CalendarVisibleFields;
+  // 2026-05-04: Per-card alerts. Optional — defaults to empty array so Tech-mobile
+  // and any other consumers that don't wire alerts still render correctly.
+  alerts?: DispatchAlert[];
+  onAlertResolve?: (alert: DispatchAlert) => void;
+  onAlertRetry?: (alert: DispatchAlert) => void;
+  onAlertNavigate?: (alert: DispatchAlert) => void;
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -441,6 +463,21 @@ function WeekCard({
       )}
       style={{ backgroundColor: techColor }}
     >
+      {/* 2026-05-04: Per-card alert badge — overlays the top-right corner of
+          every calendar card. Renders nothing when there are no alerts.
+          Click + hover open a popover with action buttons (Resolve, Retry,
+          View). This is what replaces Now HQ's separate card surface. */}
+      {alerts.length > 0 && (
+        <div className="absolute top-0.5 right-0.5 z-30" onClick={(e) => e.stopPropagation()}>
+          <DispatchCardAlertBadge
+            alerts={alerts}
+            size="sm"
+            onResolve={onAlertResolve}
+            onRetry={onAlertRetry}
+            onNavigate={onAlertNavigate}
+          />
+        </div>
+      )}
       <div className={cn("flex-1 min-w-0 px-1.5 py-1 flex flex-col gap-0.5 overflow-hidden", isTiny && "py-0.5")}>
         {/* Row 1: route order + checkbox/emoji + customer name + travel badge + initials */}
         <div className="flex items-center gap-1 min-w-0">

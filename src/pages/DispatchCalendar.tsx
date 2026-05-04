@@ -11,10 +11,12 @@ import {
   startOfWeek,
   subDays,
 } from "date-fns";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Filter, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Filter, Inbox, Users } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { WeekCalendarBoard } from "@/components/job/WeekCalendarBoard";
 import { CalendarSettings, useCalendarSettings } from "@/components/job/CalendarSettings";
+import { DispatchOpsChipStrip } from "@/components/dispatch/DispatchOpsChipStrip";
+import { DispatchStackDrawer } from "@/components/dispatch/DispatchStackDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDispatchCardAlerts } from "@/hooks/useDispatchCardAlerts";
+import { useDispatchCardAlertActions } from "@/components/dispatch/useDispatchCardAlertActions";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useCalendarJobs } from "@/hooks/useJobs";
@@ -85,6 +89,17 @@ export default function DispatchCalendar() {
   const [currentDay, setCurrentDayState] = useState(() => parseDateParam(searchParams.get("date")));
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  // 2026-05-04: Stack drawer state — slim left rail showing unscheduled work
+  // (Past Due, Ready to Schedule, Customer Decisions, New Leads). Replaces
+  // what used to live on /now. Closed by default; toggled via the Stack
+  // button in the calendar header.
+  const [stackOpen, setStackOpen] = useState(false);
+  // Per-card alert lookup — drives the badge/popover overlay on each calendar
+  // card showing pending action_items, blocked workflow alerts, and derived
+  // job-state alerts (deposit needed, missing photos, etc.). Replaces the
+  // entire Now HQ card surface.
+  const { alertsByJobId } = useDispatchCardAlerts();
+  const { resolveAlert, retryAlert, navigateAlert } = useDispatchCardAlertActions();
 
   const setCurrentDay = (day: Date) => {
     setCurrentDayState(day);
@@ -163,6 +178,9 @@ export default function DispatchCalendar() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
+      {/* 2026-05-04: Stack drawer mounts here at the root so the Sheet
+          slides in over the whole calendar. State controlled by stackOpen. */}
+      <DispatchStackDrawer open={stackOpen} onOpenChange={setStackOpen} />
       <AppHeader
         searchValue={query}
         onSearchChange={setQuery}
@@ -172,9 +190,16 @@ export default function DispatchCalendar() {
         <div className="shrink-0 border-b bg-card px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              {/* 2026-05-04: Calendar is now the default Dispatch view. Was a
-                  back-button to /dispatch — that would loop now. Swapped to a
-                  forward-link into /dispatch/board for the per-tech board view. */}
+              {/* 2026-05-04: Stack drawer toggle — slim left-rail showing
+                  unscheduled work (Past Due, Ready to Schedule, Customer
+                  Decisions, New Leads). Replaces what used to live on /now. */}
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={() => setStackOpen(true)}>
+                <Inbox className="h-4 w-4" />
+                Stack
+              </Button>
+              {/* Calendar is now the default Dispatch view. Was a back-button
+                  to /dispatch — that would loop now. Swapped to a forward-link
+                  into /dispatch/board for the per-tech board view. */}
               <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={() => navigate("/dispatch/board")}>
                 <Users className="h-4 w-4" />
                 Board view
@@ -229,6 +254,11 @@ export default function DispatchCalendar() {
           </div>
         </div>
 
+        {/* 2026-05-04: Ops alert chip strip — non-customer alerts (unmatched
+            HCP invoices, payment failures, tech proposals pending review,
+            outbox SMS waiting). Hides itself entirely when all counts are 0. */}
+        <DispatchOpsChipStrip className="shrink-0 border-b bg-muted/20 px-3 py-1.5" />
+
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {calendarDataIssues.length > 0 && (
             <div className="shrink-0 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
@@ -265,6 +295,14 @@ export default function DispatchCalendar() {
                 showHolidays={calendarSettings.showHolidays}
                 hourHeight={44}
                 headerHeight={92}
+                /* 2026-05-04: Per-card alerts now ride with each calendar card.
+                   The badge component renders inside the card grid item AND
+                   inside the hover popover so dispatchers can see + act on
+                   pending todos without leaving the calendar. */
+                alertsByJobId={alertsByJobId}
+                onAlertResolve={resolveAlert}
+                onAlertRetry={retryAlert}
+                onAlertNavigate={navigateAlert}
               />
             </>
           )}
