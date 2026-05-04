@@ -2663,20 +2663,77 @@ function ActionPanel({
     },
   });
   const { book, getState: getBookingState } = useBookingAction();
+  const { data: employees } = useEmployees();
   const bookingState = bookingActionItem ? getBookingState(bookingActionItem.id) : null;
   const bookingPhase = bookingState?.phase || "idle";
   const bookingBusy = bookingPhase === "resolving" || bookingPhase === "booking" || bookingPhase === "syncing";
   const bookingDone = bookingPhase === "booked";
   const bookingFailed = bookingPhase === "failed";
-  const handleInlineBook = useCallback(async () => {
-    if (!bookingActionItem || bookingBusy) return;
+
+  // 2026-05-04: Review & Book dialog state. Opens when user clicks the inline Book button,
+  // allowing them to review/edit date, time, tech, and job type before creating the job/estimate.
+  const [bookConfirmOpen, setBookConfirmOpen] = useState(false);
+  const [bookDate, setBookDate] = useState("");
+  const [bookStart, setBookStart] = useState("");
+  const [bookEnd, setBookEnd] = useState("");
+  const [bookAssignee, setBookAssignee] = useState("");
+  const [bookJobType, setBookJobType] = useState<"service" | "estimate" | "maintenance">("service");
+
+  // Reset confirmation dialog state whenever the action item changes (conversation selected).
+  useEffect(() => {
+    if (bookingActionItem) {
+      const metadata = bookingActionItem.metadata || {};
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      // Pre-fill from metadata; fall back to defaults
+      setBookDate(metadata.scheduled_date || tomorrowStr);
+      setBookStart(metadata.scheduled_time || "09:00");
+      setBookEnd(metadata.scheduled_end || "11:00");
+
+      // Default assignee: metadata.assigned_to > bookingSuggestion.defaultOwner > "Jonathan Carnes"
+      const defaultAssignee = metadata.assigned_to || bookingSuggestion?.defaultOwner || "Jonathan Carnes";
+      setBookAssignee(defaultAssignee);
+
+      // Map job_type to our confirm dialog's enum; handle is_estimate flag
+      const jobTypeFromMeta = metadata.job_type || "service";
+      const isEstimate = metadata.is_estimate === true || jobTypeFromMeta === "estimate";
+      const derivedJobType = isEstimate ? "estimate" : jobTypeFromMeta === "maintenance" ? "maintenance" : "service";
+      setBookJobType(derivedJobType);
+    }
+    setBookConfirmOpen(false);
+  }, [bookingActionItem?.id, bookingSuggestion?.defaultOwner]);
+
+  // Handle opening the confirmation dialog (replaces the old immediate book call)
+  const handleInlineBook = useCallback(() => {
+    if (!bookingActionItem) return;
+    setBookConfirmOpen(true);
+  }, [bookingActionItem]);
+
+  // Handle the actual booking submission from the confirmation dialog
+  const handleConfirmBook = useCallback(async () => {
+    if (!bookingActionItem || !bookDate || !bookStart) return;
+
     await book({
       action_item_id: bookingActionItem.id,
-      metadata: bookingActionItem.metadata || {},
+      metadata: {
+        ...(bookingActionItem.metadata || {}),
+        scheduled_date: bookDate,
+        scheduled_time: bookStart,
+        scheduled_end: bookEnd,
+        assigned_to: bookAssignee,
+        job_type: bookJobType,
+      },
       description: bookingActionItem.description || null,
       customer_phone: bookingActionItem.customer_phone || selected?.phone || null,
     });
-  }, [bookingActionItem, bookingBusy, book, selected?.phone]);
+
+    // Close the dialog on success (useBookingAction handles the phase transition)
+    if (bookingPhase === "booked") {
+      setBookConfirmOpen(false);
+    }
+  }, [bookingActionItem, bookDate, bookStart, bookEnd, bookAssignee, bookJobType, book, selected?.phone, bookingPhase]);
   const addressVerification = useMemo(
     () => addressVerificationFromContext(selected, customer, liveAddressVerification, acceptedAddressVerification),
     [selected, customer, liveAddressVerification, acceptedAddressVerification]
@@ -3257,6 +3314,154 @@ function ActionPanel({
             <Button type="button" size="lg" className="gap-2" onClick={acceptAddress}>
               <CheckCircle2 className="h-4 w-4" />
               Yes, accept this address
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2026-05-04: Review & Book confirmation dialog.
+          Opens when user clicks the inline Book button, allowing review/edit of:
+          - Date (required), Start time (required), End time, Tech, Job type.
+          Replaces immediate booking with a human-reviewed dialog to prevent
+          schedule_date=NULL bookings when JARVIS captures a date but no time. */}
+      <Dialog open={bookConfirmOpen} onOpenChange={setBookConfirmOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Review and confirm booking</DialogTitle>
+            <DialogDescription>
+              Verify the captured details before creating the {bookJobType === "estimate" ? "estimate" : bookJobType === "maintenance" ? "maintenance" : "service"}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Read-only: Customer info from the action item */}
+            {bookingActionItem && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer</p>
+                  <p className="mt-1 text-sm font-semibold">{bookingActionItem.metadata?.customer_name || "Unknown"}</p>
+                </div>
+                {bookingActionItem.customer_phone && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</p>
+                    <p className="mt-1 text-sm">{bookingActionItem.customer_phone}</p>
+                  </div>
+                )}
+                {(bookingActionItem.metadata?.address || addressVerification?.address) && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Address</p>
+                    <p className="mt-1 text-sm">{bookingActionItem.metadata?.address || addressVerification?.address}</p>
+                  </div>
+                )}
+                {bookingActionItem.metadata?.description && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issue</p>
+                    <p className="mt-1 line-clamp-2 text-sm">{bookingActionItem.metadata.description}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Editable fields */}
+            <div className="space-y-3">
+              {/* Date (required) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date (required)</label>
+                <Input
+                  type="date"
+                  value={bookDate}
+                  onChange={(e) => setBookDate(e.target.value)}
+                  className="mt-2"
+                />
+              </div>
+
+              {/* Start time (required) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival start (required)</label>
+                <Input
+                  type="time"
+                  value={bookStart}
+                  onChange={(e) => setBookStart(e.target.value)}
+                  className="mt-2"
+                />
+              </div>
+
+              {/* End time (optional) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival end</label>
+                <Input
+                  type="time"
+                  value={bookEnd}
+                  onChange={(e) => setBookEnd(e.target.value)}
+                  className="mt-2"
+                />
+              </div>
+
+              {/* Tech / Assignee (Select) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assigned to</label>
+                <select
+                  value={bookAssignee}
+                  onChange={(e) => setBookAssignee(e.target.value)}
+                  className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  {/* Active employees: tech, supervisor, admin, installer */}
+                  {(employees || [])
+                    .filter((emp: any) => emp.is_active && ["tech", "supervisor", "admin", "installer"].includes(emp.role))
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                    .map((emp: any) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Job type (Select) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Job type</label>
+                <select
+                  value={bookJobType}
+                  onChange={(e) => setBookJobType(e.target.value as "service" | "estimate" | "maintenance")}
+                  className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="service">Service</option>
+                  <option value="estimate">Estimate</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Validation hint */}
+            {(!bookDate || !bookStart) && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-100">
+                Date and arrival start time are required to book.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={() => setBookConfirmOpen(false)} disabled={bookingBusy}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              className="gap-2"
+              onClick={handleConfirmBook}
+              disabled={bookingBusy || !bookDate || !bookStart}
+            >
+              {bookingBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {bookingPhase === "resolving" ? "Resolving…" : bookingPhase === "syncing" ? "Syncing…" : "Booking…"}
+                </>
+              ) : (
+                <>
+                  <CalendarDays className="h-4 w-4" />
+                  Book Now
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
