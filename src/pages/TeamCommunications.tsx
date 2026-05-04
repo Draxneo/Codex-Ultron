@@ -42,12 +42,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { GrammarPreview } from "@/components/ui/GrammarPreview";
 import { Input } from "@/components/ui/input";
 import { MediaItem } from "@/components/media";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DictateButton } from "@/components/voice/DictateButton";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { insertAtSelection } from "@/lib/insertAtCursor";
 import { useAuth } from "@/hooks/useAuth";
 import { useComposerIntelligence } from "@/hooks/useComposerIntelligence";
@@ -158,7 +160,7 @@ const db = supabase as unknown as LooseSupabaseClient;
 const teamRpc = supabase as unknown as TeamPinRpcClient;
 const urlPattern = /(https?:\/\/[^\s]+)/g;
 const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
-const commonEmojis = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F525}", "\u{1F389}", "\u{1F440}", "\u{1F4A1}", "\u{1F4CC}"];
+// commonEmojis removed 2026-05-04 \u2014 quick emoji bar dropped from composer in favor of emoji picker
 
 function showTeamActionError(title: string, error: unknown) {
   const description = error instanceof Error ? error.message : undefined;
@@ -331,6 +333,9 @@ export default function TeamCommunications() {
   const [mutedCallIds, setMutedCallIds] = useState<Set<string>>(new Set());
   const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  // 2026-05-04 — Members popover state (formerly right aside header).
+  // Opens/closes the Members list popover in conversation header.
+  const [membersPopoverOpen, setMembersPopoverOpen] = useState(false);
   // 2026-05-04 — Add Member dialog state. Only shown for rooms (direct
   // conversations are 1:1). Lists every active employee not already in
   // the room.
@@ -808,73 +813,7 @@ export default function TeamCommunications() {
     onError: (error) => showTeamActionError("Could not end call", error),
   });
 
-  const markNotificationsRead = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) throw new Error("Not signed in");
-      const { error } = await db
-        .from("team_notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .is("read_at", null);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      [
-        ["team-notifications", user?.id],
-        ["side-rail-team-notifications", user?.id],
-        ["now-team-notifications", user?.id],
-        ["intake-team-notifications", user?.id],
-      ].forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
-    },
-  });
-
-  const sendMessageToNow = useMutation({
-    mutationFn: async (message: TeamMessage) => {
-      if (!user || !selectedConversation || message.deleted_at) throw new Error("Message unavailable");
-
-      const { data: existing, error: existingError } = await db
-        .from("action_items" as any)
-        .select("id")
-        .eq("status", "pending")
-        .eq("source", "team_communications")
-        .eq("metadata->>team_message_id", message.id)
-        .maybeSingle();
-      if (existingError) throw existingError;
-      if ((existing as any)?.id) return (existing as any).id;
-
-      const sender = userByAuthId.get(message.sender_id);
-      const body = message.body?.trim();
-      const { data, error } = await db
-        .from("action_items" as any)
-        .insert({
-          source: "team_communications",
-          category: "team_blocker",
-          priority: "normal",
-          title: "Team message needs attention",
-          description: body || `${message.attachments?.length ?? 0} team attachment needs review.`,
-          suggested_action: "Open Team HQ, read the message, and decide what needs to happen next.",
-          metadata: {
-            team_message_id: message.id,
-            conversation_id: message.conversation_id,
-            conversation_title: conversationTitle(selectedConversation),
-            sender_id: message.sender_id,
-            sender_name: sender?.name ?? "Team member",
-            message_created_at: message.created_at,
-            source_url: `/team?conversation=${message.conversation_id}`,
-          },
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      return (data as any).id;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["now-hq-action-items"] });
-      queryClient.invalidateQueries({ queryKey: ["hud_attention_counts"] });
-      toast.success("Sent to Now");
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not send to Now"),
-  });
+  // markNotificationsRead, sendMessageToNow removed 2026-05-04 — only used in deleted right aside
 
   const uploadAttachments = useMutation({
     mutationFn: async (files: FileList) => {
@@ -1334,6 +1273,67 @@ export default function TeamCommunications() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Members popover — shows list + add button. 2026-05-04 moved from right aside. */}
+                  <Popover open={membersPopoverOpen} onOpenChange={setMembersPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1.5"
+                        disabled={!selectedConversation}
+                        title="Members"
+                        aria-label={`Members: ${selectedMembers.length}`}
+                      >
+                        <Users className="h-4 w-4" />
+                        <span className="text-xs">Members · {selectedMembers.length}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-0">
+                      <div className="max-h-96 overflow-y-auto">
+                        <div className="sticky top-0 z-10 border-b bg-card/95 px-4 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold">Members</p>
+                            {selectedConversation?.type === "room" && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  setAddMemberDialogOpen(true);
+                                  setMembersPopoverOpen(false);
+                                }}
+                                title="Add member"
+                                aria-label="Add member to room"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1 p-3">
+                          {membersLoading &&
+                            Array.from({ length: 3 }).map((_, index) => (
+                              <Skeleton key={`member-loading-${index}`} className="h-10 rounded-md" />
+                            ))}
+                          {!membersLoading &&
+                            selectedMembers.map((member) => (
+                              <div key={member.profile_id} className="flex items-center gap-2 rounded-md px-1 py-1.5">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="text-xs">{initials(member.name)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{member.name}</p>
+                                  {member.role && <p className="text-xs text-muted-foreground">{member.role}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          {!membersLoading && selectedMembers.length === 0 && (
+                            <SidebarEmpty>Select a room or direct message to see members.</SidebarEmpty>
+                          )}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <Button
                     size="icon"
                     className="h-9 w-9"
@@ -1634,7 +1634,10 @@ export default function TeamCommunications() {
                     ))}
                   </div>
                 )}
-                <div className="flex items-end gap-2">
+                {/* 2026-05-04 Composer redesign: iMessage/WhatsApp style.
+                    Modernized single rounded input row with controls inside/outside.
+                    Quick emoji bar removed; emoji picker available via 😀 button inside input. */}
+                <div className="flex items-center gap-2">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1645,59 +1648,18 @@ export default function TeamCommunications() {
                       event.target.value = "";
                     }}
                   />
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-10 w-10 shrink-0 sm:h-11 sm:w-11"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!selectedConversation || uploadAttachments.isPending}
-                    title="Attach files"
-                    aria-label="Attach files"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-1 overflow-x-auto pb-0.5">
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground"
-                        title="Grammar assist"
-                        aria-label="Grammar assist"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                      {commonEmojis.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm hover:bg-muted"
-                          onClick={() => setDraft((value) => `${value}${emoji}`)}
-                          title={`Insert ${emoji}`}
-                          aria-label={`Insert ${emoji}`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                      <Smile className="h-3.5 w-3.5 text-muted-foreground" aria-label="Emoji" />
-                      {/* 2026-05-04: Dictate button — Whisper-driven voice-to-text
-                          for the team chat composer. Same pattern as the SMS
-                          composer: tap, talk, transcript inserts at the caret
-                          position so dispatchers can dictate hands-free while
-                          handling other things. */}
-                      <DictateButton
-                        size="sm"
-                        showLabel={false}
-                        hideOnMobile={false}
-                        autoStopOnSilence={false}
-                        context="chat"
-                        title="Dictate message"
-                        onTranscript={(text) => {
-                          const el = composer.inputRef.current;
-                          const { value, caret } = insertAtSelection(draft, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);
-                          setDraft(value);
-                          requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
-                        }}
-                      />
-                    </div>
+                  <div className="min-w-0 flex-1 flex items-center gap-1.5 rounded-full border bg-background px-3 py-2 shadow-sm">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!selectedConversation || uploadAttachments.isPending}
+                      title="Attach files"
+                      aria-label="Attach files"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
                     <Textarea
                       ref={composer.inputRef}
                       value={draft}
@@ -1710,13 +1672,35 @@ export default function TeamCommunications() {
                         }
                       }}
                       placeholder="Message"
-                      className="max-h-32 min-h-10 resize-none sm:min-h-11"
+                      className="min-h-9 max-h-32 resize-none border-0 bg-transparent placeholder:text-muted-foreground focus-visible:ring-0"
                       maxLength={4000}
+                    />
+                    <EmojiPicker
+                      onSelect={(emoji) => {
+                        const el = composer.inputRef.current;
+                        const { value, caret } = insertAtSelection(draft, el?.selectionStart ?? null, el?.selectionEnd ?? null, emoji);
+                        setDraft(value);
+                        requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+                      }}
+                    />
+                    <DictateButton
+                      size="sm"
+                      showLabel={false}
+                      hideOnMobile={false}
+                      autoStopOnSilence={false}
+                      context="chat"
+                      title="Dictate message"
+                      onTranscript={(text) => {
+                        const el = composer.inputRef.current;
+                        const { value, caret } = insertAtSelection(draft, el?.selectionStart ?? null, el?.selectionEnd ?? null, text);
+                        setDraft(value);
+                        requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+                      }}
                     />
                   </div>
                   <Button
                     size="icon"
-                    className="h-10 w-10 shrink-0 sm:h-11 sm:w-11"
+                    className="h-9 w-9 shrink-0 rounded-full"
                     disabled={
                       (!draft.trim() && pendingAttachments.length === 0) ||
                       sendMessage.isPending ||
@@ -1735,206 +1719,9 @@ export default function TeamCommunications() {
             )}
           </section>
 
-          <aside className="hidden min-h-0 border-l bg-card/95 xl:block">
-            <div className="flex h-14 items-center justify-between border-b px-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" aria-hidden="true" />
-                <p className="text-sm font-semibold">Members</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {/* Add Member — rooms only. Direct convos are 1:1.
-                    2026-05-04 per Clint's request to add member management. */}
-                {selectedConversation?.type === "room" && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => setAddMemberDialogOpen(true)}
-                    title="Add member"
-                    aria-label="Add member to room"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                )}
-                {unreadNotifications.length > 0 && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => markNotificationsRead.mutate()}
-                    title="Mark notifications read"
-                    aria-label="Mark notifications read"
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            <ScrollArea className="h-[calc(100vh-6.5rem)]">
-              <div className="space-y-4 p-3">
-                <section className="space-y-2">
-                  {membersLoading &&
-                    Array.from({ length: 3 }).map((_, index) => (
-                      <Skeleton key={`member-loading-${index}`} className="h-10 rounded-md" />
-                    ))}
-                  {selectedMembers.map((member) => (
-                    <div key={member.profile_id} className="flex items-center gap-2 rounded-md px-1 py-1.5">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">{initials(member.name)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{member.name}</p>
-                        {member.role && <p className="text-xs text-muted-foreground">{member.role}</p>}
-                      </div>
-                    </div>
-                  ))}
-                  {!membersLoading && selectedMembers.length === 0 && (
-                    <SidebarEmpty>Select a room or direct message to see members.</SidebarEmpty>
-                  )}
-                </section>
-
-                <Separator />
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team Items to Handle</p>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="rounded-md border bg-background p-3 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold">{selectedConversation ? conversationTitle(selectedConversation) : "No room selected"}</span>
-                        <Badge variant={pendingTeamNowActions.length ? "default" : activeCall ? "default" : "secondary"}>
-                          {pendingTeamNowActions.length ? `${pendingTeamNowActions.length} in Now` : activeCall ? "call live" : "quiet"}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-muted-foreground">
-                        {operationCandidates[0]?.body || (operationCandidates[0]?.attachments?.length ? "Latest update has attachments." : "Pick a chat to see what is going on.")}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between text-muted-foreground">
-                        <span>{unreadNotifications.length} unread team alert{unreadNotifications.length === 1 ? "" : "s"}</span>
-                        {activeCall?.started_at && <span>{messageTime(activeCall.started_at)}</span>}
-                      </div>
-                    </div>
-
-                    {operationCandidates.slice(0, 3).map((message) => (
-                      <div key={`now-candidate-${message.id}`} className="rounded-md border bg-background px-3 py-2 text-xs">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{userByAuthId.get(message.sender_id)?.name ?? "Team member"}</p>
-                            <p className="mt-1 line-clamp-2 text-muted-foreground">
-                              {message.body || `${message.attachments?.length ?? 0} attachment${message.attachments?.length === 1 ? "" : "s"}`}
-                            </p>
-                          </div>
-                          {teamNowByMessageId.get(message.id) ? (
-                            <Button asChild size="sm" variant="secondary" className="h-7 shrink-0 px-2 text-[11px]">
-                              <Link to={`/now?action_items=1&action_id=${teamNowByMessageId.get(message.id)!.id}`}>
-                                Sent
-                              </Link>
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 shrink-0 px-2 text-[11px]"
-                              onClick={() => sendMessageToNow.mutate(message)}
-                              disabled={sendMessageToNow.isPending}
-                            >
-                              Now
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {operationCandidates.length === 0 && (
-                      <SidebarEmpty>Team blockers can be sent to Now once a message exists.</SidebarEmpty>
-                    )}
-                  </div>
-                </section>
-
-                <Separator />
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Now Cards From This Chat</p>
-                  </div>
-                  <div className="space-y-2">
-                    {selectedConversationNowActions.slice(0, 4).map((item) => (
-                      <Link
-                        key={item.id}
-                        to={`/now?action_items=1&action_id=${item.id}`}
-                        className="block rounded-md border bg-background px-3 py-2 text-xs hover:bg-muted"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate font-medium">{item.title || "Team follow-up"}</p>
-                          <Badge variant={item.status === "pending" ? "default" : "secondary"} className="text-[10px]">
-                            {item.status || "open"}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-muted-foreground">
-                          {item.description || "Open Now HQ to finish this item."}
-                        </p>
-                      </Link>
-                    ))}
-                    {selectedConversationNowActions.length === 0 && (
-                      <SidebarEmpty>Nothing from this chat has been sent to Now yet.</SidebarEmpty>
-                    )}
-                  </div>
-                </section>
-
-                <Separator />
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <Pin className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</p>
-                  </div>
-                  <div className="space-y-2">
-                    {pinnedMessages.slice(0, 4).map((message) => (
-                      <button
-                        key={message.id}
-                        type="button"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-left text-xs hover:bg-muted"
-                        onClick={() => document.getElementById(`team-message-${message.id}`)?.scrollIntoView({ block: "center" })}
-                        aria-label={`Show pinned message from ${userByAuthId.get(message.sender_id)?.name ?? "team member"}`}
-                      >
-                        <div className="mb-1 flex items-center gap-1 font-medium">
-                          <span className="truncate">{userByAuthId.get(message.sender_id)?.name ?? "Team member"}</span>
-                        </div>
-                        <p className="line-clamp-2 text-muted-foreground">
-                          {message.body || `${message.attachments?.length ?? 0} attachment${message.attachments?.length === 1 ? "" : "s"}`}
-                        </p>
-                      </button>
-                    ))}
-                    {pinnedMessages.length === 0 && <SidebarEmpty>Pin key dispatch details so they stay easy to find.</SidebarEmpty>}
-                  </div>
-                </section>
-
-                <Separator />
-
-                {/* Team Links + Links sections moved to LEFT aside on 2026-05-04
-                     per Clint's request — they were clunky on the right. See
-                     left aside (~line 1070 area) for the new home. */}
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <Bell className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unread</p>
-                  </div>
-                  <div className="space-y-2">
-                    {unreadNotifications.map((notification) => (
-                      <div key={notification.id} className="rounded-md border bg-background px-3 py-2 text-xs">
-                        <p className="font-medium">{notification.title}</p>
-                        {notification.body && <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>}
-                      </div>
-                    ))}
-                    {unreadNotifications.length === 0 && <SidebarEmpty>Nothing new</SidebarEmpty>}
-                  </div>
-                </section>
-              </div>
-            </ScrollArea>
-          </aside>
+          {/* Right aside removed 2026-05-04 — Team Items to Handle, Now Cards,
+              Pinned, and Unread sections deleted. Members moved to popover in
+              conversation header. */}
         </div>
       </main>
       <Dialog open={resourceDialogOpen} onOpenChange={setResourceDialogOpen}>
