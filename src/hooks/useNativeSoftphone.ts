@@ -432,19 +432,14 @@ export function useNativeSoftphone(enabled: boolean = true) {
       setState((s) => ({ ...s, status: "on-call", activeCall: data, incomingCall: null }));
       startTimer();
 
-      // Query audio device to detect Bluetooth — let the SDK's AudioSwitch
-      // manage priority (BT > Wired > Earpiece > Speaker) without forcing
-      try {
-        plugin.getSelectedAudioDevice?.().then?.((info: any) => {
-          const deviceName = info?.device || info?.name || "";
-          const bt = /bluetooth/i.test(deviceName);
-          const spk = /speaker/i.test(deviceName);
-          setIsBluetooth(bt);
-          setIsSpeaker(spk);
-          setAudioDeviceLabel(bt ? deviceName.replace(/bluetooth_?/i, "").trim() || "Bluetooth" : spk ? "Speaker" : "Earpiece");
-          console.log("[NativeSoftphone] audio device on connect:", deviceName);
-        });
-      } catch { /* noop */ }
+      // NOTE (2026-05-03): the Capgo plugin doesn't expose
+      // getSelectedAudioDevice / getAvailableAudioDevices — they're not in
+      // its TS definitions and calling them on Android logs "not implemented"
+      // (the Capacitor proxy reports all property accesses as truthy, so
+      // optional chaining doesn't help). AudioSwitch still auto-routes audio
+      // correctly internally (BT > Wired > Earpiece > Speaker). We just lose
+      // the ability to display the specific device name in the call UI.
+      // The Bluetooth/Speaker booleans are now driven only by toggleSpeaker().
 
       const possibleSids = [data?.callSid, data?.parentCallSid].filter(Boolean);
       if (possibleSids.length > 0) {
@@ -981,32 +976,14 @@ export function useNativeSoftphone(enabled: boolean = true) {
    * without us doing anything (e.g. tech connects to truck stereo mid-call).
    */
   const refreshAudioDevice = useCallback(async () => {
-    const plugin = getPlugin();
-    if (!plugin?.getSelectedAudioDevice) return;
-    try {
-      const info = await plugin.getSelectedAudioDevice();
-      const deviceName: string = info?.device || info?.name || "";
-      const bt = /bluetooth|bt|headset/i.test(deviceName);
-      const spk = /speaker/i.test(deviceName);
-      setIsBluetooth(bt);
-      setIsSpeaker(spk && !bt);
-      setAudioDeviceLabel(
-        bt ? (deviceName.replace(/bluetooth_?/i, "").trim() || "Bluetooth")
-          : spk ? "Speaker"
-          : "Earpiece"
-      );
-
-      // Diagnostics: log the full device list so techs' logcat shows what
-      // AudioSwitch can actually see (vs. what's paired in OS Settings).
-      if (plugin.getAvailableAudioDevices) {
-        try {
-          const list = await plugin.getAvailableAudioDevices();
-          console.log("[NativeSoftphone] available audio devices:", list, "| selected:", deviceName);
-        } catch { /* noop */ }
-      }
-    } catch (e) {
-      console.warn("[NativeSoftphone] refreshAudioDevice failed:", e);
-    }
+    // NOTE (2026-05-03): the Capgo plugin doesn't expose
+    // getSelectedAudioDevice / getAvailableAudioDevices, so this used to
+    // throw "not implemented on android" twice every 2 seconds during a
+    // call. AudioSwitch still routes audio correctly internally based on
+    // the speaker on/off knob; we just don't get to read the actual
+    // selected device name. The label/booleans are kept up to date by
+    // toggleSpeaker() — that's accurate enough for the call UI today.
+    return;
   }, []);
 
   const toggleSpeaker = useCallback(async () => {
@@ -1017,38 +994,26 @@ export function useNativeSoftphone(enabled: boolean = true) {
     // We only have one knob — setSpeaker({ enabled }). When enabled:false,
     // AudioSwitch picks the highest-priority non-speaker route, which is
     // Bluetooth if a headset/car kit is connected, otherwise Earpiece.
-    // The actual selected device is read back via refreshAudioDevice().
-    let target: "speaker" | "auto";
-    if (isSpeaker) {
-      // Speaker → Earpiece (or BT if present)
-      target = "auto";
-    } else if (isBluetooth) {
-      // BT → Speaker
-      target = "speaker";
-    } else {
-      // Earpiece → Speaker
-      target = "speaker";
-    }
-
-    console.log(`[NativeSoftphone] toggleSpeaker: current=${audioDeviceLabel} → target=${target}`);
-
+    // We can't read back the actual device (the plugin doesn't expose
+    // getSelectedAudioDevice), so we update the UI state based on user
+    // intent and let AudioSwitch handle the routing under the hood.
+    const nextSpeaker = !isSpeaker;
     try {
-      await plugin.setSpeaker({ enabled: target === "speaker" });
-      // Give AudioSwitch a beat to actually swap routes, then re-read truth.
-      setTimeout(() => { refreshAudioDevice(); }, 150);
+      await plugin.setSpeaker({ enabled: nextSpeaker });
+      setIsSpeaker(nextSpeaker);
+      // We don't know whether AudioSwitch picked BT or Earpiece when we
+      // toggled speaker off, so just label it generically.
+      setAudioDeviceLabel(nextSpeaker ? "Speaker" : "Earpiece / BT");
+      console.log(`[NativeSoftphone] toggleSpeaker: now ${nextSpeaker ? "speaker" : "auto (earpiece or BT)"}`);
     } catch (e) {
       console.error("[NativeSoftphone] setSpeaker failed:", e);
     }
-  }, [isSpeaker, isBluetooth, audioDeviceLabel, refreshAudioDevice]);
+  }, [isSpeaker]);
 
-  // Re-poll selected audio device every 2s while on a call so connecting
-  // BT mid-call updates the UI label and confirms AudioSwitch promoted it.
-  useEffect(() => {
-    if (state.status !== "on-call") return;
-    refreshAudioDevice();
-    const id = setInterval(refreshAudioDevice, 2000);
-    return () => clearInterval(id);
-  }, [state.status, refreshAudioDevice]);
+  // Polling removed (2026-05-03): the device-readback API doesn't exist on
+  // the Capgo plugin. AudioSwitch handles the routing internally; we just
+  // can't display the live device name in the UI. If the plugin ever adds
+  // getSelectedAudioDevice we'll re-enable this effect.
 
   const sendDigit = useCallback(async (digit: string) => {
     const plugin = getPlugin();

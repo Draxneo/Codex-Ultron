@@ -29,7 +29,14 @@ function isRecoverableLoadError(error: Error): boolean {
     message.includes("importing a module script failed") ||
     message.includes("loading chunk") ||
     message.includes("chunkloaderror") ||
-    message.includes("css chunk load failed")
+    message.includes("css chunk load failed") ||
+    // Vite + lazy() stale-bundle signature: when a chunk URL 404s after a
+    // deploy, the import "succeeds" but resolves to an empty module without
+    // a default export. React.lazy then crashes accessing `.default`.
+    // Match this so the boundary auto-recovers fast instead of showing the
+    // error screen on every navigation right after a Render redeploy.
+    (message.includes("cannot read") && message.includes("default")) ||
+    (message.includes("undefined is not an object") && message.includes("default"))
   );
 }
 
@@ -74,7 +81,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (isRecoverableLoadError(error) && canAutoRecover()) {
       window.sessionStorage.setItem(CHUNK_RECOVERY_KEY, String(Date.now()));
       this.setState({ isRecovering: true });
-      setTimeout(reloadPage, 500);
+      // Reload immediately on stale-bundle errors. The 500ms delay used to
+      // give the user a chance to read the toast, but on rapid navigation
+      // right after a deploy that flash is just noise. Hard reload picks up
+      // the new chunk hashes and the user keeps moving.
+      setTimeout(reloadPage, 50);
       return;
     }
 
