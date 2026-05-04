@@ -11,12 +11,17 @@ import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
+/**
+ * Tab key used for filtering bottom-nav tabs via employee_tab_access.
+ * Updated 2026-05-03 to align with the redesigned 12-key vocabulary.
+ * Installer "My Job" landing maps to the "tech" key (their tech mobile view).
+ */
 const TAB_KEY_MAP: Record<string, string> = {
-  "/": "jobs",
+  "/": "tech",
   "/phone": "phone",
   "/sms": "sms",
-  "/customers": "customers",
-  "/copilot": "copilot",
+  "/customers": "customer",
+  "/copilot": "jarvis",
   "/pay": "pay",
   "/admin": "admin",
 };
@@ -47,13 +52,13 @@ function useInstallerTabs(): MobileTab[] {
       match: (p: string) => p.startsWith("/sms") || (p.includes("/inbox") && p.includes("sms")),
       badge: () => unreadSms,
     },
-    ...(allowedTabs?.has("customers") ? [{
+    ...(allowedTabs?.has("customer") ? [{
       path: "/customers",
       icon: Users,
-      label: "CRM",
+      label: "Customer",
       match: (p: string) => p.startsWith("/customers"),
     } as MobileTab] : []),
-    ...(allowedTabs?.has("copilot") ? [{
+    ...(allowedTabs?.has("jarvis") ? [{
       path: "/copilot",
       icon: Bot,
       label: "JARVIS",

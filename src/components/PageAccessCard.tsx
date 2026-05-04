@@ -10,16 +10,25 @@ import { ALL_ACCESS_KEYS } from "@/hooks/useEmployeeTabAccess";
 import { getRoleDefaults, matchesRoleDefaults, ROLE_LABELS, type RoleKey } from "@/lib/roleAccessDefaults";
 import { toast } from "sonner";
 
+/**
+ * Column labels for the permissions matrix. Order is enforced by
+ * ALL_ACCESS_KEYS in useEmployeeTabAccess.ts. Keep these labels short — the
+ * matrix has 12 columns and label width directly affects horizontal scroll
+ * behavior on narrower screens.
+ */
 const KEY_LABELS: Record<string, string> = {
-  jobs: "Jobs",
-  phone: "Phone",
-  sms: "SMS",
-  inbox: "Inbox",
-  chat: "Chat",
-  customers: "CRM",
-  copilot: "JARVIS",
-  pay: "Pay",
-  admin: "Admin",
+  tech: "Tech",         // Tech mobile schedule + tools
+  intake: "Intake",     // Operations Desk (phones-first triage)
+  now: "Now",           // Now HQ (live job activity)
+  dispatch: "Dispatch", // Schedule board
+  quote: "Quote",       // Catalog + builder + estimates
+  customer: "Customer", // Customer HQ / CRM
+  team: "Team",         // Team HQ (chat)
+  phone: "Phone",       // Phone surface
+  sms: "SMS",           // SMS surface
+  jarvis: "JARVIS",     // Copilot
+  pay: "Pay",           // Employee pay page
+  admin: "Admin",       // Settings, reports, agent training, IVR builder
 };
 
 const ROLE_ORDER: RoleKey[] = ["admin", "office", "supervisor", "tech", "installer"];

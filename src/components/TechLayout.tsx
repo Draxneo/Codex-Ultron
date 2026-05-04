@@ -10,15 +10,19 @@ import { MobileShell, type MobileTab } from "@/components/MobileShell";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 
-/** Tab key used for filtering via employee_tab_access */
+/**
+ * Tab key used for filtering bottom-nav tabs via employee_tab_access.
+ * Updated 2026-05-03 to align with the redesigned 12-key vocabulary
+ * (see roleAccessDefaults.ts and useEmployeeTabAccess.routeToTabKey).
+ */
 const TAB_KEY_MAP: Record<string, string> = {
-  "/tech": "jobs",
-  "/tech/team-schedule": "jobs",
-  "/jobs/backlog": "jobs",
+  "/tech": "tech",
+  "/tech/team-schedule": "tech",
+  "/jobs/backlog": "tech",
   "/phone": "phone",
   "/tech/sms": "sms",
-  "/tech/customers": "customers",
-  "/copilot": "copilot",
+  "/tech/customers": "customer",
+  "/copilot": "jarvis",
   "/pay": "pay",
   "/admin": "admin",
 };
@@ -53,13 +57,13 @@ function useTechTabs(): MobileTab[] {
       label: "SMS",
       match: (p: string) => p.startsWith("/tech/sms"),
     },
-    ...(allowedTabs?.has("customers") ? [{
+    ...(allowedTabs?.has("customer") ? [{
       path: "/tech/customers",
       icon: Users,
-      label: "Customers",
+      label: "Customer",
       match: (p: string) => p.startsWith("/tech/customers"),
     } as MobileTab] : []),
-    ...(allowedTabs?.has("copilot") ? [{
+    ...(allowedTabs?.has("jarvis") ? [{
       path: "/copilot",
       icon: Bot,
       label: "JARVIS",

@@ -2,16 +2,26 @@
  * roleAccessDefaults.ts — Single source of truth for role → page-access defaults.
  *
  * Mirrors the `get_role_default_tabs(role)` SQL function. Keep these in sync.
+ *
+ * 2026-05-03 redesign: keys now align with the 7 Operating HQs (Intake, Now,
+ * Dispatch, Tech, Quote, Customer, Team) plus 5 utility surfaces (Phone, SMS,
+ * JARVIS, Pay, Admin). Old keys (jobs/inbox/chat/customers/copilot) were
+ * deprecated and migrated by `permissions_align_with_hq_structure`.
  */
 
 export type RoleKey = "admin" | "office" | "supervisor" | "tech" | "installer";
 
 export const ROLE_DEFAULTS: Record<RoleKey, string[]> = {
-  admin:      ["jobs", "phone", "sms", "inbox", "chat", "customers", "copilot", "pay", "admin"],
-  office:     ["jobs", "phone", "sms", "inbox", "chat", "customers", "copilot", "pay"],
-  supervisor: ["jobs", "phone", "sms", "chat", "customers", "copilot", "pay"],
-  tech:       ["jobs", "phone", "sms", "chat", "pay"],
-  installer:  ["jobs", "pay"],
+  // Admin — full access to everything
+  admin:      ["tech", "intake", "now", "dispatch", "quote", "customer", "team", "phone", "sms", "jarvis", "pay", "admin"],
+  // Office — full office workflow, no tech mobile, no admin settings
+  office:     ["intake", "now", "dispatch", "quote", "customer", "team", "phone", "sms", "jarvis", "pay"],
+  // Supervisor — tech mobile + dispatch oversight + comms
+  supervisor: ["tech", "now", "dispatch", "customer", "team", "phone", "sms", "jarvis", "pay"],
+  // Technician — field essentials only
+  tech:       ["tech", "phone", "sms", "team", "pay"],
+  // Installer — most restricted
+  installer:  ["tech", "team", "pay"],
 };
 
 const FALLBACK = ROLE_DEFAULTS.office;

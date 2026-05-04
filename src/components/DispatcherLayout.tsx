@@ -11,12 +11,18 @@ import { useUnreadSmsCount } from "@/hooks/useUnreadSmsCount";
 import { useVoicemails } from "@/hooks/useVoicemails";
 import { useEmployeeTabAccess } from "@/hooks/useEmployeeTabAccess";
 
+/**
+ * Tab key used for filtering bottom-nav tabs via employee_tab_access.
+ * Updated 2026-05-03 to align with the redesigned 12-key vocabulary.
+ * The "Dispatch" tab on this mobile shell is technically the office-side
+ * landing — it maps to the "dispatch" key (Schedule HQ).
+ */
 const TAB_KEY_MAP: Record<string, string> = {
-  "/": "jobs",
+  "/": "dispatch",
   "/phone": "phone",
   "/sms": "sms",
-  "/customers": "customers",
-  "/copilot": "copilot",
+  "/customers": "customer",
+  "/copilot": "jarvis",
 };
 
 function useDispatcherTabs(): MobileTab[] {

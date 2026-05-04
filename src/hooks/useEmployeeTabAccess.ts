@@ -15,73 +15,124 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveAuth } from "@/hooks/useEffectiveAuth";
 import { getRoleDefaults } from "@/lib/roleAccessDefaults";
 
-/** Map a pathname to its access-control key. Returns undefined for unknown routes. */
+/**
+ * Map a pathname to its access-control key. Returns undefined for unknown routes.
+ *
+ * 2026-05-03 redesign: each Operating HQ has its own key (intake/now/dispatch/
+ * tech/quote/customer/team) plus utility keys (phone/sms/jarvis/pay/admin).
+ * Old keys (jobs/inbox/chat/customers/copilot/vendors) were retired.
+ */
 export function routeToTabKey(pathname: string, search?: string): string | undefined {
+  // Tech HQ (mobile schedule + tools) — only the literal /tech and its tech-specific subroutes
   if (
-    pathname === "/" ||
-    pathname.startsWith("/intake") ||
-    pathname.startsWith("/now") ||
-    pathname.startsWith("/dispatch") ||
-    pathname.startsWith("/operations-v2") ||
-    pathname.startsWith("/dispatch-v2") ||
-    pathname.startsWith("/schedule-v2") ||
-    pathname.startsWith("/workflows") ||
-    pathname.startsWith("/jobs") ||
-    pathname.startsWith("/records/") ||
     pathname === "/tech" ||
     pathname.startsWith("/tech/team-schedule") ||
     pathname.startsWith("/tech/jobs") ||
-    pathname.startsWith("/estimates") ||
+    pathname.startsWith("/jobs/backlog") ||
     pathname.startsWith("/form/")
-  ) return "jobs";
+  ) return "tech";
   if (pathname.startsWith("/tech/sms")) return "sms";
-  if (pathname.startsWith("/tech/customers")) return "customers";
-  // Legacy /inbox links redirect into the split Phone/SMS pages.
+  if (pathname.startsWith("/tech/customers")) return "customer";
+
+  // Intake HQ (Operations Desk)
+  if (pathname.startsWith("/intake") || pathname.startsWith("/operations-v2")) return "intake";
+
+  // Now HQ (live job activity board)
+  if (pathname.startsWith("/now")) return "now";
+
+  // Dispatch HQ (schedule board)
+  if (
+    pathname.startsWith("/dispatch") ||
+    pathname.startsWith("/dispatch-v2") ||
+    pathname.startsWith("/schedule-v2") ||
+    pathname.startsWith("/workflows") ||
+    pathname.startsWith("/records/") ||
+    pathname.startsWith("/jobs") // /jobs landing → dispatch (specific subroutes match higher above)
+  ) return "dispatch";
+
+  // Quote HQ (catalog + builder + estimates)
+  if (
+    pathname.startsWith("/catalog") ||
+    pathname.startsWith("/repair-catalog") ||
+    pathname.startsWith("/shopping-cart") ||
+    pathname.startsWith("/quick-quote") ||
+    pathname.startsWith("/quote-builder") ||
+    pathname.startsWith("/estimates")
+  ) return "quote";
+
+  // Customer HQ
+  if (
+    pathname.startsWith("/customers") ||
+    pathname.startsWith("/agreements") ||
+    pathname.startsWith("/leads") ||
+    pathname.startsWith("/vendors") ||
+    pathname.startsWith("/locations")
+  ) return "customer";
+
+  // Team HQ (chat)
+  if (pathname.startsWith("/team")) return "team";
+
+  // Phone surface
+  if (
+    pathname.startsWith("/phone") ||
+    pathname.startsWith("/phone-console") ||
+    pathname.startsWith("/calls") ||
+    pathname.startsWith("/communications")
+  ) return "phone";
+
+  // SMS surface
+  if (pathname.startsWith("/sms")) return "sms";
+
+  // Legacy /inbox redirects — split by query string into phone or sms
   if (pathname.startsWith("/inbox")) {
-    if (search?.includes("sms")) return "sms";
-    if (search?.includes("calls")) return "phone";
-    if (search?.includes("voicemail")) return "phone";
+    if (search?.includes("calls") || search?.includes("voicemail")) return "phone";
     return "sms";
   }
-  if (pathname.startsWith("/calls")) return "phone";
-  if (pathname.startsWith("/communications")) return "phone";
-  if (pathname.startsWith("/phone")) return "phone";
-  if (pathname.startsWith("/phone-console")) return "phone";
-  if (pathname.startsWith("/sms")) return "sms";
-  if (pathname.startsWith("/team")) return "chat";
-  if (pathname.startsWith("/customers")) return "customers";
-  if (pathname.startsWith("/agreements") || pathname.startsWith("/leads")) return "customers";
-  if (pathname.startsWith("/vendors") || pathname.startsWith("/locations")) return "jobs";
-  if (pathname.startsWith("/copilot")) return "copilot";
-  if (pathname.startsWith("/catalog") || pathname.startsWith("/repair-catalog") || pathname.startsWith("/shopping-cart")) return "jobs";
-  if (pathname.startsWith("/quick-quote") || pathname.startsWith("/quote-builder")) return "jobs";
-  if (pathname.startsWith("/payments")) return "admin";
-  if (pathname.startsWith("/reports")) return "admin";
+
+  // JARVIS (Copilot)
+  if (pathname.startsWith("/copilot")) return "jarvis";
+
+  // Pay (employee pay page)
   if (pathname.startsWith("/pay")) return "pay";
   if (pathname.startsWith("/admin") && search?.includes("section=employees") && search?.includes("employeeTab=pay")) return "pay";
+
+  // Admin (settings, payments, reports, agent training, IVR builder, system log)
   if (
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/payments") ||
+    pathname.startsWith("/reports") ||
     pathname.startsWith("/agent-training") ||
     pathname.startsWith("/ivr-builder") ||
     pathname.startsWith("/system-log")
   ) return "admin";
+
+  // Root path — let the role-aware home handle routing, no key check
+  if (pathname === "/") return undefined;
+
   return undefined;
 }
 
-/** All recognised access keys in display order */
+/** All recognised access keys in display order (left → right in the matrix UI) */
 export const ALL_ACCESS_KEYS = [
-  "jobs", "phone", "sms", "inbox", "chat",
-  "customers", "copilot", "pay", "admin",
+  "tech", "intake", "now", "dispatch", "quote", "customer", "team",
+  "phone", "sms", "jarvis", "pay", "admin",
 ] as const;
 
+/**
+ * Default landing route for each access key. Used by getFirstAllowedRoute()
+ * to send a user to a page they actually have access to after login.
+ */
 const ACCESS_FALLBACK_ROUTE: Record<(typeof ALL_ACCESS_KEYS)[number], string> = {
-  jobs: "/dispatch",
+  tech: "/tech",
+  intake: "/intake",
+  now: "/now",
+  dispatch: "/dispatch",
+  quote: "/catalog",
+  customer: "/customers",
+  team: "/team",
   phone: "/phone",
   sms: "/sms",
-  inbox: "/sms",
-  chat: "/team",
-  customers: "/customers",
-  copilot: "/copilot",
+  jarvis: "/copilot",
   pay: "/pay",
   admin: "/admin",
 };
@@ -93,11 +144,12 @@ export function getFirstAllowedRoute(allowedTabs: Set<string> | null, role?: str
     return isFieldRole ? "/tech" : "/dispatch";
   }
 
+  // Field roles always prefer /tech if they have it
+  if (isFieldRole && allowedTabs.has("tech")) return "/tech";
+
+  // Otherwise walk the canonical key order and pick the first match
   for (const key of ALL_ACCESS_KEYS) {
-    if (!allowedTabs.has(key)) continue;
-    if (key === "jobs" && isFieldRole) return "/tech";
-    if (key === "sms" && isFieldRole) return "/tech/sms";
-    return ACCESS_FALLBACK_ROUTE[key];
+    if (allowedTabs.has(key)) return ACCESS_FALLBACK_ROUTE[key];
   }
 
   return isFieldRole ? "/tech" : "/dispatch";
