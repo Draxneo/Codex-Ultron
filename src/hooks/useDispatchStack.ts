@@ -53,13 +53,18 @@ export function useDispatchStack(): DispatchStackData {
       const today = new Date().toISOString().split("T")[0];
       const errors: string[] = [];
 
-      // Fire all 4 queries simultaneously via Promise.allSettled
+      // Fire all queries simultaneously via Promise.allSettled
+      // 2026-05-04 v2: "Ready to Schedule" now ALSO includes jobs and estimates
+      // that have a scheduled_date but no arrival_start window — Clint asks for
+      // those to surface here so when JARVIS captures "Wednesday anytime" the
+      // booking lands in the stack and the dispatcher slots it onto the
+      // weekly calendar by hand.
       const results = await Promise.allSettled([
-        // 0: Ready to Schedule — jobs with no scheduled_date, not on_hold, not follow-up, not closed
+        // 0: Ready to Schedule (jobs) — no scheduled_date OR scheduled_date set but no arrival_start
         supabase
           .from("jobs")
-          .select("id, customer_name, job_type, created_at")
-          .is("scheduled_date", null)
+          .select("id, customer_name, job_type, scheduled_date, arrival_start, created_at")
+          .or("scheduled_date.is.null,arrival_start.is.null")
           .neq("status", "on_hold")
           .or("needs_follow_up.is.null,needs_follow_up.eq.false")
           .not("status", "in", CLOSED_WORK_STATUS_FILTER)
@@ -93,33 +98,79 @@ export function useDispatchStack(): DispatchStackData {
         supabase
           .from("estimate_responses")
           .select("id, estimate_id"),
+
+        // 4: Ready-to-Schedule (estimates) — same logic as jobs above. JARVIS
+        // booked the estimate with a date but no time → shows up here so the
+        // dispatcher can slot it onto the weekly calendar manually.
+        supabase
+          .from("estimates")
+          .select("id, customer_name, estimate_number, scheduled_date, arrival_start, work_status, created_at")
+          .or("scheduled_date.is.null,arrival_start.is.null")
+          .not("work_status", "in", "(won,lost,canceled,cancelled)")
+          .gte("created_at", APP_ACTION_GO_LIVE_ISO)
+          .order("created_at", { ascending: false })
+          .limit(50),
       ]);
 
       const readyToScheduleResult = results[0];
       const pastDueResult = results[1];
       const newLeadsResult = results[2];
       const estimateResponsesResult = results[3];
+      const readyEstimatesResult = results[4];
 
       const readyToSchedule: StackItem[] = [];
       const pastDue: StackItem[] = [];
       const newLeads: StackItem[] = [];
       let estimateResponses: StackItem[] = [];
 
-      // Process Ready to Schedule
+      // Process Ready to Schedule (jobs)
       if (readyToScheduleResult.status === "fulfilled" && !readyToScheduleResult.value.error) {
         const jobs = (readyToScheduleResult.value.data as any[]) || [];
         readyToSchedule.push(
-          ...jobs.map((job: any) => ({
-            id: job.id,
-            kind: "ready_to_schedule" as const,
-            title: job.customer_name || `Job #${job.id.slice(0, 8)}`,
-            subtitle: job.job_type ? `${job.job_type.charAt(0).toUpperCase() + job.job_type.slice(1)}` : undefined,
-            sortKey: new Date(job.created_at).getTime(),
-            target: `/jobs/${job.id}`,
-          }))
+          ...jobs.map((job: any) => {
+            const typeLabel = job.job_type ? job.job_type.charAt(0).toUpperCase() + job.job_type.slice(1) : "";
+            // 2026-05-04 v2: Surface the captured date in the subtitle when JARVIS
+            // got a date but no specific time. Helps the dispatcher prioritize
+            // ("oh, Wednesday is busy already") at a glance.
+            const dateLabel = job.scheduled_date
+              ? new Date(`${job.scheduled_date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · needs time"
+              : "Needs date + time";
+            const subtitle = typeLabel ? `${typeLabel} · ${dateLabel}` : dateLabel;
+            return {
+              id: job.id,
+              kind: "ready_to_schedule" as const,
+              title: job.customer_name || `Job #${job.id.slice(0, 8)}`,
+              subtitle,
+              sortKey: new Date(job.created_at).getTime(),
+              target: `/jobs/${job.id}`,
+            };
+          })
         );
       } else {
         errors.push("Ready to Schedule");
+      }
+
+      // Process Ready to Schedule (estimates) — same shape, different target route
+      if (readyEstimatesResult.status === "fulfilled" && !readyEstimatesResult.value.error) {
+        const estimates = (readyEstimatesResult.value.data as any[]) || [];
+        readyToSchedule.push(
+          ...estimates.map((est: any) => {
+            const dateLabel = est.scheduled_date
+              ? new Date(`${est.scheduled_date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · needs time"
+              : "Needs date + time";
+            const num = est.estimate_number ? `Est #${est.estimate_number}` : `Est #${String(est.id).slice(0, 8)}`;
+            return {
+              id: est.id,
+              kind: "ready_to_schedule" as const,
+              title: est.customer_name || num,
+              subtitle: `Estimate · ${dateLabel}`,
+              sortKey: new Date(est.created_at).getTime(),
+              target: `/estimates/${est.id}`,
+            };
+          })
+        );
+      } else {
+        errors.push("Ready to Schedule (estimates)");
       }
 
       // Process Past Due

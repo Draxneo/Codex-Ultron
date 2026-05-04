@@ -2724,35 +2724,44 @@ function ActionPanel({
     // Jonathan as default for a FIX call before the customer record loads).
   }, [bookingActionItem?.id, bookingSuggestion?.defaultOwner, (customer as any)?.primary_business_unit_id]);
 
-  // Handle opening the confirmation dialog (replaces the old immediate book call)
-  const handleInlineBook = useCallback(() => {
-    if (!bookingActionItem) return;
-    setBookConfirmOpen(true);
-  }, [bookingActionItem]);
+  // 2026-05-04 v2: Per Clint, NO popup. Book Now fires immediately using
+  // whatever JARVIS captured. Behavior split:
+  //   - JARVIS got a SPECIFIC TIME → estimate/job lands on the calendar at
+  //     that arrival window (uses bookDate + bookStart + bookEnd from state).
+  //   - JARVIS got a DATE but NO time → save the date only; the resulting
+  //     estimate/job has arrival_start = null and naturally surfaces in the
+  //     "Ready to Schedule" stack on Dispatch HQ for the dispatcher to slot
+  //     into the weekly schedule manually.
+  //   - JARVIS missing date entirely → button is disabled with a hint;
+  //     dispatcher should ask JARVIS / customer for at least a day.
+  //
+  // No form to fill out — the captured fields panel above already shows what
+  // JARVIS heard. The dispatcher just clicks once.
+  const handleInlineBook = useCallback(async () => {
+    if (!bookingActionItem || bookingBusy || !bookDate) return;
 
-  // Handle the actual booking submission from the confirmation dialog
-  const handleConfirmBook = useCallback(async () => {
-    if (!bookingActionItem || !bookDate || !bookStart) return;
+    // Only pass scheduled_time/end if we actually have a captured start time.
+    // Sending an empty string would make centralDateTime() return null inside
+    // useBookingAction.book(), which is fine — the resulting estimate/job
+    // ends up with a null arrival_start, which is what we want for the
+    // Ready-to-Schedule path. We send empty rather than undefined so the
+    // existing book() metadata-merge logic doesn't fall back to a stale value.
+    const hasCapturedTime = !!bookStart;
 
     await book({
       action_item_id: bookingActionItem.id,
       metadata: {
         ...(bookingActionItem.metadata || {}),
         scheduled_date: bookDate,
-        scheduled_time: bookStart,
-        scheduled_end: bookEnd,
+        scheduled_time: hasCapturedTime ? bookStart : "",
+        scheduled_end: hasCapturedTime ? bookEnd : "",
         assigned_to: bookAssignee,
         job_type: bookJobType,
       },
       description: bookingActionItem.description || null,
       customer_phone: bookingActionItem.customer_phone || selected?.phone || null,
     });
-
-    // Close the dialog on success (useBookingAction handles the phase transition)
-    if (bookingPhase === "booked") {
-      setBookConfirmOpen(false);
-    }
-  }, [bookingActionItem, bookDate, bookStart, bookEnd, bookAssignee, bookJobType, book, selected?.phone, bookingPhase]);
+  }, [bookingActionItem, bookingBusy, bookDate, bookStart, bookEnd, bookAssignee, bookJobType, book, selected?.phone]);
   const addressVerification = useMemo(
     () => addressVerificationFromContext(selected, customer, liveAddressVerification, acceptedAddressVerification),
     [selected, customer, liveAddressVerification, acceptedAddressVerification]
@@ -3338,153 +3347,13 @@ function ActionPanel({
         </DialogContent>
       </Dialog>
 
-      {/* 2026-05-04: Review & Book confirmation dialog.
-          Opens when user clicks the inline Book button, allowing review/edit of:
-          - Date (required), Start time (required), End time, Tech, Job type.
-          Replaces immediate booking with a human-reviewed dialog to prevent
-          schedule_date=NULL bookings when JARVIS captures a date but no time. */}
-      <Dialog open={bookConfirmOpen} onOpenChange={setBookConfirmOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Review and confirm booking</DialogTitle>
-            <DialogDescription>
-              Verify the captured details before creating the {bookJobType === "estimate" ? "estimate" : bookJobType === "maintenance" ? "maintenance" : "service"}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Read-only: Customer info from the action item */}
-            {bookingActionItem && (
-              <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer</p>
-                  <p className="mt-1 text-sm font-semibold">{bookingActionItem.metadata?.customer_name || "Unknown"}</p>
-                </div>
-                {bookingActionItem.customer_phone && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</p>
-                    <p className="mt-1 text-sm">{bookingActionItem.customer_phone}</p>
-                  </div>
-                )}
-                {(bookingActionItem.metadata?.address || addressVerification?.address) && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Address</p>
-                    <p className="mt-1 text-sm">{bookingActionItem.metadata?.address || addressVerification?.address}</p>
-                  </div>
-                )}
-                {bookingActionItem.metadata?.description && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issue</p>
-                    <p className="mt-1 line-clamp-2 text-sm">{bookingActionItem.metadata.description}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Editable fields */}
-            <div className="space-y-3">
-              {/* Date (required) */}
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date (required)</label>
-                <Input
-                  type="date"
-                  value={bookDate}
-                  onChange={(e) => setBookDate(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-
-              {/* Start time (required) */}
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival start (required)</label>
-                <Input
-                  type="time"
-                  value={bookStart}
-                  onChange={(e) => setBookStart(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-
-              {/* End time (optional) */}
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arrival end</label>
-                <Input
-                  type="time"
-                  value={bookEnd}
-                  onChange={(e) => setBookEnd(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-
-              {/* Tech / Assignee (Select) */}
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assigned to</label>
-                <select
-                  value={bookAssignee}
-                  onChange={(e) => setBookAssignee(e.target.value)}
-                  className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  {/* Active employees: tech, supervisor, admin, installer */}
-                  {(employees || [])
-                    .filter((emp: any) => emp.is_active && ["tech", "supervisor", "admin", "installer"].includes(emp.role))
-                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-                    .map((emp: any) => (
-                      <option key={emp.id} value={emp.name}>
-                        {emp.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Job type (Select) */}
-              <div>
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Job type</label>
-                <select
-                  value={bookJobType}
-                  onChange={(e) => setBookJobType(e.target.value as "service" | "estimate" | "maintenance")}
-                  className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  <option value="service">Service</option>
-                  <option value="estimate">Estimate</option>
-                  <option value="maintenance">Maintenance</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Validation hint */}
-            {(!bookDate || !bookStart) && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-100">
-                Date and arrival start time are required to book.
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={() => setBookConfirmOpen(false)} disabled={bookingBusy}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              className="gap-2"
-              onClick={handleConfirmBook}
-              disabled={bookingBusy || !bookDate || !bookStart}
-            >
-              {bookingBusy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {bookingPhase === "resolving" ? "Resolving…" : bookingPhase === "syncing" ? "Syncing…" : "Booking…"}
-                </>
-              ) : (
-                <>
-                  <CalendarDays className="h-4 w-4" />
-                  Book Now
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 2026-05-04 v2: Review & Book dialog REMOVED. Per Clint, the dispatcher
+          shouldn't have to fill out a form — JARVIS already extracted everything
+          from the transcript and the captured-fields panel above shows it.
+          The Book Now button now fires book() immediately (see handleInlineBook).
+          When JARVIS got a date but no specific time, the resulting estimate/job
+          lands in the Ready-to-Schedule stack on Dispatch HQ for the dispatcher
+          to drag onto the calendar after reviewing the weekly view. */}
     </aside>
   );
 }
