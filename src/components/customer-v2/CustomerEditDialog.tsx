@@ -121,7 +121,7 @@ export function CustomerEditDialog({ customer }: { customer: CustomerLike }) {
           Edit CRM
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit customer record</DialogTitle>
           <DialogDescription>

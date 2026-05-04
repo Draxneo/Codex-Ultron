@@ -126,7 +126,7 @@ export default function BrochureBlocksManager() {
         </div>
 
         <Dialog open={!!editingBlock} onOpenChange={(open) => { if (!open) setEditingBlock(null); }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85dvh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit: {editingBlock?.series} — {editingBlock?.label}</DialogTitle></DialogHeader>
             {editingBlock && (
               <div className="space-y-6">

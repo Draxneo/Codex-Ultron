@@ -324,7 +324,7 @@ export function MorningRouteOptimizerDialog({ open, onOpenChange, date, items, e
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-6xl overflow-hidden p-0">
+      <DialogContent className="max-h-[92dvh] max-w-6xl overflow-hidden p-0">
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center gap-2">
             <Route className="h-5 w-5 text-primary" />

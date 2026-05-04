@@ -32,6 +32,11 @@ const DrawerContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+        // 2026-05-03 auto-fit defaults — drawers cap at 90dvh and scroll
+        // internally so long forms can't push their footer off-screen.
+        // Specific drawers can still override via className (e.g. set
+        // max-h-[60dvh] for a smaller drawer).
+        "max-h-[90dvh] overflow-y-auto overscroll-contain",
         className,
       )}
       {...props}

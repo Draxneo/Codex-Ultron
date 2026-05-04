@@ -122,7 +122,7 @@ export function LineItemTemplatesCard() {
 
       {/* Edit / Create Dialog */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing?.id ? "Edit Template" : "New Template"}</DialogTitle>
           </DialogHeader>

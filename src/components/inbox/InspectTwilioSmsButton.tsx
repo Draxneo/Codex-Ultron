@@ -84,7 +84,7 @@ export function InspectTwilioSmsButton({ messageSid, className }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Twilio SMS inspector</DialogTitle>
             <DialogDescription className="font-mono text-xs break-all">

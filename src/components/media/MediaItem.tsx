@@ -49,7 +49,7 @@ export function MediaItem({
     variant === "compact"
       ? "max-h-20"
       : variant === "card"
-      ? "max-h-[70vh]"
+      ? "max-h-[70dvh]"
       : "max-h-48";
 
   const radius = variant === "compact" ? "rounded" : "rounded-lg";

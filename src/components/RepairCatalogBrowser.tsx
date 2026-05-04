@@ -163,7 +163,7 @@ export function RepairCatalogBrowser({ onAddToCart, onEdit, editable, compact, m
           </div>
         </div>
       ) : null}
-      <div className={`overflow-y-auto ${maxHeight || "max-h-[70vh]"}`}>
+      <div className={`overflow-y-auto ${maxHeight || "max-h-[70dvh]"}`}>
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
             <Loader2 className="h-5 w-5 animate-spin" />

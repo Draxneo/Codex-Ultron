@@ -154,7 +154,7 @@ export function UniversalMediaPlayer({
       {kind === "video" && (
         <video
           {...mediaProps}
-          className={cn("mb-3 max-h-[55vh] w-full rounded-md bg-black object-contain")}
+          className={cn("mb-3 max-h-[55dvh] w-full rounded-md bg-black object-contain")}
         />
       )}
       {kind === "audio" && <audio {...mediaProps} />}

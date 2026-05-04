@@ -485,7 +485,7 @@ export function TechFormSections({
             {/* MOBILE: one field at a time */}
             {isMobile ? (
               <>
-                <div className="max-h-[55vh] overflow-y-auto">
+                <div className="max-h-[55dvh] overflow-y-auto">
                   {activeSec.fields[mobileFieldIdx] && (
                     <FieldRenderer {...renderFieldProps(activeSec.fields[mobileFieldIdx])} />
                   )}

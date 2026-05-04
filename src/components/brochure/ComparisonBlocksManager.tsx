@@ -127,7 +127,7 @@ export default function ComparisonBlocksManager() {
         </div>
 
         <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editing?.icon} Edit: {editing?.category}</DialogTitle>
             </DialogHeader>

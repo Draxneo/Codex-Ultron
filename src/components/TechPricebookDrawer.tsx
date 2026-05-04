@@ -88,7 +88,7 @@ export function TechPricebookDrawer({ open, onOpenChange, jobId, techName }: Pro
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[92vh] flex flex-col">
+      <DrawerContent className="max-h-[92dvh] flex flex-col">
         {/* Header */}
         <DrawerHeader className="flex flex-row items-center gap-2 pb-2 border-b">
           <Button variant="ghost" size="icon" className="shrink-0" onClick={() => onOpenChange(false)}>

@@ -432,7 +432,7 @@ export function FormFieldsEditor() {
 
         {/* Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-md max-h-[80dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Form Preview — {activeType.charAt(0).toUpperCase() + activeType.slice(1)}</DialogTitle>
             </DialogHeader>

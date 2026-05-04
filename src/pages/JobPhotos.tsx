@@ -216,7 +216,7 @@ export default function JobPhotos() {
               <p className="text-xs text-muted-foreground mb-2 px-1">
                 {selected.label} • {selected.source}
               </p>
-              <MediaViewer url={selected.url} fileName={selected.label} maxHeightClass="max-h-[80vh]" />
+              <MediaViewer url={selected.url} fileName={selected.label} maxHeightClass="max-h-[80dvh]" />
             </div>
           )}
         </DialogContent>

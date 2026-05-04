@@ -301,7 +301,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="h-[95vh] max-h-[95vh] overflow-hidden flex flex-col">
+      <DrawerContent className="h-[95dvh] max-h-[95dvh] overflow-hidden flex flex-col">
         <DrawerHeader className="flex items-center justify-between border-b pb-3 shrink-0">
           <DrawerTitle className="text-lg">
             {!cartType ? "Build Proposal" : cartType === "repair" ? "Repair Options" : "New System Options"}
@@ -374,7 +374,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                       <div className="space-y-3 border-t pt-3">
                         <RepairCatalogBrowser
                           compact
-                          maxHeight="max-h-[42vh]"
+                          maxHeight="max-h-[42dvh]"
                           onAddToCart={(item) => addRepairCatalogItem(tier.key, item)}
                         />
                         <div className="flex gap-2 items-end">
@@ -437,7 +437,7 @@ export function TechEstimateCartDrawer({ open, onOpenChange, jobId, estimateId, 
                       <div className="space-y-2 border-t pt-2">
                         <EquipmentCatalogBrowser
                           compact
-                          maxHeight="max-h-[50vh]"
+                          maxHeight="max-h-[50dvh]"
                           onAddToCart={(eq: EquipmentMatchup) => setSystemSlot(tier.key, eq)}
                         />
                         <Button size="sm" variant="ghost" onClick={() => setActiveTier(null)} className="w-full text-xs">Cancel</Button>

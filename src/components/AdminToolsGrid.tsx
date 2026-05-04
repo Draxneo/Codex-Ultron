@@ -28,7 +28,7 @@ export function AdminToolsGrid() {
           <LayoutGrid className="h-5 w-5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-3 max-h-[80vh] overflow-y-auto" align="end" sideOffset={8}>
+      <PopoverContent className="w-80 p-3 max-h-[80dvh] overflow-y-auto" align="end" sideOffset={8}>
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tools</p>
         <div className="grid grid-cols-3 gap-1">
           {visibleTools.map((tool) => (

@@ -129,7 +129,7 @@ function ErrorsPanel() {
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No errors {hideResolved && "(unresolved)"}.
             </div>
           ) : (
-            <ScrollArea className="h-[60vh]">
+            <ScrollArea className="h-[60dvh]">
               {rows.map(r => {
                 const hasDetails = !!(r.stack_trace || (r.context && Object.keys(r.context).length > 0));
                 const isOpen = !!expanded[r.id];
@@ -247,7 +247,7 @@ function CronPanel() {
           <CardTitle className="text-sm">Recent Cron Runs</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="h-[40vh]">
+          <ScrollArea className="h-[40dvh]">
             {runs.map((r: any, index: number) => {
               const message = r.return_message ?? r.error_message;
               const rowKey = `${r.job_name}-${r.started_at ?? "unknown"}-${index}`;
@@ -341,7 +341,7 @@ function RetryQueuePanel() {
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Queue empty.
               </div>
             : (
-              <ScrollArea className="h-[60vh]">
+              <ScrollArea className="h-[60dvh]">
                 {rows.map((r: any) => (
                   <div key={r.id} className="border-b last:border-b-0 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -404,7 +404,7 @@ function OnCallPanel() {
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No pages sent.
             </div>
           : (
-            <ScrollArea className="h-[60vh]">
+            <ScrollArea className="h-[60dvh]">
               {rows.map((r: any) => (
                 <div key={r.id} className="border-b last:border-b-0 px-3 py-2 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
@@ -628,7 +628,7 @@ function TracePanel() {
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No trace events yet.
               </div>
             : (
-              <ScrollArea className="h-[62vh]">
+              <ScrollArea className="h-[62dvh]">
                 {rows.map((r: any) => {
                   const hasDetails = !!(r.reason || r.metadata && Object.keys(r.metadata).length > 0 || r.call_sid || r.parent_call_sid);
                   const isOpen = !!expanded[r.id];

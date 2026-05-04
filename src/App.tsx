@@ -143,7 +143,7 @@ function PrivateAppListeners() {
 
 function RouteLoading() {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+    <div className="flex min-h-[50dvh] items-center justify-center text-sm text-muted-foreground">
       Loading...
     </div>
   );

@@ -275,7 +275,7 @@ export function BookingIntentAlert() {
           <div
             key={alert.id}
             className={cn(
-              "pointer-events-auto rounded-xl border bg-card shadow-2xl p-4 space-y-3 animate-in slide-in-from-bottom-4 fade-in duration-300 max-h-[80vh] overflow-y-auto",
+              "pointer-events-auto rounded-xl border bg-card shadow-2xl p-4 space-y-3 animate-in slide-in-from-bottom-4 fade-in duration-300 max-h-[80dvh] overflow-y-auto",
               alert.priority === "critical" && "border-destructive/50 ring-1 ring-destructive/20",
               alert.priority === "high" && "border-amber-500/50 ring-1 ring-amber-500/20"
             )}

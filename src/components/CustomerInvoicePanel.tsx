@@ -368,7 +368,7 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
 
       {/* Create Invoice Dialog */}
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
           </DialogHeader>
@@ -455,7 +455,7 @@ export default function CustomerInvoicePanel({ jobId, jobType, customerName, cus
 
       {/* Edit Invoice Dialog */}
       <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Invoice</DialogTitle>
           </DialogHeader>

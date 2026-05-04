@@ -65,7 +65,7 @@ export function CoverSection({ customerName, variant = "install" }: CoverSection
   const coverTitle = coverSection?.title || defaultTitle;
   const coverSubtitle = coverSection?.subtitle || defaultSubtitle;
   return (
-    <div className="relative min-h-[60vh] overflow-hidden bg-primary">
+    <div className="relative min-h-[60dvh] overflow-hidden bg-primary">
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroComfort})` }} />
       <div className="absolute inset-0 bg-gradient-to-r from-primary/95 via-primary/80 to-primary/40" />
       <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" fill="none" preserveAspectRatio="none">

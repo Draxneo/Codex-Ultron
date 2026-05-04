@@ -327,7 +327,7 @@ export default function Agreements() {
       </main>
 
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Comfort Club Member</DialogTitle>
             <DialogDescription>Add a customer to a maintenance agreement and choose their plan details.</DialogDescription>

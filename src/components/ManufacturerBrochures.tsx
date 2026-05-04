@@ -237,12 +237,12 @@ export function ManufacturerBrochures() {
       </Card>
       {/* PDF Preview Dialog */}
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="max-w-3xl h-[80vh]">
+        <DialogContent className="max-w-3xl h-[80dvh]">
           <DialogHeader>
             <DialogTitle>Brochure Preview</DialogTitle>
           </DialogHeader>
           {previewUrl && (
-            <MediaViewer url={previewUrl} fileName="brochure.pdf" category="pdf" maxHeightClass="max-h-[75vh]" />
+            <MediaViewer url={previewUrl} fileName="brochure.pdf" category="pdf" maxHeightClass="max-h-[75dvh]" />
           )}
         </DialogContent>
       </Dialog>

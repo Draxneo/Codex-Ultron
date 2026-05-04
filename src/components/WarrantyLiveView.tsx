@@ -40,7 +40,7 @@ export default function WarrantyLiveView({ open, onOpenChange, liveViewUrl, stat
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl w-[95vw] h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-4xl w-[95vw] h-[85dvh] flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 py-3 border-b flex-shrink-0">
           <div className="flex items-center justify-between gap-3">

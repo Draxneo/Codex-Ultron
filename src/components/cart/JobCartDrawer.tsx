@@ -184,7 +184,7 @@ export function JobCartDrawer({ jobId, open, onOpenChange, onAddMore, customerNa
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="h-[92vh]">
+        <DrawerContent className="h-[92dvh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-primary" /> {cart?.estimate_number || "Customer Cart"}

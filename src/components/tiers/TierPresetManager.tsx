@@ -49,7 +49,7 @@ export function TierPresetManager({ scope, scopeLabel, open, onOpenChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Curate Good / Better / Best</DialogTitle>
           <DialogDescription>

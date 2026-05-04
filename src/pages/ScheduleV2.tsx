@@ -1119,7 +1119,7 @@ function JobMediaDialog({
             {item.customer_name || "No customer name"} &middot; {item.job_number || item.hcp_job_number || item.id.slice(0, 8)}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[70vh] overflow-auto">
+        <div className="max-h-[70dvh] overflow-auto">
           <JobPhotosGrid jobId={item.id} />
         </div>
         <DialogFooter className="border-t px-6 py-4">

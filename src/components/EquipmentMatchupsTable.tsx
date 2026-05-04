@@ -204,7 +204,7 @@ export function EquipmentMatchupsTable({ rows, editable }: Props) {
       </div>
 
       {/* Table */}
-      <div className="border border-border/60 rounded-md overflow-auto max-h-[70vh] relative">
+      <div className="border border-border/60 rounded-md overflow-auto max-h-[70dvh] relative">
         <table className="w-full text-xs border-collapse">
           <thead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm">
             <tr>

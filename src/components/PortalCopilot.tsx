@@ -142,7 +142,7 @@ export function PortalCopilot({ customerId }: { customerId: string }) {
   }
 
   return (
-    <div className="fixed bottom-0 right-0 z-50 w-full sm:w-[360px] sm:bottom-5 sm:right-5 flex flex-col border rounded-t-xl sm:rounded-xl shadow-2xl max-h-[70vh] sm:max-h-[500px] bg-white">
+    <div className="fixed bottom-0 right-0 z-50 w-full sm:w-[360px] sm:bottom-5 sm:right-5 flex flex-col border rounded-t-xl sm:rounded-xl shadow-2xl max-h-[70dvh] sm:max-h-[500px] bg-white">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b rounded-t-xl bg-gradient-to-r from-[hsl(213,60%,14%)] to-[hsl(213,55%,22%)]">
         <div className="flex items-center gap-2">

@@ -121,7 +121,7 @@ export function EstimatePhotosCard({ estimateId }: EstimatePhotosCardProps) {
           <img
             src={selectedUrl}
             alt="full size"
-            className="max-h-[90vh] max-w-[90vw] object-contain"
+            className="max-h-[90dvh] max-w-[90vw] object-contain"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

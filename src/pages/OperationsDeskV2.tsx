@@ -2440,7 +2440,7 @@ function CustomerWorkspace({
       </div>
 
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
-        <DialogContent className="flex h-[82vh] max-w-4xl flex-col overflow-hidden p-0">
+        <DialogContent className="flex h-[82dvh] max-w-4xl flex-col overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b px-4 py-3">
             <DialogTitle>Text {displayName}</DialogTitle>
             <DialogDescription>

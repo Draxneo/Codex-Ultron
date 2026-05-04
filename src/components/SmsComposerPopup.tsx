@@ -31,7 +31,7 @@ export function SmsComposerPopup() {
 
   return (
     <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-      <DialogContent className="flex h-[82vh] max-w-4xl flex-col overflow-hidden p-0">
+      <DialogContent className="flex h-[82dvh] max-w-4xl flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-3">
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-primary" />

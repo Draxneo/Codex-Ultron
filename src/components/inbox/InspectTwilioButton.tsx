@@ -114,7 +114,7 @@ export function InspectTwilioButton({ callSid, callLogId, hasRecording, classNam
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Twilio call inspector</DialogTitle>
             <DialogDescription className="font-mono text-xs break-all">{callSid}</DialogDescription>

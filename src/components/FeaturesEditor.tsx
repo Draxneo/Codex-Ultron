@@ -119,7 +119,7 @@ export function FeaturesEditor({ matchup, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">Edit Features & Benefits</DialogTitle>
           <div className="flex flex-wrap gap-1.5 mt-2">

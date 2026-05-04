@@ -128,7 +128,7 @@ export function JobEditDialog({ job }: { job: any }) {
           Edit job
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit job</DialogTitle>
           <DialogDescription>

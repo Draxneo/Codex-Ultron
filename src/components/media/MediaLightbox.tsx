@@ -95,7 +95,7 @@ export function MediaLightbox({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] max-h-[95dvh] w-[95vw] h-[95dvh] p-0 overflow-hidden flex flex-col">
         <DialogTitle className="sr-only">{current.fileName || "Media viewer"}</DialogTitle>
 
         {annotating ? (
