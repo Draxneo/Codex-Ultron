@@ -28,6 +28,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDispatchCardAlerts } from "@/hooks/useDispatchCardAlerts";
 import { useDispatchCardAlertActions } from "@/components/dispatch/useDispatchCardAlertActions";
+import { useDispatchStack } from "@/hooks/useDispatchStack";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEstimates } from "@/hooks/useEstimates";
 import { useCalendarJobs } from "@/hooks/useJobs";
@@ -101,6 +102,13 @@ export default function DispatchCalendar() {
   // entire Now HQ card surface.
   const { alertsByJobId } = useDispatchCardAlerts();
   const { resolveAlert, retryAlert, navigateAlert, runAction: runAlertAction } = useDispatchCardAlertActions();
+
+  // 2026-05-04: Total count for the Stack button badge. Tells dispatchers at
+  // a glance how many things are waiting in the drawer without them having
+  // to open it. TanStack Query dedupes — DispatchStackDrawer calls the same
+  // hook internally so this isn't a second network request.
+  const { readyToSchedule, pastDue, newLeads, estimateResponses } = useDispatchStack();
+  const stackCount = (readyToSchedule?.length || 0) + (pastDue?.length || 0) + (newLeads?.length || 0) + (estimateResponses?.length || 0);
 
   const setCurrentDay = (day: Date) => {
     setCurrentDayState(day);
@@ -206,10 +214,21 @@ export default function DispatchCalendar() {
             <div className="flex min-w-0 items-center gap-2">
               {/* 2026-05-04: Stack drawer toggle — slim left-rail showing
                   unscheduled work (Past Due, Ready to Schedule, Customer
-                  Decisions, New Leads). Replaces what used to live on /now. */}
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={() => setStackOpen(true)}>
+                  Decisions, New Leads). Replaces what used to live on /now.
+                  Red count badge on top-right shows how many items are
+                  sitting under the Stack so dispatchers know there's work
+                  hidden in the drawer without having to open it. */}
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 relative" onClick={() => setStackOpen(true)}>
                 <Inbox className="h-4 w-4" />
                 Stack
+                {stackCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-2 ring-background"
+                    aria-label={`${stackCount} items in stack`}
+                  >
+                    {stackCount > 99 ? "99+" : stackCount}
+                  </span>
+                )}
               </Button>
               {/* Calendar is now the default Dispatch view. Was a back-button
                   to /dispatch — that would loop now. Swapped to a forward-link
