@@ -31,6 +31,3 @@ project(':capawesome-team-capacitor-android-foreground-service').projectDir = ne
 
 include ':capgo-capacitor-twilio-voice'
 project(':capgo-capacitor-twilio-voice').projectDir = new File('../node_modules/@capgo/capacitor-twilio-voice/android')
-
-include ':transistorsoft-capacitor-background-geolocation'
-project(':transistorsoft-capacitor-background-geolocation').projectDir = new File('../node_modules/@transistorsoft/capacitor-background-geolocation/android')
