@@ -213,14 +213,19 @@ export function useDispatchStack(): DispatchStackData {
     },
   });
 
-  // Realtime invalidation on these tables
-  useRealtimeInvalidation({
-    tables: ["jobs", "leads", "estimates", "estimate_responses"],
-    onInvalidate: () => {
-      // Parent will handle query invalidation
-    },
-    queryKey: "dispatch-stack",
-  });
+  // 2026-05-04 fix: useRealtimeInvalidation takes an ARRAY of subscriptions
+  // and an optional channel name, not an options object. The earlier shape
+  // crashed at runtime with "s.current.map is not a function" because the
+  // hook tries to .map over the first argument.
+  useRealtimeInvalidation(
+    [
+      { table: "jobs", queryKeys: [["dispatch-stack"]] },
+      { table: "leads", queryKeys: [["dispatch-stack"]] },
+      { table: "estimates", queryKeys: [["dispatch-stack"]] },
+      { table: "estimate_responses", queryKeys: [["dispatch-stack"]] },
+    ],
+    "dispatch-stack-realtime"
+  );
 
   return {
     readyToSchedule: data?.readyToSchedule || [],

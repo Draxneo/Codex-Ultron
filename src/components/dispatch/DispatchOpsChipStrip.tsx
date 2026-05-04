@@ -79,14 +79,20 @@ function useDispatchOpsChips(): OpsChipData & { isLoading: boolean; isError: boo
     },
   });
 
-  // Realtime invalidation
-  useRealtimeInvalidation({
-    tables: ["job_invoices", "jobs", "estimate_reviews", "outbound_drafts"],
-    onInvalidate: () => {
-      // Parent will handle query invalidation
-    },
-    queryKey: "dispatch-ops-chips",
-  });
+  // 2026-05-04 fix: useRealtimeInvalidation takes an ARRAY of subscriptions
+  // and an optional channel name string, not an options object. The earlier
+  // shape crashed at runtime with "s.current.map is not a function" because
+  // the hook tries to .map over the first argument. Match the signature used
+  // by useAttentionData / useDispatchCardAlerts.
+  useRealtimeInvalidation(
+    [
+      { table: "job_invoices", queryKeys: [["dispatch-ops-chips"]] },
+      { table: "jobs", queryKeys: [["dispatch-ops-chips"]] },
+      { table: "estimate_reviews", queryKeys: [["dispatch-ops-chips"]] },
+      { table: "outbound_drafts", queryKeys: [["dispatch-ops-chips"]] },
+    ],
+    "dispatch-ops-chips-realtime"
+  );
 
   return {
     unmatchedInvoices: data?.unmatchedInvoices ?? 0,
