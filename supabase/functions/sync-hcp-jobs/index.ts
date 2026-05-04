@@ -309,22 +309,46 @@ Deno.serve(async (req) => {
 
     const { data: existingJobs } = await supabase
       .from("jobs")
-      .select("id, hcp_id, job_type, assigned_to, hcp_status, scheduled_date, arrival_start, arrival_end, address, customer_name, customer_phone, customer_email, description, hcp_note, tonnage, system_type, brand, ahri_number, hcp_job_number, job_number")
+      .select("id, hcp_id, job_type, assigned_to, hcp_status, scheduled_date, arrival_start, arrival_end, address, customer_name, customer_phone, customer_email, description, hcp_note, tonnage, system_type, brand, ahri_number, hcp_job_number, job_number, locally_modified_at")
       .in("hcp_id", hcpIds);
-    
+
     const existingMap = new Map((existingJobs || []).map((j: any) => [j.hcp_id, j]));
-    
+
     let toInsert = mappedJobs.filter(j => !existingMap.has(j.hcp_id));
     const toUpdateRaw = mappedJobs.filter(j => existingMap.has(j.hcp_id));
 
     // ── Smart diff: only update jobs where fields actually changed ──
     let skippedUnchanged = 0;
+    let skippedLocallyModified = 0;
     let actualUpdates = 0;
-    
+
+    // 2026-05-03 fix: jobs touched by the user inside our app within the
+    // last 15 minutes are protected from being clobbered by HCP. Without
+    // this guard, the cron's every-minute sync would silently revert local
+    // reschedules that hadn't yet propagated back to HCP. The trigger
+    // stamp_locally_modified_at sets locally_modified_at on local writes
+    // (it skips its own sync writes by checking synced_at). After 15 min
+    // we resume normal sync — gives the user a window to ensure HCP has
+    // the new value, but doesn't permanently desync. A future commit will
+    // add a push-to-HCP path so this protection isn't needed at all.
+    const LOCAL_PROTECTION_MS = 15 * 60 * 1000;
+    const protectionCutoff = Date.now() - LOCAL_PROTECTION_MS;
+
     for (const incoming of toUpdateRaw) {
       const existing: any = existingMap.get(incoming.hcp_id)!;
+
+      // Skip if user just edited this job locally
+      if (existing.locally_modified_at) {
+        const lmTs = new Date(existing.locally_modified_at).getTime();
+        if (Number.isFinite(lmTs) && lmTs > protectionCutoff) {
+          skippedLocallyModified++;
+          console.log(`Skipping HCP sync for job ${existing.id} (hcp=${existing.hcp_id}): locally modified at ${existing.locally_modified_at}`);
+          continue;
+        }
+      }
+
       const diff = diffJobFields(incoming, existing);
-      
+
       if (!diff) {
         skippedUnchanged++;
         continue;
@@ -342,8 +366,8 @@ Deno.serve(async (req) => {
       if (error) console.log(`Update error for ${existing.id}:`, error.message);
       else actualUpdates++;
     }
-    
-    console.log(`Smart sync: ${actualUpdates} updated, ${skippedUnchanged} unchanged (skipped)`);
+
+    console.log(`Smart sync: ${actualUpdates} updated, ${skippedUnchanged} unchanged, ${skippedLocallyModified} locally protected`);
 
     // ── Orphan matching ──
     if (toInsert.length > 0) {
