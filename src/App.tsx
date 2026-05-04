@@ -82,18 +82,31 @@ const CallsPage = lazy(() => import("./pages/CallsPage"));
 const CommunicationsOnly = lazy(() => import("./pages/CommunicationsOnly"));
 const TeamCommunications = lazy(() => import("./pages/TeamCommunications"));
 const PhoneConsole = lazy(() => import("./pages/PhoneConsole"));
-const PhoneOnlySoftphone = lazy(() =>
-  import("./components/PhoneOnlySoftphone").then((module) => ({ default: module.PhoneOnlySoftphone }))
-);
-const CallerInfoCenter = lazy(() =>
-  import("./components/softphone/CallerInfoCenter").then((module) => ({ default: module.CallerInfoCenter }))
-);
-const IntakeActionCards = lazy(() =>
-  import("./components/softphone/IntakeActionCards").then((module) => ({ default: module.IntakeActionCards }))
-);
-const BookingIntentAlert = lazy(() =>
-  import("./components/BookingIntentAlert").then((module) => ({ default: module.BookingIntentAlert }))
-);
+// 2026-05-04: Defensive helper for lazy imports that pull a NAMED export.
+// When a stale code-split chunk 404s after a Render redeploy, the .then
+// callback used to crash with 'Cannot read properties of undefined (reading
+// X)' before vite:preloadError could catch it. Now we throw a clean
+// PreloadError so the global handler fires the friendly 'Updating
+// UltraOffice…' overlay + reload instead of a stack trace under the React
+// error boundary.
+function lazyNamed<T>(loader: () => Promise<any>, exportName: string) {
+  return lazy<any>(() =>
+    loader().then((mod) => {
+      if (!mod || typeof mod[exportName] === "undefined") {
+        throw Object.assign(
+          new Error(`Lazy chunk loaded but export '${exportName}' is missing — likely a stale chunk after redeploy.`),
+          { name: "ChunkLoadError" },
+        );
+      }
+      return { default: mod[exportName] };
+    }),
+  );
+}
+
+const PhoneOnlySoftphone = lazyNamed(() => import("./components/PhoneOnlySoftphone"), "PhoneOnlySoftphone");
+const CallerInfoCenter = lazyNamed(() => import("./components/softphone/CallerInfoCenter"), "CallerInfoCenter");
+const IntakeActionCards = lazyNamed(() => import("./components/softphone/IntakeActionCards"), "IntakeActionCards");
+const BookingIntentAlert = lazyNamed(() => import("./components/BookingIntentAlert"), "BookingIntentAlert");
 const Admin = lazy(() => import("./pages/Admin"));
 const SystemLog = lazy(() => import("./pages/SystemLog"));
 const ReferralPublic = lazy(() => import("./pages/ReferralPublic"));
