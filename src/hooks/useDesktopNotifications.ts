@@ -127,6 +127,19 @@ export function useDesktopNotifications() {
         onEvent: async (payload: any) => {
           const call = payload.new as any;
           if (call.direction === "inbound" && call.status !== "completed") {
+            // ── Bot filter: suppress incoming-call toast for IVR abandonments ──
+            // If bot_filter_status is 'abandoned_at_ivr', it means the caller hung up
+            // at the IVR without pressing a digit — very likely a bot. Don't notify
+            // the dispatcher (they get tired of reacting to silence). However, if
+            // pending (not yet determined), still show the toast because the call
+            // might be connecting to a softphone right now.
+            if (call.bot_filter_status === "abandoned_at_ivr") {
+              console.log(
+                `[Notify] Incoming call toast suppressed — IVR abandonment (bot signal): ${call.phone_number}`
+              );
+              return;
+            }
+
             let caller = call.contact_name;
 
             // If no name on the row yet, try a quick customer lookup

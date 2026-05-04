@@ -493,6 +493,10 @@ Deno.serve(async (req) => {
       metadata: { digit, label: option.label, action_type: option.action_type, forward_to: option.forward_to },
     });
 
+    // ── Store the IVR engagement state (bot filter) ──
+    // When a caller presses a digit in the IVR, mark bot_filter_status as 'engaged'.
+    // This signals that the caller is real (not a bot) and should appear in Intake feed
+    // and trigger incoming-call toasts for dispatchers.
     // Store the department selection on the call_log so the UI can display it
     try {
       const { data: callRow } = await supabase
@@ -506,9 +510,11 @@ Deno.serve(async (req) => {
           // ivr_digit lets voice-status-callback look up the per-dept SMS body
           // (the IVR canvas is now the single source of truth for after-call SMS)
           extracted_data: { ...existing, ivr_department: option.label, ivr_department_key: deptKey, ivr_digit: digit },
+          // Mark as 'engaged' — caller pressed a button, so they're not a bot.
+          bot_filter_status: 'engaged',
         }).eq("id", callRow.id);
       }
-    } catch (e) { console.error("Failed to store IVR department:", e); }
+    } catch (e) { console.error("Failed to store IVR department or bot filter status:", e); }
 
     if (option.action_type === "say_message") {
       return new Response(

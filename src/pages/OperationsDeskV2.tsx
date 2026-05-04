@@ -3906,6 +3906,22 @@ export default function OperationsDeskV2() {
       // for help, or report a problem) always show — Clint wants every call
       // visible regardless of who dialed, with full transcript + JARVIS.
       .filter((item) => item.kind === "call" || !isEmployeeConversation(item))
+      // ── Bot filter: suppress IVR abandonments from Intake unless they texted us ──
+      // A call is a bot if bot_filter_status === 'abandoned_at_ivr' (caller hung up
+      // at IVR without pressing a digit). We keep showing them IF the same phone
+      // number has at least one inbound SMS (signal of a real human using texting).
+      // This keeps the real abandonments visible (e.g., accidental calls) while suppressing
+      // the robocall flood that Clint complained about.
+      .filter((item) => {
+        if (item.kind !== "call") return true; // SMS not affected by bot filter
+        const call = (item.raw as CallConversation).lastCall as any;
+        if (call?.bot_filter_status !== "abandoned_at_ivr") return true; // Not a bot
+        // It looks like a bot — only show it if the same phone has at least one SMS
+        const hasSmsFromThisPhone = smsConversations.some((sms) =>
+          sms.phoneNumber === item.phone && sms.direction === "inbound"
+        );
+        return hasSmsFromThisPhone;
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const q = search.trim().toLowerCase();

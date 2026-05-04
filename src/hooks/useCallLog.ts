@@ -55,6 +55,10 @@ export type CallRow = {
   day_ct: string | null;
   /** CT time label ("HH:MM AM") — server-computed. */
   time_ct: string | null;
+  /** Bot filter status: 'pending' (initial), 'engaged' (caller pressed digit or answered),
+   * 'abandoned_at_ivr' (caller hung up at IVR without pressing anything).
+   * Use to suppress bot/dead-air calls from Intake feed and toast notifications. */
+  bot_filter_status?: string | null;
 };
 
 export type CallConversation = {
@@ -111,13 +115,13 @@ export function useCallLog() {
       // (no client-side timezone drift).
       let { data, error } = await (supabase as any)
         .from("v_call_log_with_day")
-        .select("id, direction, phone_number, called_number, business_unit_id, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
+        .select("id, direction, phone_number, called_number, business_unit_id, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct, bot_filter_status")
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) {
         const legacy = await (supabase as any)
           .from("v_call_log_with_day")
-          .select("id, direction, phone_number, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct")
+          .select("id, direction, phone_number, answered_by, duration_seconds, status, contact_name, contact_type, recording_url, created_at, is_read, transcription, ai_summary, stir_status, extracted_data, twilio_sid, ended_at, day_ct, time_ct, bot_filter_status")
           .order("created_at", { ascending: false })
           .limit(500);
         data = legacy.data;

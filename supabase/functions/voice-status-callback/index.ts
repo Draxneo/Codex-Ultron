@@ -591,6 +591,21 @@ Deno.serve(async (req) => {
         ended_by: pendingEndedBy === "agent" ? "agent" : (baseExtracted as any).ended_by || "unknown",
         terminal_reason: effectiveStatus,
       };
+
+      // ── Bot filter: mark 'abandoned_at_ivr' if call ended without IVR engagement ──
+      // If the call is in a negative terminal state (no-answer, busy, failed, canceled)
+      // AND bot_filter_status is still 'pending' (no digit was pressed), mark it as
+      // 'abandoned_at_ivr' (bot signal). This prevents dead-air calls from flooding
+      // the dispatcher's Intake feed and toast notifications.
+      const isNegativeTerminal = NEGATIVE_TERMINAL_STATUSES.has(effectiveStatus);
+      const isBotCandidate = existingRow.bot_filter_status === 'pending' || !existingRow.bot_filter_status;
+      if (isNegativeTerminal && isBotCandidate) {
+        updates.bot_filter_status = 'abandoned_at_ivr';
+        console.log(
+          `[Bot filter] Call ${existingRow.twilio_sid} marked as abandoned_at_ivr ` +
+          `(status=${effectiveStatus}, no IVR digit recorded)`
+        );
+      }
     }
 
     if (effectiveStatus === "completed") {
