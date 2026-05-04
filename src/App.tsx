@@ -535,10 +535,21 @@ function AppRouter() {
         {/* Protected routes */}
         <Route path="/" element={<RoleAwareHome />} />
         <Route path="/intake" element={<ProtectedRoute><OperationsDeskV2 /></ProtectedRoute>} />
-        <Route path="/now" element={<ProtectedRoute><NowHQ /></ProtectedRoute>} />
+        {/* 2026-05-04: Now HQ retired — /now redirects to /dispatch. All Now HQ
+            functionality (per-card alerts, action queue, ops chips) now lives
+            inside the Dispatch surfaces. NowHQ.tsx is kept on disk during the
+            transition so realtime/badge consumers don't break, but the route
+            is no longer reachable. */}
+        <Route path="/now" element={<Navigate to="/dispatch" replace />} />
         <Route path="/workflows" element={<ProtectedRoute><WorkflowMaps /></ProtectedRoute>} />
-        <Route path="/dispatch" element={<ProtectedRoute><ScheduleV2 /></ProtectedRoute>} />
-        <Route path="/dispatch/calendar" element={<ProtectedRoute><DispatchCalendar /></ProtectedRoute>} />
+        {/* /dispatch defaults to the weekly calendar (DispatchCalendar) because
+            dispatchers spend most of their time there. The per-tech board view
+            (ScheduleV2) lives at /dispatch/board and is reached via the "Board"
+            button in the calendar header. Legacy /dispatch/calendar still works
+            via redirect for back-compat with any saved bookmarks. */}
+        <Route path="/dispatch" element={<ProtectedRoute><DispatchCalendar /></ProtectedRoute>} />
+        <Route path="/dispatch/board" element={<ProtectedRoute><ScheduleV2 /></ProtectedRoute>} />
+        <Route path="/dispatch/calendar" element={<Navigate to="/dispatch" replace />} />
         <Route path="/operations-v2" element={<Navigate to="/intake" replace />} />
         <Route path="/dispatch-v2" element={<Navigate to="/dispatch" replace />} />
         <Route path="/schedule-v2" element={<Navigate to="/dispatch" replace />} />

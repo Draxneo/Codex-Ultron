@@ -1439,12 +1439,15 @@ export default function ScheduleV2() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <TabsList className="h-10">
                 <TabsTrigger value="board" className="gap-2"><Users className="h-4 w-4" /> Board</TabsTrigger>
+                {/* 2026-05-04: /dispatch is now the calendar view by default,
+                    and this Board page lives at /dispatch/board. Link goes to
+                    /dispatch (the new home) preserving the date param. */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-2 px-3"
-                  onClick={() => navigate(`/dispatch/calendar?date=${format(currentDay, "yyyy-MM-dd")}`)}
+                  onClick={() => navigate(`/dispatch?date=${format(currentDay, "yyyy-MM-dd")}`)}
                 >
                   <CalendarDays className="h-4 w-4" />
                   Calendar

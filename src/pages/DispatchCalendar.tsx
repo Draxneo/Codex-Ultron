@@ -11,7 +11,7 @@ import {
   startOfWeek,
   subDays,
 } from "date-fns";
-import { AlertTriangle, ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Filter, Users } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { WeekCalendarBoard } from "@/components/job/WeekCalendarBoard";
 import { CalendarSettings, useCalendarSettings } from "@/components/job/CalendarSettings";
@@ -172,14 +172,17 @@ export default function DispatchCalendar() {
         <div className="shrink-0 border-b bg-card px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={() => navigate("/dispatch")}>
-                <ArrowLeft className="h-4 w-4" />
-                Dispatch HQ
+              {/* 2026-05-04: Calendar is now the default Dispatch view. Was a
+                  back-button to /dispatch — that would loop now. Swapped to a
+                  forward-link into /dispatch/board for the per-tech board view. */}
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={() => navigate("/dispatch/board")}>
+                <Users className="h-4 w-4" />
+                Board view
               </Button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold tracking-tight text-foreground">Weekly Calendar</h1>
-                  <Badge variant="secondary">Full Screen</Badge>
+                  <h1 className="text-lg font-semibold tracking-tight text-foreground">Dispatch HQ</h1>
+                  <Badge variant="secondary">Weekly</Badge>
                 </div>
                 <p className="hidden text-xs text-muted-foreground md:block">
                   Weekly schedule showing open spots, overlaps, and arrival windows.

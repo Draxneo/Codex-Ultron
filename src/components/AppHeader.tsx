@@ -25,9 +25,12 @@ import { DEFAULT_COMPANY_NAME } from "@/lib/companyDefaults";
 import { openPhoneConsole } from "@/lib/phoneConsoleBridge";
 import { toast } from "@/hooks/use-toast";
 
+// 2026-05-04: Now HQ retired. /now redirects to /dispatch in App.tsx.
+// All "needs action" alerts now live as pills/popovers on the Dispatch
+// calendar cards plus the Stack drawer for unscheduled items. Removed
+// the standalone Now HQ nav link so dispatchers have one home.
 const allNavItems: Record<string, { label: string; roles: string[] | null }> = {
   "/intake": { label: "Intake HQ", roles: null },
-  "/now": { label: "Now HQ", roles: null },
   "/dispatch": { label: "Dispatch HQ", roles: null },
   "/phone": { label: "Inbox", roles: null },
   "/sms": { label: "Messages", roles: null },
