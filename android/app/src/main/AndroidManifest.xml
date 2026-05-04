@@ -38,10 +38,26 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Twilio Voice + softphone audio -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Lets the SDK detect when the user is on a native cellular call so it can pause / resume Twilio audio -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Bluetooth headset audio routing (required on Android 12+ even for connecting to paired BT) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Keep the device awake during an active call so the audio stream isn't interrupted -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Tech location tracking + on-my-way ETA -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Push notifications (incoming calls, SMS replies, JARVIS alerts) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Foreground services for active call + location -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 </manifest>

@@ -16,6 +16,7 @@ import { SmsLogProvider } from "@/contexts/SmsLogContext";
 import { AnnouncerProvider } from "@/components/voice/AnnouncerProvider";
 import { useDesktopNotifications } from "@/hooks/useDesktopNotifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useNativePermissionsBootstrap } from "@/hooks/useNativePermissionsBootstrap";
 
 import { useAndroidBackButton } from "@/hooks/useAndroidBackButton";
 import { useCapacitor } from "@/hooks/useCapacitor";
@@ -130,6 +131,10 @@ const queryClient = new QueryClient({
 function PrivateAppListeners() {
   useDesktopNotifications();
   usePushNotifications();
+  // Runs once per install on Capacitor native: requests microphone + location
+  // permissions so Twilio Voice can connect and OMW ETA tracking works.
+  // No-op on web.
+  useNativePermissionsBootstrap();
   usePreWarmCache();
   useAppResume();
   return null;
