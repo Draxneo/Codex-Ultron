@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from "react";
 import { format, isSameDay, isToday, parseISO, startOfWeek, addDays } from "date-fns";
-import { Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, Zap } from "lucide-react";
+import { AlertTriangle as AlertTriangleIcon, Clock, Phone, MapPin, Wrench, ClipboardList, Calendar, Car, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
@@ -118,9 +118,14 @@ interface WeekCalendarBoardProps {
   onAlertResolve?: (alert: DispatchAlert) => void;
   onAlertRetry?: (alert: DispatchAlert) => void;
   onAlertNavigate?: (alert: DispatchAlert) => void;
+  /** Generic dispatcher for any DispatchAlertActionKind — used by the in-
+   *  popover action buttons including secondary actions like "Customer
+   *  financed". Callers typically wire this to runAction from
+   *  useDispatchCardAlertActions(). */
+  onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
 }
 
-export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate }: WeekCalendarBoardProps) {
+export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDay, onDayClick, bulkMode, selectedIds, onToggleSelect, routeOrders, cardDensity = "comfortable", visibleFields, businessHoursOnly = false, showHolidays = false, hourHeight = DEFAULT_HOUR_HEIGHT, headerHeight = DEFAULT_HEADER_HEIGHT, alertsByJobId, onAlertResolve, onAlertRetry, onAlertNavigate, onAlertAction }: WeekCalendarBoardProps) {
   const VISIBLE_WEEKS = 9;
   const CENTER_WEEK_INDEX = Math.floor(VISIBLE_WEEKS / 2);
   const weekStart = startOfWeek(currentDay, { weekStartsOn: 0 });
@@ -371,7 +376,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                   {untimed.length > 0 && (
                     <div className="absolute top-0 left-0 right-0 z-20 p-0.5 flex flex-col gap-0.5">
                       {untimed.map(item => (
-                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} alerts={alertsByJobId?.get(item.id) || []} onAlertResolve={onAlertResolve} onAlertRetry={onAlertRetry} onAlertNavigate={onAlertNavigate} />
+                        <WeekCard key={item.id} item={item} onClick={onItemClick} techColor={empColorMap.get(item.assigned_to || "") || UNASSIGNED_COLOR} compact={false} bulkMode={bulkMode} selected={selectedIds?.has(item.id)} onToggleSelect={onToggleSelect} routeInfo={routeOrders?.get(item.id)} cardDensity={cardDensity} visibleFields={visibleFields} alerts={alertsByJobId?.get(item.id) || []} onAlertResolve={onAlertResolve} onAlertRetry={onAlertRetry} onAlertNavigate={onAlertNavigate} onAlertAction={onAlertAction} />
                       ))}
                     </div>
                   )}
@@ -405,6 +410,7 @@ export function WeekCalendarBoard({ weekItems, employees, onItemClick, currentDa
                           onAlertResolve={onAlertResolve}
                           onAlertRetry={onAlertRetry}
                           onAlertNavigate={onAlertNavigate}
+                          onAlertAction={onAlertAction}
                         />
                       </div>
                     );
@@ -438,6 +444,7 @@ function WeekCard({
   onAlertResolve,
   onAlertRetry,
   onAlertNavigate,
+  onAlertAction,
 }: {
   item: BoardItem;
   onClick: (item: BoardItem) => void;
@@ -457,6 +464,7 @@ function WeekCard({
   onAlertResolve?: (alert: DispatchAlert) => void;
   onAlertRetry?: (alert: DispatchAlert) => void;
   onAlertNavigate?: (alert: DispatchAlert) => void;
+  onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
 }) {
   const emoji = JOB_TYPE_EMOJI[item.job_type] || "🔧";
   const tag = JOB_TYPE_TAG[item.job_type] || "SERV";
@@ -619,14 +627,47 @@ function WeekCard({
         {cardContent}
       </HoverCardTrigger>
       <HoverCardContent side="right" align="start" className="w-72 p-0 overflow-hidden z-50">
-        <CardPopover item={item} techColor={techColor} routeInfo={routeInfo} visibleFields={visibleFields} />
+        <CardPopover
+          item={item}
+          techColor={techColor}
+          routeInfo={routeInfo}
+          visibleFields={visibleFields}
+          alerts={alerts}
+          onAlertResolve={onAlertResolve}
+          onAlertRetry={onAlertRetry}
+          onAlertNavigate={onAlertNavigate}
+          onAlertAction={onAlertAction}
+        />
       </HoverCardContent>
     </HoverCard>
   );
 }
 
 // ── Hover Popover Content ──
-function CardPopover({ item, techColor, routeInfo, visibleFields }: { item: BoardItem; techColor: string; routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null }; visibleFields?: CalendarVisibleFields }) {
+function CardPopover({
+  item,
+  techColor,
+  routeInfo,
+  visibleFields,
+  alerts = [],
+  onAlertResolve,
+  onAlertRetry,
+  onAlertNavigate,
+  onAlertAction,
+}: {
+  item: BoardItem;
+  techColor: string;
+  routeInfo?: { order: number; travelMin: number | null; fromLabel: string | null };
+  visibleFields?: CalendarVisibleFields;
+  // 2026-05-04: Alerts now render INSIDE the main hover popover instead of in
+  // a second floating popover anchored to the corner badge. Single source of
+  // dispatcher attention per card.
+  alerts?: DispatchAlert[];
+  onAlertResolve?: (alert: DispatchAlert) => void;
+  onAlertRetry?: (alert: DispatchAlert) => void;
+  onAlertNavigate?: (alert: DispatchAlert) => void;
+  onAlertAction?: (alert: DispatchAlert, kind?: import("@/hooks/useDispatchCardAlerts").DispatchAlertActionKind, target?: string) => void;
+}) {
   const navigate = useNavigate();
   const openQuickQuote = () => {
     const params = new URLSearchParams();
@@ -690,6 +731,61 @@ function CardPopover({ item, techColor, routeInfo, visibleFields }: { item: Boar
 
       {/* Body */}
       <div className="p-3 space-y-2.5">
+        {/* 2026-05-04: Action-required alerts. Renders inline at the top of
+            the popover so dispatchers see the workflow blockers + their
+            resolution buttons together with the customer details — instead
+            of in a separate second popover that overlapped the card. Each
+            alert can offer multiple resolution paths (e.g. deposit alert
+            shows "Mark deposit received" + "Customer financed"). */}
+        {alerts.length > 0 && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50/80 p-2.5 dark:border-amber-800/70 dark:bg-amber-950/30">
+            <div className="flex items-center gap-1.5 mb-2">
+              <AlertTriangleIcon className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-amber-950 dark:text-amber-100">
+                {alerts.length} action{alerts.length === 1 ? "" : "s"} required
+              </span>
+            </div>
+            <div className="space-y-2">
+              {alerts.map((alert) => {
+                const handlePrimary = () => {
+                  if (onAlertAction) onAlertAction(alert);
+                  else if (alert.actionKind === "navigate") onAlertNavigate?.(alert);
+                  else if (alert.actionKind === "rpc_retry") onAlertRetry?.(alert);
+                  else onAlertResolve?.(alert);
+                };
+                return (
+                  <div key={alert.id} className="rounded border border-amber-200 bg-background p-2 dark:border-amber-900/60 dark:bg-card">
+                    <div className="text-xs font-semibold text-foreground">{alert.label}</div>
+                    {alert.detail && (
+                      <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{alert.detail}</div>
+                    )}
+                    {(alert.actionLabel || (alert.secondaryActions && alert.secondaryActions.length > 0)) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {alert.actionLabel && (
+                          <Button size="sm" variant="default" className="h-7 text-[11px] px-2.5 gap-1" onClick={handlePrimary}>
+                            {alert.actionLabel}
+                          </Button>
+                        )}
+                        {alert.secondaryActions?.map((sec, idx) => (
+                          <Button
+                            key={`${alert.id}-sec-${idx}`}
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px] px-2.5"
+                            onClick={() => onAlertAction?.(alert, sec.kind, sec.target)}
+                          >
+                            {sec.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Date & Time */}
         {(scheduledDate || (timeStr && visibleFields?.arrivalWindow !== false)) && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -26,6 +26,38 @@ import { APP_ACTION_GO_LIVE_ISO, CLOSED_WORK_STATUS_FILTER } from "@/lib/appLife
 
 export type DispatchAlertSeverity = "blocked" | "action" | "info";
 
+/**
+ * Action verbs the dispatch alert popover knows how to execute. Matches the
+ * cases handled in useDispatchCardAlertActions:
+ *  - navigate: useNavigate(actionTarget) — used for things like "open job page"
+ *  - rpc_resolve: acknowledge_workflow_card_once / resolve_workflow_alert RPC
+ *  - rpc_retry: retry_workflow_alert_once RPC
+ *  - rpc_admin_delete: delete_action_item_admin RPC (admin only)
+ *  - mark_deposit: stamp jobs.deposit_paid_at = now() on actionTarget (job id)
+ *  - mark_financed: stamp jobs.payment_method='financed' + finance_paperwork_at=now()
+ *  - mark_completion_sent: stamp jobs.completion_form_sent_at = now()
+ *  - mark_photos_uploaded: stamp jobs.photos_uploaded_at = now()
+ */
+export type DispatchAlertActionKind =
+  | "navigate"
+  | "rpc_resolve"
+  | "rpc_retry"
+  | "rpc_admin_delete"
+  | "mark_deposit"
+  | "mark_financed"
+  | "mark_completion_sent"
+  | "mark_photos_uploaded";
+
+/** Optional secondary action button on an alert. The primary action lives in
+ *  the alert's top-level actionLabel/actionKind/actionTarget fields; this lets
+ *  derived alerts offer alternate resolution paths (e.g. "Customer financed"
+ *  alongside "Mark deposit received"). */
+export type DispatchAlertSecondaryAction = {
+  label: string;
+  kind: DispatchAlertActionKind;
+  target?: string;
+};
+
 export type DispatchAlert = {
   id: string; // unique key for React + RPC target
   source: "action_item" | "workflow_alert" | "derived";
@@ -33,9 +65,12 @@ export type DispatchAlert = {
   severity: DispatchAlertSeverity;
   label: string; // short human label e.g. "Needs deposit"
   detail?: string; // longer description
-  actionLabel?: string; // button label e.g. "Mark deposit received"
-  actionKind?: "navigate" | "rpc_resolve" | "rpc_retry" | "rpc_admin_delete";
-  actionTarget?: string; // URL for navigate, or RPC arg
+  actionLabel?: string; // primary button label e.g. "Mark deposit received"
+  actionKind?: DispatchAlertActionKind;
+  actionTarget?: string; // URL for navigate, or RPC arg / job id for mark_*
+  /** Optional additional buttons (e.g. "Customer financed" beside "Mark deposit
+   *  received"). Renders inline below the primary action. */
+  secondaryActions?: DispatchAlertSecondaryAction[];
   createdAt: string;
 };
 
@@ -143,6 +178,10 @@ export function useDispatchCardAlerts() {
           const derived: DispatchAlert[] = [];
 
           // Deposit needed: job_type='install', deposit_paid_at IS NULL, payment_method != 'financed'
+          // Two resolution paths offered: deposit collected OR customer financed
+          // (Synchrony etc.) — financing makes the deposit moot, so we expose it
+          // as a one-click second option that flips payment_method='financed'
+          // and stamps finance_paperwork_at simultaneously.
           if (
             job.job_type === "install" &&
             !job.deposit_paid_at &&
@@ -156,8 +195,11 @@ export function useDispatchCardAlerts() {
               label: "Needs deposit",
               detail: "Collect deposit payment to proceed",
               actionLabel: "Mark deposit received",
-              actionKind: "rpc_resolve",
+              actionKind: "mark_deposit",
               actionTarget: job.id,
+              secondaryActions: [
+                { label: "Customer financed", kind: "mark_financed", target: job.id },
+              ],
               createdAt: job.created_at,
             });
           }
@@ -176,7 +218,7 @@ export function useDispatchCardAlerts() {
               label: "Finance paperwork pending",
               detail: "Complete financing application",
               actionLabel: "Mark completed",
-              actionKind: "rpc_resolve",
+              actionKind: "mark_financed",
               actionTarget: job.id,
               createdAt: job.created_at,
             });
@@ -194,6 +236,9 @@ export function useDispatchCardAlerts() {
               actionLabel: "Upload photos",
               actionKind: "navigate",
               actionTarget: `/jobs/${job.id}`,
+              secondaryActions: [
+                { label: "Mark already uploaded", kind: "mark_photos_uploaded", target: job.id },
+              ],
               createdAt: job.created_at,
             });
           }
@@ -210,6 +255,9 @@ export function useDispatchCardAlerts() {
               actionLabel: "Send form",
               actionKind: "navigate",
               actionTarget: `/jobs/${job.id}`,
+              secondaryActions: [
+                { label: "Already sent", kind: "mark_completion_sent", target: job.id },
+              ],
               createdAt: job.created_at,
             });
           }

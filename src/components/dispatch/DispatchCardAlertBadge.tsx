@@ -1,34 +1,33 @@
 /**
- * DispatchCardAlertBadge.tsx — Dispatch calendar card alert badge + hover/popover overlay
+ * DispatchCardAlertBadge.tsx — Visual-only alert pill on dispatch calendar cards
  *
  * SYSTEM CONNECTIONS:
  * - Consumes DispatchAlert[] from useDispatchCardAlerts
- * - Renders a small severity-colored pill with alert count + highest-severity label
- * - HoverCard for hover trigger on desktop, click-to-open support for mobile/keyboard
- * - Calls onResolve/onRetry/onNavigate callbacks on action buttons
+ * - Renders a small severity-colored pill with alert count + severity icon
+ * - DOES NOT carry its own popover — the action buttons live INSIDE the
+ *   main card hover popover (CardPopover in WeekCalendarBoard.tsx) so
+ *   dispatchers only have ONE popover to interact with per card.
  *
- * SITS ON:
- * - shadcn HoverCard + Popover primitives
- * - Alert severity color coding (blocked=red, action=amber, info=blue)
- * - useDispatchCardAlertActions hook for mutation handling
+ * 2026-05-04 simplification: previously this component owned a separate
+ * HoverCard with action buttons. That created a second popover that overlapped
+ * the main card popover. Now the pill is purely a visual indicator, and
+ * action buttons render inline inside CardPopover.
  *
  * RENDERING:
  * - Returns null if no alerts
- * - Otherwise small pill: count + label, color-coded by highest severity
- * - Hover/click opens overlay with detailed alert list + per-alert action buttons
+ * - Otherwise small pill: severity icon + count, color-coded by highest severity
  */
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, Zap, Trash2 } from "lucide-react";
-import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useMemo } from "react";
+import { AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DispatchAlert } from "@/hooks/useDispatchCardAlerts";
 
 export interface DispatchCardAlertBadgeProps {
   alerts: DispatchAlert[];
   size?: "sm" | "md";
+  /** Legacy callbacks — kept for back-compat with any other consumers, but
+   *  unused on the calendar surface (CardPopover handles actions now). */
   onResolve?: (alert: DispatchAlert) => void;
   onRetry?: (alert: DispatchAlert) => void;
   onNavigate?: (alert: DispatchAlert) => void;
@@ -48,24 +47,7 @@ function severityIcon(severity: DispatchAlert["severity"]) {
   return Info;
 }
 
-function actionIcon(kind?: DispatchAlert["actionKind"]) {
-  if (kind === "rpc_resolve") return CheckCircle2;
-  if (kind === "rpc_retry") return Zap;
-  if (kind === "rpc_admin_delete") return Trash2;
-  return null;
-}
-
-export function DispatchCardAlertBadge({
-  alerts,
-  size = "sm",
-  onResolve,
-  onRetry,
-  onNavigate,
-  onDelete,
-  isLoading = false,
-}: DispatchCardAlertBadgeProps) {
-  const [open, setOpen] = useState(false);
-
+export function DispatchCardAlertBadge({ alerts, size = "sm" }: DispatchCardAlertBadgeProps) {
   // Find highest severity for badge display
   const highestSeverity = useMemo(() => {
     if (alerts.some((a) => a.severity === "blocked")) return "blocked";
@@ -73,97 +55,27 @@ export function DispatchCardAlertBadge({
     return "info";
   }, [alerts]);
 
-  // If no alerts, render nothing
   if (alerts.length === 0) return null;
 
   const colors = severityColor(highestSeverity);
   const SeverityIcon = severityIcon(highestSeverity);
-  const topLabel = alerts[0]?.label || "Alert";
+  const sizeCls = size === "md" ? "px-2.5 py-1 text-xs" : "px-1.5 py-0.5 text-[10px]";
 
   return (
-    <HoverCard open={open} onOpenChange={setOpen}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
-            colors.bg,
-            colors.text,
-            colors.border,
-            "border cursor-pointer hover:opacity-80"
-          )}
-          onClick={() => setOpen(!open)}
-        >
-          <SeverityIcon className="h-3 w-3 shrink-0" />
-          <span>{alerts.length}</span>
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent className={cn("w-80", colors.bg, colors.border, "border")} side="left" align="start">
-        <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-semibold">{alerts.length} alert{alerts.length !== 1 ? "s" : ""}</h4>
-            <p className="text-xs text-muted-foreground">
-              {highestSeverity === "blocked" && "Workflow is blocked"}
-              {highestSeverity === "action" && "Action required"}
-              {highestSeverity === "info" && "FYI"}
-            </p>
-          </div>
-
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {alerts.map((alert) => {
-              const colors2 = severityColor(alert.severity);
-              const Icon = severityIcon(alert.severity);
-              const ActionIcon = actionIcon(alert.actionKind);
-
-              const handleAction = () => {
-                if (alert.actionKind === "rpc_resolve" && onResolve) {
-                  onResolve(alert);
-                } else if (alert.actionKind === "rpc_retry" && onRetry) {
-                  onRetry(alert);
-                } else if (alert.actionKind === "navigate" && onNavigate) {
-                  onNavigate(alert);
-                } else if (alert.actionKind === "rpc_admin_delete" && onDelete) {
-                  onDelete(alert);
-                }
-              };
-
-              return (
-                <div
-                  key={alert.id}
-                  className={cn(
-                    "rounded-md p-2.5 border text-sm space-y-1.5",
-                    colors2.bg,
-                    colors2.border
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", colors2.text)} />
-                    <div className="min-w-0 flex-1">
-                      <p className={cn("font-semibold text-xs", colors2.text)}>{alert.label}</p>
-                      {alert.detail && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{alert.detail}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {alert.actionLabel && (
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      disabled={isLoading}
-                      onClick={handleAction}
-                      className="w-full h-7 text-xs"
-                    >
-                      {ActionIcon && <ActionIcon className="h-3 w-3" />}
-                      {alert.actionLabel}
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </HoverCardContent>
-    </HoverCard>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full font-semibold border pointer-events-none",
+        sizeCls,
+        colors.bg,
+        colors.text,
+        colors.border,
+      )}
+      // Pointer-events disabled so hover passes through to the underlying
+      // calendar card, which is what triggers the unified popover.
+      aria-label={`${alerts.length} ${alerts.length === 1 ? "alert" : "alerts"} requiring action`}
+    >
+      <SeverityIcon className="h-2.5 w-2.5 shrink-0" />
+      <span>{alerts.length}</span>
+    </span>
   );
 }

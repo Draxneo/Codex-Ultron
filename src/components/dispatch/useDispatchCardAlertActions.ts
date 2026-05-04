@@ -27,7 +27,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
-import type { DispatchAlert } from "@/hooks/useDispatchCardAlerts";
+import type { DispatchAlert, DispatchAlertActionKind, DispatchAlertSecondaryAction } from "@/hooks/useDispatchCardAlerts";
 
 export function useDispatchCardAlertActions() {
   const navigate = useNavigate();
@@ -129,9 +129,147 @@ export function useDispatchCardAlertActions() {
     }
   };
 
+  // 2026-05-04: Direct job-state mutations for derived alerts. Each kind below
+  // stamps the relevant timestamp/field on the jobs row, which causes the
+  // derived alert's gating condition to flip and the alert to disappear on the
+  // next refetch.
+  const markDeposit = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await supabase.from("jobs").update({
+        deposit_paid_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Deposit marked received", description: "The job moves forward." });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-card-alerts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not mark deposit",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markFinanced = useMutation({
+    mutationFn: async (jobId: string) => {
+      // Customer financed (Synchrony etc.) — flip payment_method AND stamp
+      // the finance paperwork timestamp so both the deposit alert and the
+      // finance paperwork alert clear at once.
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("jobs").update({
+        payment_method: "financed",
+        finance_paperwork_at: now,
+      }).eq("id", jobId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Marked as financed", description: "Deposit waived; finance paperwork on file." });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-card-alerts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not mark financed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markCompletionSent = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await supabase.from("jobs").update({
+        completion_form_sent_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Marked sent", description: "Completion form recorded." });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-card-alerts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not mark completion form sent",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markPhotosUploaded = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await supabase.from("jobs").update({
+        photos_uploaded_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Marked uploaded", description: "Site photos on record." });
+      queryClient.invalidateQueries({ queryKey: ["dispatch-card-alerts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not mark photos uploaded",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  /**
+   * Single dispatcher entry point for any alert button click. The popover UI
+   * just calls runAction(alert, kind, target) and we route to the right
+   * mutation/handler based on kind. Centralizes routing so the popover stays
+   * dumb — it doesn't need to know about RPC names or table updates.
+   */
+  const runAction = (
+    alert: DispatchAlert,
+    kind?: DispatchAlertActionKind,
+    target?: string,
+  ) => {
+    const k = kind || alert.actionKind;
+    const t = target || alert.actionTarget;
+    if (!k) return;
+    switch (k) {
+      case "navigate":
+        if (t) navigate(t);
+        return;
+      case "rpc_resolve":
+        resolveAlert.mutate(alert);
+        return;
+      case "rpc_retry":
+        retryAlert.mutate(alert);
+        return;
+      case "mark_deposit":
+        if (t) markDeposit.mutate(t);
+        return;
+      case "mark_financed":
+        if (t) markFinanced.mutate(t);
+        return;
+      case "mark_completion_sent":
+        if (t) markCompletionSent.mutate(t);
+        return;
+      case "mark_photos_uploaded":
+        if (t) markPhotosUploaded.mutate(t);
+        return;
+    }
+  };
+
+  const isBusy = (alert: DispatchAlert) =>
+    resolveAlert.isPending ||
+    retryAlert.isPending ||
+    markDeposit.isPending ||
+    markFinanced.isPending ||
+    markCompletionSent.isPending ||
+    markPhotosUploaded.isPending;
+
   return {
     resolveAlert,
     retryAlert,
     navigateAlert,
+    runAction,
+    isBusy,
   };
 }

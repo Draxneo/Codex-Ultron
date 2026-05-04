@@ -99,7 +99,7 @@ export default function DispatchCalendar() {
   // job-state alerts (deposit needed, missing photos, etc.). Replaces the
   // entire Now HQ card surface.
   const { alertsByJobId } = useDispatchCardAlerts();
-  const { resolveAlert, retryAlert, navigateAlert } = useDispatchCardAlertActions();
+  const { resolveAlert, retryAlert, navigateAlert, runAction: runAlertAction } = useDispatchCardAlertActions();
 
   const setCurrentDay = (day: Date) => {
     setCurrentDayState(day);
@@ -299,13 +299,15 @@ export default function DispatchCalendar() {
                    bottom of the weather row. */
                 headerHeight={124}
                 /* 2026-05-04: Per-card alerts now ride with each calendar card.
-                   The badge component renders inside the card grid item AND
-                   inside the hover popover so dispatchers can see + act on
-                   pending todos without leaving the calendar. */
+                   The visual badge sits in the bottom-right corner; the action
+                   buttons live INSIDE the main hover popover (one popover per
+                   card, not two). runAlertAction dispatches navigate/RPC/job-
+                   field updates by alert.actionKind. */
                 alertsByJobId={alertsByJobId}
                 onAlertResolve={resolveAlert}
                 onAlertRetry={retryAlert}
                 onAlertNavigate={navigateAlert}
+                onAlertAction={runAlertAction}
               />
             </>
           )}
