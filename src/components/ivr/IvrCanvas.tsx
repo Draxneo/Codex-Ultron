@@ -1,7 +1,7 @@
 /**
  * IvrCanvas — React Flow canvas with drag-and-drop and inline editing.
  */
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -360,16 +360,38 @@ export function IvrCanvas({ config, menuOptions, profiles, onUpdateConfig, onUpd
     }
   }, [positionsReady, applyPositions, setNodes]);
 
-  // Sync when config/menuOptions change but preserve user-dragged positions
+  // Track which config we're currently rendering so we can distinguish
+  // "same config, menu changed" (preserve in-progress drag) from
+  // "different company picked" (DROP the in-progress positions; they
+  // belong to the previous company and would corrupt this one).
+  const renderedConfigIdRef = useRef<string | null>(null);
+
+  // Sync when config/menuOptions change.
+  //   - Same config (menu options edited): preserve user-dragged positions
+  //     from React state so a drag-in-progress doesn't snap back.
+  //   - Different config (company switched): DO NOT carry positions from
+  //     prev React state — those belong to the company we're leaving and
+  //     would corrupt the new company's layout. Use buildGraph defaults
+  //     and let the saved-positions effect overlay this company's snapshot
+  //     once it loads. (2026-05-03 fix for cross-company position bleed.)
   useEffect(() => {
     const { nodes: newNodes, edges: newEdges } = buildGraph(config, menuOptions, onSelect);
+    const isSameConfig = renderedConfigIdRef.current === config.id;
+    renderedConfigIdRef.current = config.id;
+
     setNodes((prev) => {
-      const posMap = new Map(prev.map((n) => [n.id, n.position]));
-      const nextNodes = newNodes.map((n) => ({
-        ...n,
-        position: posMap.get(n.id) ?? n.position,
-      }));
-      return positionsReady ? applyPositions(nextNodes) : nextNodes;
+      if (isSameConfig) {
+        // Preserve any in-progress drag positions; merge with the new graph.
+        const posMap = new Map(prev.map((n) => [n.id, n.position]));
+        const nextNodes = newNodes.map((n) => ({
+          ...n,
+          position: posMap.get(n.id) ?? n.position,
+        }));
+        return positionsReady ? applyPositions(nextNodes) : nextNodes;
+      }
+      // Different config — start fresh from auto-layout, then layer on
+      // saved positions if/when they're ready for THIS company.
+      return positionsReady ? applyPositions(newNodes) : newNodes;
     });
     setEdges(newEdges);
   }, [config, menuOptions, onSelect, setNodes, setEdges, positionsReady, applyPositions]);
