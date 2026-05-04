@@ -48,12 +48,19 @@ export function SmsPanel({ initialPhone = null, initialDraft = null }: SmsPanelP
     return match ? match.threadKey : getSmsThreadKey(toE164(raw) ?? raw);
   };
 
+  // 2026-05-03 fix: previously also depended on conversations.length, which
+  // re-fired on every inbound SMS that grew the list — overriding whatever
+  // thread the user had clicked on with whatever initialPhone resolved to.
+  // The result felt like getting kicked out of an active conversation. The
+  // initialPhone is meant to PRE-SELECT a thread when the user lands on
+  // /sms?phone=…; once they're in, their explicit selectConversation()
+  // clicks should win. Re-running this effect on length changes was wrong.
   useEffect(() => {
     if (!initialPhone) return;
     setSelectedThreadKey(resolveConversationKey(initialPhone));
     setNewMessageMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPhone, conversations.length]);
+  }, [initialPhone]);
 
   const searched = conversations.filter((c) => {
     if (!search) return true;

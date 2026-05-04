@@ -3736,17 +3736,27 @@ export default function OperationsDeskV2() {
 
   useEffect(() => {
     if (!selected) return;
+    // Refresh the selected conversation reference so the right pane shows the
+    // latest data. Match priority: exact id (cheapest), then thread key
+    // (survives lastMessage-id changes), then last-10 digits + kind (survives
+    // contact-resolution rebuilds).
     const refreshedSelection =
       conversations.find((item) => item.id === selected.id) ||
       conversations.find((item) => intakeThreadKeyForDeskItem(item) === intakeThreadKeyForDeskItem(selected)) ||
       conversations.find((item) => item.kind === selected.kind && normalizeLast10(item.phone) === normalizeLast10(selected.phone));
 
-    if (refreshedSelection) {
-      if (refreshedSelection !== selected) setSelected(refreshedSelection);
-      return;
+    if (refreshedSelection && refreshedSelection !== selected) {
+      setSelected(refreshedSelection);
     }
-
-    setSelected(null);
+    // 2026-05-03 fix: do NOT setSelected(null) when the conversation isn't
+    // found in the freshly-computed list. That branch was kicking users out
+    // of the active thread whenever an inbound SMS triggered a list rebuild
+    // that briefly didn't include their selected conversation (race between
+    // realtime INSERT, smsConversations recompute, and contact resolution).
+    // Intentional clears go through clearConversationForTesting() and
+    // handleConversationHandled() which set null explicitly. Letting the
+    // selected ref go stale for a beat is far better than dumping the user
+    // back to "no conversation selected" mid-typing.
   }, [conversations, selected]);
 
   useEffect(() => {
