@@ -44,8 +44,18 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Lets the SDK detect when the user is on a native cellular call so it can pause / resume Twilio audio -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <!-- Bluetooth headset audio routing (required on Android 12+ even for connecting to paired BT) -->
+    <!-- Bluetooth headset audio routing.
+         BLUETOOTH_CONNECT (API 31+) is the runtime permission requested by
+         the inline UoPermissions plugin so Twilio's AudioSwitch can enumerate
+         paired devices on Android 12+. Without the runtime grant, headsets
+         and car kits stay invisible to the SDK even though they're paired
+         in Settings.
+         BLUETOOTH + BLUETOOTH_ADMIN (legacy, maxSdk=30) keep Android 11 and
+         below working — those are install-time permissions and don't need a
+         runtime prompt. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- Keep the device awake during an active call so the audio stream isn't interrupted -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
