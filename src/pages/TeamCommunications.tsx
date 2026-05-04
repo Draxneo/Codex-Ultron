@@ -243,6 +243,10 @@ export default function TeamCommunications() {
   const [mutedCallIds, setMutedCallIds] = useState<Set<string>>(new Set());
   const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  // 2026-05-04 — Add Member dialog state. Only shown for rooms (direct
+  // conversations are 1:1). Lists every active employee not already in
+  // the room.
+  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
   const [resourceLabel, setResourceLabel] = useState("");
   const [resourceHref, setResourceHref] = useState("");
   const [resourceNote, setResourceNote] = useState("");
@@ -604,6 +608,29 @@ export default function TeamCommunications() {
       if (conversationId) setSelectedConversationId(conversationId);
     },
     onError: (error) => showTeamActionError("Could not create room", error),
+  });
+
+  /**
+   * 2026-05-04 — addMember: lets the user add a teammate to an existing room.
+   * Direct conversations are 1:1 so this is room-only at the UI level.
+   * Inserts into team_conversation_members; the conversation realtime listener
+   * picks up the change and re-fetches the members list.
+   */
+  const addMember = useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!user || !selectedConversation) throw new Error("No conversation selected");
+      if (selectedConversation.type !== "room") throw new Error("Add member is only for rooms");
+      const { error } = await db
+        .from("team_conversation_members")
+        .insert({ conversation_id: selectedConversation.id, user_id: targetUserId, role: "member" });
+      if (error) throw error;
+      return targetUserId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-conversation-members"] });
+      toast.success("Member added.");
+    },
+    onError: (error) => showTeamActionError("Could not add member", error),
   });
 
   const startCall = useMutation({
@@ -1068,6 +1095,111 @@ export default function TeamCommunications() {
                     )}
                   </div>
                 </section>
+
+                {/* ── Team Links + Links — moved here from the right aside on
+                     2026-05-04 per Clint. Compact list view (one link per row)
+                     fits the 280px left column comfortably. */}
+                <section>
+                  <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team Links</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => setResourceDialogOpen(true)}
+                      title="Add team link"
+                      aria-label="Add team link"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {sharedLinksLoading ? (
+                    <div className="space-y-1.5">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <Skeleton key={`resource-loading-${index}`} className="h-8 rounded-md" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(sharedLinkGroups).slice(0, 5).map(([category, links]) => (
+                        <div key={category}>
+                          <p className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">{category}</p>
+                          <div className="space-y-0.5">
+                            {links.slice(0, 6).map((link) => (
+                              <a
+                                key={link.id}
+                                href={link.href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                                aria-label={`Open ${link.label}`}
+                                title={link.sub || link.href}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                <span className="truncate font-medium">{link.label}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {sharedLinks.length === 0 && (
+                        <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                          Add permits, vendor ordering, warranty, finance links here.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <section>
+                  <div className="mb-2 flex items-center gap-1.5 px-1">
+                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shared in Chat</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    {pinnedLinks
+                      .filter((href, index, list) => list.indexOf(href) === index)
+                      .slice(0, 8)
+                      .map((href) => (
+                        <a
+                          key={href}
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                          aria-label={`Open ${href}`}
+                          title={href}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <span className="truncate">{href}</span>
+                        </a>
+                      ))}
+                    {pinnedLinks.length === 0 && recentLinks.length === 0 && (
+                      <p className="px-2 py-1.5 text-[11px] text-muted-foreground">Links shared in chat collect here.</p>
+                    )}
+                    {recentLinks.length > 0 && (
+                      <div className="pt-1">
+                        <p className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">Recent</p>
+                        {recentLinks.slice(0, 4).map((href) => (
+                          <button
+                            key={href}
+                            type="button"
+                            className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+                            onClick={() => setDraft((value) => `${value}${value ? " " : ""}${href}`)}
+                            aria-label={`Add ${href} to message`}
+                            title={href}
+                          >
+                            <LinkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span className="truncate">{href}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
               </div>
             </ScrollArea>
           </aside>
@@ -1459,18 +1591,34 @@ export default function TeamCommunications() {
                 <Users className="h-4 w-4" aria-hidden="true" />
                 <p className="text-sm font-semibold">Members</p>
               </div>
-              {unreadNotifications.length > 0 && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  onClick={() => markNotificationsRead.mutate()}
-                  title="Mark notifications read"
-                  aria-label="Mark notifications read"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-              )}
+              <div className="flex items-center gap-1">
+                {/* Add Member — rooms only. Direct convos are 1:1.
+                    2026-05-04 per Clint's request to add member management. */}
+                {selectedConversation?.type === "room" && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setAddMemberDialogOpen(true)}
+                    title="Add member"
+                    aria-label="Add member to room"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                )}
+                {unreadNotifications.length > 0 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => markNotificationsRead.mutate()}
+                    title="Mark notifications read"
+                    aria-label="Mark notifications read"
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <ScrollArea className="h-[calc(100vh-6.5rem)]">
               <div className="space-y-4 p-3">
@@ -1615,113 +1763,9 @@ export default function TeamCommunications() {
 
                 <Separator />
 
-                <section>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team Links</p>
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => setResourceDialogOpen(true)}
-                      title="Add team link"
-                      aria-label="Add team link"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  {sharedLinksLoading ? (
-                    <div className="space-y-2">
-                      {Array.from({ length: 4 }).map((_, index) => (
-                        <Skeleton key={`resource-loading-${index}`} className="h-10 rounded-md" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {Object.entries(sharedLinkGroups).slice(0, 5).map(([category, links]) => (
-                        <div key={category}>
-                          <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{category}</p>
-                          <div className="space-y-1">
-                            {links.slice(0, 5).map((link) => (
-                              <a
-                                key={link.id}
-                                href={link.href}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-2 text-xs hover:bg-muted"
-                                aria-label={`Open ${link.label}`}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-semibold">{link.label}</span>
-                                  <span className="block truncate text-[10px] text-muted-foreground">{link.sub || link.href}</span>
-                                </span>
-                                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      {sharedLinks.length === 0 && (
-                        <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                          Starter links are shown here. Add permitting, vendor ordering, utility, warranty, and financing links for the whole team.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                <Separator />
-
-                <section>
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Links</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {pinnedLinks
-                      .filter((href, index, list) => list.indexOf(href) === index)
-                      .slice(0, 8)
-                      .map((href) => {
-                        return (
-                          <a
-                            key={href}
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-muted"
-                            aria-label={`Open ${href}`}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span className="truncate">{href}</span>
-                          </a>
-                        );
-                      })}
-                    {pinnedLinks.length === 0 && recentLinks.length === 0 && (
-                      <SidebarEmpty>Links shared in chat will collect here.</SidebarEmpty>
-                    )}
-                    {recentLinks.length > 0 && (
-                      <div className="pt-1">
-                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Recent</p>
-                        {recentLinks.slice(0, 3).map((href) => (
-                          <button
-                            key={href}
-                            type="button"
-                            className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-xs hover:bg-muted"
-                            onClick={() => setDraft((value) => `${value}${value ? " " : ""}${href}`)}
-                            aria-label={`Add ${href} to message`}
-                          >
-                            <LinkIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span className="truncate">{href}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                <Separator />
+                {/* Team Links + Links sections moved to LEFT aside on 2026-05-04
+                     per Clint's request — they were clunky on the right. See
+                     left aside (~line 1070 area) for the new home. */}
 
                 <section>
                   <div className="mb-2 flex items-center gap-1.5">
@@ -1799,6 +1843,63 @@ export default function TeamCommunications() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member dialog — rooms only. Lists active employees who aren't
+          already in this room. Click adds them; the realtime listener picks
+          up the new row and updates the Members panel. (2026-05-04) */}
+      <Dialog open={addMemberDialogOpen} onOpenChange={setAddMemberDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add member to {selectedConversation ? conversationTitle(selectedConversation) : "room"}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            // Compute who's NOT already in the room. Filter by active +
+            // having a profile_id (only chat-enabled employees).
+            const currentMemberAuthIds = new Set(selectedMembers.map((m) => m.profile_id).filter(Boolean));
+            const addable = teamUsers
+              .filter((emp) => emp.is_active && emp.profile_id && !currentMemberAuthIds.has(emp.profile_id))
+              .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+            if (addable.length === 0) {
+              return (
+                <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+                  Everyone with chat access is already in this room.
+                </p>
+              );
+            }
+            return (
+              <div className="space-y-1">
+                {addable.map((emp) => (
+                  <button
+                    key={emp.profile_id}
+                    type="button"
+                    onClick={() => {
+                      addMember.mutate(emp.profile_id!, {
+                        onSuccess: () => setAddMemberDialogOpen(false),
+                      });
+                    }}
+                    disabled={addMember.isPending}
+                    className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-[11px]">{initials(emp.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{emp.name}</p>
+                      {emp.role && (
+                        <p className="truncate text-xs text-muted-foreground">{emp.role}</p>
+                      )}
+                    </div>
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
