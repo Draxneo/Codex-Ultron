@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getTaskModel } from "../_shared/getTaskModel.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
+import { resolveOrCreateCustomerByPhone } from "../_shared/resolveOrCreateCustomerByPhone.ts";
 import { verifyAddress } from "../_shared/verifyContact.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import {
@@ -657,6 +658,16 @@ Deno.serve(async (req) => {
     const { matchedEmployee } = resolvedContact;
     let isEmployee = !!matchedEmployee;
 
+    // Resolve or create customer by phone — every inbound SMS gets a customer ID
+    // This ensures sms_log.related_customer_id is always populated for later querying
+    const customerResolution = await resolveOrCreateCustomerByPhone(supabase, from, {
+      businessUnitId: businessUnit?.id,
+      sourceLabel: "inbound_sms",
+      contactName,
+      skipCreate: false, // Always create for inbound SMS (they contacted us)
+    });
+    const relatedCustomerId = customerResolution.customerId;
+
     // Force contact label for answering service relay (group under Vendors in inbox)
     if (isAnsweringService) {
       contactName = "Answering Service";
@@ -780,6 +791,7 @@ Deno.serve(async (req) => {
       num_segments: numSegments,
       to_number: toNumber,
       business_unit_id: businessUnit?.id || null,
+      ...(relatedCustomerId ? { related_customer_id: relatedCustomerId } : {}),
       ...(relatedVendorId ? { related_vendor_id: relatedVendorId } : {}),
       ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
     } as any).select("id").single();

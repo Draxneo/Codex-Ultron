@@ -1,6 +1,7 @@
 import { getCentralNow } from "../_shared/formatters.ts";
 import { sendIvrSms } from "../_shared/smsHelper.ts";
 import { resolveContact } from "../_shared/resolveContact.ts";
+import { resolveOrCreateCustomerByPhone } from "../_shared/resolveOrCreateCustomerByPhone.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -298,6 +299,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Resolve or create customer by phone — every inbound call gets a customer ID
+    // This ensures call_log.related_customer_id is always populated for later querying
+    const customerResolution = await resolveOrCreateCustomerByPhone(supabase, externalPhone, {
+      businessUnitId: businessUnit?.id,
+      sourceLabel: isInbound ? "inbound_call" : "outbound_call",
+      contactName,
+      skipCreate: !isInbound, // Only auto-create for inbound calls
+    });
+    const relatedCustomerId = customerResolution.customerId;
+
     // Vendor matching — optimized: single SQL queries with server-side digit
     // normalization instead of loading entire tables into memory.
     let relatedVendorId: string | null = null;
@@ -359,6 +370,7 @@ Deno.serve(async (req) => {
         twilio_sid: callSid,
         contact_name: contactName,
         contact_type: contactType,
+        ...(relatedCustomerId ? { related_customer_id: relatedCustomerId } : {}),
         ...(relatedVendorId ? { related_vendor_id: relatedVendorId } : {}),
         called_number: to || null,
         business_unit_id: businessUnit?.id || null,

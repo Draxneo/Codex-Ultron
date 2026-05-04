@@ -5,6 +5,7 @@ import { withRetry, isRetryable, logSystemError, enqueueRetry, pageOnCall } from
 import { requireStaffOrInternal } from "../_shared/functionAuth.ts";
 import { appendSmsSignature, smsSignatureForCompany } from "../_shared/smsSignature.ts";
 import { resolveSmsBusinessUnitForRecipient } from "../_shared/businessUnits.ts";
+import { resolveOrCreateCustomerByPhone } from "../_shared/resolveOrCreateCustomerByPhone.ts";
 
 type MediaInput = string | { url: string; content_type?: string };
 
@@ -198,6 +199,22 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Fallback: Resolve or create customer by phone (for outbound-only contacts) ──
+    // If relatedCustomerId was not passed and phone is valid, look it up or create a stub.
+    // This ensures every SMS has a link back to a customer for later querying.
+    // For outbound, skipCreate=false so even manually-sent messages to new numbers
+    // get a customer record (they may become a lead).
+    let resolvedCustomerId = relatedCustomerId || null;
+    if (!resolvedCustomerId && normalizedTo.length >= 10) {
+      const phoneResolution = await resolveOrCreateCustomerByPhone(supabase, normalizedTo, {
+        businessUnitId: senderResolution.businessUnit?.id || null,
+        sourceLabel: "outbound_sms",
+        contactName: contactName || null,
+        skipCreate: false,
+      });
+      resolvedCustomerId = phoneResolution.customerId;
+    }
+
     // ── TCPA / consent gate ─────────────────────────────────────────────
     // Block outbound SMS to any customer who has explicitly opted out.
     // Lookup precedence: relatedCustomerId (most reliable) → phone match.
@@ -208,11 +225,11 @@ Deno.serve(async (req) => {
     //   null/anything-else → allowed (treated as unknown rather than denied)
     if (!isInternalAlert) {
       let consentRow: { id: string; text_consent: string | null } | null = null;
-      if (relatedCustomerId) {
+      if (relatedCustomerId || resolvedCustomerId) {
         const { data } = await supabase
           .from("customers")
           .select("id, text_consent")
-          .eq("id", relatedCustomerId)
+          .eq("id", relatedCustomerId || resolvedCustomerId)
           .maybeSingle();
         consentRow = data as any;
       }
@@ -319,7 +336,7 @@ Deno.serve(async (req) => {
     if (contactName || isInternalAlert) initialInsert.contact_name = contactName || "Internal alert";
     if (contactType || isInternalAlert) initialInsert.contact_type = isInternalAlert ? "internal" : contactType;
     if (relatedVendorId) initialInsert.related_vendor_id = relatedVendorId;
-    if (relatedCustomerId) initialInsert.related_customer_id = relatedCustomerId;
+    if (relatedCustomerId || resolvedCustomerId) initialInsert.related_customer_id = relatedCustomerId || resolvedCustomerId;
     if (sourceFunction) initialInsert.source_function = sourceFunction;
     if (template_key) initialInsert.template_key = template_key;
 
