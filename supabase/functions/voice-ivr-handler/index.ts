@@ -16,6 +16,7 @@ import { logSystemTrace } from "../_shared/systemTrace.ts";
 import { validateTwilioSignature } from "../_shared/twilioSignature.ts";
 import { getTwilioCallerId } from "../_shared/phoneSafety.ts";
 import { getDefaultBusinessUnit, normalizeE164Phone as normalizeBusinessPhone, resolveBusinessUnitByPhone } from "../_shared/businessUnits.ts";
+import { fireCallerContextSms } from "../_shared/callerContextSms.ts";
 
 type IvrRoutingOption = {
   label?: string | null;
@@ -599,6 +600,32 @@ Deno.serve(async (req) => {
           queue_retry: queueRetry,
         },
       });
+
+      // ── FIRE CALLER-CONTEXT SMS ASYNCHRONOUSLY (fire-and-forget) ──
+      // Send SMS to each dispatcher's cell with customer context (name, address,
+      // Comfort Club tag, last jobs, etc) so they recognize priority customers
+      // before answering. This is async (no await) so it doesn't block the dial.
+      const callSidHashForIdempotency = callSid.substring(0, 16);
+      for (const fwdNumber of forwardingNumbers) {
+        // Fire without await — EdgeRuntime will keep worker alive for background tasks
+        const bgSmsTask = (async () => {
+          try {
+            await fireCallerContextSms(
+              from,                           // caller phone
+              fwdNumber.phone_number,         // dispatcher cell phone
+              supabaseUrl,                    // for building customer record URL
+              businessUnit?.id || null,       // business unit for SMS routing
+              supabase,                       // admin client
+              callSid,                        // for audit trail
+              callSidHashForIdempotency,      // for idempotency
+            );
+          } catch (err) {
+            console.error(`Failed to send context SMS to ${fwdNumber.phone_number}:`, err);
+          }
+        })();
+        try { (globalThis as any).EdgeRuntime?.waitUntil?.(bgSmsTask); } catch { /* waitUntil unavailable */ }
+      }
+
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
